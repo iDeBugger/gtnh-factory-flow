@@ -187,12 +187,14 @@ public final class ClientFluidStackIconRenderer {
         File cachedFile = ClientItemStackIconRenderer.cacheFileForKey("fluid:" + key, filename);
         if (cachedFile.isFile()) {
             Files.copy(cachedFile.toPath(), outFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            IconColors.record(filename, ImageIO.read(outFile));
             return MaterializedFluidIconResult.CACHE_HIT;
         }
         File legacyCachedFile = ClientItemStackIconRenderer.cacheFile(filename);
         if (legacyCachedFile.isFile()) {
             Files.copy(legacyCachedFile.toPath(), outFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
             Files.copy(legacyCachedFile.toPath(), cachedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            IconColors.record(filename, ImageIO.read(outFile));
             return MaterializedFluidIconResult.CACHE_HIT;
         }
 
@@ -202,6 +204,7 @@ public final class ClientFluidStackIconRenderer {
             return MaterializedFluidIconResult.SKIPPED;
         }
 
+        IconColors.record(filename, image);
         ImageIO.write(image, "png", outFile);
         File cacheDir = ClientItemStackIconRenderer.cacheDir();
         if (!cacheDir.exists()) {

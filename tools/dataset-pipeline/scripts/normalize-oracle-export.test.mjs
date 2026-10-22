@@ -644,16 +644,57 @@ describe("recipe ids survive a rebuild", () => {
     expect(new Set([a.id, b.id, c.id]).size).toBe(3);
   });
 
-  it("keeps two identical registrations apart, in export order", () => {
-    // addRecipe folds true duplicates by signature; a pair the game keeps
-    // apart by duration alone is the case this guards.
-    const [a, b] = normalize(
-      exportWith([steel("a"), steel("b", { durationTicks: 500, eut: 120, specialValue: 0 })]),
-    ).recipes;
-    if (b) {
-      expect(a.id).not.toBe(b.id);
-    }
-    expect(a.id).toMatch(/:[0-9a-f]{16}$/);
+  it("leaves the dataset version out of the id, so another pack's same recipe keeps it", () => {
+    const recipe = normalize(exportWith([steel("a")])).recipes[0];
+    expect(recipe.id).toMatch(/^oracle:gregtech:gt-recipe-blastfurnace:[0-9a-f]{16}$/);
+    expect(recipe.id).not.toContain("test-fixture");
+    expect(recipe.source.rawRecipeId).toBe(`gt.recipe.blastfurnace:${recipe.id.split(":").pop()}`);
+  });
+
+  it("numbers a pair that shares a key by its bodies, whatever order the export lists them in", () => {
+    // The same slots registered in another order: addRecipe keeps both, the key cannot tell them apart.
+    const swapped = (id) =>
+      steel(id, {
+        itemInputs: [item("gregtech:dust.coal", 1, "Coal Dust"), item("gregtech:dust.iron", 1, "Iron Dust")],
+      });
+    const forward = normalize(exportWith([steel("a"), swapped("b")])).recipes;
+    const backward = normalize(exportWith([swapped("b"), steel("a")])).recipes;
+    expect(forward).toHaveLength(2);
+    expect(new Set(forward.map((recipe) => recipe.id)).size).toBe(2);
+    const idOf = (recipes) =>
+      new Map(recipes.map((recipe) => [recipe.inputs.map((slot) => slot.id).join(","), recipe.id]));
+    expect(idOf(backward)).toEqual(idOf(forward));
+  });
+});
+
+describe("crafting ids come from the recipe, not its registration", () => {
+  const plank = { kind: "oreDictionary", names: ["plankWood"], amount: 1 };
+  const stick = { kind: "oreDictionary", names: ["stickWood"], amount: 1 };
+  const shaped = (id, pattern) => ({
+    id,
+    type: "shaped",
+    width: 3,
+    height: 3,
+    output: item("minecraft:wooden_scythe", 1, "Wooden Scythe"),
+    inputs: pattern.map((entry, slotIndex) => (entry ? { ...entry, slotIndex } : undefined)).filter(Boolean),
+  });
+  const crafting = (recipes) =>
+    normalize({ domains: [{ id: "crafting", recipes }] }).recipes.filter((recipe) => recipe.category === "crafting");
+  const right = [plank, plank, plank, undefined, undefined, stick, undefined, stick, undefined];
+  const mirrored = [plank, plank, stick, plank, undefined, undefined, undefined, stick, undefined];
+
+  it("gives the same pattern the same id under any exporter id", () => {
+    const [first] = crafting([shaped("registered-17", right)]);
+    const [second] = crafting([shaped("registered-4203", right)]);
+    expect(second.id).toBe(first.id);
+    expect(first.id).toMatch(/^oracle:crafting:shaped:[0-9a-f]{16}$/);
+  });
+
+  it("tells a mirrored pattern of ore dictionary slots apart by its layout", () => {
+    const ids = crafting([shaped("a", right), shaped("b", mirrored)]).map((recipe) => recipe.id);
+    expect(ids).toHaveLength(2);
+    expect(ids.every((id) => /:[0-9a-f]{16}$/.test(id))).toBe(true);
+    expect(new Set(ids).size).toBe(2);
   });
 });
 

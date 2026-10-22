@@ -1,17 +1,18 @@
-// Keep a previous dataset's recipe ids in a fresh build.
+// Give one dataset another's recipe ids.
 //
-// A fresh oracle export re-mints recipe ids: every id carries the dataset
-// version, and crafting, furnace, thaumcraft and other recipes are numbered in
-// an order the game does not keep. Saved plans name recipes by id, so a new
-// build takes the previous build's id for every recipe that does the same
-// thing (same map, slots, amounts, chances, ticks and EU). Recipes named by a
-// game identity (a bee species, a crop, a vein, a mob, an underground fluid)
-// keep their id when that identity is unchanged, even if their numbers moved.
-// Everything else (new or changed recipes) keeps its new id.
+// The normalizer mints ids from what a recipe is (recipeContentKey in
+// normalize-oracle-export.mjs), without the dataset version, so a rebuild or a
+// new pack needs no carrying. This script remains for datasets built before
+// that, whose ids carried the version and an export-order counter: it takes
+// the previous dataset's id for every recipe that does the same thing (same
+// map, slots, amounts, chances, ticks and EU), and recipes named by a game
+// identity (a bee species, a crop, a vein, a mob, an underground fluid) keep
+// theirs when that identity is unchanged. Everything else keeps its new id.
+// Run the other way round (a fresh build as "previous", a copy of a published
+// dataset as "new"), it lets the two be compared recipe by recipe.
 //
 // Usage: node carry-recipe-ids.mjs <previous recipes.json[.gz]> <new recipes.json> [report.json]
-// Rewrites the new recipes.json in place. Run after normalize-oracle-export and
-// before the resource and recipe indexes.
+// Rewrites the new recipes.json in place.
 import fs from "node:fs";
 import readline from "node:readline";
 import zlib from "node:zlib";
@@ -82,8 +83,12 @@ export function contentKey(recipe) {
   ]);
 }
 
+// An id is `oracle:<category>:...`, or `oracle:<dataset version>:<category>:...`
+// in datasets built before ids left the version out.
 function identityKey(recipe) {
-  return `${recipe.category}|${String(recipe.id).replace(/^oracle:[^:]+:/, "")}`;
+  const rest = String(recipe.id).replace(/^oracle:/, "");
+  const unversioned = rest.startsWith(`${recipe.category}:`) ? rest : rest.slice(rest.indexOf(":") + 1);
+  return `${recipe.category}|${unversioned}`;
 }
 
 function recipeLine(line) {

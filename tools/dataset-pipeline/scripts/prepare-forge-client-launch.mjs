@@ -118,7 +118,7 @@ async function minecraftVersionInfo(versionId) {
 
 async function downloadLibraries(versionInfo) {
   for (const library of versionInfo.libraries ?? []) {
-    if (!isAllowed(library.rules)) {
+    if (!isAllowed(library.rules, library.name)) {
       continue;
     }
 
@@ -184,7 +184,7 @@ async function downloadMultiMcPatchLibraries() {
   for (const patchFile of patchFiles) {
     const patch = JSON.parse(await fs.readFile(path.join(patchesDir, patchFile), "utf8"));
     for (const library of patch.libraries ?? []) {
-      if (!isAllowed(library.rules) || !library.name) {
+      if (!isAllowed(library.rules, library.name) || !library.name) {
         continue;
       }
 
@@ -394,14 +394,21 @@ function extractNatives(jarPath) {
   }
 }
 
-function isAllowed(rules = []) {
+// Prism names x86-64 Linux natives "linux" and ARM ones "linux-arm64". A plain jar
+// limited to "linux" has no architecture, so it still loads on ARM.
+function isAllowed(rules = [], name = "") {
   if (rules.length === 0) {
     return true;
   }
 
+  const LINUX_OS = process.arch === "arm64" ? "linux-arm64" : "linux";
+  const x64Natives = /-natives-linux:|:natives-linux$/.test(name);
   let allowed = false;
   for (const rule of rules) {
-    const osMatches = !rule.os || rule.os.name === "linux";
+    const osMatches =
+      !rule.os ||
+      rule.os.name === LINUX_OS ||
+      (rule.os.name === "linux" && LINUX_OS !== "linux" && !x64Natives);
     if (osMatches) {
       allowed = rule.action === "allow";
     }

@@ -2,10 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import { existsSync } from "node:fs";
-import { PNG } from "pngjs";
 import { writeDatasetJson } from "./dataset-json-writer.mjs";
-import { getDominantOpaqueColor } from "./icon-utils.mjs";
 import { spargeRolledOutputs } from "./sparge-byproducts.mjs";
+import { stageRenderedIcons as stageIconsOnWorkers } from "./stage-rendered-icons.mjs";
 import {
   EEC_MACHINE_TYPE,
   eecDropChance,
@@ -45,8 +44,6 @@ const renderedIcons = await stageRenderedIcons(renderedIconDir, outDir);
 const resources = new Map();
 const recipes = [];
 const recipeMaps = new Set();
-/** Content hash -> how often it has been minted; see stableRecipeId. */
-const stableRecipeIdCounts = new Map();
 const recipeMapIcons = new Map();
 // GT's gt.recipe.furnace map mirrors vanilla FurnaceRecipes at runtime, so its
 // export has catalysts (steam/electric furnaces, Multi Smelter...) but zero
@@ -98,6 +95,23 @@ const recipeSignatures = new Set();
 // Coke Oven. Left to their localized names they fold into one misleading
 // "Coke Oven" family, so the ICO map wears its machine's name instead.
 const RECIPE_MAP_DISPLAY_NAMES = new Map([["gtpp.recipe.cokeoven", "Industrial Coke Oven"]]);
+// GT++ merged into GregTech in 2.9.0-RC-1: its gtpp.recipe.* maps are
+// gt.recipe.* there, and the Industrial Coke Oven's map took the machine's
+// name. Ids use the newest name, so a recipe keeps its id across that merge.
+const RECIPE_MAP_ID_RENAMES = new Map([["gtpp.recipe.cokeoven", "gt.recipe.industrialcokeoven"]]);
+
+// Fields, at any depth, a rebuild may change without the recipe changing:
+// names, icons, tooltips (some mods randomize them), stamps and the version.
+const VOLATILE_RECIPE_FIELDS = new Set([
+  "displayName",
+  "iconPath",
+  "dominantColor",
+  "tooltip",
+  "generatedAt",
+  "datasetVersionId",
+  "rawRecipeId",
+]);
+
 // The Tank synthesis (see addTankRecipe): its machine name, and the fallback
 // face for its chip when no plain empty cell ever crossed the Canner map.
 const TANK_MACHINE_TYPE = "Tank";
@@ -115,6 +129,7 @@ normalizeCropsNhCrops(findDomain("cropsNhCrops"));
 normalizeMobDrops(findDomain("mobDrops"));
 normalizeMining(findDomain("mining"));
 overrideFurnaceRecipeMapIcon();
+assignContentRecipeIds();
 
 const dataset = {
   schemaVersion: 1,
@@ -217,16 +232,18 @@ function normalizeGregtech(domain) {
         eut,
         machineConfigControls,
       });
-      const stableId = stableRecipeId(recipeMap.id, {
-        inputs,
-        outputs,
-        durationTicks,
-        eut,
-        specialValue: Number(rawRecipe.specialValue) || 0,
-      });
-
       addRecipe({
-        id: recipeId("gregtech", recipeMap.id, stableId),
+        contentId: {
+          idParts: ["gregtech", gameRecipeMapId(recipeMap.id)],
+          rawPrefix: recipeMap.id,
+          key: recipeContentKey(gameRecipeMapId(recipeMap.id), {
+            inputs,
+            outputs,
+            durationTicks,
+            eut,
+            specialValue: Number(rawRecipe.specialValue) || 0,
+          }),
+        },
         name: `${machineType}: ${resourceLabel(outputs[0])}`,
         kind: "gregtech_machine",
         category: "gregtech",
@@ -250,7 +267,6 @@ function normalizeGregtech(domain) {
           datasetVersionId,
           recipeMap: machineType,
           exporter: "gtnh-oracle",
-          rawRecipeId: `${recipeMap.id}:${stableId}`,
         },
         nei: {
           additionalInfo: [
@@ -271,7 +287,7 @@ function normalizeGregtech(domain) {
       // had them in their own fluidcanner map. The fluid-touch filter inside
       // keeps food canning out either way.
       if (recipeMap.id === "gt.recipe.canner" || recipeMap.id === "gt.recipe.fluidcanner") {
-        addTankRecipe(stableId, inputs, outputs);
+        addTankRecipe(inputs, outputs);
       }
     }
   }
@@ -312,7 +328,7 @@ function overrideTankRecipeMapIcon() {
  * waives is the Canner's power and time, so a chain that just needs the other
  * form of a fluid does not drag a powered machine line in with it.
  */
-function addTankRecipe(stableId, inputs, outputs) {
+function addTankRecipe(inputs, outputs) {
   if (![...inputs, ...outputs].some((entry) => entry.kind === "fluid")) {
     return;
   }
@@ -326,7 +342,11 @@ function addTankRecipe(stableId, inputs, outputs) {
     tankIconFallback = face;
   }
   addRecipe({
-    id: recipeId("gregtech", "planner.tank", stableId),
+    contentId: {
+      idParts: ["gregtech", "planner.tank"],
+      rawPrefix: "planner.tank",
+      key: recipeContentKey("planner.tank", { inputs, outputs, durationTicks: 1, eut: 0, specialValue: 0 }),
+    },
     name: `Tank: ${resourceLabel(outputs[0])}`,
     kind: "gregtech_machine",
     category: "gregtech",
@@ -343,7 +363,6 @@ function addTankRecipe(stableId, inputs, outputs) {
       datasetVersionId,
       recipeMap: TANK_MACHINE_TYPE,
       exporter: "gtnh-oracle",
-      rawRecipeId: `planner.tank:${stableId}`,
     },
     nei: {
       additionalInfo: ["Free and instant: a planner convenience, not a placeable machine."],
@@ -369,16 +388,29 @@ function normalizeCrafting(domain) {
       amount: 1,
       displayName: "Crafting Table",
     });
-    const craftingInputs = (rawRecipe.inputs ?? [])
-      .map((entry, index) =>
-        resourceAmount(entry, {
+    const craftingSlots = (rawRecipe.inputs ?? [])
+      .map((entry, index) => ({
+        gridSlot: entry.slotIndex ?? index,
+        resource: resourceAmount(entry, {
           neiSlot: craftingInputNeiSlot(rawRecipe, entry.slotIndex ?? index),
         }),
-      )
-      .filter(Boolean);
+      }))
+      .filter((slot) => slot.resource);
+    const craftingInputs = craftingSlots.map((slot) => slot.resource);
     const inputGrid = craftingInputGrid(rawRecipe);
     addRecipe({
-      id: recipeId("crafting", rawRecipe.type, rawRecipe.id),
+      contentId: {
+        idParts: ["crafting", rawRecipe.type],
+        key: recipeContentKey(machineType, {
+          // A shaped recipe is its pattern: the same items in another layout make another
+          // recipe. The grid cell comes from the export, since ore dictionary slots carry no
+          // neiSlot.
+          inputs: craftingSlots.map(({ gridSlot, resource }) =>
+            rawRecipe.type === "shapeless" ? resource : { ...resource, gridSlot },
+          ),
+          outputs: [output],
+        }),
+      },
       name: `${machineType}: ${resourceLabel(output)}`,
       kind: "gregtech_machine",
       category: "crafting",
@@ -416,7 +448,10 @@ function normalizeSmelting(domain) {
     }
     recipeMaps.add(machineType);
     addRecipe({
-      id: recipeId("smelting", rawRecipe.id),
+      contentId: {
+        idParts: ["smelting"],
+        key: recipeContentKey(machineType, { inputs: [input], outputs: [output] }),
+      },
       name: `${machineType}: ${resourceLabel(output)}`,
       kind: "gregtech_machine",
       category: "furnace",
@@ -537,7 +572,15 @@ function normalizeThaumcraft(domain) {
     );
     const durationTicks = positiveInt(rawRecipe.durationTicks, thaumcraftDuration(rawRecipe.type));
     addRecipe({
-      id: recipeId("thaumcraft", rawRecipe.type, rawRecipe.id),
+      contentId: {
+        idParts: ["thaumcraft", rawRecipe.type],
+        key: recipeContentKey(machineType, {
+          inputs,
+          outputs,
+          durationTicks,
+          positional: rawRecipe.type === "arcane",
+        }),
+      },
       name: `${machineType}: ${resourceLabel(output)}`,
       kind: rawRecipe.type === "essentiaSmelting" ? "essentia_smelting" : "gregtech_machine",
       category: "thaumcraft",
@@ -2183,28 +2226,15 @@ async function stageRenderedIcons(sourceDir, datasetOutDir) {
   const targetDir = path.join(datasetOutDir, "textures", "rendered");
   await fs.rm(targetDir, { recursive: true, force: true });
   await fs.mkdir(targetDir, { recursive: true });
-  for (const file of await fs.readdir(sourceDir)) {
-    if (!file.toLowerCase().endsWith(".png")) {
-      continue;
-    }
-    const sourcePath = path.join(sourceDir, file);
-    const targetPath = path.join(targetDir, file);
-    await fs.copyFile(sourcePath, targetPath);
-    const color = await dominantColorForPng(targetPath);
+  const files = (await fs.readdir(sourceDir)).filter((file) => file.toLowerCase().endsWith(".png"));
+  const colors = await stageIconsOnWorkers(files, sourceDir, targetDir);
+  files.forEach((file, index) => {
     icons.set(file, {
       iconPath: `/datasets/gtnh/${datasetVersionId}/textures/rendered/${file}`,
-      dominantColor: color,
+      dominantColor: colors[index],
     });
-  }
+  });
   return icons;
-}
-
-async function dominantColorForPng(filePath) {
-  try {
-    return getDominantOpaqueColor(PNG.sync.read(await fs.readFile(filePath)));
-  } catch {
-    return undefined;
-  }
 }
 
 function renderedIconPath(fileName) {
@@ -2232,18 +2262,18 @@ function findDomain(id) {
 }
 
 /**
- * A recipe's id, minted from what the recipe IS - its slots, ticks, EU and
- * special value, in its map - so it comes out the same on every rebuild.
+ * What a recipe IS, for its id: its map, slots, amounts, chances, ticks, EU
+ * and special value. Neither the dataset version nor anything the exporter
+ * numbers goes in, so an unchanged recipe keeps its id on every rebuild and
+ * in every pack version that has it, and plans keep their cards.
  *
- * The oracle's own id hashed the map, the recipe's position in it and
- * `GTRecipe.toString()`, which GTRecipe never overrides: a JVM identity
- * hash, different on every export. Every dataset rebuild therefore renamed
- * every GregTech recipe, and every saved plan lost every id it held. Two
- * recipes the game registers identically (GT has such pairs) get the same
- * hash and are told apart by a counter, in the exporter's sorted order.
+ * The exporter's own ids counted registrations (crafting, furnace,
+ * thaumcraft) or hashed `GTRecipe.toString()`, a JVM identity hash: every
+ * export renamed recipes and every saved plan lost its ids. Slots are sorted;
+ * a pattern's layout is part of the recipe, so a slot carries its grid cell
+ * (`gridSlot`, or its neiSlot when the recipe is `positional`).
  */
-
-function stableRecipeId(recipeMapId, recipe) {
+function recipeContentKey(map, recipe) {
   const slotKey = (entry) =>
     [
       entry.kind,
@@ -2251,29 +2281,90 @@ function stableRecipeId(recipeMapId, recipe) {
       entry.amount,
       entry.consumed === false ? "nc" : "",
       entry.chance ?? "",
+      entry.gridSlot ?? (recipe.positional && entry.neiSlot ? `${entry.neiSlot.x},${entry.neiSlot.y}` : ""),
     ].join("|");
-  const hash = crypto
-    .createHash("sha1")
-    .update(
-      JSON.stringify({
-        map: recipeMapId,
-        inputs: recipe.inputs.map(slotKey).sort(),
-        outputs: recipe.outputs.map(slotKey).sort(),
-        durationTicks: recipe.durationTicks,
-        eut: recipe.eut,
-        specialValue: recipe.specialValue,
-      }),
-    )
-    .digest("hex")
-    .slice(0, 16);
-  const key = `${recipeMapId}:${hash}`;
-  const seen = (stableRecipeIdCounts.get(key) ?? 0) + 1;
-  stableRecipeIdCounts.set(key, seen);
-  return seen === 1 ? hash : `${hash}-${seen}`;
+  return JSON.stringify({
+    map,
+    inputs: recipe.inputs.map(slotKey).sort(),
+    outputs: recipe.outputs.map(slotKey).sort(),
+    durationTicks: recipe.durationTicks ?? null,
+    eut: recipe.eut ?? null,
+    specialValue: recipe.specialValue ?? null,
+  });
 }
 
+function gameRecipeMapId(recipeMapId) {
+  return RECIPE_MAP_ID_RENAMES.get(recipeMapId) ?? String(recipeMapId).replace(/^gtpp\.recipe\./, "gt.recipe.");
+}
+
+function canonicalRecipeBody(value) {
+  if (Array.isArray(value)) {
+    return value.map(canonicalRecipeBody);
+  }
+  if (value && typeof value === "object") {
+    const canonical = {};
+    for (const key of Object.keys(value).sort()) {
+      if (!VOLATILE_RECIPE_FIELDS.has(key)) {
+        canonical[key] = canonicalRecipeBody(value[key]);
+      }
+    }
+    return canonical;
+  }
+  return value;
+}
+
+/**
+ * Gives every recipe that carries a `contentId` its id: the hash of its
+ * content key. Recipes with the same key (GT registers such pairs, which
+ * differ only outside the key) take `-2`, `-3`... in the order of a hash of
+ * their whole body, not in export order, which the game does not keep.
+ * GregTech recipes get the same suffix as their rawRecipeId, after the map.
+ */
+function assignContentRecipeIds() {
+  const groups = new Map();
+  for (const recipe of recipes) {
+    if (!recipe.contentId) {
+      continue;
+    }
+    const hash = sha1Hex(recipe.contentId.key).slice(0, 16);
+    const groupKey = `${recipe.contentId.idParts.join(":")}:${hash}`;
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, { hash, members: [] });
+    }
+    groups.get(groupKey).members.push(recipe);
+  }
+  for (const { hash, members } of groups.values()) {
+    if (members.length > 1) {
+      const bodyHash = new Map(
+        members.map((recipe) => {
+          const { id, contentId, ...body } = recipe;
+          return [recipe, sha1Hex(JSON.stringify(canonicalRecipeBody(body)))];
+        }),
+      );
+      members.sort((left, right) => {
+        const a = bodyHash.get(left);
+        const b = bodyHash.get(right);
+        return a < b ? -1 : a > b ? 1 : 0;
+      });
+    }
+    members.forEach((recipe, index) => {
+      const suffix = index === 0 ? hash : `${hash}-${index + 1}`;
+      recipe.id = recipeId(...recipe.contentId.idParts, suffix);
+      if (recipe.contentId.rawPrefix) {
+        recipe.source.rawRecipeId = `${recipe.contentId.rawPrefix}:${suffix}`;
+      }
+      delete recipe.contentId;
+    });
+  }
+}
+
+function sha1Hex(value) {
+  return crypto.createHash("sha1").update(value).digest("hex");
+}
+
+/** A recipe id: `oracle:` and its parts, never the dataset version (see recipeContentKey). */
 function recipeId(...parts) {
-  return `oracle:${datasetVersionId}:${parts
+  return `oracle:${parts
     .map((part) => slug(part))
     .filter(Boolean)
     .join(":")}`;

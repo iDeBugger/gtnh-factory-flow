@@ -29,18 +29,38 @@ Rebuilds must run `normalize-fluid-icon-alpha.mjs` (with `--rename`) after the i
 builds and before publishing, or faint fluids ship invisible. Texture URLs are cache-immutable: fix pixels under a NEW filename (`--rename`),
 and patch whole basenames only.
 
-A fresh export is NOT deterministic: crafting, furnace, bee, crop and essentia recipes
-reorder, re-minting ~37,000 ids. When an export only ADDS fields, graft them onto the
-published export (`~/graft-sparge.js`, matching recipes by content key) and confirm with
-a shard diff (`~/cmp-field.js`). The 2.9 export in WSL is such a graft.
+Recipe ids come from what a recipe is, never from the export: `recipeContentKey` in
+`normalize-oracle-export.mjs` hashes the map (GT++'s `gtpp.recipe.*` read as
+`gt.recipe.*`), sorted slots, amounts, chances, ticks, EU and special value, plus the grid
+cell of a shaped pattern. The id is `oracle:<category>:<map>:<hash>` with no dataset
+version, so a rebuild or another pack keeps every unchanged recipe's id with nothing to
+carry. Recipes sharing a key take `-2`, `-3`... in the order of a hash of their whole body.
+Bees, crops, veins, mobs and underground fluids keep ids named by their game identity.
+About 20 recipes differ between two exports of one pack because the game rolls them
+(Crop Breeder and assembly line ore picks, Gadomancy aspects); a plan holding one finds it
+again by content (`resolveProjectRecipes`). Exam: `normalize-oracle-export.test.mjs`.
 
-A new pack (or any fresh export) keeps the previous dataset's recipe ids with
-`scripts/carry-recipe-ids.mjs <previous recipes.json.gz> <new recipes.json> [report]`, run
-after normalize and before the indexes: same map (GT++'s `gtpp.recipe.*` read as RC-2's
-`gt.recipe.*`), slots, amounts, chances, ticks and EU keep the old id (its old dataset
-prefix included); bees, crops, veins, mobs and underground fluids keep theirs by identity.
-`local-2.9.0-rc-2` carries beta-2's ids this way (`~/rebuild-rc2.sh` in WSL; the report is
-`oracle/recipe-id-carry.json`).
+Datasets built before this carry versioned ids (`oracle:local-2.9.0-beta-2:...`) and the
+published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such builds.
+
+## Exporting on Apple Silicon
+
+The client export runs natively in arm64 Docker (OrbStack): `prepare-forge-client-launch.mjs`
+picks LWJGL's `linux-arm64` natives, and Mesa llvmpipe renders under xvfb. Keep the instance
+on a case-sensitive Docker volume: the pack has file names that differ only in case.
+
+- Icons render into a pool of reused framebuffers and are read back 64 at a time
+  (`gtnh.oracle.iconReadBackBatch`); PNG encoding and writes run on a thread pool. Do not
+  draw several icons into one framebuffer: llvmpipe rasterizes 3D blocks differently there.
+- A flat item icon (every 8x8 square one colour, about 70% of items) is written as 32x32,
+  one pixel per texel, margins kept (`asPixelArt`). The app draws every icon pixelated and
+  sized from the padded canvas, so it shows the same picture; blocks and models stay 256.
+- Animated textures are held on their first frame while icons render
+  (`IconAnimationFreezer`), so fluids and machines come out the same on every export. About
+  400 icons from time-driven renderers still differ between exports.
+- The mod writes `icon-colors.json` beside the icons (`IconColors`, a step-for-step port of
+  `getDominantOpaqueColor`); `stage-rendered-icons.mjs` decodes only icons it lacks. The two
+  must stay identical.
 
 ## Import principles
 
