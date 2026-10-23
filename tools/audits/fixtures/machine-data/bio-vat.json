@@ -1,0 +1,111 @@
+{
+  "source": "bartworks' Bacterial Vat map (bw.recipe.BacteriaVat), GLASS and SIEVERT metadata",
+  "recipes": [
+    {
+      "culture": "Saccharomyces cerevisiae var bayanus",
+      "items": [
+        {
+          "id": "harvestcraft:grapeitem",
+          "name": "Grape",
+          "amount": 16
+        }
+      ],
+      "itemOutputs": [],
+      "fluidIn": {
+        "id": "water",
+        "name": "Water",
+        "amount": 100
+      },
+      "fluidOut": {
+        "id": "potion.wine",
+        "name": "Wine",
+        "amount": 12
+      },
+      "durationTicks": 200,
+      "eut": 120,
+      "glass": 3,
+      "sievert": 0,
+      "exact": false,
+      "cleanroom": false
+    },
+    {
+      "culture": "Derivantur Cellula Evolutionis",
+      "items": [
+        {
+          "id": "gregtech:gt.metaitem.03@32073",
+          "name": "Stemcells",
+          "amount": 64
+        },
+        {
+          "id": "galaxyspace:item.unknowcrystal",
+          "name": "Unknown Crystal Shard",
+          "amount": 16
+        },
+        {
+          "id": "dreamcraft:tcetieseaweedextract",
+          "name": "TCetiE-Seaweed Extract",
+          "amount": 4
+        },
+        {
+          "id": "gregtech:gt.metaitem.01@2329",
+          "name": "Tritanium Dust",
+          "amount": 4
+        }
+      ],
+      "itemOutputs": [],
+      "fluidIn": {
+        "id": "growthmediumraw",
+        "name": "Raw Growth Catalyst Medium",
+        "amount": 8
+      },
+      "fluidOut": {
+        "id": "biomediumraw",
+        "name": "Raw Bio Catalyst Medium",
+        "amount": 2
+      },
+      "durationTicks": 3600,
+      "eut": 30720,
+      "glass": 6,
+      "sievert": 94,
+      "exact": true,
+      "cleanroom": false
+    },
+    {
+      "culture": "Cellula Biologicum Evolutione",
+      "items": [
+        {
+          "id": "gregtech:gt.metaitem.03@32076",
+          "name": "Biocells",
+          "amount": 8
+        },
+        {
+          "id": "dreamcraft:tcetieseaweedextract",
+          "name": "TCetiE-Seaweed Extract",
+          "amount": 16
+        },
+        {
+          "id": "gregtech:gt.metaitem.01@2394",
+          "name": "Infinity Catalyst Dust",
+          "amount": 4
+        }
+      ],
+      "itemOutputs": [],
+      "fluidIn": {
+        "id": "growthmediumraw",
+        "name": "Raw Growth Catalyst Medium",
+        "amount": 5
+      },
+      "fluidOut": {
+        "id": "biomediumraw",
+        "name": "Raw Bio Catalyst Medium",
+        "amount": 10
+      },
+      "durationTicks": 3600,
+      "eut": 491520,
+      "glass": 8,
+      "sievert": 150,
+      "exact": true,
+      "cleanroom": true
+    }
+  ]
+}

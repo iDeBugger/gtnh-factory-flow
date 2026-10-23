@@ -82,8 +82,12 @@ export GTNH_INSTANCE_ROOT="$instance_root"
 mkdir -p "$instance_root/mods"
 
 oracle_project="tools/dataset-pipeline/gtnh-calc-oracle"
+# The pack picks the GregTech the mod compiles against (dependencies.gradle), so one
+# source tree builds a different jar per pack: the pack goes in the cache key too.
+GTNH_ORACLE_PACK="${GTNH_ORACLE_PACK:-2.9}"
 oracle_patch_hash="$(
   {
+    echo "gtnhPack=$GTNH_ORACLE_PACK"
     find "$oracle_project" -type f \
       ! -path '*/build/*' \
       ! -path '*/.gradle/*' \
@@ -93,7 +97,7 @@ oracle_patch_hash="$(
 oracle_cached_jar=""
 if [[ -n "$GTNH_ORACLE_BUILD_CACHE_DIR" ]]; then
   mkdir -p "$GTNH_ORACLE_BUILD_CACHE_DIR"
-  oracle_cached_jar="$GTNH_ORACLE_BUILD_CACHE_DIR/gtnh-calc-oracle-$oracle_patch_hash.jar"
+  oracle_cached_jar="$GTNH_ORACLE_BUILD_CACHE_DIR/gtnh-calc-oracle-$GTNH_ORACLE_PACK-$oracle_patch_hash.jar"
 fi
 
 if [[ -n "$oracle_cached_jar" && -f "$oracle_cached_jar" ]]; then
@@ -109,27 +113,38 @@ else
     gradle_java_paths_csv="$(IFS=,; echo "${gradle_java_paths[*]}")"
     export GRADLE_OPTS="${GRADLE_OPTS:-} -Dorg.gradle.java.installations.paths=$gradle_java_paths_csv -Dorg.gradle.java.installations.auto-download=false"
   fi
+  # Jar names carry the git commit, not the pack, so jars from an earlier commit or pack
+  # would sit beside this build's. Clearing them first leaves only the jar built here.
+  if [[ -d "$oracle_project/build/libs" ]]; then
+    find "$oracle_project/build/libs" -maxdepth 1 -type f -name '*.jar' -delete
+  fi
   if [[ -x /opt/java/jdk-25/bin/java ]]; then
-    (cd "$oracle_project" && JAVA_HOME=/opt/java/jdk-25 PATH="/opt/java/jdk-25/bin:$PATH" ./gradlew --no-daemon build)
+    (cd "$oracle_project" && JAVA_HOME=/opt/java/jdk-25 PATH="/opt/java/jdk-25/bin:$PATH" ./gradlew --no-daemon build -PgtnhPack="$GTNH_ORACLE_PACK")
   else
-    (cd "$oracle_project" && ./gradlew --no-daemon build)
+    (cd "$oracle_project" && ./gradlew --no-daemon build -PgtnhPack="$GTNH_ORACLE_PACK")
   fi
   echo "GTNH calculation oracle build outputs:"
   find "$oracle_project/build/libs" -maxdepth 1 -type f -name '*.jar' -printf '  %f\n' | sort
-  oracle_jar="$(
+  runtime_jars=()
+  while IFS= read -r jar; do
+    runtime_jars+=("$jar")
+  done < <(
     find "$oracle_project/build/libs" -maxdepth 1 -type f -name '*.jar' \
       ! -name '*-sources.jar' \
       ! -name '*-dev.jar' \
       ! -name '*-dev-preshadow.jar' \
       ! -name '*-preshadow.jar' \
-      | sort | tail -n 1
-  )"
-  if [[ -z "$oracle_jar" ]]; then
-    echo "GTNH calculation oracle build did not produce a runtime jar." >&2
+      | sort
+  )
+  if (( ${#runtime_jars[@]} != 1 )); then
+    echo "GTNH calculation oracle build should leave one runtime jar, found ${#runtime_jars[@]}." >&2
     exit 1
   fi
+  oracle_jar="${runtime_jars[0]}"
+  echo "GTNH calculation oracle runtime jar ($GTNH_ORACLE_PACK): $(basename "$oracle_jar")"
   if [[ -n "$oracle_cached_jar" ]]; then
     cp "$oracle_jar" "$oracle_cached_jar"
+    echo "Cached GTNH calculation oracle jar: $oracle_cached_jar"
   fi
 fi
 find "$instance_root/mods" -type f \( -iname '*recex*.jar' -o -iname '*recipe*export*.jar' -o -iname '*gtnh*calc*oracle*.jar' \) -print -delete
@@ -271,7 +286,8 @@ while (( SECONDS < deadline )); do
     fail_from_runtime_log "GTNH runtime emitted a fatal Forge/Minecraft crash log before completing the oracle export."
   fi
 
-  raw_oracle_json="$(find "$oracle_output_dir" -type f -name '*.json' 2>/dev/null | sort | tail -n 1 || true)"
+  # Top level only: machine-data/ below it holds JSON files that are not the export.
+  raw_oracle_json="$(find "$oracle_output_dir" -maxdepth 1 -type f -name '*.json' 2>/dev/null | sort | tail -n 1 || true)"
   if [[ -n "$raw_oracle_json" ]]; then
     current_size="$(stat -c%s "$raw_oracle_json")"
     sleep 5
@@ -317,6 +333,15 @@ if [[ -z "$raw_oracle_json" ]]; then
 fi
 
 cp "$raw_oracle_json" "$GTNH_RAW_EXPORT_DIR/oracle-export.json"
+# The Tree Growth Simulator, Bacterial Vat and radio hatch side files the oracle writes beside
+# its export, for tools/audits/import-machine-side-data.mjs.
+rm -rf "$GTNH_RAW_EXPORT_DIR/machine-data"
+if [[ -d "$oracle_output_dir/machine-data" ]]; then
+  cp -r "$oracle_output_dir/machine-data" "$GTNH_RAW_EXPORT_DIR/machine-data"
+  echo "Machine data: $(ls "$GTNH_RAW_EXPORT_DIR/machine-data" | tr '\n' ' ')"
+else
+  echo "GTNH calculation oracle wrote no machine-data/ under $oracle_output_dir" >&2
+fi
 echo "Normalizing oracle export into dataset recipes.json"
 node tools/dataset-pipeline/scripts/normalize-oracle-export.mjs "$raw_oracle_json" "$GTNH_DATASET_OUT_DIR/recipes.json"
 echo "Applying texture icons to normalized dataset"

@@ -36,9 +36,10 @@ cell of a shaped pattern. The id is `oracle:<category>:<map>:<hash>` with no dat
 version, so a rebuild or another pack keeps every unchanged recipe's id with nothing to
 carry. Recipes sharing a key take `-2`, `-3`... in the order of a hash of their whole body.
 Bees, crops, veins, mobs and underground fluids keep ids named by their game identity.
-About 20 recipes differ between two exports of one pack because the game rolls them
-(Crop Breeder and assembly line ore picks, Gadomancy aspects); a plan holding one finds it
-again by content (`resolveProjectRecipes`). Exam: `normalize-oracle-export.test.mjs`.
+Some recipes differ between two exports of one pack because the game rolls them (Crop
+Breeder and assembly line ore picks, Gadomancy aspects, and Thaumcraft's generated item
+aspects behind essentia smelting): 18 to 70 ids across three pairs of exports. A plan
+holding one finds it again by content (`resolveProjectRecipes`). Exam: `normalize-oracle-export.test.mjs`.
 
 Datasets built before this carry versioned ids (`oracle:local-2.9.0-beta-2:...`) and the
 published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such builds.
@@ -86,6 +87,10 @@ on a case-sensitive Docker volume: the pack has file names that differ only in c
   with a fake label.
 - Every fluid-touching Canner recipe is mirrored into the synthesized "Tank" map
   (`addTankRecipe`, 0 EU, 1 tick, real slots).
+- The Tree Growth Simulator, Bacterial Vat and radio hatch facts the recipes lack go to
+  `machine-data/` beside `oracle-export.json` (`MachineDataExport`, ids only, no icons), for
+  `tools/audits/import-machine-side-data.mjs`. The export's order of the radio hatch's GT++
+  rods changes on every launch, so the importer sorts the materials by id.
 - Extreme Entity Crusher mobs come from the `kubatech-eec-mobs` oracle adapter (drop
   chances replayed in `eec-drops.mjs`). Sparge Tower rolled outputs and fusion startup EU
   are per-recipe export fields; `sparge-byproducts.mjs` appends rolled slots AFTER the

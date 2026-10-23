@@ -1,0 +1,19 @@
+{
+  "source": "bartworks' radio hatch materials (bw.recipe.radhatch): SIEVERT and MASS metadata",
+  "materials": [
+    {
+      "id": "bartworks:gt.bwmetageneratedsticklong@30",
+      "name": "Long Thorium 232 Rod",
+      "amount": 1,
+      "sievert": 90,
+      "mass": 2
+    },
+    {
+      "id": "bartworks:gt.bwmetageneratedstick@30",
+      "name": "Thorium 232 Rod",
+      "amount": 1,
+      "sievert": 90,
+      "mass": 1
+    }
+  ]
+}

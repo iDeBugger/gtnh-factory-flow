@@ -99,8 +99,9 @@ computes in float: replicate it.
   (void protection holds it). Glass and sieverts gate via `recipeGate` (`MachineContext.recipe`);
   the radio hatch's material is an input at its decay rate. The dataset has no GLASS/SIEVERT:
   `data/bio-vat.json` and `data/radio-hatch.json`.
-- Both come from the in-game mod's export (`call 'machinedata?dir=...'` in the full pack, then
-  `tools/audits/import-machine-side-data.mjs`); never hand-edit them. Their cards show their
+- Both come from the oracle export's `machine-data/` beside `oracle-export.json` (a port of the
+  in-game mod's `call 'machinedata?dir=...'`), then `tools/audits/import-machine-side-data.mjs
+  <dir> --gt <GT5U version> [--out <dir>]`; never hand-edit them. Their cards show their
   working (`formula-lines.ts`, `MachineFormulas`); the in-game mod shows the same lines.
   Per-recipe knobs come from `controlsFor` in the machine table.
 

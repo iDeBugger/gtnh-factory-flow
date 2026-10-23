@@ -1,3 +1,12 @@
 plugins {
     id 'com.gtnewhorizons.gtnhconvention'
 }
+
+// The pack's version-specific sources (dependencies.gradle picks the dir from gtnhPack).
+sourceSets {
+    main {
+        java {
+            srcDir project.ext.gtnhPackSourceDir
+        }
+    }
+}

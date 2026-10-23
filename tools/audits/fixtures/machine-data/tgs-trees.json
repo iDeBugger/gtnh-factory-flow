@@ -1,0 +1,76 @@
+{
+  "source": "MTETreeFarm's NEI recipes (gt.recipe.treefarm): outputs are NEI's, the product x the mode's multiplier",
+  "trees": [
+    {
+      "sapling": {
+        "id": "minecraft:sapling",
+        "name": "Oak Sapling",
+        "amount": 1
+      },
+      "outputs": {
+        "log": {
+          "id": "minecraft:log",
+          "name": "Oak Log",
+          "amount": 5
+        },
+        "sapling": {
+          "id": "minecraft:sapling",
+          "name": "Oak Sapling",
+          "amount": 5
+        },
+        "leaves": {
+          "id": "minecraft:leaves",
+          "name": "Oak Leaves",
+          "amount": 2
+        },
+        "fruit": {
+          "id": "minecraft:apple",
+          "name": "Apple",
+          "amount": 1
+        }
+      }
+    },
+    {
+      "sapling": {
+        "id": "forestry:sapling",
+        "name": "Apple Oak Sapling",
+        "amount": 1
+      },
+      "outputs": {
+        "log": {
+          "id": "minecraft:log",
+          "name": "Oak Log",
+          "amount": 5
+        },
+        "sapling": {
+          "id": "forestry:sapling",
+          "name": "Apple Oak Sapling",
+          "amount": 5
+        },
+        "leaves": {
+          "id": "forestry:leaves",
+          "name": "Apple Oak Leaves",
+          "amount": 2
+        },
+        "fruit": {
+          "id": "minecraft:apple",
+          "name": "Apple",
+          "amount": 1
+        }
+      },
+      "forestry": {
+        "species": "forestry.treeOak",
+        "height": 0.75,
+        "girth": 1,
+        "fertility": 0.05,
+        "yield": 0.025,
+        "base": {
+          "log": 1,
+          "sapling": 1,
+          "leaves": 1,
+          "fruit": 1
+        }
+      }
+    }
+  ]
+}

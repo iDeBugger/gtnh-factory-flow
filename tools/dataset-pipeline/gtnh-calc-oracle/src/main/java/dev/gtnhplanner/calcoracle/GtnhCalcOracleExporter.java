@@ -6,18 +6,10 @@ import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.Loader;
 import dev.gtnhplanner.calcoracle.icons.FluidStackIconExporter;
 import dev.gtnhplanner.calcoracle.icons.ItemStackIconExporter;
-import gregtech.api.enums.StoneType;
-import gregtech.api.interfaces.IOreMaterial;
-import gregtech.api.interfaces.IStoneType;
 import gregtech.api.recipe.RecipeMap;
 import gregtech.api.recipe.RecipeMapBackend;
 import gregtech.api.util.GTRecipe;
 import gregtech.api.util.GTRecipeConstants;
-import gtneioreplugin.util.DimensionHelper;
-import gtneioreplugin.util.GT5OreLayerHelper;
-import gtneioreplugin.util.GT5OreSmallHelper;
-import gtneioreplugin.util.GT5UndergroundFluidHelper;
-import gtneioreplugin.util.OreVeinLayer;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -59,7 +51,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
 
-public final class GtnhCalcOracleExporter {
+public final class GtnhCalcOracleExporter implements MiningContext, MachineDataContext {
 
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
     private static final String[] GT_VOLTAGE_NAMES = new String[] {
@@ -102,7 +94,8 @@ public final class GtnhCalcOracleExporter {
         domains.add(exportIc2Crops(adapters));
         domains.add(exportCropsNhCrops(adapters));
         domains.add(exportMobDrops(adapters));
-        domains.add(exportMining(adapters));
+        domains.add(new MiningExportImpl().exportMining(adapters, this));
+        Map<String, Map<String, Object>> machineData = exportMachineData();
 
         Map<String, Object> root = map();
         root.put("schemaVersion", Integer.valueOf(1));
@@ -122,6 +115,10 @@ public final class GtnhCalcOracleExporter {
             throw new IllegalStateException("Could not create oracle output directory: " + outputDir);
         }
 
+        // Machine data goes first: the export runner takes the main file's arrival as the end
+        // of the export, and copies machine-data/ out beside it.
+        writeMachineData(new File(outputDir, "machine-data"), machineData);
+
         File outputFile = new File(outputDir, "gtnh-oracle-" + safeTimestamp(generatedAt) + ".json");
         FileWriter writer = new FileWriter(outputFile);
         try {
@@ -132,6 +129,62 @@ public final class GtnhCalcOracleExporter {
         }
 
         return new ExportResult(outputFile.getAbsolutePath(), recipeCount, adapters.size());
+    }
+
+    /**
+     * The Tree Growth Simulator, Bacterial Vat and radio hatch side files, by file name. A file
+     * that fails is left out and logged, so the importer stops on it instead of reading a stale
+     * one; it is not an adapter, so oracle-export.json stays as it was.
+     */
+    private Map<String, Map<String, Object>> exportMachineData() {
+        MachineDataExport export = new MachineDataExport(this);
+        Map<String, Map<String, Object>> files = new LinkedHashMap<String, Map<String, Object>>();
+        try {
+            files.put("tgs-trees.json", export.trees());
+        } catch (Throwable t) {
+            GtnhCalcOracleMod.LOG.error("GTNH calculation oracle machine data tgs-trees.json failed.", t);
+        }
+        try {
+            files.put("bio-vat.json", export.vat());
+        } catch (Throwable t) {
+            GtnhCalcOracleMod.LOG.error("GTNH calculation oracle machine data bio-vat.json failed.", t);
+        }
+        try {
+            files.put("radio-hatch.json", export.radioHatch());
+        } catch (Throwable t) {
+            GtnhCalcOracleMod.LOG.error("GTNH calculation oracle machine data radio-hatch.json failed.", t);
+        }
+        return files;
+    }
+
+    /** Written like each file is exported: a failure is logged and left out, never the main export's end. */
+    private void writeMachineData(File dir, Map<String, Map<String, Object>> files) {
+        if (!dir.isDirectory() && !dir.mkdirs()) {
+            GtnhCalcOracleMod.LOG.error("GTNH calculation oracle could not create machine data directory {}.", dir);
+            return;
+        }
+        File[] stale = dir.listFiles();
+        if (stale != null) {
+            for (File file : stale) {
+                file.delete();
+            }
+        }
+        Gson pretty = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+        for (Map.Entry<String, Map<String, Object>> entry : files.entrySet()) {
+            File file = new File(dir, entry.getKey());
+            try {
+                FileWriter writer = new FileWriter(file);
+                try {
+                    pretty.toJson(entry.getValue(), writer);
+                    writer.write('\n');
+                } finally {
+                    writer.close();
+                }
+            } catch (Exception e) {
+                file.delete();
+                GtnhCalcOracleMod.LOG.error("GTNH calculation oracle machine data " + entry.getKey() + " failed.", e);
+            }
+        }
     }
 
     private Map<String, Object> exportOreDictionary(List<Map<String, Object>> adapters) {
@@ -1930,274 +1983,6 @@ public final class GtnhCalcOracleExporter {
         }
     }
 
-    private Map<String, Object> exportMining(List<Map<String, Object>> adapters) {
-        Map<String, Object> domain = domain("mining");
-        domain.put(
-            "notes",
-            "GregTech worldgen exported through the NEI ore plugin helpers bundled in GT5-Unofficial. A vein's"
-                + " weight is its relative pick weight among the veins that can generate in a dimension; dimChances"
-                + " are the plugin's computed per-dimension probabilities keyed by dimension abbreviation. Density"
-                + " and size describe how the picked vein fills chunks. Small ores generate independently at"
-                + " amountPerChunk tries per chunk, and undergroundFluids list per-dimension chunk deposits.");
-        List<Map<String, Object>> dimensions = new ArrayList<Map<String, Object>>();
-        try {
-            for (DimensionHelper.Dimension dimension : DimensionHelper.ALL_DIMENSIONS) {
-                if (dimension == null) {
-                    continue;
-                }
-                Map<String, Object> exported = map();
-                exported.put("id", safeString(dimension.internalName()));
-                putIfPresent(exported, "name", safeString(dimension.trimmedName()));
-                putIfPresent(exported, "fullName", safeString(dimension.fullName()));
-                putIfPresent(exported, "abbr", safeString(dimension.abbr()));
-                putIfPresent(exported, "tier", safeString(dimension.tierKey()));
-                dimensions.add(exported);
-            }
-        } catch (Throwable ignored) {
-            // A failure here also fails the vein export below, which reports it.
-        }
-        domain.put("dimensions", dimensions);
-        exportMiningOreVeins(adapters, domain);
-        exportMiningSmallOres(adapters, domain);
-        exportMiningUndergroundFluids(adapters, domain);
-        return domain;
-    }
-
-    private void exportMiningOreVeins(List<Map<String, Object>> adapters, Map<String, Object> domain) {
-        long started = System.currentTimeMillis();
-        List<Map<String, Object>> veins = new ArrayList<Map<String, Object>>();
-        try {
-            Map<String, GT5OreLayerHelper.OreLayerWrapper> byName = GT5OreLayerHelper.getOreVeinsByName();
-            if (byName == null || byName.isEmpty()) {
-                // The NEI plugin fills these caches when its handlers first open, which
-                // never happens on the autorun path. init() rebuilds fresh immutable maps
-                // from the OreMixes enum, so calling it again is harmless.
-                GT5OreLayerHelper.init();
-                byName = GT5OreLayerHelper.getOreVeinsByName();
-            }
-
-            Map<GT5OreLayerHelper.OreLayerWrapper, Map<String, Object>> chancesByVein =
-                new IdentityHashMap<GT5OreLayerHelper.OreLayerWrapper, Map<String, Object>>();
-            Map<String, GT5OreLayerHelper.NormalOreDimensionWrapper> byDim = GT5OreLayerHelper.getOreVeinsByDim();
-            for (Map.Entry<String, GT5OreLayerHelper.NormalOreDimensionWrapper> dimEntry
-                : (byDim == null ? Collections.<String, GT5OreLayerHelper.NormalOreDimensionWrapper>emptyMap() : byDim)
-                    .entrySet()) {
-                if (dimEntry.getValue() == null || dimEntry.getValue().oreVeinToProbabilityInDimension == null) {
-                    continue;
-                }
-                for (Map.Entry<GT5OreLayerHelper.OreLayerWrapper, Double> chance : dimEntry.getValue()
-                    .oreVeinToProbabilityInDimension.entrySet()) {
-                    Map<String, Object> chances = chancesByVein.get(chance.getKey());
-                    if (chances == null) {
-                        chances = map();
-                        chancesByVein.put(chance.getKey(), chances);
-                    }
-                    chances.put(dimEntry.getKey(), chance.getValue());
-                }
-            }
-
-            for (GT5OreLayerHelper.OreLayerWrapper vein : byName.values()) {
-                if (vein == null) {
-                    continue;
-                }
-                veins.add(oreVein(vein, chancesByVein.get(vein)));
-            }
-            domain.put("veins", veins);
-            String status = veins.isEmpty() ? "partial" : "computed";
-            String warning = veins.isEmpty()
-                ? "GregTech ore vein helper was present, but no veins were exported."
-                : null;
-            adapters.add(adapter("gregtech-ore-veins", status, true, byName.size(), veins.size(), started, warning));
-        } catch (Throwable t) {
-            adapters.add(adapter("gregtech-ore-veins", "partial", true, 0, veins.size(), started, t.toString()));
-            domain.put("veins", veins);
-        }
-    }
-
-    private Map<String, Object> oreVein(GT5OreLayerHelper.OreLayerWrapper vein, Map<String, Object> dimChances) {
-        Map<String, Object> exported = map();
-        exported.put("id", safeString(vein.veinName));
-        String name;
-        try {
-            name = vein.getLocalizedName();
-        } catch (Throwable ignored) {
-            name = vein.veinName;
-        }
-        exported.put("name", safeString(name));
-        exported.put("weight", Integer.valueOf(vein.randomWeight));
-        exported.put("density", Integer.valueOf(vein.density));
-        exported.put("size", Integer.valueOf(vein.size));
-        putIfPresent(exported, "heightRange", vein.worldGenHeightRange);
-        if (vein.allowedDimWithOrigNames != null) {
-            exported.put("dims", new ArrayList<String>(vein.allowedDimWithOrigNames));
-        }
-        if (vein.abbrDimNames != null) {
-            exported.put("dimAbbrs", new ArrayList<String>(vein.abbrDimNames));
-        }
-        if (vein.dimWorldGenHeightRange != null && !vein.dimWorldGenHeightRange.isEmpty()) {
-            exported.put("dimHeightRanges", new LinkedHashMap<String, String>(vein.dimWorldGenHeightRange));
-        }
-        if (dimChances != null && !dimChances.isEmpty()) {
-            exported.put("dimChances", dimChances);
-        }
-
-        List<Map<String, Object>> ores = new ArrayList<Map<String, Object>>();
-        String[] roles = new String[] { "primary", "secondary", "between", "sporadic" };
-        int[] layerIds = new int[] {
-            OreVeinLayer.VEIN_PRIMARY, OreVeinLayer.VEIN_SECONDARY, OreVeinLayer.VEIN_BETWEEN,
-            OreVeinLayer.VEIN_SPORADIC
-        };
-        for (int index = 0; index < roles.length; index++) {
-            IOreMaterial material = vein.ores != null && layerIds[index] < vein.ores.length
-                ? vein.ores[layerIds[index]]
-                : null;
-            if (material == null) {
-                continue;
-            }
-            Map<String, Object> layer = map();
-            layer.put("role", roles[index]);
-            putIfPresent(layer, "material", oreMaterial(material));
-            putIfPresent(layer, "ore", itemStack(veinLayerOre(vein, layerIds[index], material)));
-            ores.add(layer);
-        }
-        exported.put("ores", ores);
-        return exported;
-    }
-
-    private ItemStack veinLayerOre(GT5OreLayerHelper.OreLayerWrapper vein, int layer, IOreMaterial material) {
-        try {
-            IStoneType stone = null;
-            List<IStoneType> validStones = material.getValidStones();
-            if (validStones != null && !validStones.isEmpty()) {
-                stone = validStones.get(0);
-            }
-            if (stone == null) {
-                stone = StoneType.Stone;
-            }
-            return vein.getLayerOre(layer, stone);
-        } catch (Throwable ignored) {
-            return null;
-        }
-    }
-
-    private Map<String, Object> oreMaterial(IOreMaterial material) {
-        if (material == null) {
-            return null;
-        }
-        Map<String, Object> exported = map();
-        exported.put("id", Integer.valueOf(material.getId()));
-        putIfPresent(exported, "internalName", material.getInternalName());
-        String name;
-        try {
-            name = material.getLocalizedName();
-        } catch (Throwable ignored) {
-            name = material.getDefaultLocalName();
-        }
-        putIfPresent(exported, "name", name);
-        return exported;
-    }
-
-    private void exportMiningSmallOres(List<Map<String, Object>> adapters, Map<String, Object> domain) {
-        long started = System.currentTimeMillis();
-        List<Map<String, Object>> smallOres = new ArrayList<Map<String, Object>>();
-        try {
-            Map<String, GT5OreSmallHelper.OreSmallWrapper> byName = GT5OreSmallHelper.SMALL_ORES_BY_NAME;
-            if (byName.isEmpty()) {
-                // Unlike the vein helper, init() appends into final collections, so it
-                // must only run when they are still empty.
-                GT5OreSmallHelper.init();
-            }
-            for (GT5OreSmallHelper.OreSmallWrapper small : byName.values()) {
-                if (small == null) {
-                    continue;
-                }
-                Map<String, Object> exported = map();
-                exported.put("id", safeString(small.oreGenName));
-                putIfPresent(exported, "material", oreMaterial(small.material));
-                putIfPresent(exported, "heightRange", small.worldGenHeightRange);
-                exported.put("amountPerChunk", Integer.valueOf(small.amountPerChunk));
-                if (small.allowedDimWithOrigNames != null) {
-                    exported.put("dims", new ArrayList<String>(small.allowedDimWithOrigNames));
-                }
-                if (small.enabledDims != null) {
-                    exported.put("enabledDims", new ArrayList<String>(small.enabledDims));
-                }
-                List<Map<String, Object>> drops = new ArrayList<Map<String, Object>>();
-                List<ItemStack> rawDrops = GT5OreSmallHelper.ORE_MAT_TO_DROPS.get(small.material);
-                for (ItemStack drop : rawDrops == null ? Collections.<ItemStack>emptyList() : rawDrops) {
-                    Map<String, Object> exportedDrop = itemStack(drop);
-                    if (exportedDrop != null) {
-                        drops.add(exportedDrop);
-                    }
-                }
-                putIfPresent(exported, "drops", drops);
-                smallOres.add(exported);
-            }
-            domain.put("smallOres", smallOres);
-            String status = smallOres.isEmpty() ? "partial" : "computed";
-            String warning = smallOres.isEmpty()
-                ? "GregTech small ore helper was present, but no small ores were exported."
-                : null;
-            adapters.add(
-                adapter("gregtech-small-ores", status, true, byName.size(), smallOres.size(), started, warning));
-        } catch (Throwable t) {
-            adapters.add(adapter("gregtech-small-ores", "partial", true, 0, smallOres.size(), started, t.toString()));
-            domain.put("smallOres", smallOres);
-        }
-    }
-
-    private void exportMiningUndergroundFluids(List<Map<String, Object>> adapters, Map<String, Object> domain) {
-        long started = System.currentTimeMillis();
-        List<Map<String, Object>> fluids = new ArrayList<Map<String, Object>>();
-        try {
-            Map<String, List<GT5UndergroundFluidHelper.UndergroundFluidWrapper>> all =
-                GT5UndergroundFluidHelper.getAllEntries();
-            if (all == null || all.isEmpty()) {
-                GT5UndergroundFluidHelper.init();
-                all = GT5UndergroundFluidHelper.getAllEntries();
-            }
-            for (Map.Entry<String, List<GT5UndergroundFluidHelper.UndergroundFluidWrapper>> entry
-                : (all == null
-                    ? Collections.<String, List<GT5UndergroundFluidHelper.UndergroundFluidWrapper>>emptyMap()
-                    : all).entrySet()) {
-                Map<String, Object> exported = map();
-                exported.put("fluidId", safeString(entry.getKey()));
-                Fluid fluid = FluidRegistry.getFluid(entry.getKey());
-                if (fluid != null) {
-                    putIfPresent(exported, "fluid", fluidStack(new FluidStack(fluid, 1)));
-                }
-                List<Map<String, Object>> deposits = new ArrayList<Map<String, Object>>();
-                for (GT5UndergroundFluidHelper.UndergroundFluidWrapper wrapper
-                    : entry.getValue() == null
-                        ? Collections.<GT5UndergroundFluidHelper.UndergroundFluidWrapper>emptyList()
-                        : entry.getValue()) {
-                    if (wrapper == null) {
-                        continue;
-                    }
-                    Map<String, Object> deposit = map();
-                    deposit.put("dim", safeString(wrapper.dimension));
-                    deposit.put("chance", Integer.valueOf(wrapper.chance));
-                    deposit.put("minAmount", Integer.valueOf(wrapper.minAmount));
-                    deposit.put("maxAmount", Integer.valueOf(wrapper.maxAmount));
-                    deposits.add(deposit);
-                }
-                exported.put("deposits", deposits);
-                fluids.add(exported);
-            }
-            domain.put("undergroundFluids", fluids);
-            String status = fluids.isEmpty() ? "partial" : "computed";
-            String warning = fluids.isEmpty()
-                ? "GregTech underground fluid helper was present, but no fluids were exported."
-                : null;
-            adapters.add(
-                adapter("gregtech-underground-fluids", status, true, fluids.size(), fluids.size(), started, warning));
-        } catch (Throwable t) {
-            adapters
-                .add(adapter("gregtech-underground-fluids", "partial", true, 0, fluids.size(), started, t.toString()));
-            domain.put("undergroundFluids", fluids);
-        }
-    }
-
     private Map<String, Object> buildGtRuntimeCalculation(String recipeMapId, String recipeMapName, GTRecipe recipe) {
         Map<String, Object> out = map();
         out.put("sourceKind", "gregtech-overclock-calculator");
@@ -2920,7 +2705,8 @@ public final class GtnhCalcOracleExporter {
         return item;
     }
 
-    private Map<String, Object> itemStack(ItemStack stack) {
+    @Override
+    public Map<String, Object> itemStack(ItemStack stack) {
         if (stack == null || stack.getItem() == null || stack.stackSize <= 0) {
             return null;
         }
@@ -2952,7 +2738,8 @@ public final class GtnhCalcOracleExporter {
         return item;
     }
 
-    private Map<String, Object> fluidStack(FluidStack stack) {
+    @Override
+    public Map<String, Object> fluidStack(FluidStack stack) {
         if (stack == null || stack.getFluid() == null || stack.amount <= 0) {
             return null;
         }
@@ -3582,7 +3369,8 @@ public final class GtnhCalcOracleExporter {
         return value instanceof Number ? ((Number) value).intValue() : 0;
     }
 
-    private void putIfPresent(Map<String, Object> target, String key, Object value) {
+    @Override
+    public void putIfPresent(Map<String, Object> target, String key, Object value) {
         if (value == null) {
             return;
         }
@@ -3592,13 +3380,15 @@ public final class GtnhCalcOracleExporter {
         target.put(key, value);
     }
 
-    private Map<String, Object> domain(String id) {
+    @Override
+    public Map<String, Object> domain(String id) {
         Map<String, Object> domain = map();
         domain.put("id", id);
         return domain;
     }
 
-    private Map<String, Object> adapter(
+    @Override
+    public Map<String, Object> adapter(
         String id,
         String status,
         boolean detected,
@@ -3681,12 +3471,28 @@ public final class GtnhCalcOracleExporter {
         return separator > 0 ? registryId.substring(0, separator) : null;
     }
 
-    private String itemResourceId(String registryId, int meta) {
+    @Override
+    public String itemId(ItemStack stack) {
+        if (stack == null || stack.getItem() == null) {
+            return null;
+        }
+        String registryId = Item.itemRegistry.getNameForObject(stack.getItem());
+        return registryId == null ? "?" : itemResourceId(registryId, stack.getItemDamage());
+    }
+
+    @Override
+    public String fluidId(FluidStack stack) {
+        return stack == null || stack.getFluid() == null ? null : stack.getFluid().getName();
+    }
+
+    @Override
+    public String itemResourceId(String registryId, int meta) {
         String id = canonicalRegistryId(registryId);
         return meta == 0 ? id : id + "@" + meta;
     }
 
-    private String canonicalRegistryId(String registryId) {
+    @Override
+    public String canonicalRegistryId(String registryId) {
         String normalized = safeString(registryId).trim();
         int separator = normalized.indexOf(':');
         if (separator < 0) {
@@ -3721,7 +3527,8 @@ public final class GtnhCalcOracleExporter {
         return format.format(new Date());
     }
 
-    private String safeString(Object value) {
+    @Override
+    public String safeString(Object value) {
         return value == null ? "" : String.valueOf(value);
     }
 
@@ -3736,7 +3543,8 @@ public final class GtnhCalcOracleExporter {
         return builder.toString();
     }
 
-    private Map<String, Object> map() {
+    @Override
+    public Map<String, Object> map() {
         return new LinkedHashMap<String, Object>();
     }
 

@@ -1,10 +1,31 @@
-// Track the GregTech the pack actually ships (GTNH 2.9.0-beta-2 loads
-// gregtech-5.09.54.20.jar), so the symbols the exporter compiles against are
-// the ones it reflects over at runtime. The older 5.09.52.258 pin no longer
-// resolves at all: it drags in Thaumic_Exploration, whose pom asks for a
-// CodeChickenLib:1.3.0 that GTNH's nexus has since unpublished.
+// Each GTNH pack builds against the GregTech it ships, so the symbols the exporter
+// compiles against are the ones it reflects over at runtime. Pick one with
+// -PgtnhPack=<pack>; gradle.properties sets the default. The NEI ore plugin API differs
+// between these GT versions, so each pack also compiles its own MiningExportImpl from the
+// source dir named here (build.gradle adds it to the main source set).
+//
+// 2.9 loads gregtech-5.09.54.20.jar. The older 5.09.52.258 pin no longer resolves at all:
+// it drags in Thaumic_Exploration, whose pom asks for a CodeChickenLib:1.3.0 that GTNH's
+// nexus has since unpublished. 2.8.1 loads gregtech-5.09.51.476.jar, whose pom reaches the
+// same dead end (ThaumicTinkerer > ThaumicBoots > Thaumic_Exploration:1.4.2-GTNH >
+// CodeChickenLib:1.3.0), so that pack excludes Thaumic_Exploration. The exporter compiles
+// against no Thaumcraft addon, and the game supplies its own copy at runtime.
+def gtnhPacks = [
+    '2.9'  : [gt: '5.09.54.20', sourceDir: 'src/gt5u54/java', excludes: []],
+    '2.8.1': [gt: '5.09.51.476', sourceDir: 'src/gt5u51/java',
+              excludes: [[group: 'com.github.GTNewHorizons', module: 'Thaumic_Exploration']]],
+]
+def gtnhPack = (project.findProperty('gtnhPack') ?: '2.9').toString()
+def gtnhPackConfig = gtnhPacks[gtnhPack]
+if (gtnhPackConfig == null) {
+    throw new GradleException("Unknown gtnhPack '${gtnhPack}'. Use one of: ${gtnhPacks.keySet().join(', ')}")
+}
+ext.gtnhPackSourceDir = gtnhPackConfig.sourceDir
+
 dependencies {
-    implementation("com.github.GTNewHorizons:GT5-Unofficial:5.09.54.20:dev")
+    implementation("com.github.GTNewHorizons:GT5-Unofficial:${gtnhPackConfig.gt}:dev") {
+        gtnhPackConfig.excludes.each { exclude(it) }
+    }
 
     shadowImplementation("com.google.code.gson:gson:2.10.1")
 }
