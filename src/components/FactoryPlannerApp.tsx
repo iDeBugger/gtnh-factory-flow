@@ -68,6 +68,7 @@ import {
 } from "@/lib/workspace-columns";
 import { RecipeBrowser } from "./RecipeBrowser";
 import { FoldGlyph } from "./flow/clean/fold/FoldKey";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 
 export function FactoryPlannerApp() {
   const project = useFactoryStore((state) => state.project);
@@ -172,6 +173,7 @@ export function FactoryPlannerApp() {
         .then(async () => {
           try {
             // Own posts open as your design; everyone else's opens as a copy.
+            // With the community library switched off no id is read, so `?plan=` opens nothing.
             const sharedPlanId = readSharedPlanId();
             if (sharedPlanId) {
               try {
@@ -413,7 +415,7 @@ const BoardColumn = memo(function BoardColumn() {
   return (
     <div className="grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)]">
       <div className="min-w-0">
-        {covering ? null : publicView ? <PublicViewBar key={publicView.id} /> : null}
+        {covering || !isModAndCommunityOn() ? null : publicView ? <PublicViewBar key={publicView.id} /> : null}
         {covering ? null : <TabConflictNotice />}
         <LiveNotice />
       </div>
@@ -729,6 +731,8 @@ function ViewerAwareBrowser({ onLoadDatasetVersion }: Pick<WorkspaceProps, "onLo
   if (!readOnly) return <RecipeBrowser onLoadDatasetVersion={onLoadDatasetVersion} />;
   return <div className="relative h-full min-h-0 overflow-hidden">
     <div inert className="h-full opacity-30 grayscale"><RecipeBrowser onLoadDatasetVersion={onLoadDatasetVersion} /></div>
-    <ViewOnlyNotice />
+    {/* View only is a community post's state. Switched off no post is ever viewed (viewPublicProject opens none);
+        the gate here is a second line of defence. */}
+    {isModAndCommunityOn() ? <ViewOnlyNotice /> : null}
   </div>;
 }

@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { getCommunityDb, isCommunityConfigured } from "@/lib/server/community";
 
 /** Re-query the plan list at most hourly, so crawl bursts cost one DB read. */
@@ -9,7 +10,8 @@ export const revalidate = 3600;
  * title, description and preview card (see `generateMetadata` in page.tsx),
  * so each one is a real page worth indexing, not just an app-state URL.
  * Only plans a stranger could open are listed: the same `is_public !== false`
- * rule the unfurler uses.
+ * rule the unfurler uses. With the community library switched off there are
+ * no plan pages, so only the home page is listed.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://gtnhplanner.com";
@@ -17,7 +19,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/`, lastModified: new Date(), changeFrequency: "weekly", priority: 1 },
   ];
 
-  if (!isCommunityConfigured()) {
+  if (!isModAndCommunityOn() || !isCommunityConfigured()) {
     return entries;
   }
 

@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { ImageResponse } from "next/og";
 import { NextResponse } from "next/server";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
+import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import { PNG } from "pngjs";
 import { GT_TIER_COLORS } from "@/components/flow/tier-colors";
 import { getPlanPreviewPng, getPublicPlanRow } from "@/lib/server/plan-preview";
@@ -151,6 +153,9 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ planId: string }> },
 ) {
+  if (!isModAndCommunityOn()) {
+    return modAndCommunityOffResponse();
+  }
   const { planId } = await params;
   const [row, previewPng] = await Promise.all([
     getPublicPlanRow(planId),

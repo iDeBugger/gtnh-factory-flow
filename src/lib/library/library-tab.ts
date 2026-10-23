@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { leaveWelcomeTab } from "@/lib/welcome/welcome-tab";
 import { playSfx } from "@/lib/sound/sfx";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 
 /**
  * The Library: everything you have, and everything the network has.
@@ -56,6 +57,11 @@ function isLibraryView(value: unknown): value is LibraryView {
   );
 }
 
+/** With the community switched off its shelves (public, saved) are not there: a door to them opens My plans. */
+function served(view: LibraryView): LibraryView {
+  return !isModAndCommunityOn() && (view.kind === "public" || view.kind === "saved") ? { kind: "all" } : view;
+}
+
 function readStored(): LibraryTabState {
   try {
     const raw = window.sessionStorage.getItem(SHELF_SESSION_KEY);
@@ -65,7 +71,7 @@ function readStored(): LibraryTabState {
     const parsed = JSON.parse(raw) as Partial<LibraryTabState>;
     return {
       active: parsed.active === true,
-      view: isLibraryView(parsed.view) ? parsed.view : { kind: "all" },
+      view: isLibraryView(parsed.view) ? served(parsed.view) : { kind: "all" },
     };
   } catch {
     return CLOSED;
@@ -120,12 +126,12 @@ export function openLibrary(view?: LibraryView) {
   // The library swapping in for the board turns a page, as the mod's.
   if (!getSnapshot().active) playSfx("ui.page");
   leaveWelcomeTab();
-  write({ active: true, ...(view ? { view } : {}) });
+  write({ active: true, ...(view ? { view: served(view) } : {}) });
 }
 
 /** Change what the open library is looking at. */
 export function setLibraryView(view: LibraryView) {
-  write({ view });
+  write({ view: served(view) });
 }
 
 /** Step off the library onto whatever design is active. */

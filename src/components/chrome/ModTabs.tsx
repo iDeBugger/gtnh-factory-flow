@@ -32,6 +32,7 @@ import { libraryRows } from "./library-rows";
 import { copyPlanCode } from "./share-actions";
 import type { ShareMode } from "@/components/community/SharePlanDialog";
 import { isLiveConfigured } from "@/lib/live/live-config";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { ChecklistIcon } from "./pixel-icons";
 
 /** What the tab strip asks of the bar: the dialogs it does not own. */
@@ -352,7 +353,9 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
         { label: "Open a plan...", detail: "My plans", onSelect: () => openLibrary({ kind: "all" }) },
         { label: "Open plan file...", detail: ".json", onSelect: () => document.querySelector<HTMLInputElement>("[data-plan-file-input]")?.click() },
         { label: "Paste plan", detail: "a plan link, code or file", onSelect: onPaste },
-        { label: "Browse Community", detail: "public plans", onSelect: () => openLibrary({ kind: "public" }) },
+        ...(isModAndCommunityOn()
+          ? [{ label: "Browse Community", detail: "public plans", onSelect: () => openLibrary({ kind: "public" }) }]
+          : []),
       ];
     }
     if (m.kind === "delete") {

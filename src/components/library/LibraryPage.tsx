@@ -32,6 +32,7 @@ import { SharedWithMe } from "@/components/live/SharedWithMe";
 import { isLiveConfigured } from "@/lib/live/live-config";
 import { useCloudLibraryStore } from "@/lib/library/cloud-library";
 import { parsePlanSearch } from "@/lib/community/search-query";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 
 /**
  * The Library: your designs and the network's public setups, as one kind of
@@ -41,6 +42,10 @@ import { parsePlanSearch } from "@/lib/community/search-query";
  * the globe marks posted ones (green posted, dim not; clicking dim posts).
  * The left rail is All, your folders (drop a tile on one, or use Move to),
  * then Community. Search, tier and sort apply to whatever is showing.
+ *
+ * With the community library switched off there is no Community or Saved
+ * shelf and nothing posts: no post marks, links, visibility keys or
+ * "Post as a public setup", and a delete never reaches for a post.
  * Closing a tab never deletes; delete lives here, armed.
  */
 
@@ -101,7 +106,8 @@ export function LibraryPage() {
   const [bulkDeleteArmed, setBulkDeleteArmed] = useState(false);
   /** The design whose preview page is up, if any. */
   const [detailId, setDetailId] = useState<string>();
-  const { posts: myPosts, signedIn } = useMyPosts();
+  const communityOn = isModAndCommunityOn();
+  const { posts: myPosts, signedIn } = useMyPosts(communityOn);
   const showShared = isLiveConfigured() && signedIn;
   const savedIds = useSavedSetups();
 
@@ -363,7 +369,7 @@ export function LibraryPage() {
    */
   const deleteDesign = async (id: string) => {
     const design = designs.find((entry) => entry.id === id);
-    if (design?.communityPlanId && signedIn) {
+    if (communityOn && design?.communityPlanId && signedIn) {
       try {
         await deleteCommunityPlan(design.communityPlanId);
         notifySetupsChanged();
@@ -429,8 +435,12 @@ export function LibraryPage() {
               {showShared ? (
                 <option value="shared">Shared with me ({sharedCount ?? 0})</option>
               ) : null}
-              <option value="public">Community</option>
-              <option value="saved">Saved ({savedIds.length})</option>
+              {communityOn ? (
+                <>
+                  <option value="public">Community</option>
+                  <option value="saved">Saved ({savedIds.length})</option>
+                </>
+              ) : null}
             </select>
           </div>
           <aside className="flex w-[184px] shrink-0 flex-col gap-1 overflow-y-auto bg-[#101215] px-2 py-2 compact:hidden">
@@ -520,30 +530,34 @@ export function LibraryPage() {
               />
             ) : null}
 
-            <div className="mx-1 my-2 border-t-2 border-[#23262d] compact:mx-2 compact:my-0 compact:h-4 compact:border-l compact:border-t-0" />
-            <RailItem
-              icon={Factory}
-              label="Community"
-              selected={library.view.kind === "public"}
-              onClick={() => setLibraryView({ kind: "public" })}
-            />
-            <RailItem
-              icon={Bookmark}
-              label="Saved"
-              nested
-              count={savedIds.length}
-              selected={library.view.kind === "saved"}
-              onClick={() => setLibraryView({ kind: "saved" })}
-            />
+            {communityOn ? (
+              <>
+                <div className="mx-1 my-2 border-t-2 border-[#23262d] compact:mx-2 compact:my-0 compact:h-4 compact:border-l compact:border-t-0" />
+                <RailItem
+                  icon={Factory}
+                  label="Community"
+                  selected={library.view.kind === "public"}
+                  onClick={() => setLibraryView({ kind: "public" })}
+                />
+                <RailItem
+                  icon={Bookmark}
+                  label="Saved"
+                  nested
+                  count={savedIds.length}
+                  selected={library.view.kind === "saved"}
+                  onClick={() => setLibraryView({ kind: "saved" })}
+                />
+              </>
+            ) : null}
           </aside>
 
           {/* THE PAGE. */}
           <section className="flex min-h-0 min-w-0 flex-1 flex-col">
             {library.view.kind === "shared" ? (
               <SharedWithMe />
-            ) : library.view.kind === "public" ? (
+            ) : communityOn && library.view.kind === "public" ? (
               <SetupsGrid scope="network" presetQuery={library.view.search} />
-            ) : library.view.kind === "saved" ? (
+            ) : communityOn && library.view.kind === "saved" ? (
               <SetupsGrid scope="saved" />
             ) : detailDesign ? (
               <LibraryDetail
@@ -607,7 +621,7 @@ export function LibraryPage() {
                             onClick: () => void setPostVisibility(detailDesign, !detailPost.isPublic),
                           },
                         ]
-                      : signedIn
+                      : signedIn && communityOn
                         ? [
                             {
                               label: "Post as a public setup",
@@ -745,7 +759,7 @@ export function LibraryPage() {
                             favorite={design.favorite === true}
                             onFavorite={() => void toggleFavorite(design.id)}
                             onPost={
-                              !post && signedIn
+                              !post && signedIn && communityOn
                                 ? () => void postDesign(design.id)
                                 : undefined
                             }
@@ -859,7 +873,7 @@ export function LibraryPage() {
                 }}
               />
             </>
-          ) : signedIn ? (
+          ) : signedIn && communityOn ? (
             <MenuItem
               label="Post as a public setup"
               onClick={() => {
@@ -1063,11 +1077,13 @@ function sortDesignsBy(designs: DesignSummary[], sort: SortKey): DesignSummary[]
 }
 
 /**
- * The signed-in account's posts by id, or undefined while signed out or
- * still loading. Read once per sign-in and again whenever a share lands or
- * a post is changed from here.
+ * The signed-in account's posts by id, or undefined while signed out,
+ * still loading, or with the community library switched off. Read once per
+ * sign-in and again whenever a share lands or a post is changed from here.
  */
-function useMyPosts(): { posts: Map<string, CommunityPlanSummary> | undefined; signedIn: boolean } {
+function useMyPosts(
+  communityOn: boolean,
+): { posts: Map<string, CommunityPlanSummary> | undefined; signedIn: boolean } {
   const { user } = useCommunityUser();
   const username = user?.username;
   const [loaded, setLoaded] = useState<{
@@ -1083,7 +1099,8 @@ function useMyPosts(): { posts: Map<string, CommunityPlanSummary> | undefined; s
   }, []);
 
   useEffect(() => {
-    if (!username) {
+    // Switched off, there are no posts to mark: the community routes answer 404.
+    if (!username || !communityOn) {
       return;
     }
     let cancelled = false;
@@ -1112,10 +1129,10 @@ function useMyPosts(): { posts: Map<string, CommunityPlanSummary> | undefined; s
     return () => {
       cancelled = true;
     };
-  }, [username, tick]);
+  }, [username, tick, communityOn]);
 
   return {
-    posts: loaded && loaded.username === username ? loaded.posts : undefined,
+    posts: communityOn && loaded && loaded.username === username ? loaded.posts : undefined,
     signedIn: Boolean(username),
   };
 }

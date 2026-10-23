@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { factoryProjectSchema } from "@/lib/model/schemas";
 import type { FactoryProject } from "@/lib/model/types";
 
@@ -32,6 +33,19 @@ export function feedbackRepo(origin: "game" | "web" | undefined, env: Record<str
     ? env.GITHUB_FEEDBACK_WEB_REPO || FEEDBACK_WEB_REPO
     : env.GITHUB_FEEDBACK_REPO || FEEDBACK_REPO;
 }
+/**
+ * Whether this deployment takes a report with this body's origin. The game's
+ * reports (origin absent or `game`) come only while the mod integration is on;
+ * the web planner's always do. Read from the raw JSON so the answer comes
+ * before the report is parsed or counted.
+ */
+export function feedbackOriginServed(json: unknown): boolean {
+  if (isModAndCommunityOn()) {
+    return true;
+  }
+  return typeof json === "object" && json !== null && (json as { origin?: unknown }).origin === "web";
+}
+
 export const FROM_GAME_LABEL = "from game";
 export const FROM_WEB_LABEL = "from web";
 const KIND_LABELS = { bug: "bug", idea: "enhancement", help: "question" } as const;

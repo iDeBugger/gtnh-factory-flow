@@ -29,6 +29,7 @@ import {
   GlanceTitle,
   type GlanceRow,
 } from "@/components/help/card-parts";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 
 /**
  * The board's help corner: a "?" button.
@@ -200,6 +201,19 @@ const LIBRARY: HelpCard = {
   ],
 };
 
+/** The same card with the community library switched off: no setups to open, save or post. */
+const LIBRARY_OWN: HelpCard = {
+  title: "Plans",
+  rows: [
+    { icon: Library, text: "Your *plans*, in folders" },
+    { text: "*Favorites*: the plans you star" },
+  ],
+};
+
+function libraryCard(): HelpCard {
+  return isModAndCommunityOn() ? LIBRARY : LIBRARY_OWN;
+}
+
 const RECIPE_SEARCH: HelpCard = {
   title: "Recipe search",
   rows: [
@@ -283,9 +297,9 @@ const TOUCH_MOVES: HelpCard = {
 };
 
 /** Every card, in reading order, for the one-column formats. */
-const LINEAR: HelpCard[] = [
+const linearCards = (): HelpCard[] => [
   SOLVING,
-  LIBRARY,
+  libraryCard(),
   BUILD,
   TOOLS,
   FRAMING,
@@ -486,7 +500,7 @@ function layoutGlance({ rects, button, vw, vh }: Measured): GlanceLayout {
     // No browser column means no place for the Library card; it sits here,
     // under the pill it describes.
     const cards = [
-      ...(browser ? [] : [LIBRARY]),
+      ...(browser ? [] : [libraryCard()]),
       BUILD,
       SOLVING,
       ...(footLanes === 0 ? footCards : []),
@@ -570,7 +584,7 @@ function layoutGlance({ rects, button, vw, vh }: Measured): GlanceLayout {
     columns.push({
       key: "browser",
       style: { left, top, width: CARD_W },
-      cards: [LIBRARY, LEFT_COLUMN, RECIPE_SEARCH],
+      cards: [libraryCard(), LEFT_COLUMN, RECIPE_SEARCH],
     });
     if (pill) {
       const ring = padRect(pill);
@@ -745,7 +759,7 @@ function HelpSheet({ onClose }: { onClose: () => void }) {
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
         <GlanceCard card={TOUCH_MOVES} />
-        {LINEAR.map((card) => (
+        {linearCards().map((card) => (
           <GlanceCard key={card.title} card={card} />
         ))}
       </div>
@@ -788,7 +802,7 @@ function HelpHoverPanel({
         }}
       >
         <GlanceCard card={MOVES} />
-        {LINEAR.map((card) => (
+        {linearCards().map((card) => (
           <GlanceCard key={card.title} card={card} />
         ))}
       </div>

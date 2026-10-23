@@ -2,6 +2,12 @@
 
 import type { LivePerson } from "@/lib/live/protocol";
 import { useLiveSession, type LiveStatus } from "@/store/live-session";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
+
+/** A face's name: a player in the game says so, unless the mod is switched off (then the game is never named). */
+export function liveFaceName(person: Pick<LivePerson, "username" | "client">): string {
+  return person.client === "game" && isModAndCommunityOn() ? `${person.username} (in game)` : person.username;
+}
 
 /** Up to two letters for a face: the name's first, and the first after a break if any. */
 export function initialsOf(username: string): string {
@@ -79,7 +85,7 @@ export function LiveFaces({ max = 5 }: { max?: number }) {
           key={person.id}
           username={person.username}
           color={person.color}
-          title={person.client === "game" ? `${person.username} (in game)` : person.username}
+          title={liveFaceName(person)}
         />
       ))}
       {more > 0 ? (

@@ -6,6 +6,7 @@ import type { DesignSummary } from "@/lib/designs/design-library";
 import { readLibraryTabState, openLibrary } from "@/lib/library/library-tab";
 import { onSfx } from "@/lib/sound/sfx";
 import { useDesignStore } from "@/store/design-store";
+import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 import { ModTabs } from "./ModTabs";
 
 vi.mock("@/lib/compact-view", () => ({ isCompactViewport: () => false }));
@@ -50,6 +51,8 @@ const props = { onPaste: vi.fn(), onShare: vi.fn() };
 const rows = () => [...document.querySelectorAll('[role="menu"] [role="menuitem"]')].map((element) => element.textContent);
 
 describe("the plan tabs", () => {
+  withModAndCommunityOn();
+
   it("shows one tab per open plan, the active one marked, and leaves the parked plan on the shelf", () => {
     render(<ModTabs {...props} />);
     const tabs = [...document.querySelectorAll(".mt-tab")];
@@ -177,6 +180,33 @@ describe("the plan tabs", () => {
     } finally {
       vi.unstubAllGlobals();
       vi.restoreAllMocks();
+    }
+  });
+});
+
+describe("the plan tabs with the mod and the community switched off (unset)", () => {
+  withModAndCommunityUnset();
+
+  it("the + menu has no Browse Community", () => {
+    render(<ModTabs {...props} />);
+    fireEvent.click(screen.getByLabelText("New plan"));
+    expect(rows()).toEqual(["New plan", "Open a plan...My plans", "Open plan file....json", "Paste plana plan link, code or file"]);
+    expect(screen.queryByText(/Browse Community/)).toBeNull();
+  });
+
+  it("a tab's menu has no Community row, posted or not", () => {
+    useDesignStore.setState({ designs: [design("a", "Benzene", { communityPlanId: "post-1" }), design("b", "ref-chain")] });
+    render(<ModTabs {...props} />);
+    for (const name of ["ref-chain", "Benzene"]) {
+      fireEvent.contextMenu(screen.getByText(name));
+      expect(rows()).toEqual([
+        "Rename",
+        "Copy plan codeto paste or share",
+        "Close tabkept in My plans",
+        "Close other tabskept in My plans",
+        "Delete plan",
+      ]);
+      expect(screen.queryByText(/Community/)).toBeNull();
     }
   });
 });

@@ -4,6 +4,7 @@ import {
   PLAN_SUMMARY_COLUMNS,
   type PlanRow,
 } from "@/lib/server/community";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { describePlanRow } from "@/lib/server/plan-preview";
 import { APP_VERSION } from "@/lib/version";
 
@@ -11,12 +12,13 @@ import { APP_VERSION } from "@/lib/version";
  * The site as one page of markdown for language-model crawlers (the llms.txt
  * convention), which run no JavaScript and so see the planner as an empty
  * page. Top shared plans are linked because each plan URL server-renders its
- * name and summary into metadata.
+ * name and summary into metadata. With the community library switched off,
+ * neither the plans nor the community are mentioned.
  */
 export const revalidate = 3600;
 
 async function topPlans(base: string): Promise<string[]> {
-  if (!isCommunityConfigured()) {
+  if (!isModAndCommunityOn() || !isCommunityConfigured()) {
     return [];
   }
   try {
@@ -39,12 +41,13 @@ async function topPlans(base: string): Promise<string[]> {
 
 export async function GET() {
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://gtnhplanner.com";
+  const community = isModAndCommunityOn();
   const plans = await topPlans(base);
 
   const lines = [
     "# GTNH Planner",
     "",
-    "> Free browser-based factory planner and recipe calculator for GregTech: New Horizons (GTNH), the Minecraft expert modpack. Draw production chains on an interactive flowchart, balance machine ratios, compute EU/t power draw and throughput, and share plans with the community. No account and no install needed.",
+    `> Free browser-based factory planner and recipe calculator for GregTech: New Horizons (GTNH), the Minecraft expert modpack. Draw production chains on an interactive flowchart, balance machine ratios, ${community ? "compute EU/t power draw and throughput, and share plans with the community" : "and compute EU/t power draw and throughput"}. No account and no install needed.`,
     "",
     "Key facts:",
     "",
@@ -58,7 +61,9 @@ export async function GET() {
     "## Start here",
     "",
     `- [The planner](${base}/): the app itself. Everything happens on one page.`,
-    `- [Sitemap](${base}/sitemap.xml): the home page plus every public community plan.`,
+    community
+      ? `- [Sitemap](${base}/sitemap.xml): the home page plus every public community plan.`
+      : `- [Sitemap](${base}/sitemap.xml): the home page.`,
     "",
   ];
 

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
+import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import { factoryProjectSchema } from "@/lib/model/schemas";
 import { calculateThroughput } from "@/lib/solver";
 import { normalizeLoadedProject } from "@/lib/model/project-normalize";
@@ -56,6 +58,9 @@ const SORT_COLUMNS: Record<
 };
 
 export async function GET(request: Request) {
+  if (!isModAndCommunityOn()) {
+    return modAndCommunityOffResponse();
+  }
   if (!isCommunityConfigured()) {
     return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
   }
@@ -234,6 +239,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!isModAndCommunityOn()) {
+    return modAndCommunityOffResponse();
+  }
   if (!isCommunityConfigured()) {
     return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
   }

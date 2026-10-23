@@ -6,7 +6,7 @@ import { Cursor, draws } from "./cursor";
 import { Director, tourWarnings, type NoteSpec } from "./director";
 import { resetPointerState } from "./input";
 import { enterSandbox, leaveSandbox } from "./sandbox";
-import { STEPS } from "./script";
+import { tourSteps } from "./script";
 import { getTour, markTourOffered, resetTour, setTour } from "./tour-store";
 
 /**
@@ -57,10 +57,11 @@ export async function startTour(step = 0): Promise<void> {
   starting = true;
   markTourOffered();
   try {
-    setTour({ phase: "playing", index: 0, total: STEPS.length, noteReady: false });
+    const steps = tourSteps();
+    setTour({ phase: "playing", index: 0, total: steps.length, noteReady: false });
     await enterSandbox();
     cursor = new Cursor(layer!);
-    director = new Director(STEPS, cursor, {
+    director = new Director(steps, cursor, {
       onNote: setNote,
       onLeave: () => void leaveTour(),
     });

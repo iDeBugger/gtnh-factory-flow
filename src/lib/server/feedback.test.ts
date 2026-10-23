@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
+import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 import {
+  feedbackOriginServed,
   feedbackRepo,
   FROM_GAME_LABEL,
   FROM_WEB_LABEL,
@@ -180,5 +182,25 @@ describe("feedbackRepo", () => {
     expect(feedbackRepo(undefined, {})).toBe("jackwrichards/gtnh-planner-mod");
     expect(feedbackRepo("web", { GITHUB_FEEDBACK_WEB_REPO: "o/web", GITHUB_FEEDBACK_REPO: "o/game" })).toBe("o/web");
     expect(feedbackRepo("game", { GITHUB_FEEDBACK_WEB_REPO: "o/web", GITHUB_FEEDBACK_REPO: "o/game" })).toBe("o/game");
+  });
+});
+
+describe("which origins are taken", () => {
+  describe("with the setting unset", () => {
+    withModAndCommunityUnset();
+    it("takes only the web planner's reports", () => {
+      expect(feedbackOriginServed({ origin: "web" })).toBe(true);
+      expect(feedbackOriginServed({ origin: "game" })).toBe(false);
+      expect(feedbackOriginServed({})).toBe(false);
+      expect(feedbackOriginServed(null)).toBe(false);
+    });
+  });
+  describe("with the setting on", () => {
+    withModAndCommunityOn();
+    it("takes every origin", () => {
+      expect(feedbackOriginServed({ origin: "game" })).toBe(true);
+      expect(feedbackOriginServed({})).toBe(true);
+      expect(feedbackOriginServed({ origin: "web" })).toBe(true);
+    });
   });
 });

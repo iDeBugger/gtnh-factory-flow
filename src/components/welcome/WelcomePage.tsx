@@ -16,6 +16,7 @@ import { listCommunityPlans } from "@/lib/community/client";
 import type { CommunityPlanSummary } from "@/lib/community/types";
 import type { EntryIcon } from "@/lib/model/types";
 import { openCommunityPost } from "@/lib/community/open-post";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { openLibrary } from "@/lib/library/library-tab";
 import { openSidebarTab } from "@/lib/sidebar-tab";
 import { APP_VERSION } from "@/lib/version";
@@ -31,9 +32,9 @@ import "../chrome/mod-panel.css";
  * The Welcome tab. It COVERS the board (see FactoryPlannerApp) rather than
  * replacing it, over a quiet ASCII backdrop. One short column: the name, the
  * ways to start (new design, shared setups, find a recipe, your library) and
- * community setups. Every pick steps off the tab; the checkbox at the foot
- * turns off showing it on startup. Release notes live on the header's
- * version chip, not here.
+ * community setups (both only with the community library switched on).
+ * Every pick steps off the tab; the checkbox at the foot turns off showing
+ * it on startup. Release notes live on the header's version chip, not here.
  */
 
 const COMMUNITY_TILE_COUNT = 15;
@@ -82,6 +83,7 @@ export function WelcomePage() {
   const welcome = useWelcomeTab();
   const addDesign = useDesignStore((state) => state.addDesign);
   const backdropIcons = useBackdropIcons();
+  const communityOn = isModAndCommunityOn();
 
   return (
     <div className="pn-skin relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-canvas text-fg">
@@ -132,12 +134,15 @@ export function WelcomePage() {
               >
                 New design
               </PrimaryButton>
-              <SecondaryButton
-                icon={Factory}
-                onClick={() => openLibrary({ kind: "public" })}
-              >
-                Browse shared setups
-              </SecondaryButton>
+              {/* Shared setups are the community library's; switched off, there is nothing to browse. */}
+              {communityOn ? (
+                <SecondaryButton
+                  icon={Factory}
+                  onClick={() => openLibrary({ kind: "public" })}
+                >
+                  Browse shared setups
+                </SecondaryButton>
+              ) : null}
               <SecondaryButton
                 icon={Search}
                 onClick={() => {
@@ -154,7 +159,7 @@ export function WelcomePage() {
             </div>
           </header>
 
-          <CommunityShelf />
+          {communityOn ? <CommunityShelf /> : null}
 
           <footer className="border-t border-line pt-3">
             <label className="flex w-fit cursor-pointer items-center gap-2 text-[12px] text-fg-muted hover:text-fg">

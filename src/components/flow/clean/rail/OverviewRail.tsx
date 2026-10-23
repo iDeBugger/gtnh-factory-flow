@@ -79,6 +79,7 @@ import { SpareBlock } from "./SpareBlock";
 import { openAddToTask } from "@/components/tasks/AddToTask";
 import { cardsForTask } from "@/lib/tasks/make-task";
 import { isLiveConfigured } from "@/lib/live/live-config";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 
 /** Task boards come with live plans: no Add to a task without them. */
 const TASKS_ENABLED = isLiveConfigured();
@@ -582,7 +583,8 @@ function lineTip(line: RailLine, text: string): TipContent {
     sub: text,
     actions: [
       { input: "left", label: "Go to the cards that make or use it, one by one" },
-      { input: "right", label: "Find public plans that make it" },
+      // Public plans are the community library's: switched off, a right click finds nothing.
+      ...(isModAndCommunityOn() ? [{ input: "right" as const, label: "Find public plans that make it" }] : []),
     ],
   };
 }

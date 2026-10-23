@@ -68,6 +68,7 @@ import type { EntryIcon, FactoryProject } from "@/lib/model/types";
 import { LOCAL_STORAGE_KEY, useFactoryStore } from "./factory-store";
 import { liveDesignIdInThisTab } from "./live-edit-gate";
 import type { SharedPlanRef } from "@/lib/designs/design-library";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 
 export type DesignSaveState = "idle" | "saving" | "saved" | "error";
 
@@ -458,6 +459,8 @@ export const useDesignStore = create<DesignStore>((set, get) => ({
     landOnNothing(set);
   },
   viewPublicProject: async (post, project) => {
+    // A public view is a community post's; switched off, none opens.
+    if (!isModAndCommunityOn()) return;
     const { activeDesignId, designs } = get();
     await flushCanvasInto(designs.find((design) => design.id === activeDesignId));
     beginDesignCameraHandover();

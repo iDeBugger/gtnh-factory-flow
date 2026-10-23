@@ -61,6 +61,15 @@ Every save goes through `persistCanvas` in design-store.ts:
 - The old view-only session (`design-store.publicView`, `PublicViewBar`, `isReadOnly`) is no
   longer entered by any path.
 
+## Switched off: the in-game mod and the community library
+
+- `NEXT_PUBLIC_MOD_AND_COMMUNITY`, read by `isModAndCommunityOn()` at call time: only `on` is on; unset, the default,
+  is off. Tests turn it on with `withModAndCommunityOn()` (`src/test-support/mod-and-community.ts`).
+- Off, the store opens no community post: `viewPublicProject` returns at once (no public view, nothing read-only), a
+  `?plan=` arrival reads no id, the library's public and saved views open My plans (`served()`), and deleting a design
+  never reaches for its post. A design's `communityPlanId` stays stored and untouched; it is only never acted on.
+- Off keeps: accounts, account sync, `/api/library/**`, `#p=` links and codes, live plans and task boards.
+
 ## Account sync (src/lib/library/library-sync.ts)
 
 - The Supabase instance is small. Pushes wait for 5 s of quiet (30 s max while editing,

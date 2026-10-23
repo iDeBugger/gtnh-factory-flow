@@ -16,6 +16,7 @@ import {
 } from "./rail-model";
 import { allAt, evenShares, nudged } from "./rail-math";
 import type { SpareView } from "./spare-model";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 
 /**
  * Everything the overview rail does to the plan, in one place. Ordinary edits
@@ -277,8 +278,12 @@ export function walkCards(id: string, cards: string[]): boolean {
   return true;
 }
 
-/** Right click on a resource row: the public setups that make it. */
+/**
+ * Right click on a resource row: the public setups that make it. With the
+ * community library switched off there are none, so it opens nothing.
+ */
 export function showSetupsMaking(line: Pick<RailLine, "label">): void {
+  if (!isModAndCommunityOn()) return;
   openLibrary({ kind: "public", search: line.label });
 }
 

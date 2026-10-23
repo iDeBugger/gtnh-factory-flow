@@ -29,11 +29,12 @@ import { PixelIcon } from "./pixel-icons";
 import { ControlsList } from "./ControlsList";
 import { HelpLinks } from "./help-links";
 import { isLiveConfigured } from "@/lib/live/live-config";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { useCommunityAuthStore } from "@/store/community-auth-store";
 import { useLiveSession } from "@/store/live-session";
 import { closeFeedback, useFeedbackOpen } from "@/components/flow/clean/feedback/feedback-store";
 import { PlanShareDialog } from "@/components/live/PlanShareDialog";
-import { initialsOf, inkOn } from "@/components/live/LiveFaces";
+import { initialsOf, inkOn, liveFaceName } from "@/components/live/LiveFaces";
 
 /** Live plans (sharing, presence, task boards): none of it shows without NEXT_PUBLIC_LIVE_URL. */
 const LIVE = isLiveConfigured();
@@ -144,8 +145,10 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
   const linkedPost = useFactoryStore((state) => state.project.metadata?.communityPlanId);
   const plan = () => useFactoryStore.getState().project;
   const isTaskBoardPlan = useFactoryStore((state) => state.project.primaryView === "tasks");
-  // Whether a game with the mod is listening, asked each time the menu opens.
-  const modReach = useModReach(menu?.kind === "share");
+  // Whether a game with the mod is listening, asked each time the menu opens. With the mod switched off nothing is
+  // asked, so the page never reaches for this computer.
+  const modOn = isModAndCommunityOn();
+  const modReach = useModReach(modOn && menu?.kind === "share");
 
   // The mod's Share menu has the same rows, in the same words. Labels only. People first, then the copies; a copy
   // posted to Community is the last row (never for a task board).
@@ -164,7 +167,7 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
     { label: "Copy plan code", onSelect: () => void copyPlanCode(plan()) },
     { label: "Export plan file", onSelect: () => downloadPlanFile(plan()) },
     { label: "Screenshot...", onSelect: onScreenshot },
-    openInModRow(modReach, plan),
+    ...(modOn ? [openInModRow(modReach, plan)] : []),
     ...libraryRows(Boolean(linkedPost), onShare, { disabled: isReadOnly, taskBoard: isTaskBoardPlan }).map(({ detail, ...row }, index) => {
       void detail;
       return index === 0 ? { ...row, ruleAbove: true } : row;
@@ -211,7 +214,7 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
         ariaLabel="Plans"
         width={pictures ? undefined : 42}
         open={library.active}
-        tip="Plans: your plans, the ones shared with you, and Community"
+        tip={modOn ? "Plans: your plans, the ones shared with you, and Community" : "Plans: your plans and the ones shared with you"}
         // Opens the library on My plans, and shuts it again; its shelves are along its top.
         onClick={() => (library.active ? leaveLibrary() : openLibrary({ kind: "all" }))}
       >
@@ -330,7 +333,7 @@ function LivePresence({ tight }: { tight: boolean }) {
             <span
               key={person.id}
               className="mb-face"
-              aria-label={person.client === "game" ? `${person.username} (in game)` : person.username}
+              aria-label={liveFaceName(person)}
               style={{ background: person.color, color: inkOn(person.color) }}
             >
               {initialsOf(person.username)}
@@ -369,7 +372,9 @@ function helpEntries({
     { label: "Controls and shortcuts", onSelect: openControls },
     { label: "Welcome", ruleAbove: true, onSelect: () => HelpLinks.openWelcome() },
     { label: unreadNotes ? "What's new *" : "What's new", detail: HelpLinks.version, onSelect: onChangelog },
-    { label: "Download the mod", detail: "GTNH 2.9", onSelect: () => HelpLinks.open(HelpLinks.mod) },
+    ...(isModAndCommunityOn()
+      ? [{ label: "Download the mod", detail: "GTNH 2.9", onSelect: () => HelpLinks.open(HelpLinks.mod) }]
+      : []),
     { label: "Source on GitHub", onSelect: () => HelpLinks.open(HelpLinks.github) },
     { label: "Discord thread", onSelect: () => HelpLinks.open(HelpLinks.discord) },
     { label: "Support on Ko-fi", onSelect: () => HelpLinks.open(HelpLinks.kofi) },

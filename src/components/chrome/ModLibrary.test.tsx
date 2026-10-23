@@ -5,6 +5,7 @@ import type { DesignSummary } from "@/lib/designs/design-library";
 import { stampOpened, resetLastOpenForTests } from "@/lib/library/last-open";
 import { openLibrary, readLibraryTabState } from "@/lib/library/library-tab";
 import { useDesignStore } from "@/store/design-store";
+import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 
 vi.mock("@/lib/compact-view", () => ({ isCompactViewport: () => false }));
 const auth = vi.hoisted(() => ({ user: undefined as undefined | { username: string } }));
@@ -68,6 +69,8 @@ afterEach(() => cleanup());
 const tileNames = () => [...document.querySelectorAll(".ml-tile:not(.ml-new) .ml-name")].map((element) => element.textContent);
 
 describe("the library", () => {
+  withModAndCommunityOn();
+
   it("has the mod's header: MY PLANS with its count, COMMUNITY, a Find a plan box and a close key, and no sign-in key (that is the top bar's account key)", () => {
     render(<ModLibrary />);
     const tabs = [...document.querySelectorAll(".ml-tab")].map((tab) => tab.textContent);
@@ -145,5 +148,28 @@ describe("the library", () => {
     render(<ModLibrary />);
     expect(document.querySelector("[data-signed-in-as]")?.textContent).toBe("Signed in as arodoid");
     expect(document.querySelector(".ml-account")).toBeNull();
+  });
+});
+
+describe("the library with the mod and the community switched off (unset)", () => {
+  withModAndCommunityUnset();
+
+  it("has no COMMUNITY shelf, and a public view opens My plans", () => {
+    openLibrary({ kind: "public" });
+    render(<ModLibrary />);
+    expect([...document.querySelectorAll(".ml-tab")].map((tab) => tab.textContent)).toEqual(["MY PLANS3"]);
+    expect(screen.queryByText("COMMUNITY")).toBeNull();
+    expect(screen.queryByTestId("public-grid")).toBeNull();
+    expect(document.querySelector(".ml-drop")).toBeNull();
+    expect(tileNames()).toEqual(["ref-chain", "Benzene", "Parked"]);
+  });
+
+  it("a posted plan wears no posted badge, and the tile's menu has no Community row", () => {
+    useDesignStore.setState({ designs: [design("a", "Benzene", { communityPlanId: "post-1" })], activeDesignId: "a" });
+    render(<ModLibrary />);
+    expect(document.querySelector(".ml-posted")).toBeNull();
+    fireEvent.contextMenu(screen.getByText("Benzene"));
+    const rows = [...document.querySelectorAll('[role="menu"] [role="menuitem"]')].map((element) => element.textContent);
+    expect(rows).toEqual(["Open", "Rename", "Copy plan codeto paste or share", "Delete plan"]);
   });
 });

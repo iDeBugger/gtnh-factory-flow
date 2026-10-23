@@ -1,5 +1,7 @@
 "use client";
 
+import { isModAndCommunityOn } from "@/lib/deployment-features";
+
 /**
  * The link you send someone: `/?plan=<community id>`, which opens that setup in
  * a tab of its own. Shared by the Share buttons, the arrival import, the
@@ -32,9 +34,13 @@ export function sharedPlanLink(planId: string): string {
   return `${window.location.origin}/?${SHARED_PLAN_PARAM}=${encodeURIComponent(planId)}`;
 }
 
-/** The setup this page load was opened for, if the address named one. */
+/**
+ * The setup this page load was opened for, if the address named one. With the
+ * community library switched off a `?plan=` link names nothing: no post can be
+ * read, so the visit is an ordinary one.
+ */
 export function readSharedPlanId(): string | undefined {
-  return pendingSharedPlanId;
+  return isModAndCommunityOn() ? pendingSharedPlanId : undefined;
 }
 
 /**

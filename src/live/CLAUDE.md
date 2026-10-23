@@ -30,7 +30,9 @@ the game is `docs/design/cloud-live.md` in the game's repository: frames and ops
 - The server writes comment stamps and a task's `createdBy`; the client's values are replaced.
 - Flushes, renewals and lease takes only touch designs that are not tombstoned: a deleted plan is never written back.
 - Sessions: `src/lib/server/session.ts`, the website's own check (constant time). Origins: `LIVE_ALLOWED_ORIGINS`; a
-  client sending no Origin (the game) is let in. Limits that need no database come before any lookup (upgrades per
+  client sending no Origin (the game) is let in only while `NEXT_PUBLIC_MOD_AND_COMMUNITY` is `on`
+  (`isModAndCommunityOn`, read at runtime here); off, that upgrade, a `client:"game"` hello and `/live/nearby` are
+  refused. Tests of the game paths turn it on with `withModAndCommunityOn()` (`src/test-support/`). Limits that need no database come before any lookup (upgrades per
   address and account, sockets per account); accounts are cached a minute. The client address is `X-Client-Ip` only
   on requests from loopback (Caddy).
 - `/internal/*` (Bearer `LIVE_INTERNAL_TOKEN`) is for the Next.js routes; Caddy routes only `/live` and `/live/*` here.

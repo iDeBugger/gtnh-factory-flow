@@ -5,6 +5,7 @@ import { readSharedPlanId, syncSharedPlanAddress } from "@/lib/community/shared-
 import { useWelcomeTab } from "@/lib/welcome/welcome-tab";
 import { useFactoryStore } from "@/store/factory-store";
 import { useDesignStore } from "@/store/design-store";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 
 /**
  * Keeps the address bar honest about the open board.
@@ -19,6 +20,12 @@ export function SharedAddressSync() {
   const isWelcomeCoveringBoard = useWelcomeTab().active;
 
   useEffect(() => {
+    // Switched off, a post link opens nothing: never advertise one, and take
+    // an arrival's `?plan=` back out of the address.
+    if (!isModAndCommunityOn()) {
+      syncSharedPlanAddress(undefined);
+      return;
+    }
     if (readSharedPlanId()) return;
     // A linked design IS its post, so the address may carry the post's id
     // whenever the board is showing.

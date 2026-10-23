@@ -8,6 +8,7 @@ import { OPEN_FEEDBACK_EVENT } from "./chrome-events";
 import { ModBar } from "./ModBar";
 import { useCommunityAuthStore } from "@/store/community-auth-store";
 import { openLibrary, readLibraryTabState } from "@/lib/library/library-tab";
+import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 
 const viewport = vi.hoisted(() => ({ compact: false }));
 vi.mock("@/lib/compact-view", () => ({ isCompactViewport: () => viewport.compact, useIsCompactViewport: () => viewport.compact }));
@@ -60,6 +61,8 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("the mod's top bar", () => {
+  withModAndCommunityOn();
+
   it("every key is in the Tab order and Enter or Space presses it", () => {
     renderBar();
     for (const id of ["plans", "share", "account", "feedback", "settings", "help"]) {
@@ -258,6 +261,52 @@ describe("the mod's top bar", () => {
       expect(key(id).getAttribute("data-tip-id"), id).toBe(`bar|${id}`);
       expect(JSON.parse(key(id).getAttribute("data-tip")!).title.length).toBeGreaterThan(3);
     }
+  });
+});
+
+describe("the top bar with the mod and the community switched off (unset)", () => {
+  withModAndCommunityUnset();
+
+  const openKey = async (id: string) => {
+    await act(async () => {
+      fireEvent.click(key(id));
+    });
+  };
+
+  it("no mod or community row in the bar's menus", async () => {
+    const before = useFactoryStore.getState().project;
+    useFactoryStore.setState({ project: { ...before, metadata: { communityPlanId: "post-1" } } });
+    try {
+      renderBar();
+      await openKey("share");
+      expect(shareLabels()).toEqual(["Copy plan link", "Copy plan code", "Export plan file", "Screenshot..."]);
+      await openKey("help");
+      expect(shareLabels()).toContain("Controls and shortcuts");
+      for (const text of ["Open in the game", "Download the mod", "Post a copy to Community", "Update in Community", "Post a new copy to Community"]) {
+        expect(screen.queryByText(new RegExp(text)), text).toBeNull();
+      }
+    } finally {
+      useFactoryStore.setState({ project: before });
+    }
+  });
+
+  it("opening the Share menu asks nothing of this computer: no permission query, no probe of 127.0.0.1", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderBar();
+    await openKey("share");
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(modLink.localNetworkPermission).not.toHaveBeenCalled();
+    expect(modLink.findModGame).not.toHaveBeenCalled();
+    expect(fetchSpy.mock.calls.some(([input]) => String(input).includes("127.0.0.1"))).toBe(false);
+    fetchSpy.mockRestore();
+  });
+
+  it("the Plans tip names no Community", () => {
+    renderBar();
+    const tip = JSON.parse(key("plans").getAttribute("data-tip")!).title as string;
+    expect(tip).toBe("Plans: your plans and the ones shared with you");
   });
 });
 

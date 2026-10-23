@@ -1,6 +1,6 @@
 "use client";
 
-import { CHANGELOG, type ChangelogEntry } from "@/lib/changelog";
+import { visibleChangelog, type ChangelogEntry } from "@/lib/changelog";
 import { APP_VERSION } from "@/lib/version";
 
 /** Release notes open only from the version chip; unread notes get a dot
@@ -85,7 +85,8 @@ export function unseenEntries(): ChangelogEntry[] {
   if (compareVersions(read, APP_VERSION) >= 0) {
     return [];
   }
-  return CHANGELOG.filter(
+  // Only what this deployment shows can be unread.
+  return visibleChangelog().filter(
     (entry) =>
       compareVersions(entry.version, read) > 0 &&
       compareVersions(entry.version, APP_VERSION) <= 0,

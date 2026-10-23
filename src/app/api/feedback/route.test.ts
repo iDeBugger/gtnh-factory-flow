@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
+import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 
 vi.mock("@/lib/server/community", () => ({
   isCommunityConfigured: () => true,
@@ -55,6 +56,8 @@ afterEach(() => {
 });
 
 describe("the feedback route", () => {
+  withModAndCommunityOn();
+
   it("is closed until the server has a GitHub token", async () => {
     vi.stubEnv("GITHUB_FEEDBACK_TOKEN", "");
     const response = await send(report);
@@ -119,5 +122,37 @@ describe("the feedback route", () => {
     expect(await send({ ...report, deviceId: "device" })).toHaveProperty("status", 400);
     expect(claimIssue).not.toHaveBeenCalled();
     expect(openIssue).not.toHaveBeenCalled();
+  });
+});
+
+describe("the feedback route with the setting unset", () => {
+  withModAndCommunityUnset();
+
+  it("answers the game's reports, with or without their origin, as absent, before any count", async () => {
+    vi.stubEnv("GITHUB_FEEDBACK_TOKEN", "token");
+    vi.mocked(openIssue).mockClear();
+    vi.mocked(claimIssue).mockClear();
+    for (const body of [report, { ...report, origin: "game" }]) {
+      const response = await send(body);
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "Not found" });
+    }
+    expect(claimIssue).not.toHaveBeenCalled();
+    expect(openIssue).not.toHaveBeenCalled();
+  });
+
+  it("opens the web planner's reports as before", async () => {
+    vi.stubEnv("GITHUB_FEEDBACK_TOKEN", "token");
+    vi.mocked(openIssue).mockClear();
+    const web = {
+      ...report,
+      origin: "web",
+      deviceId: "web-0b6c1c7e-8f0a-4c43-9a51-6f2d0c1e2b3a",
+      versions: { mod: "3.12.0", pack: "", java: "", os: "Win32" },
+    };
+    const sent = await send(web);
+    expect(sent.status).toBe(201);
+    expect(vi.mocked(openIssue).mock.calls[0]![1]).toBe("jackwrichards/gtnh-factory-flow");
+    expect((await send({ ...web, title: "" })).status).toBe(400);
   });
 });

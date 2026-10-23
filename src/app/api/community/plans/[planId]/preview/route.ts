@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
+import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import { BOARD_IMAGE_MAX_BYTES } from "@/lib/community/types";
 import { PLAN_PREVIEW_BUCKET, getPlanPreviewPng } from "@/lib/server/plan-preview";
 import {
@@ -47,6 +49,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ planId: string }> },
 ) {
+  if (!isModAndCommunityOn()) {
+    return modAndCommunityOffResponse();
+  }
   if (!isCommunityConfigured()) {
     return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
   }
@@ -120,6 +125,9 @@ export async function POST(
  * it is the same picture every chat unfurl already shows.
  */
 export async function GET(_request: Request, context: { params: Promise<{ planId: string }> }) {
+  if (!isModAndCommunityOn()) {
+    return modAndCommunityOffResponse();
+  }
   const { planId } = await context.params;
   const png = await getPlanPreviewPng(planId);
   if (!png) {

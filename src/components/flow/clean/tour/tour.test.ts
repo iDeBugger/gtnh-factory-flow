@@ -2,7 +2,8 @@
 import { describe, expect, it } from "vitest";
 import { parseLines, parseSpans, plainText } from "./markup";
 import { overlap, placeNote } from "./placement";
-import { STEPS } from "./script";
+import { tourSteps } from "./script";
+import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 
 describe("tour markup", () => {
   it("makes words between asterisks gold and {b:} {o:} the resource inks", () => {
@@ -59,11 +60,19 @@ describe("note placement", () => {
 });
 
 describe("the script", () => {
+  withModAndCommunityOn();
+
+  it("visits the Community shelf in the library", () => {
+    const library = tourSteps().find((step) => step.id === "library");
+    expect(library?.note.text).toMatch(/\*Community\*/);
+  });
+
   it("has unique step ids and a note for each, in plain short words", () => {
-    const ids = STEPS.map((s) => s.id);
+    const steps = tourSteps();
+    const ids = steps.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(STEPS.length).toBeGreaterThanOrEqual(30);
-    for (const step of STEPS) {
+    expect(steps.length).toBeGreaterThanOrEqual(30);
+    for (const step of steps) {
       expect(step.note.text.length).toBeGreaterThan(10);
       expect(step.actions.length).toBeGreaterThan(0);
       // The owner's voice: no website or Factory Flow names in a note.
@@ -72,7 +81,22 @@ describe("the script", () => {
   });
 
   it("leaves out what needs the game", () => {
-    const all = STEPS.map((s) => s.note.text).join("\n");
+    const all = tourSteps().map((s) => s.note.text).join("\n");
     expect(all).not.toMatch(/\bNEI\b|in the world|pin list|crosshair/i);
+  });
+});
+
+describe("the script with the community library switched off", () => {
+  withModAndCommunityUnset();
+
+  it("runs from Plans to the new plan with no Community shelf to wait for or click", () => {
+    const steps = tourSteps();
+    const ids = steps.map((s) => s.id);
+    expect(ids).not.toContain("library");
+    expect(ids.indexOf("new-plan")).toBe(ids.indexOf("plans") + 1);
+    expect(ids[ids.length - 1]).toBe("feedback");
+    expect(steps.map((s) => s.note.text).join("\n")).not.toMatch(/community/i);
+    // Each step still has its actions, so the director plays it through to the end.
+    for (const step of steps) expect(step.actions.length).toBeGreaterThan(0);
   });
 });

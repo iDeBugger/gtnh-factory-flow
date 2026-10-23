@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 import type { BoardClipboardPayload } from "@/store/factory-store";
 import { boardSelectionPayloadSchema } from "@/lib/model/schemas";
 import {
@@ -42,12 +43,21 @@ export async function GET(request: Request, context: RouteContext) {
   const sessionUser = await getSessionUser(request);
   const { blueprintId } = await context.params;
   const db = getCommunityDb();
-  // Ownership is the cookie's user id, never a client-supplied owner.
+  // Ownership is the cookie's user id, never a client-supplied owner. Someone
+  // else's published blueprint is the community library's, so with that
+  // switched off only the reader's own blueprints are found.
+  const readable = [
+    isModAndCommunityOn() ? "is_public.eq.true" : undefined,
+    sessionUser ? `user_id.eq.${sessionUser.id}` : undefined,
+  ].filter(Boolean);
+  if (readable.length === 0) {
+    return NextResponse.json({ error: "Blueprint not found." }, { status: 404 });
+  }
   const { data, error } = await db
     .from("blueprints")
     .select(`${BLUEPRINT_SUMMARY_COLUMNS},payload`)
     .eq("id", blueprintId)
-    .or(`is_public.eq.true${sessionUser ? `,user_id.eq.${sessionUser.id}` : ""}`)
+    .or(readable.join(","))
     .maybeSingle();
   if (error) {
     return NextResponse.json(

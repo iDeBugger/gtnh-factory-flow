@@ -49,6 +49,7 @@ import {
   undoKey,
 } from "./script-targets";
 import { card, css, keepDetail, portRow, textOf, within, type Target } from "./targets";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 
 /**
  * The tour, step by step (the mod's Script, on the website's planner): each step acts something out on the real UI,
@@ -871,43 +872,50 @@ const feedback: Step = {
 
 // endregion
 
-export const STEPS: Step[] = [
-  findRecipe,
-  firstCard,
-  mouseAround,
-  keysAround,
-  pinNumber,
-  pinCount,
-  pinInput,
-  tierStep,
-  powerStep,
-  settingsStep,
-  cloneStep,
-  drawerFromPort,
-  drawerFromItems,
-  wiring,
-  arrange,
-  overview,
-  colours,
-  machinesStep,
-  combine,
-  undo,
-  units,
-  forcedAdd,
-  forcedWired,
-  forcedInput,
-  forcedUses,
-  forcedOutput,
-  forcedSplit,
-  trashStep,
-  productStep,
-  nonRecipe,
-  minimapStep,
-  stickyNote,
-  ...(isLiveConfigured() ? [inviteStep] : []),
-  plansStep,
-  libraryStep,
-  newPlan,
-  ...(isLiveConfigured() ? [taskBoardStep, taskStep] : []),
-  feedback,
-];
+/**
+ * The tour, built when it starts: the live steps come only with live plans, and
+ * the Community shelf only with the community library switched on (switched off
+ * there is no shelf to wait for or click).
+ */
+export function tourSteps(): Step[] {
+  return [
+    findRecipe,
+    firstCard,
+    mouseAround,
+    keysAround,
+    pinNumber,
+    pinCount,
+    pinInput,
+    tierStep,
+    powerStep,
+    settingsStep,
+    cloneStep,
+    drawerFromPort,
+    drawerFromItems,
+    wiring,
+    arrange,
+    overview,
+    colours,
+    machinesStep,
+    combine,
+    undo,
+    units,
+    forcedAdd,
+    forcedWired,
+    forcedInput,
+    forcedUses,
+    forcedOutput,
+    forcedSplit,
+    trashStep,
+    productStep,
+    nonRecipe,
+    minimapStep,
+    stickyNote,
+    ...(isLiveConfigured() ? [inviteStep] : []),
+    plansStep,
+    ...(isModAndCommunityOn() ? [libraryStep] : []),
+    newPlan,
+    ...(isLiveConfigured() ? [taskBoardStep, taskStep] : []),
+    feedback,
+  ];
+}

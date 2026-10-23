@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
+import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import { boardSelectionPayloadSchema } from "@/lib/model/schemas";
 import {
   BLUEPRINT_MAX_PER_USER,
@@ -38,6 +40,11 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   if (url.searchParams.get("scope") === "public") {
+    // The public shelf is the community library; an account's own
+    // blueprints below stay whatever the setting.
+    if (!isModAndCommunityOn()) {
+      return modAndCommunityOffResponse();
+    }
     return listPublicBlueprints(request, url);
   }
 

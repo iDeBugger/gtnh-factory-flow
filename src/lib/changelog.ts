@@ -1,3 +1,5 @@
+import { isModAndCommunityOn } from "@/lib/deployment-features";
+
 /**
  * What's new, in players' words.
  *
@@ -38,7 +40,56 @@ export interface ChangelogEntry {
   actions?: ChangelogAction[];
 }
 
-export const CHANGELOG: ChangelogEntry[] = [
+/** What a release or a note is about, when it is the in-game mod or the community library. */
+export type ChangelogTopic = "mod" | "community";
+
+/** A note about the mod or the community library: hidden while they are switched off. */
+export interface ChangelogTaggedNote {
+  text: string;
+  about: ChangelogTopic;
+}
+
+/**
+ * A release as written below. Tag a NOTE that is about the mod or the community
+ * library; tag the whole release only when every note is. Leave untagged a note
+ * that only mentions them in passing ("checked against the community
+ * calculator"). With them switched off (`isModAndCommunityOn`) tagged notes are
+ * not shown and a release left with no notes is not shown at all, nor counted
+ * toward the unread dot.
+ */
+export interface ChangelogRelease extends Omit<ChangelogEntry, "notes"> {
+  notes: (string | ChangelogTaggedNote)[];
+  about?: ChangelogTopic;
+  /** The headline shown while the mod and the community library are switched off, when the headline names them. */
+  headlineWithout?: string;
+}
+
+/**
+ * The releases this deployment shows, newest first, as plain entries. Read at
+ * every call, so the setting is never cached.
+ */
+export function visibleChangelog(): ChangelogEntry[] {
+  const on = isModAndCommunityOn();
+  const shown: ChangelogEntry[] = [];
+  for (const release of CHANGELOG) {
+    if (!on && release.about) continue;
+    const notes = release.notes.flatMap((note) =>
+      typeof note === "string" ? [note] : on ? [note.text] : [],
+    );
+    if (notes.length === 0) continue;
+    shown.push({
+      version: release.version,
+      date: release.date,
+      headline: !on && release.headlineWithout ? release.headlineWithout : release.headline,
+      notes,
+      ...(release.warning ? { warning: release.warning } : {}),
+      ...(release.actions ? { actions: release.actions } : {}),
+    });
+  }
+  return shown;
+}
+
+export const CHANGELOG: ChangelogRelease[] = [
   {
     version: "4.4.1",
     date: "2026-10-21",
@@ -74,7 +125,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-10-19",
     headline: "Staying signed in when the database is down",
     notes: [
-      "If the community database stops responding, you stay signed in. The site checks again every 30 seconds instead of showing Sign in.",
+      { text: "If the community database stops responding, you stay signed in. The site checks again every 30 seconds instead of showing Sign in.", about: "community" },
       "Plans shared with you are no longer removed from your device while the database is down.",
     ],
   },
@@ -82,6 +133,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "4.3.1",
     date: "2026-10-19",
     headline: "A clear message when Community is down",
+    about: "community",
     notes: [
       "When the community database is not responding, Community and your cloud plans say so in one line instead of showing an error page.",
     ],
@@ -136,8 +188,9 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "4.0.0",
     date: "2026-10-15",
     headline: "Version 4: the in-game planner on the web, and plans you edit together",
+    headlineWithout: "Version 4: a new board, and plans you edit together",
     notes: [
-      "The board is rebuilt to look and work like the in-game planner, with its top bar, plan tabs, cards, drawers and wires.",
+      { text: "The board is rebuilt to look and work like the in-game planner, with its top bar, plan tabs, cards, drawers and wires.", about: "mod" },
       "Build, Solve and Pool are gone: set a count, a rate or a drawer and the board works out the rest.",
       "Plans you already have convert as they open, and a Pool plan says so because its pools became wires.",
       "The overview on the left lists what goes in, what comes out and every machine with its power.",
@@ -146,8 +199,8 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Right-click the board to add sticky notes, boxes and arrows.",
       "A drawer wired between makers and users works as a buffer and shows what passes through it.",
       "The planner plays the game's sounds, and Help has a short tour that shows you around.",
-      "Share copies the plan's link or code, exports it as a file, or sends it straight to your running game with Open in the game.",
-      "Opening a Community setup gives you your own copy, and your own post only changes when you pick Update my post.",
+      { text: "Share copies the plan's link or code, exports it as a file, or sends it straight to your running game with Open in the game.", about: "mod" },
+      { text: "Opening a Community setup gives you your own copy, and your own post only changes when you pick Update my post.", about: "community" },
       "The machine list moved to Settings, and the Raw/Net switch, resource trends and the hide and star marks are gone.",
       "Invite, next to Share, lets friends edit a plan with you while you see their cursors and edits as they happen.",
       "Signed in, every plan is in your account from the moment you make it, and the other person is told when you share one with them.",
@@ -156,7 +209,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Click a task to open it in a big box with its notes, the things to tick off, who is on it and comments.",
       "Tasks have a priority, show how many days they sat in a column, and can wait on other tasks. Chain shows what waits on what.",
       "Right-click cards, or a machine in the overview, and pick Add to a task. A card shows a dot for its task.",
-      "Spots and screenshots added in the game show on their task. Copy gives you a spot's x y z.",
+      { text: "Spots and screenshots added in the game show on their task. Copy gives you a spot's x y z.", about: "mod" },
       "The keys that change the board, like Non-recipe, undo and Arrange, sit in a bar along the top of the board, and your account has its own key beside Share.",
       "Big plans pan, zoom and edit much faster.",
     ],
@@ -165,6 +218,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "3.11.1",
     date: "2026-10-12",
     headline: "Reports from the mod are checked",
+    about: "mod",
     notes: [
       "Bug reports sent from the in-game planner are now limited and checked for spam before they are posted.",
     ],
@@ -173,6 +227,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "3.11.0",
     date: "2026-10-11",
     headline: "GTNH Planner is now in the game!",
+    about: "mod",
     notes: [
       "*GTNH Planner is a mod for GTNH 2.9*: plan your factories right from NEI, just like the site.",
       "A one-time popup shows the trailer; close it and it stays closed.",
@@ -330,7 +385,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     notes: [
       "Pool has clearer rates, roomier material totals, separate Tier/Count columns, easier dragging, and Balance controls for individual materials or whole groups.",
       "Use the camera on any plan to capture Build, Solve, or the full Pool worksheet, with detailed cards and a smaller summary.",
-      "Shared setups explain view-only mode and offer Make a copy; tooltips stay readable while you adjust controls.",
+      { text: "Shared setups explain view-only mode and offer Make a copy; tooltips stay readable while you adjust controls.", about: "community" },
       "Tank and cell wires stay connected when you change machine tiers or settings.",
     ],
   },
@@ -471,7 +526,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-09-11",
     headline: "A more compact workspace",
     notes: [
-      "Public setups open as *view-only tabs*, with private copies, display settings and checklists available.",
+      { text: "Public setups open as *view-only tabs*, with private copies, display settings and checklists available.", about: "community" },
       "A shared header holds *compressible tabs*, with plan details above the canvas and quicker tab closing.",
       "The compact inspector adds *Raw/Net and Peak/Average switches*, multiblock supply details and editable product targets.",
       "Power popups *open below machines* when space above is limited, and selection uses clear blue outlines.",
@@ -569,10 +624,11 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "2.56.0",
     date: "2026-09-04",
     headline: "The library: every design and every shared setup in one place",
+    headlineWithout: "The library: every design in one place",
     notes: [
       "The square at the head of the tab strip opens the library: your designs in collections and Favorites, searched, filtered and sorted, and kept in step across your devices when you sign in.",
-      "A posted design is its post: every save updates it, and opening someone else's setup makes a copy of your own.",
-      "Public setups have comments, a Saved shelf, sorts by activity, and filters by EU/t and by what a setup makes or takes.",
+      { text: "A posted design is its post: every save updates it, and opening someone else's setup makes a copy of your own.", about: "community" },
+      { text: "Public setups have comments, a Saved shelf, sorts by activity, and filters by EU/t and by what a setup makes or takes.", about: "community" },
       "Imported plans find each card's exact recipe again, big plans no longer freeze on every edit, and one broken design no longer hides the rest.",
     ],
   },
@@ -622,6 +678,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "2.53.1",
     date: "2026-09-02",
     headline: "One vote per person",
+    about: "community",
     notes: [
       "A setup can no longer be upvoted again after your connection changes address.",
       "Signed in, your vote follows your account between browsers.",
@@ -633,7 +690,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-09-02",
     headline: "A new Welcome tab, and help that covers the whole board",
     notes: [
-      "The Welcome tab is rebuilt: your designs, the community's newest setups and what changed.",
+      { text: "The Welcome tab is rebuilt: your designs, the community's newest setups and what changed.", about: "community" },
       "The ? corner's help now covers cards, drawers, board windows, the search and every key.",
       "The guided tours are gone. A new tutorial is on the way.",
       "The compass in the header brings the Welcome tab back once you close it.",
@@ -710,7 +767,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-08-31",
     headline: "The item list learns what players build",
     notes: [
-      "Most popular is the new default sort, ranked from the community's shared setups.",
+      { text: "Most popular is the new default sort, ranked from the community's shared setups.", about: "community" },
       "Results are one dense grid of named tiles with bigger icons, in place of the list and grid views.",
       "Tiles lift on hover like a hand of cards.",
       "The recent shelf, filters and pager slim down so more items fit on screen.",
@@ -785,7 +842,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "A new switch by the setup rules turns the question around: type an amount on a product drawer and every card shows how many machines that takes.",
       "Amounts are minimums, so recipes that make two things at once still solve.",
       "An amount nothing on the board can make is marked in red on its drawer.",
-      "The mode travels with the plan, so a shared setup opens the way it was saved.",
+      { text: "The mode travels with the plan, so a shared setup opens the way it was saved.", about: "community" },
     ],
   },
   {
@@ -1185,7 +1242,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     notes: [
       "A board that read 0% after you wired in a supply drawer runs again.",
       "The machine list counts the Crop Managers and Industrial Farms your crops fill, not one machine per seed.",
-      "A shared setup's card refreshes its rates with the current app instead of showing the numbers it was saved with.",
+      { text: "A shared setup's card refreshes its rates with the current app instead of showing the numbers it was saved with.", about: "community" },
       "The two voltage tiers above UIV now wear their right names: UMV, then UXV.",
     ],
   },
@@ -1389,7 +1446,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-08-12",
     headline: "Share it, make it yours, and watch it move",
     notes: [
-      "Share buttons now sit next to Import and Export and on the new plan bar, which holds a plan's icon, name, description and votes.",
+      { text: "Share buttons now sit next to Import and Export and on the new plan bar, which holds a plan's icon, name, description and votes.", about: "community" },
       "The board has textured papers now: charcoal, blueprint, chalkboard, parchment and more, picked from the view tools.",
       "Boxes and zones take their own border and fill styles, and your own pictures can go on the board.",
       "The board is alive: cards glide onto the grid, wires follow while you drag, and every rate eases into place, with two view buttons to turn it off.",
@@ -1553,6 +1610,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "1.42.1",
     date: "2026-08-09",
     headline: "A link to someone's setup opens the setup",
+    about: "community",
     notes: [
       "Following a link someone sent you now lands you straight on their factory. The welcome page used to come up over it, so the setup was sitting there in a tab behind and the link looked like it had failed.",
       "The tab it arrives in is named after the setup, so you can tell it from your own work at a glance. It used to say Untitled design.",
@@ -1972,7 +2030,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Speed, power discount, parallels and overclock behaviour are all covered for those machines. Everything else keeps working exactly as before.",
       "Some numbers will move. Where they do, the new one is the one your factory will actually hit.",
       "Thanks to ShadowTheAge, whose open source GTNH calculator these figures are taken from.",
-      "Found a rate that looks wrong? The Report Bug button in the header is now hard to miss, and it asks for a link to your published setup so it can be checked against your actual board.",
+      { text: "Found a rate that looks wrong? The Report Bug button in the header is now hard to miss, and it asks for a link to your published setup so it can be checked against your actual board.", about: "community" },
     ],
   },
   {
@@ -2044,6 +2102,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "1.19.0",
     date: "2026-08-06",
     headline: "A shared setup now arrives set up the way you left it",
+    about: "community",
     notes: [
       "Sharing a setup saves how you had everything arranged, and opening someone else's puts it back exactly like that.",
       "That covers your starred resources and their charts, what you had hidden, whether hidden mode was on, and whether you were reading rates per second, per minute or per hour.",
@@ -2128,6 +2187,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "1.13.0",
     date: "2026-08-06",
     headline: "The community hub moved in next door",
+    about: "community",
     notes: [
       "The Community page is gone. Everyone's shared factories now live in a Setups tab, right beside Items and Pockets.",
       "Browse, search, sort and upvote without leaving your board. Hover a setup to read its story: what it needs, what it makes.",
@@ -2155,8 +2215,8 @@ export const CHANGELOG: ChangelogEntry[] = [
     notes: [
       "Shift+drag a box around machines, then Ctrl+G: they compact into one pocket card carrying the group's ins and outs. Double-click it to step inside its own purple room. Esc steps back out.",
       "Pocket cards wire like machines: one port per resource at the boundary. Compacting warns first when it would pool supplies that came from different places.",
-      "A Pockets tab now sits beside the item search: save a pocket to it, publish it, browse and vote on everyone else's, and place one straight onto your board.",
-      "Pockets take tags and search by them. Rename in place, overwrite one from your board, and double-click a public row to download it.",
+      { text: "A Pockets tab now sits beside the item search: save a pocket to it, publish it, browse and vote on everyone else's, and place one straight onto your board.", about: "community" },
+      { text: "Pockets take tags and search by them. Rename in place, overwrite one from your board, and double-click a public row to download it.", about: "community" },
       "Drawers, tanks and trash cans went dark and wear their item's colour. Zoomed out, hovering one shows its item and rate.",
       "Zoomed way out the board becomes an LED wall: card faces glow their item's colour with bright rims, and wires light up gold to match.",
       "Box select got real: drag, then copy, cut, paste, delete and undo the whole selection at once.",

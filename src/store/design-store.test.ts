@@ -58,6 +58,7 @@ import { createEmptyProject } from "@/examples";
 import { useDesignStore } from "./design-store";
 import { useFactoryStore } from "./factory-store";
 import { copyViewedPost } from "@/lib/community/open-post";
+import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 
 function summary(id: string, extra: Partial<DesignSummary> = {}): DesignSummary {
   return {
@@ -294,6 +295,7 @@ describe("closing a blank tab", () => {
 
 
 describe("public viewing sessions", () => {
+  withModAndCommunityOn();
   beforeEach(async () => {
     vi.clearAllMocks();
     useFactoryStore.getState().markHydratedProject(createEmptyProject());
@@ -364,6 +366,8 @@ describe("public viewing sessions", () => {
 
 
 describe("one mode for every design", () => {
+  // Its public-post case opens community posts.
+  withModAndCommunityOn();
   const modeOf = () => {
     const project = useFactoryStore.getState().project;
     return { plan: project.planMode === true, solve: project.solveMode === true, pool: project.poolMode === true };
@@ -409,6 +413,23 @@ describe("one mode for every design", () => {
     expect(modeOf()).toEqual({ plan: true, solve: true, pool: false });
     expect(original.poolMode).toBe(true);
     expect(storage.writeDesign).not.toHaveBeenCalled();
+  });
+});
+
+describe("public viewing sessions with the community library switched off", () => {
+  withModAndCommunityUnset();
+
+  it("opens no public view: the open design stays, read-write", async () => {
+    useFactoryStore.getState().markHydratedProject(createEmptyProject());
+    useDesignStore.setState({ activeDesignId: "a", publicView: undefined, publicViews: [] });
+    const before = useFactoryStore.getState().project;
+    const post = { ...createEmptyProject(), name: "Someone else's setup" };
+    await useDesignStore.getState().viewPublicProject({ id: "post", name: post.name }, post);
+    expect(useDesignStore.getState().publicView).toBeUndefined();
+    expect(useDesignStore.getState().publicViews).toEqual([]);
+    expect(useDesignStore.getState().activeDesignId).toBe("a");
+    expect(useFactoryStore.getState().isReadOnly).toBe(false);
+    expect(useFactoryStore.getState().project).toBe(before);
   });
 });
 

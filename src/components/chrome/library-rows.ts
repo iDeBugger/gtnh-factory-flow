@@ -1,5 +1,6 @@
 import type { ShareMode } from "@/components/community/SharePlanDialog";
 import { isLiveConfigured } from "@/lib/live/live-config";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 import type { MenuEntry } from "./ChromeMenu";
 
 /**
@@ -13,8 +14,8 @@ export function libraryRows(
   open: (mode: ShareMode) => void,
   options: { disabled?: boolean; taskBoard?: boolean } = {},
 ): MenuEntry[] {
-  // A task board is never posted to the library.
-  if (options.taskBoard) return [];
+  // A task board is never posted to the library, and with the community switched off nothing is.
+  if (options.taskBoard || !isModAndCommunityOn()) return [];
   if (!linked) {
     return [
       isLiveConfigured()

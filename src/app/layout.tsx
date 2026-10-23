@@ -8,6 +8,7 @@ import {
   Lexend,
 } from "next/font/google";
 import localFont from "next/font/local";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { APP_FONT_STORAGE_KEY, DEFAULT_APP_FONT } from "@/lib/app-font";
 import { AppFontRestore } from "@/components/AppFontRestore";
 import { UiScaleRestore } from "@/components/UiScaleRestore";
@@ -121,12 +122,18 @@ const uiScaleBoot = uiScaleBootScript({
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://gtnhplanner.com";
 
+// The community clause is said only where the community library is on.
+const community = isModAndCommunityOn();
+const shareClause = community
+  ? "balance machine ratios, find bottlenecks, and share plans with the community."
+  : "balance machine ratios, and find bottlenecks.";
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   applicationName: "GTNH Planner",
   title: "GTNH Planner | GregTech New Horizons Factory Calculator",
   description:
-    "Plan and optimize GregTech: New Horizons factories on an interactive flowchart. Full recipe data for GTNH 2.9, throughput and power calculation, machine ratios, and community-shared plans.",
+    `Plan and optimize GregTech: New Horizons factories on an interactive flowchart. Full recipe data for GTNH 2.9, throughput and power calculation, ${community ? "machine ratios, and community-shared plans." : "and machine ratios."}`,
   alternates: {
     canonical: "/",
   },
@@ -152,7 +159,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "GTNH Planner | GregTech New Horizons Factory Calculator",
     description:
-      "Free factory planner for GregTech: New Horizons with full recipe data for GTNH 2.9. Draw production chains, balance machine ratios, find bottlenecks, and share plans with the community.",
+      `Free factory planner for GregTech: New Horizons with full recipe data for GTNH 2.9. Draw production chains, ${shareClause}`,
     siteName: "GTNH Planner",
     type: "website",
     url: "/",
@@ -161,7 +168,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "GTNH Planner | GregTech New Horizons Factory Calculator",
     description:
-      "Free factory planner for GregTech: New Horizons with full recipe data for GTNH 2.9. Draw production chains, balance machine ratios, find bottlenecks, and share plans with the community.",
+      `Free factory planner for GregTech: New Horizons with full recipe data for GTNH 2.9. Draw production chains, ${shareClause}`,
   },
   icons: {
     icon: [

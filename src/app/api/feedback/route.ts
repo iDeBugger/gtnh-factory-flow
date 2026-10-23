@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { encodePlanCode, planCodeLink } from "@/lib/import-export/plan-code";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { isCommunityConfigured } from "@/lib/server/community";
+import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import {
   FEEDBACK_MAX_BYTES,
   feedbackRepo,
@@ -9,6 +11,7 @@ import {
   issueBody,
   issueLabels,
   issueTitle,
+  feedbackOriginServed,
   linkFits,
   openIssue,
   parseFeedback,
@@ -38,6 +41,25 @@ export async function POST(request: Request) {
   if (!token || !isCommunityConfigured()) {
     return NextResponse.json({ error: "Reports can't be sent yet." }, { status: 503 });
   }
+  // With the mod integration off the game's reports are answered as absent,
+  // so the body is read first: they never count against the gate the web
+  // planner's reports share.
+  let early: string | undefined;
+  if (!isModAndCommunityOn()) {
+    if (Number(request.headers.get("content-length") ?? 0) > FEEDBACK_MAX_BYTES) {
+      return NextResponse.json({ error: "The report is too big. Send fewer plans." }, { status: 413 });
+    }
+    early = await request.text();
+    let peek: unknown;
+    try {
+      peek = JSON.parse(early);
+    } catch {
+      peek = undefined;
+    }
+    if (peek !== undefined && !feedbackOriginServed(peek)) {
+      return modAndCommunityOffResponse();
+    }
+  }
   const gate = feedbackGate.admit();
   if (gate === "paused") {
     return NextResponse.json({ error: "Reports are paused for a while. Try again later." }, { status: 503 });
@@ -49,7 +71,7 @@ export async function POST(request: Request) {
     if (Number(request.headers.get("content-length") ?? 0) > FEEDBACK_MAX_BYTES) {
       return refuse(413, "The report is too big. Send fewer plans.");
     }
-    const raw = await request.text();
+    const raw = early ?? (await request.text());
     if (raw.length > FEEDBACK_MAX_BYTES) {
       return refuse(413, "The report is too big. Send fewer plans.");
     }

@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { readOps } from "@/lib/live/ops";
 import {
   colorFor,
@@ -403,6 +404,10 @@ export class LiveService {
       return { status: 200, body: { ok: !this.stopping, ...this.stats } };
     }
     if (method === "GET" && url.pathname === `${LIVE_PATH}/nearby`) {
+      // The game's share helper: absent while the mod integration is off.
+      if (!isModAndCommunityOn()) {
+        return { status: 404, body: { error: "Not found" } };
+      }
       if (!this.nearbyByAddress.take(clientAddress(req))) {
         return { status: 429, body: { error: "Too many asks. Try again in a minute." } };
       }
@@ -566,8 +571,13 @@ export class LiveService {
       refuse(404, "Not Found");
       return;
     }
-    // Browsers always send Origin; it must be one of ours. The game sends none.
+    // Browsers always send Origin; it must be one of ours. The game sends none,
+    // and is let in only while the mod integration is on.
     const origin = req.headers.origin;
+    if (origin === undefined && !isModAndCommunityOn()) {
+      refuse(403, "Forbidden");
+      return;
+    }
     if (origin !== undefined) {
       const normalized = normalizeOrigin(origin);
       if (!normalized || !this.origins.has(normalized)) {
@@ -779,6 +789,13 @@ export class LiveService {
     if (frame.v !== LIVE_PROTOCOL_VERSION) {
       this.error(conn, "version", `This service speaks version ${LIVE_PROTOCOL_VERSION}.`);
       conn.ws.close(1002, "version");
+      return;
+    }
+    // A game connection is refused while the mod integration is off, whatever
+    // Origin the socket came with.
+    if (frame.client === "game" && !isModAndCommunityOn()) {
+      this.error(conn, "forbidden", "Game connections are switched off here.");
+      conn.ws.close(1008, "game");
       return;
     }
     const client: LiveClientKind = frame.client === "game" ? "game" : "web";

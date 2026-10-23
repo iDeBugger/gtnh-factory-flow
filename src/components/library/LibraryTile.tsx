@@ -21,6 +21,7 @@ import { FLUID_ICON_SCALE, ResourceIcon } from "@/components/nei/ResourceIcon";
 import { TierBadge, type VoltageTier } from "@/components/shelf-cards";
 import { normalizeBlueprintTags } from "@/lib/blueprints/types";
 import type { EntryIcon } from "@/lib/model/types";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 
 /**
  * THE tile: one shape for your designs and network posts, in every library
@@ -303,7 +304,8 @@ export function LibraryTile({
               open
             </span>
           ) : null}
-          {marks.privatePost ? (
+          {/* Every post mark is the community's: with it switched off a tile wears none. */}
+          {marks.privatePost && isModAndCommunityOn() ? (
             <span
               className="text-[var(--mc-ink-muted)]"
               aria-label="Private: only you can see it"
@@ -312,7 +314,7 @@ export function LibraryTile({
               <EyeOff className="h-3 w-3" aria-hidden />
             </span>
           ) : null}
-          <PostGlyph marks={marks} onPost={onPost} onCopyLink={onCopyLink} />
+          {isModAndCommunityOn() ? <PostGlyph marks={marks} onPost={onPost} onCopyLink={onCopyLink} /> : null}
           {social ? (
             <>
               <button

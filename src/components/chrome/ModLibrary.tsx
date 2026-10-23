@@ -24,6 +24,7 @@ import { useCommunityUser } from "@/components/community/auth";
 import { ChromeMenu, chromeAnchorOf, MENU_ANCHOR_ATTR, type ChromeAnchor, type MenuEntry } from "./ChromeMenu";
 import { SharedWithMe } from "@/components/live/SharedWithMe";
 import { isLiveConfigured } from "@/lib/live/live-config";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { useCloudLibraryStore } from "@/lib/library/cloud-library";
 import { ChecklistIcon } from "./pixel-icons";
 
@@ -47,8 +48,10 @@ export function ModLibrary() {
   const [menu, setMenu] = useState<{ kind: "sort" | "tier"; anchor: ChromeAnchor }>();
   const { user } = useCommunityUser();
   const showShared = LIVE && Boolean(user);
+  // With the community switched off there is no public shelf: its views land on My plans.
+  const community = isModAndCommunityOn();
   const shelf: "mine" | "public" | "shared" =
-    library.view.kind === "public" || library.view.kind === "saved"
+    community && (library.view.kind === "public" || library.view.kind === "saved")
       ? "public"
       : library.view.kind === "shared" && showShared
         ? "shared"
@@ -103,12 +106,14 @@ export function ModLibrary() {
             onClick={() => setLibraryView({ kind: "shared" })}
           />
         ) : null}
-        <ShelfTab
-          label="COMMUNITY"
-          count={publicTotal === undefined ? "..." : compact(publicTotal)}
-          on={shelf === "public"}
-          onClick={() => setLibraryView({ kind: "public" })}
-        />
+        {community ? (
+          <ShelfTab
+            label="COMMUNITY"
+            count={publicTotal === undefined ? "..." : compact(publicTotal)}
+            on={shelf === "public"}
+            onClick={() => setLibraryView({ kind: "public" })}
+          />
+        ) : null}
         {shelf === "shared" ? null : shelf === "mine" ? (
           <input
             className="ml-search"
@@ -405,7 +410,7 @@ function PlanTile({
       )}
       {size ? <span className="ml-size">{size}</span> : null}
       <span className="ml-when">last open {when}</span>
-      {design.communityPlanId ? <span className="ml-posted">posted</span> : null}
+      {design.communityPlanId && isModAndCommunityOn() ? <span className="ml-posted">posted</span> : null}
     </div>
   );
 }

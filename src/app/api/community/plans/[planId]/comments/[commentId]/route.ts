@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
+import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import {
   communityStorageErrorMessage,
   getCommunityDb,
@@ -18,6 +20,9 @@ type RouteContext = { params: Promise<{ planId: string; commentId: string }> };
  * tombstone, not a hole, so the thread keeps its shape server-side.
  */
 export async function DELETE(request: Request, context: RouteContext) {
+  if (!isModAndCommunityOn()) {
+    return modAndCommunityOffResponse();
+  }
   if (!isCommunityConfigured()) {
     return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
   }

@@ -42,7 +42,19 @@ The instance is small and has gone down under load. Rules:
 - The dashboard (restarts, disk IO, memory) needs the repo owner; there is no management
   token here.
 
+## The mod and community switch (deployment-features.ts)
+
+- `isModAndCommunityOn()` is true only when `NEXT_PUBLIC_MOD_AND_COMMUNITY` is `on`; unset or anything else is off.
+  Off, every `/api/community/plans/**` route, the public blueprint shelf (`?scope=public`, `/publish`, `/vote`,
+  `/download`, and another account's blueprint by id) and `/community` answer 404 (`modAndCommunityOffResponse`);
+  sitemap, llms.txt, robots and the `?plan=` metadata say nothing of community plans. Accounts, board images, the
+  library, account sync and an account's own blueprints stay. Read it at each call, never in a module constant.
+- Tests run with the default (off). A test of a gated feature calls `withModAndCommunityOn()`
+  (`src/test-support/mod-and-community.ts`); a test of the off side calls `withModAndCommunityUnset()`.
+
 ## Feedback from the game (feedback.ts, app/api/feedback)
+
+- Off (above), a report whose `origin` is absent or `game` answers 404 before the gate counts it; `web` is unchanged.
 
 - The in-game planner's Feedback box posts to `/api/feedback`; each report becomes an issue on
   `jackwrichards/gtnh-planner-mod` through `GITHUB_FEEDBACK_TOKEN` (in `/opt/shared/env.local`; without it the route

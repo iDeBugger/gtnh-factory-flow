@@ -19,6 +19,7 @@ import { useCommunityAuthStore } from "@/store/community-auth-store";
 import { useDesignStore } from "@/store/design-store";
 import { noteLeavingPlan, useLiveSession } from "@/store/live-session";
 import { Face } from "./LiveFaces";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 
 /**
  * Who the open plan is shared with. The owner adds people by name and
@@ -175,8 +176,9 @@ export function PlanShareDialog({ onClose }: { onClose: () => void }) {
           ) : (
             <div className="space-y-3">
               <p className="text-xs text-fg-muted">
-                Everyone here can edit the plan with you, live. Posting a copy to Community is
-                separate.
+                {isModAndCommunityOn()
+                  ? "Everyone here can edit the plan with you, live. Posting a copy to Community is separate."
+                  : "Everyone here can edit the plan with you, live."}
               </p>
               <ul className="space-y-1" data-plan-members>
                 <li className="flex items-center gap-2 text-sm">

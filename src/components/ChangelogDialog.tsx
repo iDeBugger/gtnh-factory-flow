@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, History, X } from "lucide-react";
-import { CHANGELOG, type ChangelogEntry } from "@/lib/changelog";
+import { visibleChangelog, type ChangelogEntry } from "@/lib/changelog";
 import { APP_VERSION } from "@/lib/version";
 
 /**
@@ -14,7 +14,7 @@ import { APP_VERSION } from "@/lib/version";
  */
 export function ChangelogDialog({
   onClose,
-  entries = CHANGELOG,
+  entries: givenEntries,
   unseenVersions,
 }: {
   onClose: () => void;
@@ -25,6 +25,8 @@ export function ChangelogDialog({
   // Memoized because it feeds the useMemo below: a fresh empty Set every
   // render would re-split the list on every keystroke the dialog ever sees.
   const unseen = useMemo(() => unseenVersions ?? new Set<string>(), [unseenVersions]);
+  // Every release this deployment shows (none about a switched-off mod or community library).
+  const entries = useMemo(() => givenEntries ?? visibleChangelog(), [givenEntries]);
 
   /**
    * What the sheet opens on: unseen releases if any, otherwise the newest few.

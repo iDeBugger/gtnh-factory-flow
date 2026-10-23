@@ -14,6 +14,7 @@ import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/dat
 import { getCommunityDb, makeSessionToken } from "@/lib/server/community";
 import * as designRoute from "@/app/api/library/designs/[designId]/route";
 import * as memberRoute from "@/app/api/library/designs/[designId]/members/[userId]/route";
+import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 import { Journal } from "./journal";
 import { LiveService, type LiveServiceOptions } from "./service";
 import { supabasePlanStore, type PlanStore } from "./store";
@@ -280,6 +281,30 @@ afterAll(async () => {
 });
 
 describe("the live service", { timeout: 30_000 }, () => {
+  // The game's connections (no Origin, a "game" hello) and its nearby ask are
+  // part of the mod integration; these cases run with it on.
+  withModAndCommunityOn();
+
+  describe("with the mod integration unset", () => {
+    withModAndCommunityUnset();
+
+    it("refuses an upgrade with no Origin and a game hello, and has no nearby ask", async () => {
+      const { port } = await startService();
+      await expect(TestClient.open(port, { who: "ann", origin: null })).rejects.toThrow("HTTP 403");
+      const browser = await TestClient.open(port, { who: "ann", origin: ORIGIN });
+      await browser.hello();
+      const posing = await TestClient.open(port, { who: "ann", origin: ORIGIN });
+      posing.send({ t: "hello", v: 1, client: "game", clientVersion: "test", game: { server: "world" } });
+      expect(await posing.next("error")).toMatchObject({ code: "forbidden" });
+      await until(() => posing.closed);
+      const nearby = await fetch(`http://127.0.0.1:${port}/live/nearby?names=ann`, {
+        headers: { cookie: users.ann!.cookie },
+      });
+      expect(nearby.status).toBe(404);
+      expect(await nearby.json()).toEqual({ error: "Not found" });
+    });
+  });
+
   it("lets two people edit one plan: concurrent batches converge and each sender's echo acks it", async () => {
     const { port } = await startService();
     const { designId, doc } = await makeDesign();

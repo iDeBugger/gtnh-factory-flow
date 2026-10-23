@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
+import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import type { CommunityVoteResponse } from "@/lib/community/types";
 import {
   checkRateLimit,
@@ -18,6 +20,9 @@ export const dynamic = "force-dynamic";
  * feeds the rate limit.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ planId: string }> }) {
+  if (!isModAndCommunityOn()) {
+    return modAndCommunityOffResponse();
+  }
   if (!isCommunityConfigured()) {
     return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
   }

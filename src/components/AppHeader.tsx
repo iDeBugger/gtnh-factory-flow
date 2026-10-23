@@ -12,6 +12,7 @@ import { ModScreenshot } from "./chrome/ModScreenshot";
 import { DevMenu } from "./DevMenu";
 import { ModSettings } from "./chrome/ModSettings";
 import { ModBar } from "./chrome/ModBar";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 
 /**
  * The pack picker's switch. See the note where it renders; flip this back to
@@ -62,6 +63,8 @@ export function AppHeader(_props: AppHeaderProps) {
   // Settings lives up here for the same reason as the share dialog: the
   // compact menu closes behind it without unmounting it.
   const [isSettingsOpen, setSettingsOpen] = useState(false);
+  // The mod's announcement and the post-to-Community dialog belong to the mod and the community: switched off, neither mounts.
+  const modAndCommunity = isModAndCommunityOn();
   // Dialogs the bar and the header both open; they portal or sit fixed, so neither layout owns their place.
   const dialogs = (
     <>
@@ -69,9 +72,9 @@ export function AppHeader(_props: AppHeaderProps) {
         <ChangelogDialog unseenVersions={unseenVersions} onClose={() => setChangelogOpen(false)} />
       ) : null}
       {/* The one popup that opens by itself, once per browser. */}
-      <ModAnnouncement />
+      {modAndCommunity ? <ModAnnouncement /> : null}
       {isDevMenuOpen ? <DevMenu onClose={() => setDevMenuOpen(false)} /> : null}
-      {shareMode !== false ? <SharePlanDialog mode={shareMode} onClose={() => setShareMode(false)} /> : null}
+      {modAndCommunity && shareMode !== false ? <SharePlanDialog mode={shareMode} onClose={() => setShareMode(false)} /> : null}
       {isExportOpen ? <ModScreenshot onClose={() => setExportOpen(false)} /> : null}
       {isSettingsOpen ? (
         <ModSettings onClose={() => setSettingsOpen(false)} />

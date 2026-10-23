@@ -203,3 +203,22 @@ in `src/store/CLAUDE.md` (Live plans, Task boards).
     dot of its most pressing task (blocked, then doing, to do, done; `lib/tasks/task-link-index.ts`, from the task
     boards on this device, counting machine things and older task links).
 - Notices from the live plan (an edit refused, removed from a plan) show above the board (`LiveNotice`).
+
+## Switched off: the in-game mod and the community library
+
+- One deployment setting, `NEXT_PUBLIC_MOD_AND_COMMUNITY`, read by `isModAndCommunityOn()`
+  (`src/lib/deployment-features.ts`) at render or call time, never in a module constant. Only `on` turns it on;
+  unset or any other value is off, the default. Tests run off; a test of a mod or community feature opts in with
+  `withModAndCommunityOn()`, and a test that pins the off side uses `withModAndCommunityUnset()`
+  (`src/test-support/mod-and-community.ts`).
+- Off hides: Open in the game and Download the mod; the game probe on 127.0.0.1; "(in game)" on faces; the mod
+  announcement; every Community row (`libraryRows()` returns none), Browse Community, the COMMUNITY, Community and
+  Saved shelves, post marks, links, visibility keys and "Post as a public setup"; the post dialog; Welcome's Browse
+  shared setups and New from the community; the overview's right click for public plans; the help card's community
+  rows; the tour's Community step (`tourSteps()` builds the list at start); changelog notes tagged `about` (a
+  release with none left goes too, and `headlineWithout` replaces a headline naming them; `visibleChangelog()`, which
+  also feeds the unread dot); a `?plan=` link (`readSharedPlanId()` names nothing, the
+  address sync takes it out); public views (`viewPublicProject` opens none) and their bar and View only notice.
+- Off keeps: accounts, sign-in, board images, Plans and account sync, Share with people and live plans, `#p=` plan
+  links and codes, task boards, resource popularity, and the code itself (nothing is deleted).
+- The real-app check is `scratch/probes/no-mod-community.mjs` against `npm run dev:local` with the variable unset.

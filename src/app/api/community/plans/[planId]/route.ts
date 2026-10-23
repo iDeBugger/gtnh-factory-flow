@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
+import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { factoryProjectSchema } from "@/lib/model/schemas";
 import { normalizeLoadedProject } from "@/lib/model/project-normalize";
@@ -40,6 +42,9 @@ export const dynamic = "force-dynamic";
  * this summary in the background, and background reads are not views.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ planId: string }> }) {
+  if (!isModAndCommunityOn()) {
+    return modAndCommunityOffResponse();
+  }
   if (!isCommunityConfigured()) {
     return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
   }
@@ -175,6 +180,9 @@ async function refreshStaleStats(
 
 /** Updates a post in place. Only the signed-in owner may do this. */
 export async function PUT(request: Request, { params }: { params: Promise<{ planId: string }> }) {
+  if (!isModAndCommunityOn()) {
+    return modAndCommunityOffResponse();
+  }
   if (!isCommunityConfigured()) {
     return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
   }
@@ -321,6 +329,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ planId: string }> },
 ) {
+  if (!isModAndCommunityOn()) {
+    return modAndCommunityOffResponse();
+  }
   if (!isCommunityConfigured()) {
     return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
   }

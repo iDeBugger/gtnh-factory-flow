@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { FactoryPlannerApp } from "@/components/FactoryPlannerApp";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { describePlanRow, getPublicPlanRow } from "@/lib/server/plan-preview";
 
 export const dynamic = "force-dynamic";
@@ -9,13 +10,17 @@ export const revalidate = 0;
  * A shared link unfurls as the plan it carries: its name, the author's words
  * (or the plan's numbers), and a card drawn from its inputs and outputs -
  * instead of the site's one generic face. Any other visit, and any plan a
- * crawler may not see, falls through to the layout's metadata untouched.
+ * crawler may not see, falls through to the layout's metadata untouched, as
+ * does every visit while the community library is switched off.
  */
 export async function generateMetadata({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<Metadata> {
+  if (!isModAndCommunityOn()) {
+    return {};
+  }
   const params = await searchParams;
   const planId = typeof params.plan === "string" ? params.plan : undefined;
   const row = planId ? await getPublicPlanRow(planId) : undefined;
@@ -54,6 +59,7 @@ export async function generateMetadata({
 }
 
 export default function Home() {
+  const community = isModAndCommunityOn();
   return (
     <>
       <FactoryPlannerApp />
@@ -65,7 +71,9 @@ export default function Home() {
           A free factory planner and recipe calculator for GregTech: New
           Horizons. Draw production chains on an interactive flowchart with
           full recipe data for GTNH 2.9, balance machine ratios,
-          compute power and throughput, and share plans with the community.
+          {community
+            ? " compute power and throughput, and share plans with the community."
+            : " and compute power and throughput."}{" "}
           The planner needs JavaScript to run.
         </p>
       </noscript>

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { isModAndCommunityOn } from "@/lib/deployment-features";
+import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import type { BoardClipboardPayload } from "@/store/factory-store";
 import { getCommunityDb, getSessionUser, isCommunityConfigured } from "@/lib/server/community";
 import {
@@ -21,6 +23,9 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ blueprintId: string }> },
 ) {
+  if (!isModAndCommunityOn()) {
+    return modAndCommunityOffResponse();
+  }
   if (!isCommunityConfigured()) {
     return NextResponse.json({ error: "Cloud storage is not configured." }, { status: 503 });
   }

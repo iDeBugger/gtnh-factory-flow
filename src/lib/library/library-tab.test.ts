@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 
 /**
  * The library across reloads: a reload while on it lands back on it, in the
@@ -39,6 +40,8 @@ afterEach(() => {
 });
 
 describe("library tab", () => {
+  withModAndCommunityOn();
+
   it("starts closed, on everything", async () => {
     const library = await visit(local, session);
     expect(library.readLibraryTabState()).toEqual({ active: false, view: { kind: "all" } });
@@ -76,5 +79,25 @@ describe("library tab", () => {
     expect(library.readLibraryTabState().view).toEqual({ kind: "public" });
     library.leaveLibrary();
     expect(library.readLibraryTabState()).toEqual({ active: false, view: { kind: "public" } });
+  });
+});
+
+describe("library tab with the mod and the community switched off (unset)", () => {
+  withModAndCommunityUnset();
+
+  it("the public and saved views open My plans instead", async () => {
+    const library = await visit(local, session);
+    library.openLibrary({ kind: "public", search: "@someone" });
+    expect(library.readLibraryTabState()).toEqual({ active: true, view: { kind: "all" } });
+    library.setLibraryView({ kind: "saved" });
+    expect(library.readLibraryTabState().view).toEqual({ kind: "all" });
+    library.setLibraryView({ kind: "favorites" });
+    expect(library.readLibraryTabState().view).toEqual({ kind: "favorites" });
+  });
+
+  it("a public view kept from before a reload comes back as My plans", async () => {
+    session.setItem("gtnh-factory-flow-library", JSON.stringify({ active: true, view: { kind: "public" } }));
+    const library = await visit(local, session);
+    expect(library.readLibraryTabState()).toEqual({ active: true, view: { kind: "all" } });
   });
 });
