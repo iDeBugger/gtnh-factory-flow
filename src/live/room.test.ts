@@ -239,6 +239,28 @@ describe("a room's batches", () => {
   });
 });
 
+describe("a room's game version", () => {
+  it("a live room keeps gameVersion through a batch and a flush", async () => {
+    const store = new HeldStore();
+    store.plan = { ...store.plan, gameVersion: "2.8.1" };
+    const room = await openRoom(store);
+    expect(room.apply(peer, "c1", rename("Two"))).toMatchObject({ kind: "applied" });
+    expect(await room.flush()).toBe(true);
+    expect(store.plan).toMatchObject({ gameVersion: "2.8.1", tasks: [{ id: "t1", title: "Two" }] });
+  });
+
+  it("refuses a batch that sets the version, and stores none on a plan that had none", async () => {
+    const store = new HeldStore();
+    const room = await openRoom(store);
+    expect(room.apply(peer, "c1", [{ o: "meta", f: { gameVersion: "2.8.1" } }])).toMatchObject({
+      kind: "refused",
+    });
+    expect(room.apply(peer, "c2", rename("Two"))).toMatchObject({ kind: "applied" });
+    expect(await room.flush()).toBe(true);
+    expect("gameVersion" in store.plan).toBe(false);
+  });
+});
+
 describe("a room's lease", () => {
   it("is the room's own: once another holds it, the room stops writing and everyone joins again", async () => {
     const store = new HeldStore();

@@ -743,6 +743,12 @@ export const factoryProjectSchema = z.object({
   poolResourceRules: z.record(z.string(), z.enum(["share", "import"])).optional(),
   checklist: z.object({ cards: z.array(z.string()), edges: z.array(z.string()) }).optional(),
   schemaVersion: z.literal(PROJECT_SCHEMA_VERSION),
+  // The game version family; absent reads as 2.9. Any other value is kept as
+  // written, trimmed. A blank reads as absent rather than sinking the whole load.
+  gameVersion: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.string().trim().min(1).max(32).optional(),
+  ),
   id: z.string().min(1),
   name: z.string().min(1),
   // No length cap: the inputs cap at the community limits, and a strict field

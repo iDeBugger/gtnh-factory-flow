@@ -92,6 +92,16 @@ describe("keepStoredPlanMarks", () => {
     });
   });
 
+  it("keeps the stored plan's game version on a write that did not see the plan", () => {
+    const stale: DesignSummary = {
+      ...makeSummary("a", "Oil renamed", "2026-09-25T10:00:00.000Z"),
+      updatedAt: "2026-09-25T11:00:00.000Z",
+      gameVersion: "2.9",
+    };
+    expect(keepStoredPlanMarks(stale, { ...stored, gameVersion: "2.8.1" }).gameVersion).toBe("2.8.1");
+    expect(keepStoredPlanMarks(stale, stored).gameVersion).toBeUndefined();
+  });
+
   it("writes a summary that saw the stored plan as it is", () => {
     const fresh = { ...stored, name: "Renamed", icon: undefined };
     expect(keepStoredPlanMarks(fresh, stored)).toBe(fresh);
@@ -121,6 +131,14 @@ describe("duplicateDesign", () => {
     expect(copy.name).toBe("Platline copy");
     expect(copy.project.name).toBe("Platline copy");
     expect(copy.id).not.toBe(source.id);
+  });
+
+  it("keeps the plan's game version, and adds none to a plan without one", () => {
+    const source = createDesign({ ...createEmptyProject(), gameVersion: "2.8.1" }, "Platline");
+    expect(duplicateDesign(source, []).project.gameVersion).toBe("2.8.1");
+    expect(toDesignSummary(duplicateDesign(source, [])).gameVersion).toBe("2.8.1");
+    const old = createDesign(createEmptyProject(), "Old");
+    expect("gameVersion" in duplicateDesign(old, []).project).toBe(false);
   });
 
   it("suffixes a second copy", () => {
@@ -252,6 +270,12 @@ describe("toDesignSummary", () => {
     expect(summary.closed).toBe(true);
     expect(summary.folderId).toBe("f1");
     expect(summary.communityPlanId).toBe("post-1");
+  });
+
+  it("copies the plan's game version, and leaves it absent for a plan without one", () => {
+    const record = createDesign({ ...createEmptyProject(), gameVersion: "2.8.1" }, "Oil");
+    expect(toDesignSummary(record).gameVersion).toBe("2.8.1");
+    expect("gameVersion" in toDesignSummary(createDesign(createEmptyProject(), "Old"))).toBe(false);
   });
 
   it("leaves open, unposted designs unflagged", () => {

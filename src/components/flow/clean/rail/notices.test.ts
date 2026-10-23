@@ -1,8 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mockForced, mockUnneeded } from "@/lib/solver/plan/__fixtures__/mock-extras";
-import type { ThroughputResult } from "@/lib/model/types";
+import type { Recipe, ThroughputResult } from "@/lib/model/types";
+import type { DatasetManifest, DatasetVersion } from "@/lib/datasets/types";
+import { unservedPlanVersion } from "@/lib/datasets/dataset-cache";
+import { servedGameVersions } from "@/lib/datasets/new-plan-version";
+import { startLandingRefresh } from "@/lib/datasets/refresh-project-recipes";
 import type { PlanNote, PlanSolveExtras } from "@/lib/solver/plan/types";
-import { buildNotices, byUrgency } from "./notices";
+import { buildNotices, byUrgency, planVersionNotice } from "./notices";
 
 const withExtras = (
   mock: typeof mockForced,
@@ -202,5 +206,77 @@ describe("the notices' sentences", () => {
     expect(buildNotices(mockForced.project, mockForced.result)).toEqual([]);
     expect(buildNotices(mockForced.project, undefined)).toEqual([]);
     expect(buildNotices(mockForced.project, { ...mockForced.result, plan: undefined })).toEqual([]);
+  });
+});
+
+describe("a plan for a version this site has no recipes for", () => {
+  const version = (id: string, gtnhVersion: string): DatasetVersion => ({
+    id,
+    gtnhVersion,
+    channel: "stable",
+    publishedAt: "2026-10-20T00:00:00.000Z",
+    manifestPath: "/datasets/gtnh/datasets.manifest.json",
+    recipeDatasetPath: `/datasets/gtnh/${id}/recipes.json.gz`,
+    sourceInfo: { sourceId: "recex", generatedAt: "2026-10-20T00:00:00.000Z" },
+  });
+  const manifest: DatasetManifest = {
+    schemaVersion: 1,
+    latestStableVersion: "local-2.9.0-rc-2",
+    versions: [version("local-2.9.0-rc-2", "2.9.0-RC-2"), version("local-2.8.1", "2.8.1")],
+  };
+
+  it("unserved plan version shows the notice and never refreshes", async () => {
+    const plan = { gameVersion: "2.10", recipes: [{ id: "r1" } as Recipe] };
+    const unserved = unservedPlanVersion({ datasetManifest: manifest, project: plan });
+    expect(unserved).toBe("2.10");
+    const notice = planVersionNotice(unserved, servedGameVersions(manifest));
+    expect(notice).toMatchObject({
+      severity: "warn",
+      text: "This plan is for GTNH 2.10. This site has recipes for GTNH 2.9 and GTNH 2.8.1.",
+      focus: [],
+      // Read in full: the row wraps instead of fading its rule out.
+      wrap: true,
+    });
+    // The Convert key waits for conversion: no key that does nothing.
+    expect(notice?.action).toBeUndefined();
+
+    // Whatever dataset is active, the plan's stored bodies are never asked about.
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const apply = vi.fn();
+    for (const id of ["local-2.9.0-rc-2", "local-2.8.1"]) {
+      const entry = manifest.versions.find((entry) => entry.id === id)!;
+      expect(
+        startLandingRefresh({
+          dataset: { datasetVersionId: id, gtnhVersion: entry.gtnhVersion },
+          manifest,
+          manifestUrl: "/m.json",
+          project: plan,
+          checked: new Map(),
+          requested: new WeakSet(),
+          stillServes: () => true,
+          apply,
+        }),
+      ).toBeUndefined();
+    }
+    await Promise.resolve();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(apply).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("the key shows once conversion hands one over", () => {
+    const convert = vi.fn();
+    const notice = planVersionNotice("2.10", ["2.9", "2.8.1"], convert);
+    expect(notice?.action?.label).toBe("Convert to GTNH 2.9");
+    notice?.action?.onSelect();
+    expect(convert).toHaveBeenCalledTimes(1);
+  });
+
+  it("served plans, and any plan before the manifest arrives, get none", () => {
+    expect(unservedPlanVersion({ datasetManifest: manifest, project: {} })).toBeUndefined();
+    expect(unservedPlanVersion({ datasetManifest: manifest, project: { gameVersion: "2.8.1" } })).toBeUndefined();
+    expect(unservedPlanVersion({ datasetManifest: undefined, project: { gameVersion: "2.10" } })).toBeUndefined();
+    expect(planVersionNotice(undefined, ["2.9"])).toBeUndefined();
   });
 });

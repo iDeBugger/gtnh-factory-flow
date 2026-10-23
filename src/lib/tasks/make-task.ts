@@ -1,5 +1,6 @@
 "use client";
 
+import { readNewPlanVersion } from "@/lib/datasets/new-plan-version";
 import { readDesign } from "@/lib/designs/design-storage";
 import { buildMachineList } from "@/lib/model/machine-list";
 import type { FactoryProject, PlanTaskLink, PlanTaskStatus } from "@/lib/model/types";
@@ -176,7 +177,7 @@ export async function addCardsToTask(
     }
     await activateDesign(board);
   } else {
-    await designStore.addTaskBoard();
+    await designStore.addTaskBoard({ gameVersion: readNewPlanVersion(useFactoryStore.getState().datasetManifest) });
   }
   const boardId = useDesignStore.getState().activeDesignId;
   // The board lands on the canvas a moment after the design is named.

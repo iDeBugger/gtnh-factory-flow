@@ -23,6 +23,8 @@ import {
   type SearchPhase,
 } from "@/lib/search";
 import { useFactoryStore } from "@/store/factory-store";
+import { activeVersionServesPlan, unservedPlanVersion } from "@/lib/datasets/dataset-cache";
+import { recipesNotOnSiteText } from "@/lib/datasets/new-plan-version";
 import { POWER_EU_CLAUSE_ID } from "@/lib/power/power-search";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import { isEchoOfTouch } from "@/lib/pointer-kind";
@@ -68,8 +70,13 @@ export function ResourceIndexPane({
   leading?: ReactNode;
 }) {
   const datasetManifestUrl = useFactoryStore((state) => state.datasetManifestUrl);
+  // While a tab's own dataset loads, the other version's items are not listed for it.
+  const servesPlan = useFactoryStore(activeVersionServesPlan);
+  const unservedVersion = useFactoryStore(unservedPlanVersion);
   const selectedDatasetVersion = useFactoryStore((state) =>
-    state.datasetManifest?.versions.find((entry) => entry.id === state.selectedDatasetVersionId),
+    servesPlan
+      ? state.datasetManifest?.versions.find((entry) => entry.id === state.selectedDatasetVersionId)
+      : undefined,
   );
   const dataset = useFactoryStore((state) => state.dataset);
   const isDatasetLoading = useFactoryStore((state) => state.isDatasetLoading);
@@ -313,14 +320,18 @@ export function ResourceIndexPane({
   return (
     <div className="nei pn-column flex min-h-0 flex-1 flex-col" onWheel={handleResourceWheel}>
       {searchAt === "top" ? <div className="nei-search-foot">{searchField}</div> : null}
-      {!dataset ? (
+      {!dataset || !servesPlan ? (
         <>
           <div className="nei-pager">
             {leading}
             <span className="nei-pager-count nei-text"> </span>
           </div>
           <div className="nei-empty">
-            {isDatasetLoading ? "Loading recipe index..." : "Recipe index is not loaded yet."}
+            {unservedVersion
+              ? recipesNotOnSiteText(unservedVersion)
+              : isDatasetLoading
+                ? "Loading recipe index..."
+                : "Recipe index is not loaded yet."}
           </div>
           <div className="min-h-0 flex-1" />
         </>

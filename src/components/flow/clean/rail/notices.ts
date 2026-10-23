@@ -7,6 +7,8 @@ import { UP_TO_WORD } from "../up-to-reason";
 import { loopSentence, loopTag, loopTone, type LoopTone } from "../loops";
 import type { Note, NoteArg, PlanNote, PlanShortfall } from "@/lib/solver/plan/types";
 import { splitResultNodeId } from "./rail-model";
+import type { GameVersion } from "@/lib/model/game-version";
+import { CONVERT_TO_DEFAULT_LABEL, unservedPlanText } from "@/lib/datasets/new-plan-version";
 
 /**
  * The notices bar's list: the solver's notes in the mod's words
@@ -26,6 +28,10 @@ export interface BoardNotice {
   focus: string[];
   /** A notice the player can put away (the plan conversion's): the row shows a Dismiss key. */
   dismiss?: () => void;
+  /** A key that acts on the notice (the version notice's Convert): shown only when given. */
+  action?: { label: string; onSelect: () => void };
+  /** The sentence wraps onto more lines instead of fading out: for a notice whose whole sentence is its rule. */
+  wrap?: boolean;
   /** An alarm's name ("DEAD LOOP"): a chip before the sentence, blinking on the prompts' clock. */
   tag?: string;
   /** The ring an alarm is about: its row and chip take the ring's tone, as its cards' outlines do. */
@@ -84,6 +90,28 @@ const RULE_BY_NOTE: Record<string, "at-least" | "exact" | "at-most" | "ignore"> 
   RULE_AT_MOST: "at-most",
   RULE_ANY: "ignore",
 };
+
+/**
+ * The notice on a plan whose game version this site has no recipes for (`unservedPlanVersion`). The plan opens with
+ * its stored recipe bodies and is never refreshed; the notice stays while the plan is open. The Convert key shows only
+ * when `onConvert` is given.
+ */
+export function planVersionNotice(
+  unserved: GameVersion | undefined,
+  served: readonly GameVersion[],
+  onConvert?: () => void,
+): BoardNotice | undefined {
+  if (!unserved) return undefined;
+  return {
+    id: `plan-version:${unserved}`,
+    severity: "warn",
+    text: unservedPlanText(unserved, served),
+    focus: [],
+    // Its second half (which versions this site has) is the rule, and nothing else ever shows it.
+    wrap: true,
+    ...(onConvert ? { action: { label: CONVERT_TO_DEFAULT_LABEL, onSelect: onConvert } } : {}),
+  };
+}
 
 export function buildNotices(
   project: FactoryProject,

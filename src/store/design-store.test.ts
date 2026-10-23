@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   DesignFolder,
   DesignRecord,
@@ -54,11 +54,15 @@ vi.mock("@/lib/designs/design-camera", () => ({
 }));
 
 import { readLibraryTabState } from "@/lib/library/library-tab";
-import { createEmptyProject } from "@/examples";
+import { toDesignSummary } from "@/lib/designs/design-library";
+import { planGameVersion } from "@/lib/model/game-version";
+import { createEmptyProject, createNewProject } from "@/examples";
 import { useDesignStore } from "./design-store";
 import { useFactoryStore } from "./factory-store";
 import { copyViewedPost } from "@/lib/community/open-post";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
+import { resetNewPlanVersionForTests, writeNewPlanVersion } from "@/lib/datasets/new-plan-version";
+import type { DatasetManifest } from "@/lib/datasets/types";
 
 function summary(id: string, extra: Partial<DesignSummary> = {}): DesignSummary {
   return {
@@ -571,5 +575,130 @@ describe("two browser tabs on one library (Jack, 2026-09-23: hours lost to a sec
       stop();
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("the game version a design is for", () => {
+  /** Storage as IndexedDB keeps it: records whole, summaries made from them as `writeDesign` makes them. */
+  function versionedLibrary(...records: DesignRecord[]) {
+    const stored = new Map(records.map((record) => [record.id, structuredClone(record)]));
+    storage.listDesignSummaries.mockImplementation(async () =>
+      [...stored.values()].map((record) => toDesignSummary(record)),
+    );
+    storage.readDesign.mockImplementation(async (id) => {
+      const record = stored.get(id);
+      return record ? structuredClone(record) : undefined;
+    });
+    storage.writeDesign.mockImplementation(async (record) => {
+      stored.set(record.id, { ...toDesignSummary(record), project: structuredClone(record.project) });
+    });
+    return stored;
+  }
+
+  it("an IndexedDB record with no field opens as 2.9 and is not rewritten on load", async () => {
+    useFactoryStore.getState().markHydratedProject(createEmptyProject());
+    const old: DesignRecord = { ...summary("old"), project: { ...createEmptyProject(), planMode: true, solveMode: true } };
+    const other: DesignRecord = { ...summary("other"), project: { ...createEmptyProject(), gameVersion: "2.8.1" } };
+    const stored = versionedLibrary(old, other);
+    const raw = JSON.stringify(stored.get("old"));
+    storage.readActiveDesignId.mockReturnValue("other");
+    await useDesignStore.getState().hydrate();
+    await useDesignStore.getState().switchToDesign("old");
+
+    const project = useFactoryStore.getState().project;
+    expect("gameVersion" in project).toBe(false);
+    expect(planGameVersion(project)).toBe("2.9");
+    expect(useDesignStore.getState().designs.find((design) => design.id === "old")?.gameVersion).toBeUndefined();
+    // Nothing was written over the old record: no field, the same stamp.
+    expect(JSON.stringify(stored.get("old"))).toBe(raw);
+    expect(stored.get("old")?.updatedAt).toBe(old.updatedAt);
+  });
+
+  it("addDesign({ gameVersion: '2.8.1' }) stores a plan and a summary on 2.8.1", async () => {
+    const stored = versionedLibrary();
+    await useDesignStore.getState().addDesign({ gameVersion: "2.8.1" });
+
+    const id = useDesignStore.getState().activeDesignId!;
+    expect(stored.get(id)?.project.gameVersion).toBe("2.8.1");
+    expect(useDesignStore.getState().designs.find((design) => design.id === id)?.gameVersion).toBe("2.8.1");
+    expect(useFactoryStore.getState().project.gameVersion).toBe("2.8.1");
+  });
+
+  it("addDesign() with no version stamps none, and a task board takes the version it is given", async () => {
+    const stored = versionedLibrary();
+    await useDesignStore.getState().addDesign();
+    const plain = useDesignStore.getState().activeDesignId!;
+    expect("gameVersion" in stored.get(plain)!.project).toBe(false);
+
+    await useDesignStore.getState().addTaskBoard({ gameVersion: "2.8.1" });
+    const board = useDesignStore.getState().activeDesignId!;
+    expect(stored.get(board)?.project).toMatchObject({ primaryView: "tasks", gameVersion: "2.8.1" });
+    expect(useDesignStore.getState().designs.find((design) => design.id === board)).toMatchObject({
+      taskBoard: true,
+      gameVersion: "2.8.1",
+    });
+  });
+
+  describe("blank plans the library makes itself take the New plans choice", () => {
+    const version = (id: string, gtnhVersion: string) => ({
+      id,
+      gtnhVersion,
+      channel: "stable" as const,
+      publishedAt: "2026-10-20T00:00:00.000Z",
+      manifestPath: "/datasets/gtnh/datasets.manifest.json",
+      recipeDatasetPath: `/datasets/gtnh/${id}/recipes.json.gz`,
+      sourceInfo: { sourceId: "recex" as const, generatedAt: "2026-10-20T00:00:00.000Z" },
+    });
+    const manifest: DatasetManifest = {
+      schemaVersion: 1,
+      latestStableVersion: "local-2.9.0-rc-2",
+      versions: [version("local-2.9.0-rc-2", "2.9.0-RC-2"), version("local-2.8.1", "2.8.1")],
+    };
+    beforeEach(() => {
+      useFactoryStore.setState({ datasetManifest: manifest });
+      // This suite runs with no localStorage, so the pick is held as the page's own choice.
+      writeNewPlanVersion("2.8.1");
+    });
+    afterEach(() => {
+      resetNewPlanVersionForTests();
+      useFactoryStore.setState({ datasetManifest: undefined });
+    });
+
+    it("deleting the last plan seeds a blank plan on 2.8.1, with its tab's version", async () => {
+      const stored = versionedLibrary({ ...summary("only"), project: createEmptyProject() });
+      storage.deleteDesign.mockImplementation(async (id: string) => {
+        stored.delete(id);
+      });
+      await useDesignStore.getState().hydrate();
+      await useDesignStore.getState().removeDesign("only");
+
+      const id = useDesignStore.getState().activeDesignId!;
+      expect(id).not.toBe("only");
+      expect(stored.get(id)?.project.gameVersion).toBe("2.8.1");
+      // The tab's chip reads the summary.
+      expect(useDesignStore.getState().designs.find((design) => design.id === id)?.gameVersion).toBe("2.8.1");
+      expect(planGameVersion(useFactoryStore.getState().project)).toBe("2.8.1");
+    });
+
+    it("the first-run seed of an empty library is on 2.8.1 too", async () => {
+      const stored = versionedLibrary();
+      await useDesignStore.getState().hydrate();
+
+      const [seeded] = [...stored.values()];
+      expect(seeded?.project.gameVersion).toBe("2.8.1");
+      expect(useDesignStore.getState().designs[0]?.gameVersion).toBe("2.8.1");
+    });
+  });
+
+  it("duplicate and copy keep the version", async () => {
+    const stored = versionedLibrary({ ...summary("src"), project: { ...createNewProject(), gameVersion: "2.8.1" } });
+    await useDesignStore.getState().hydrate();
+    await useDesignStore.getState().copyDesign("src");
+
+    const copy = useDesignStore.getState().activeDesignId!;
+    expect(copy).not.toBe("src");
+    expect(stored.get(copy)?.project.gameVersion).toBe("2.8.1");
+    expect(useDesignStore.getState().designs.find((design) => design.id === copy)?.gameVersion).toBe("2.8.1");
+    expect(stored.get("src")?.project.gameVersion).toBe("2.8.1");
   });
 });

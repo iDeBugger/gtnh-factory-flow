@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { DatasetCache } from "@/lib/datasets/dataset-cache";
+import type { DatasetManifest, DatasetVersion, RecipeDataset } from "@/lib/datasets";
+import type { Recipe } from "@/lib/model/types";
 import { getStorageRole } from "@/lib/model/storage-role";
 import { PROJECT_SCHEMA_VERSION, type FactoryProject } from "@/lib/model/types";
 import { makeResourceHandleId } from "@/components/flow/resource-handles";
-import { captureBoardSelection, useFactoryStore } from "./factory-store";
+import { captureBoardSelection, replaceDatasetCacheForTests, useFactoryStore } from "./factory-store";
 import { allowLegacyModesForTests } from "@/lib/model/project-normalize";
 
 // These tests exercise the old Build, Solve and Pool code, which the app no longer reaches.
@@ -4784,5 +4787,202 @@ describe("swapping the mob in an Extreme Entity Crusher", () => {
   it("never takes a second recipe: the controller holds one spawner", () => {
     useFactoryStore.getState().setProject(PROJECT());
     expect(useFactoryStore.getState().addRecipeToNode("eec", SKELETON)).toBe(false);
+  });
+});
+
+describe("the active dataset follows the open plan", () => {
+  const manifest = {
+    schemaVersion: 1,
+    latestStableVersion: "local-2.9.0-rc-2",
+    versions: [
+      { id: "local-2.9.0-rc-2", gtnhVersion: "2.9.0-RC-2", publishedAt: "2026-10-23T00:00:00.000Z" },
+      { id: "local-2.8.1", gtnhVersion: "2.8.1", publishedAt: "2026-10-23T00:00:00.000Z" },
+    ],
+  } as unknown as DatasetManifest;
+  const catalog = (id: string, gtnhVersion: string): RecipeDataset =>
+    ({
+      schemaVersion: 1,
+      datasetVersionId: id,
+      gtnhVersion,
+      resources: [{ id: "dust", kind: "item", displayName: "Dust", iconPath: `/${id}/dust.png` }],
+      recipes: [],
+      oreDictionary: {},
+      recipeMaps: [],
+    }) as unknown as RecipeDataset;
+  const dataset29 = catalog("local-2.9.0-rc-2", "2.9.0-RC-2");
+  const dataset281 = catalog("local-2.8.1", "2.8.1");
+  const datasetRecipe = (id: string, datasetVersionId: string): Recipe => ({
+    id,
+    name: id,
+    machineType: "Macerator",
+    minimumTier: "LV",
+    durationTicks: 20,
+    eut: 2,
+    inputs: [{ kind: "item", id: "ore", amount: 1 }],
+    outputs: [{ kind: "item", id: "dust", amount: 1 }],
+    source: { datasetVersionId },
+  });
+  const plan = (id: string, gameVersion?: string): FactoryProject => ({
+    schemaVersion: PROJECT_SCHEMA_VERSION,
+    id,
+    name: id,
+    ...(gameVersion ? { gameVersion } : {}),
+    planMode: true,
+    fuelProfiles: [],
+    recipes: [datasetRecipe("on-board", gameVersion === "2.8.1" ? "local-2.8.1" : "local-2.9.0-rc-2")],
+    nodes: [{ id: "n1", recipeId: "on-board", position: { x: 0, y: 0 }, machineCount: 1, parallel: 1, overclockTier: "LV", enabled: true }],
+    edges: [],
+  });
+
+  /** Loads that resolve only when the test says so. */
+  let pending: Map<string, (dataset: RecipeDataset) => void>;
+  let loads: string[];
+
+  beforeEach(async () => {
+    pending = new Map();
+    loads = [];
+    replaceDatasetCacheForTests(
+      new DatasetCache(
+        (_url: string, version: DatasetVersion) =>
+          new Promise<RecipeDataset>((resolve) => {
+            loads.push(version.id);
+            pending.set(version.id, resolve);
+          }),
+      ),
+    );
+    useFactoryStore.setState({ dataset: undefined, selectedDatasetVersionId: undefined, isDatasetLoading: false });
+    useFactoryStore.getState().setDatasetManifest(manifest, "/m.json");
+    useFactoryStore.getState().setProject(plan("plan-29"));
+    const boot = useFactoryStore.getState().ensureDatasetFor("2.9");
+    pending.get("local-2.9.0-rc-2")!(dataset29);
+    await boot;
+  });
+
+  it("switching tabs mid-load lands the right dataset", async () => {
+    expect(useFactoryStore.getState().dataset).toBe(dataset29);
+    const plan281 = plan("plan-281", "2.8.1");
+    const before281 = JSON.stringify(plan281);
+
+    // To a 2.8.1 tab: its dataset starts loading, the 2.9 one stays until it lands.
+    useFactoryStore.getState().setProject(plan281);
+    const load281 = useFactoryStore.getState().ensureDatasetFor("2.8.1");
+    expect(useFactoryStore.getState().isDatasetLoading).toBe(true);
+    expect(useFactoryStore.getState().dataset).toBe(dataset29);
+
+    // Back to a 2.9 tab before the load resolves: the cached 2.9 dataset, at once.
+    useFactoryStore.getState().setProject(plan("plan-29b"));
+    const project29 = useFactoryStore.getState().project;
+    await useFactoryStore.getState().ensureDatasetFor("2.9");
+    expect(useFactoryStore.getState().isDatasetLoading).toBe(false);
+
+    // The 2.8.1 load lands late: it only fills the cache.
+    pending.get("local-2.8.1")!(dataset281);
+    expect(await load281).toBe(dataset281);
+    expect(useFactoryStore.getState().dataset).toBe(dataset29);
+    expect(useFactoryStore.getState().selectedDatasetVersionId).toBe("local-2.9.0-rc-2");
+    expect(useFactoryStore.getState().project).toBe(project29);
+    expect(JSON.stringify(plan281)).toBe(before281);
+
+    // The 2.8.1 tab again: no second load, its dataset becomes the active one.
+    useFactoryStore.getState().setProject(plan281);
+    await useFactoryStore.getState().ensureDatasetFor("2.8.1");
+    expect(loads).toEqual(["local-2.9.0-rc-2", "local-2.8.1"]);
+    expect(useFactoryStore.getState().dataset).toBe(dataset281);
+    expect(useFactoryStore.getState().selectedDatasetVersionId).toBe("local-2.8.1");
+  });
+
+  it("recipe add is refused while the plan's dataset loads", async () => {
+    useFactoryStore.getState().setProject(plan("plan-281", "2.8.1"));
+    const load281 = useFactoryStore.getState().ensureDatasetFor("2.8.1");
+    const store = () => useFactoryStore.getState();
+    const before = store().project;
+    const recipe29 = datasetRecipe("from-2.9", "local-2.9.0-rc-2");
+
+    store().addNodeForRecipeObject(recipe29);
+    store().addConnectedNodeForRecipeObject(recipe29, "n1", { kind: "item", id: "dust", mode: "uses" });
+    store().refactorNodeWithRecipe("n1", recipe29);
+    store().swapMachineRecipe("n1", recipe29);
+    store().setNodeRecipe("n1", recipe29);
+    expect(store().addRecipeToNode("n1", recipe29)).toBe(false);
+    // A body from a dataset the manifest does not list waits for the plan's own version.
+    store().addNodeForRecipeObject(datasetRecipe("old-build", "local-2.9.0-rc-1"));
+    expect(store().project).toBe(before);
+
+    // Its own dataset lands: adds go through.
+    pending.get("local-2.8.1")!(dataset281);
+    await load281;
+    store().addNodeForRecipeObject(datasetRecipe("from-2.8.1", "local-2.8.1"));
+    expect(store().project.nodes).toHaveLength(2);
+  });
+
+  it("a pick fetched on one version is refused on a tab of the other, both cached", async () => {
+    // Both catalogs cached and the 2.8.1 tab open: switching is instant, so a 2.9 body
+    // fetched before the switch arrives while the 2.8.1 dataset is already the active one.
+    useFactoryStore.getState().setProject(plan("plan-281", "2.8.1"));
+    const load281 = useFactoryStore.getState().ensureDatasetFor("2.8.1");
+    pending.get("local-2.8.1")!(dataset281);
+    await load281;
+    expect(useFactoryStore.getState().dataset).toBe(dataset281);
+    const before = useFactoryStore.getState().project;
+    const recipe29 = datasetRecipe("from-2.9", "local-2.9.0-rc-2");
+    useFactoryStore.getState().addNodeForRecipeObject(recipe29);
+    useFactoryStore.getState().refactorNodeWithRecipe("n1", recipe29);
+    expect(useFactoryStore.getState().addRecipeToNode("n1", recipe29)).toBe(false);
+    expect(useFactoryStore.getState().project).toBe(before);
+  });
+
+  it("a 2.9 plan takes picks as soon as the manifest names its version, before the catalog", () => {
+    useFactoryStore.setState({ dataset: undefined, selectedDatasetVersionId: undefined });
+    useFactoryStore.getState().setDatasetManifest(manifest, "/m.json");
+    useFactoryStore.getState().setProject(plan("plan-29"));
+    useFactoryStore.getState().addNodeForRecipeObject(datasetRecipe("from-2.9", "local-2.9.0-rc-2"));
+    expect(useFactoryStore.getState().project.nodes).toHaveLength(2);
+  });
+
+  it("setDataset for another family does not touch the open project", () => {
+    useFactoryStore.getState().setProject(plan("plan-281", "2.8.1"));
+    const project = useFactoryStore.getState().project;
+    useFactoryStore.getState().setDataset(dataset29);
+    expect(useFactoryStore.getState().project).toBe(project);
+    // The plan's own family does refresh its icons.
+    useFactoryStore.getState().setDataset(dataset281);
+    expect(useFactoryStore.getState().project.recipes[0]?.outputs[0]?.iconPath).toBe("/local-2.8.1/dust.png");
+  });
+
+  it("a dataset switch does not re-solve the open plan against the other version", async () => {
+    useFactoryStore.getState().setProject(plan("plan-281", "2.8.1"));
+    const solved = useFactoryStore.getState().lastResult;
+    useFactoryStore.getState().setDataset(dataset29);
+    expect(useFactoryStore.getState().lastResult).toBe(solved);
+    const load281 = useFactoryStore.getState().ensureDatasetFor("2.8.1");
+    pending.get("local-2.8.1")!(dataset281);
+    await load281;
+    expect(useFactoryStore.getState().dataset).toBe(dataset281);
+    expect(useFactoryStore.getState().lastResult).toBe(solved);
+  });
+
+  it("a version this site does not serve loads nothing and waits for nothing", async () => {
+    useFactoryStore.getState().setProject(plan("plan-210", "2.10"));
+    useFactoryStore.setState({ isDatasetLoading: true });
+    expect(await useFactoryStore.getState().ensureDatasetFor("2.10")).toBeUndefined();
+    expect(useFactoryStore.getState().isDatasetLoading).toBe(false);
+    expect(useFactoryStore.getState().dataset).toBe(dataset29);
+    expect(loads).toEqual(["local-2.9.0-rc-2"]);
+  });
+
+  it("the manifest's selection never names a hidden version", () => {
+    useFactoryStore.setState({ selectedDatasetVersionId: undefined });
+    useFactoryStore.getState().setDatasetManifest(
+      {
+        schemaVersion: 1,
+        latestStableVersion: "local-2.8.4",
+        versions: [
+          { id: "local-2.8.4", gtnhVersion: "2.8.4", publishedAt: "2026-01-01T00:00:00.000Z" },
+          { id: "local-2.9.0-rc-2", gtnhVersion: "2.9.0-RC-2", publishedAt: "2026-10-23T00:00:00.000Z" },
+        ],
+      } as unknown as DatasetManifest,
+      "/m.json",
+    );
+    expect(useFactoryStore.getState().selectedDatasetVersionId).toBe("local-2.9.0-rc-2");
   });
 });

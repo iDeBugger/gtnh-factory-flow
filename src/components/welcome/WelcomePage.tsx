@@ -1,5 +1,7 @@
 "use client";
 
+import { readNewPlanVersion } from "@/lib/datasets/new-plan-version";
+import { planGameVersion } from "@/lib/model/game-version";
 import {
   Download,
   Factory,
@@ -122,14 +124,16 @@ export function WelcomePage() {
                   // Step off first: adding a design does not, and the new
                   // tab would otherwise sit under this page unseen.
                   leaveWelcomeTab();
-                  // An empty untitled plan already open is the new design: a second one would only sit beside it.
-                  const { project } = useFactoryStore.getState();
+                  // An empty untitled plan already open on the chosen version is the new design: a second one would only sit beside it.
+                  const { project, datasetManifest } = useFactoryStore.getState();
+                  const gameVersion = readNewPlanVersion(datasetManifest);
                   const blank =
+                    planGameVersion(project) === gameVersion &&
                     project.nodes.length === 0 && (project.storages ?? []).length === 0 && (project.annotations ?? []).length === 0;
                   const open = useDesignStore.getState();
                   const current = open.designs.find((design) => design.id === open.activeDesignId);
                   if (blank && current?.name === UNTITLED_DESIGN_NAME && !current.closed) return;
-                  void addDesign();
+                  void addDesign({ gameVersion });
                 }}
               >
                 New design

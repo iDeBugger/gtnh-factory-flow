@@ -3,7 +3,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Recipe } from "@/lib/model/types";
-import type { DatasetManifest, DatasetVersion } from "@/lib/datasets/types";
+import type { DatasetManifest, DatasetVersion, RecipeDataset } from "@/lib/datasets/types";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
 import { useFactoryStore } from "@/store/factory-store";
 import { RecipeBrowser, contextualizePreviewRecipe } from "./RecipeBrowser";
@@ -11,7 +11,7 @@ import { queryRecipeDatasetRecipes } from "@/lib/datasets/browser-loader";
 
 const datasetVersion: DatasetVersion = {
   id: "test-version",
-  gtnhVersion: "test",
+  gtnhVersion: "2.9.0",
   channel: "daily",
   publishedAt: "2026-05-25T00:00:00.000Z",
   manifestPath: "manifest.json",
@@ -122,6 +122,13 @@ describe("RecipeBrowser", () => {
       edges: [],
     });
     useFactoryStore.getState().setDatasetManifest(manifest, "/datasets/manifest.json");
+    // The browser asks only while the active dataset serves the open plan's version.
+    useFactoryStore.getState().setDataset({
+      datasetVersionId: datasetVersion.id,
+      gtnhVersion: datasetVersion.gtnhVersion,
+      resources: [],
+      recipes: [],
+    } as unknown as RecipeDataset);
     useFactoryStore.getState().browseResource(
       {
         kind: "item",
@@ -165,6 +172,41 @@ describe("RecipeBrowser", () => {
         id: "oredict:logWood",
       }),
     );
+  });
+
+  it("refuses a pick whose body arrives after a switch to a tab on another version", async () => {
+    let release: (recipe: unknown) => void = () => {};
+    const body = await browserLoaderMock.getRecipeDatasetRecipe();
+    browserLoaderMock.getRecipeDatasetRecipe.mockImplementationOnce(
+      () => new Promise((resolve) => (release = resolve)) as never,
+    );
+    render(<RecipeBrowser onLoadDatasetVersion={() => {}} />);
+    fireEvent.click(await screen.findByLabelText("Add recipe node"));
+    // The player moves to a 2.8.1 tab while the 2.9 body is on its way.
+    useFactoryStore.setState((state) => ({ project: { ...state.project, gameVersion: "2.8.1" } }));
+    release({ ...body, source: { datasetVersionId: datasetVersion.id } });
+    await waitFor(() => {
+      expect(useFactoryStore.getState().pendingRecipeAdds.at(-1)?.error).toBe(
+        "This recipe is from another GTNH version.",
+      );
+    });
+    expect(useFactoryStore.getState().project.nodes).toHaveLength(0);
+  });
+
+  it("asks nothing and reads as loading while the plan's own dataset loads", async () => {
+    // A 2.8.1 tab with the 2.9 dataset still active: no 2.9 recipe is offered for it.
+    useFactoryStore.setState((state) => ({ project: { ...state.project, gameVersion: "2.8.1" } }));
+    render(<RecipeBrowser onLoadDatasetVersion={() => {}} />);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(queryRecipeDatasetRecipes).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Add recipe node")).toBeNull();
+  });
+
+  it("says a plan's version has no recipes on this site, instead of loading", async () => {
+    useFactoryStore.setState((state) => ({ project: { ...state.project, gameVersion: "2.10" } }));
+    render(<RecipeBrowser onLoadDatasetVersion={() => {}} />);
+    expect(await screen.findAllByText("Recipes for GTNH 2.10 are not on this site.")).not.toHaveLength(0);
+    expect(queryRecipeDatasetRecipes).not.toHaveBeenCalled();
   });
 
   it("keeps filled-cell recipe slots renderable when browsing by equivalent fluid", () => {

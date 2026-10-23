@@ -61,6 +61,14 @@ void (LIVE_COLLECTIONS satisfies readonly (keyof typeof LIVE_ENTITY_SCHEMAS)[]);
 
 const META_SCHEMAS = factoryProjectSchema.shape as unknown as Record<string, z.ZodType>;
 
+/**
+ * Plan fields no live edit may set or delete. The game version picks which
+ * recipes and machine rules the plan is read with, so it changes only by
+ * converting the plan into a new design; clients leave it out of live edits
+ * (`live-shape.ts`), and the service refuses a batch that names it.
+ */
+const NEVER_LIVE_FIELDS: ReadonlySet<string> = new Set(["gameVersion"]);
+
 /** A schema's fields, when it is a plain object schema (no whole-object checks, unknown keys dropped). */
 function fieldSchemas(schema: z.ZodType): Record<string, z.ZodType> | undefined {
   if (!(schema instanceof z.ZodObject)) {
@@ -168,6 +176,9 @@ export function checkPlanField(
   name: string,
   value: unknown,
 ): { error: string } | { fix?: { value: unknown } } {
+  if (NEVER_LIVE_FIELDS.has(name)) {
+    return { error: `plan field ${name}: not a live edit` };
+  }
   const schema = own(META_SCHEMAS, name);
   if (!schema || (LIVE_COLLECTIONS as readonly string[]).includes(name)) {
     return { error: `plan field ${JSON.stringify(name.slice(0, 40))} is not part of a plan` };

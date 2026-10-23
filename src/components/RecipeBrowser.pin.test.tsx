@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DatasetManifest, DatasetVersion } from "@/lib/datasets/types";
+import type { DatasetManifest, DatasetVersion, RecipeDataset } from "@/lib/datasets/types";
 import { PROJECT_SCHEMA_VERSION, type Recipe } from "@/lib/model/types";
 import { useFactoryStore } from "@/store/factory-store";
 import { queryRecipeDatasetRecipes } from "@/lib/datasets/browser-loader";
@@ -16,7 +16,7 @@ import { RecipeBrowser } from "./RecipeBrowser";
 
 const datasetVersion: DatasetVersion = {
   id: "pin-version",
-  gtnhVersion: "test",
+  gtnhVersion: "2.9.0",
   channel: "daily",
   publishedAt: "2026-05-25T00:00:00.000Z",
   manifestPath: "manifest.json",
@@ -102,6 +102,13 @@ describe("RecipeBrowser pinned to a machine", () => {
       edges: [],
     });
     useFactoryStore.getState().setDatasetManifest(manifest, "/datasets/manifest.json");
+    // The browser asks only while the active dataset serves the open plan's version.
+    useFactoryStore.getState().setDataset({
+      datasetVersionId: datasetVersion.id,
+      gtnhVersion: datasetVersion.gtnhVersion,
+      resources: [],
+      recipes: [],
+    } as unknown as RecipeDataset);
     // A pick made while Welcome covers the board goes to a new tab; this one is about the open plan.
     closeWelcomeTab();
     useFactoryStore.getState().browseMachineRecipes("lcr-card");

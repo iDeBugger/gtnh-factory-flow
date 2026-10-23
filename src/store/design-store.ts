@@ -64,8 +64,10 @@ import { applyPlanView, capturePlanView } from "@/lib/plan-view";
 import { noteLibraryDeletion } from "@/lib/library/library-deletes";
 import { leaveLibrary, openLibrary } from "@/lib/library/library-tab";
 import { leaveWelcomeTab } from "@/lib/welcome/welcome-tab";
+import type { GameVersion } from "@/lib/model/game-version";
 import type { EntryIcon, FactoryProject } from "@/lib/model/types";
 import { LOCAL_STORAGE_KEY, useFactoryStore } from "./factory-store";
+import { readNewPlanVersion } from "@/lib/datasets/new-plan-version";
 import { liveDesignIdInThisTab } from "./live-edit-gate";
 import type { SharedPlanRef } from "@/lib/designs/design-library";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
@@ -93,9 +95,10 @@ interface DesignStore {
   hydrate: () => Promise<void>;
   /** Puts `id` on the canvas, and back on the strip if it was closed. */
   switchToDesign: (id: string) => Promise<void>;
-  addDesign: () => Promise<void>;
+  /** A new blank design; `gameVersion` stamps the plan, absent reads as 2.9. */
+  addDesign: (options?: { gameVersion?: GameVersion }) => Promise<void>;
   /** A new design that opens on its task board (`primaryView: "tasks"`). */
-  addTaskBoard: () => Promise<void>;
+  addTaskBoard: (options?: { gameVersion?: GameVersion }) => Promise<void>;
   /** Adds `project` as a new design tab and switches to it (community imports). */
   importProjectAsDesign: (project: FactoryProject, name: string) => Promise<void>;
   /**
@@ -455,6 +458,7 @@ export const useDesignStore = create<DesignStore>((set, get) => ({
       ?? openDesigns(get().designs)[0];
     if (target) { await get().switchToDesign(target.id); return; }
     set({ publicView: undefined });
+    // Unstamped on purpose: no public view opens while the community is off, and this canvas has no design record.
     showProject(createNewProject());
     landOnNothing(set);
   },
@@ -588,23 +592,23 @@ export const useDesignStore = create<DesignStore>((set, get) => ({
     set(await listLibrary());
   },
 
-  addDesign: async () => {
+  addDesign: async (options) => {
     const { activeDesignId, designs } = get();
     await flushCanvasInto(designs.find((design) => design.id === activeDesignId));
 
-    const record = createDesignRecord(createNewProject(), UNTITLED_DESIGN_NAME);
+    const record = createDesignRecord(createNewProject(options?.gameVersion), UNTITLED_DESIGN_NAME);
     await writeDesign(record);
     landOnDesign(set, record);
     leaveLibrary();
     set(await listLibrary());
   },
 
-  addTaskBoard: async () => {
+  addTaskBoard: async (options) => {
     const { activeDesignId, designs } = get();
     await flushCanvasInto(designs.find((design) => design.id === activeDesignId));
 
     const record = createDesignRecord(
-      { ...createNewProject(), primaryView: "tasks" },
+      { ...createNewProject(options?.gameVersion), primaryView: "tasks" },
       makeUniqueDesignName(
         TASK_BOARD_NAME,
         designs.map((design) => design.name),
@@ -790,9 +794,14 @@ export const useDesignStore = create<DesignStore>((set, get) => ({
     if (library.designs.length === 0) {
       // A library with nothing in it is seeded rather than shown empty: the
       // canvas has to belong to some record for autosave to have a home.
-      const seeded = createDesignRecord(createNewProject(), UNTITLED_DESIGN_NAME);
+      // It is a new plan like any other: made for the New plans choice.
+      const seeded = createDesignRecord(
+        createNewProject(readNewPlanVersion(useFactoryStore.getState().datasetManifest)),
+        UNTITLED_DESIGN_NAME,
+      );
       await writeDesign(seeded);
-      library = { ...library, designs: [seeded] };
+      // Its summary as storage lists it, so the tab reads the plan's version at once.
+      library = { ...library, designs: [toDesignSummary(seeded)] };
       landOnDesign(set, seeded, library);
       return;
     }
@@ -1141,11 +1150,13 @@ async function backfillSummaryIcons(
 async function seedFirstDesign(): Promise<DesignSummary> {
   const legacy = readLegacyProject();
   const record = createDesignRecord(
-    legacy ?? createNewProject(),
+    // The manifest is seldom in yet on a first run, so this is usually 2.9; a remembered choice it serves is kept.
+    legacy ?? createNewProject(readNewPlanVersion(useFactoryStore.getState().datasetManifest)),
     legacy?.name ?? UNTITLED_DESIGN_NAME,
   );
   await writeDesign(record);
-  return record;
+  // The summary as storage lists it (the plan's version included), not the record with its plan.
+  return toDesignSummary(record);
 }
 
 function readLegacyProject(): FactoryProject | undefined {

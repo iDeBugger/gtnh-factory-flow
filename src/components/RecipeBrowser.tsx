@@ -15,9 +15,17 @@ import {
 } from "@/lib/datasets/browser-loader";
 import type { RecipeQueryClause, RecipeQuerySideOp } from "@/lib/datasets/recipe-query";
 import type { DatasetResourceIndexEntry, RecipeSummary } from "@/lib/datasets/types";
+import { recipesNotOnSiteText } from "@/lib/datasets/new-plan-version";
 import { resourceMatchesInput } from "@/lib/model";
 import { MACHINE_PIN_RESOURCE_ID, useFactoryStore } from "@/store/factory-store";
 import { useDesignStore } from "@/store/design-store";
+import {
+  activeVersionServesPlan,
+  OTHER_VERSION_RECIPE_MESSAGE,
+  refusesRecipeOnPlan,
+  unservedPlanVersion,
+} from "@/lib/datasets/dataset-cache";
+import { gameVersionOfDataset } from "@/lib/model/game-version";
 import { leaveWelcomeTab, readWelcomeTabState } from "@/lib/welcome/welcome-tab";
 import type {
   RecipeBrowserMachinePin,
@@ -71,6 +79,11 @@ export function RecipeBrowser({ onLoadDatasetVersion }: RecipeBrowserProps) {
   const datasetManifest = useFactoryStore((state) => state.datasetManifest);
   const datasetManifestUrl = useFactoryStore((state) => state.datasetManifestUrl);
   const selectedDatasetVersionId = useFactoryStore((state) => state.selectedDatasetVersionId);
+  // While the open plan's own dataset loads (a tab on the other version), nothing is asked
+  // and the results read as loading: no other version's recipe is offered for this plan.
+  const datasetServesOpenPlan = useFactoryStore(activeVersionServesPlan);
+  // A plan for a version this site has no recipes for: the page says so instead of loading forever.
+  const unservedVersion = useFactoryStore(unservedPlanVersion);
   const projectRecipes = useFactoryStore((state) => state.project.recipes);
   const recipeSearch = useFactoryStore((state) => state.recipeSearch);
   const maxTier = useFactoryStore((state) => state.maxTierFilter);
@@ -351,8 +364,11 @@ export function RecipeBrowser({ onLoadDatasetVersion }: RecipeBrowserProps) {
     machinePin !== undefined && queryClauses.length === 0 && activeRecipeQuery === "";
 
   const selectedDatasetVersion = useMemo(
-    () => datasetManifest?.versions.find((entry) => entry.id === selectedDatasetVersionId),
-    [datasetManifest?.versions, selectedDatasetVersionId],
+    () =>
+      datasetServesOpenPlan
+        ? datasetManifest?.versions.find((entry) => entry.id === selectedDatasetVersionId)
+        : undefined,
+    [datasetManifest?.versions, datasetServesOpenPlan, selectedDatasetVersionId],
   );
 
   const getRecipeQueryKey = useCallback(
@@ -534,7 +550,13 @@ export function RecipeBrowser({ onLoadDatasetVersion }: RecipeBrowserProps) {
       // covered plan, so they are dropped.
       const welcomeCovered = readWelcomeTabState().active;
       if (welcomeCovered) {
-        await useDesignStore.getState().addDesign();
+        // The new plan is on the version whose recipes the browser showed.
+        const shown = currentState.datasetManifest?.versions.find(
+          (version) => version.id === currentState.selectedDatasetVersionId,
+        );
+        await useDesignStore
+          .getState()
+          .addDesign(shown ? { gameVersion: gameVersionOfDataset(shown) } : undefined);
         leaveWelcomeTab();
       }
       const currentRefactorNodeId = welcomeCovered
@@ -555,6 +577,11 @@ export function RecipeBrowser({ onLoadDatasetVersion }: RecipeBrowserProps) {
       const pendingId = beginRecipeAdd(recipeSummary.name);
       try {
         const recipe = await getFullRecipe(recipeSummary.id, Boolean(currentResource));
+        // The fetch can resolve after a switch to a tab on the other version: say so, add nothing.
+        if (refusesRecipeOnPlan(useFactoryStore.getState(), recipe)) {
+          failRecipeAdd(pendingId, OTHER_VERSION_RECIPE_MESSAGE);
+          return;
+        }
         if (currentMachinePin) {
           // The pinned machine's card takes the pick as one more recipe, keeping
           // the concrete item it was browsed from in its slots.
@@ -854,7 +881,8 @@ export function RecipeBrowser({ onLoadDatasetVersion }: RecipeBrowserProps) {
           onRecipeMapHover={prefetchRecipeMapTab}
           recipes={filteredRecipes}
           hasMore={recipeHasMore}
-          isLoading={recipeQueryLoading || answerPending}
+          isLoading={recipeQueryLoading || answerPending || (!datasetServesOpenPlan && !unservedVersion)}
+          unavailable={unservedVersion ? recipesNotOnSiteText(unservedVersion) : undefined}
           queryError={recipeQueryError}
           query={recipeBookSearch}
           onQueryChange={(query) => {

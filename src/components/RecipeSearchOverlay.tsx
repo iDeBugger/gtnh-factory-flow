@@ -171,6 +171,7 @@ export function RecipeSearchOverlay({
   recipes,
   hasMore,
   isLoading,
+  unavailable,
   queryError,
   query,
   onQueryChange,
@@ -207,6 +208,8 @@ export function RecipeSearchOverlay({
   recipes: RecipeSummary[];
   hasMore: boolean;
   isLoading: boolean;
+  /** Why no recipes can show at all (a plan for a version this site has no recipes for). */
+  unavailable?: string;
   queryError?: string;
   query: string;
   onQueryChange: (query: string) => void;
@@ -1010,7 +1013,9 @@ export function RecipeSearchOverlay({
   );
 
   // What the page says when it has no recipes to show.
-  const emptyText = queryError
+  const emptyText = unavailable
+    ? unavailable
+    : queryError
     ? queryError
     : clauses.length === 0 && !query.trim()
       ? machinePin

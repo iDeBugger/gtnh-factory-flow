@@ -13,6 +13,7 @@ import {
 import { useFactoryStore } from "@/store/factory-store";
 import { startPromptClock } from "../../virtual/prompt-phase";
 import { buildNotices, byUrgency, type BoardNotice, type NoticeSeverity } from "./notices";
+import { usePlanVersionNotice } from "../../PlanVersionNotice";
 import { framesReadably } from "./rail-actions";
 import { SparePopupHost } from "./SparePopup";
 import { RailTipHost } from "./rail-tip";
@@ -62,6 +63,7 @@ export function useBoardNotices(): BoardNotice[] {
   const result = useFactoryStore((state) => state.lastResult);
   const conversion = useFactoryStore((state) => state.planNotice);
   const dismissConversion = useFactoryStore((state) => state.dismissPlanNotice);
+  const version = usePlanVersionNotice();
   const flashed = useSyncExternalStore(
     subscribe,
     () => flashSnapshot,
@@ -81,9 +83,10 @@ export function useBoardNotices(): BoardNotice[] {
           },
         ]
       : [];
+    // A plan for a version this site has no recipes for is said while it is open (PlanVersionNotice).
     // A flash answers what the player just did, so it stays on top; the rest go most pressing first.
-    return [...(flashed ? [flashed] : []), ...byUrgency([...converted, ...solved])];
-  }, [conversion, dismissConversion, flashed, solved]);
+    return [...(flashed ? [flashed] : []), ...byUrgency([...(version ? [version] : []), ...converted, ...solved])];
+  }, [conversion, dismissConversion, flashed, solved, version]);
 }
 
 export function NoticeRow({
@@ -109,6 +112,7 @@ export function NoticeRow({
       className="rail-notice"
       data-severity={notice.severity}
       data-alarm={alarm ? (notice.loop ?? "") : undefined}
+      data-wrap={notice.wrap ? "" : undefined}
       role={alarm ? "alert" : "status"}
     >
       {notice.tag ? <span className="rail-notice-tag">{notice.tag}</span> : null}
@@ -126,6 +130,19 @@ export function NoticeRow({
           }}
         >
           Show me
+        </span>
+      ) : null}
+      {notice.action ? (
+        <span
+          role="button"
+          tabIndex={0}
+          className="rail-notice-show"
+          onClick={notice.action.onSelect}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") notice.action?.onSelect();
+          }}
+        >
+          {notice.action.label}
         </span>
       ) : null}
       {notice.dismiss ? (

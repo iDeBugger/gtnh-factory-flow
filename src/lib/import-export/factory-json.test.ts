@@ -15,6 +15,32 @@ describe("factory JSON import/export", () => {
     expect(parsed.metadata?.isDemo).toBe(true);
   });
 
+  it("keeps the plan's game version, and adds none to a plan saved without one", () => {
+    const project = loadBiodieselDemoProject();
+    expect(parseFactoryProjectJson(serializeFactoryProject({ ...project, gameVersion: "2.8.1" })).gameVersion).toBe(
+      "2.8.1",
+    );
+    // A version this site does not know is kept as written, not dropped or remapped.
+    const later = serializeFactoryProject({ ...project, gameVersion: "2.10" });
+    expect(JSON.parse(later).gameVersion).toBe("2.10");
+    expect(parseFactoryProjectJson(later).gameVersion).toBe("2.10");
+    const { gameVersion, ...old } = project;
+    void gameVersion;
+    const parsed = parseFactoryProjectJson(JSON.stringify(old));
+    expect("gameVersion" in parsed).toBe(false);
+    expect("gameVersion" in JSON.parse(serializeFactoryProject(parsed))).toBe(false);
+  });
+
+  it("opens a plan file whose game version is blank as one with none", () => {
+    const project = loadBiodieselDemoProject();
+    for (const blank of ["", "   "]) {
+      const parsed = parseFactoryProjectJson(JSON.stringify({ ...project, gameVersion: blank }));
+      expect(parsed.gameVersion).toBeUndefined();
+      expect("gameVersion" in JSON.parse(serializeFactoryProject(parsed))).toBe(false);
+    }
+    expect(parseFactoryProjectJson(JSON.stringify({ ...project, gameVersion: " 2.8.1 " })).gameVersion).toBe("2.8.1");
+  });
+
   it("reports invalid JSON and invalid factory data", () => {
     expect(() => parseFactoryProjectJson("{")).toThrow(/Invalid JSON/);
     expect(() =>

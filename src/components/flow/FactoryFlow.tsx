@@ -138,7 +138,9 @@ import {
   type BoardClipboardPayload,
   type BoardFraming,
 } from "@/store/factory-store";
+import { activeVersionServesPlan } from "@/lib/datasets/dataset-cache";
 import { PlanConversionNotice } from "./PlanConversionNotice";
+import { PlanVersionNotice } from "./PlanVersionNotice";
 import { dropFilesOnPlanBoard } from "@/lib/import-export/open-plan-file";
 import { getStorageRoles } from "@/lib/model/storage-role";
 import { useBlueprintStore } from "@/store/blueprint-store";
@@ -1946,8 +1948,10 @@ export function FactoryFlow() {
       : "",
   );
   const poolRatioAsked = useRef(new Set<string>());
+  // A ratio is written onto the plan, so it is asked only of the plan's own version.
+  const poolVersionServes = useFactoryStore(activeVersionServesPlan);
   useEffect(() => {
-    if (!poolPairsSignature) {
+    if (!poolPairsSignature || !poolVersionServes) {
       return;
     }
     const state = useFactoryStore.getState();
@@ -1969,7 +1973,7 @@ export function FactoryFlow() {
         }
       });
     }
-  }, [poolPairsSignature]);
+  }, [poolPairsSignature, poolVersionServes]);
   const addStorageForConnection = useFactoryStore((state) => state.addStorageForConnection);
   const selectedNodeId = useFactoryStore((state) => state.selectedNodeId);
   const deleteNode = useFactoryStore((state) => state.deleteNode);
@@ -6685,6 +6689,7 @@ export function FactoryFlow() {
         <DeathSpiralNotice onShow={handleShowNodes} />
         <ClogLockNotice onShow={handleShowNodes} />
         </PlanNoticeSwitch>
+        <PlanVersionNotice />
         <PlanConversionNotice />
         <RecipeAddChips />
       </div>

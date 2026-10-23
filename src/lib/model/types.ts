@@ -876,6 +876,11 @@ export interface FactoryProject {
   /** Construction progress; never changes production. */
   checklist?: { cards: string[]; edges: string[] };
   schemaVersion: typeof PROJECT_SCHEMA_VERSION;
+  /**
+   * The game version family this plan is for ("2.9", "2.8.1"). Set when the
+   * plan is made and never edited; absent reads as 2.9 (`planGameVersion`).
+   */
+  gameVersion?: string;
   id: string;
   name: string;
   /**

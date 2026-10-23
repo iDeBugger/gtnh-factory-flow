@@ -1,5 +1,6 @@
-import type { DatasetVersion } from "./types";
-import type { Recipe } from "@/lib/model/types";
+import type { DatasetManifest, DatasetVersion, RecipeDataset } from "./types";
+import type { FactoryProject, Recipe } from "@/lib/model/types";
+import { datasetServesPlan } from "./dataset-cache";
 import { isPowerRecipe } from "@/lib/power/power-recipe";
 import { isCustomRateRecipe } from "@/lib/model/custom-rate";
 import { FLUID_TANK_EMPTY_MAP } from "@/lib/model/fluid-tank";
@@ -55,7 +56,7 @@ export function noteRecipesRefreshed(
   versionId: string,
   checked: Map<string, boolean>,
 ): void {
-  noteRestorableRecipes(refreshed);
+  noteRestorableRecipes(refreshed, versionId);
   for (const recipe of refreshed) {
     checked.set(`${versionId}|${recipe.id}`, Boolean(recipe.runtimeCalculation));
   }
@@ -68,12 +69,14 @@ export function noteRecipesRefreshed(
  * recipes) is matched by what it takes and makes, the way import does, and
  * comes back with a `migration` entry from the stored id to the current one,
  * so old cards still pick up the dataset's current handlers. Power cards are
- * synthesized on the way in and are skipped.
+ * synthesized on the way in and are skipped. Once `dropped()` says the answer is no
+ * longer wanted, nothing more is asked.
  */
 export async function resolveProjectRecipes(
   manifestUrl: string,
   version: DatasetVersion,
   recipes: Recipe[],
+  dropped: () => boolean = () => false,
 ): Promise<{ refreshed: Recipe[]; migration: Record<string, string> }> {
   // A demo recipe is the plan's own data: the dataset never has it, so asking only fills the console with 404s.
   // Custom rate cards, empty fluid tanks and the empty crop farm are the plan's own cards too.
@@ -95,11 +98,11 @@ export async function resolveProjectRecipes(
     (recipe, index) => byId[index]?.status === "rejected" && !isPowerRecipe(recipe),
   );
   const migration: Record<string, string> = {};
-  if (stale.length > 0) {
+  if (stale.length > 0 && !dropped()) {
     try {
       const resolved = await resolveRecipeDatasetRecipes(manifestUrl, version, stale.map(recipeContentRef));
       const fetched = await Promise.allSettled(
-        resolved.matches.map(async (match) => ({
+        (dropped() ? [] : resolved.matches).map(async (match) => ({
           importedId: match.importedId,
           recipe: await getRecipeDatasetRecipe(manifestUrl, version, match.recipeId),
         })),
@@ -115,4 +118,59 @@ export async function resolveProjectRecipes(
     }
   }
   return { refreshed, migration };
+}
+
+/**
+ * The landing refresh (FactoryPlannerApp): the active dataset's bodies for the open plan's
+ * recipes not yet checked against it. It runs only while the dataset serves the plan's game
+ * version, and `apply` runs only if the answer lands while the board still holds a plan the
+ * same dataset serves (`stillServes`): a refresh never crosses versions. A dropped answer is
+ * forgotten: dropped by an edit, it is asked again at once (`retry`); dropped by a switch to
+ * another version's tab, when its plan is back on the board. Returns the cancel
+ * for an effect's cleanup, or undefined when nothing was asked.
+ */
+export function startLandingRefresh(options: {
+  dataset: Pick<RecipeDataset, "datasetVersionId" | "gtnhVersion"> | undefined;
+  manifest: DatasetManifest | undefined;
+  manifestUrl: string;
+  project: Pick<FactoryProject, "gameVersion" | "recipes">;
+  checked: Map<string, boolean>;
+  requested: WeakSet<Recipe>;
+  stillServes: () => boolean;
+  apply: (refreshed: Recipe[], migration: Record<string, string>) => void;
+  /** Asks for another run: an answer dropped by an edit on the same plan is asked again at once. */
+  retry?: () => void;
+}): (() => void) | undefined {
+  const { dataset, manifest, project, checked, requested } = options;
+  if (!dataset || !datasetServesPlan(dataset, project)) {
+    return undefined;
+  }
+  const version = manifest?.versions.find((entry) => entry.id === dataset.datasetVersionId);
+  if (!version) {
+    return undefined;
+  }
+  const pending = recipesToRefresh(project.recipes, version.id, checked, requested);
+  if (pending.length === 0) {
+    return undefined;
+  }
+  const unchecked = pending.filter((recipe) => !checked.has(`${version.id}|${recipe.id}`));
+  noteRecipesRequested(pending, version.id, checked, requested);
+  let cancelled = false;
+  const dropped = () => cancelled || !options.stillServes();
+  void resolveProjectRecipes(options.manifestUrl, version, pending, dropped).then(({ refreshed, migration }) => {
+    if (dropped()) {
+      // Dropped (the board moved on): these recipes are asked again when their plan is back.
+      for (const recipe of pending) requested.delete(recipe);
+      for (const recipe of unchecked) checked.delete(`${version.id}|${recipe.id}`);
+      if (options.stillServes()) options.retry?.();
+      return;
+    }
+    noteRecipesRefreshed(refreshed, version.id, checked);
+    if (refreshed.length > 0) {
+      options.apply(refreshed, migration);
+    }
+  });
+  return () => {
+    cancelled = true;
+  };
 }

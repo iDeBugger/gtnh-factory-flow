@@ -1,10 +1,82 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { DesignRecord, DesignSummary } from "@/lib/designs/design-library";
 
-// The engine imports the stores, which touch nothing at import time, but
-// the client module and the auth store are not needed for the pure rules.
-vi.mock("./client", () => ({}));
+// The pure rules need neither; the sync runs below use them as IndexedDB and
+// the account would: summaries made from records as `writeDesign` makes them.
+const storage = vi.hoisted(() => ({ records: new Map<string, DesignRecord>() }));
+vi.mock("@/lib/designs/design-storage", async () => {
+  const { toDesignSummary } = await import("@/lib/designs/design-library");
+  const summaryOf = (record: DesignRecord): DesignSummary => {
+    const summary: Partial<DesignRecord> = { ...record };
+    delete summary.project;
+    return summary as DesignSummary;
+  };
+  return {
+    listDesignSummaries: vi.fn(async () => [...storage.records.values()].map(summaryOf)),
+    listDesignFolders: vi.fn(async () => []),
+    readDesign: vi.fn(async (id: string) => storage.records.get(id)),
+    readDesignSummary: vi.fn(async (id: string) => {
+      const record = storage.records.get(id);
+      return record ? summaryOf(record) : undefined;
+    }),
+    writeDesign: vi.fn(async (record: DesignRecord) => {
+      storage.records.set(record.id, { ...toDesignSummary(record), project: record.project });
+    }),
+    writeDesignIfUnchanged: vi.fn(async () => "written"),
+    writeDesignSummary: vi.fn(async (summary: DesignSummary & { project?: DesignRecord["project"] }) => {
+      const record = storage.records.get(summary.id);
+      if (record) {
+        const kept: Partial<DesignRecord> = { ...summary };
+        delete kept.project;
+        storage.records.set(summary.id, { ...(kept as DesignSummary), project: record.project });
+      }
+    }),
+    writeDesignFolder: vi.fn(async () => undefined),
+    deleteDesign: vi.fn(async (id: string) => {
+      storage.records.delete(id);
+    }),
+    deleteDesignFolder: vi.fn(async () => undefined),
+    readActiveDesignId: vi.fn(() => undefined),
+    writeActiveDesignId: vi.fn(),
+  };
+});
+vi.mock("@/lib/designs/design-camera", () => ({
+  keepDesignCameras: vi.fn(),
+  forgetDesignCameras: vi.fn(),
+  rememberDesignCamera: vi.fn(),
+  readDesignCamera: vi.fn(),
+  beginDesignCameraHandover: vi.fn(),
+}));
+const account = vi.hoisted(() => ({
+  library: { designs: [] as unknown[], folders: [] as unknown[], shared: [] as unknown[] },
+  plans: new Map<string, unknown>(),
+  pushes: [] as Array<{ id: string; body: Record<string, unknown> }>,
+}));
+vi.mock("./client", () => ({
+  fetchRemoteLibrary: vi.fn(async () => account.library),
+  fetchRemoteDesignPlan: vi.fn(async (id: string) => ({
+    design: account.library.designs.find((design) => (design as { id: string }).id === id),
+    plan: account.plans.get(id),
+  })),
+  pushRemoteDesign: vi.fn(async (id: string, body: Record<string, unknown>) => {
+    account.pushes.push({ id, body });
+    return { design: { id, updatedAt: body.updatedAt }, behind: false };
+  }),
+  deleteRemoteDesign: vi.fn(async () => undefined),
+  pushRemoteFolder: vi.fn(async () => ({ folder: {}, behind: false })),
+  deleteRemoteFolder: vi.fn(async () => undefined),
+}));
 
-import { libraryChangeSignature, reconcileDesigns, reconcileFolders } from "./library-sync";
+import { createNewProject } from "@/examples";
+import { useCommunityAuthStore } from "@/store/community-auth-store";
+import { useDesignStore } from "@/store/design-store";
+import {
+  libraryChangeSignature,
+  reconcileDesigns,
+  reconcileFolders,
+  remoteMetaToSummary,
+  syncLibraryNow,
+} from "./library-sync";
 import type { RemoteDesignMeta, RemoteFolder } from "./sync-types";
 
 const T0 = "2026-09-01T00:00:00.000Z";
@@ -153,5 +225,79 @@ describe("libraryChangeSignature", () => {
     expect(libraryChangeSignature([design, { ...design, id: "b" }], [folder])).not.toBe(base);
     expect(libraryChangeSignature([design], [{ ...folder, updatedAt: T2 }])).not.toBe(base);
     expect(libraryChangeSignature([design], [])).not.toBe(base);
+  });
+});
+
+describe("the game version through the account sync", () => {
+  beforeEach(() => {
+    storage.records.clear();
+    account.library = { designs: [], folders: [], shared: [] };
+    account.plans.clear();
+    account.pushes = [];
+    useDesignStore.setState({ designs: [], activeDesignId: undefined });
+    useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
+  });
+
+  it("account sync pull and push keep gameVersion", async () => {
+    // Pulled: a plan this browser has never seen, made for 2.8.1.
+    account.library.designs = [remote("pulled")];
+    account.plans.set("pulled", { ...createNewProject(), gameVersion: "2.8.1" });
+    // Pushed: a 2.8.1 plan the account has never seen.
+    storage.records.set("pushed", {
+      id: "pushed",
+      name: "Pushed",
+      createdAt: T0,
+      updatedAt: T2,
+      gameVersion: "2.8.1",
+      project: { ...createNewProject(), gameVersion: "2.8.1" },
+    });
+
+    await syncLibraryNow();
+
+    expect(storage.records.get("pulled")?.project.gameVersion).toBe("2.8.1");
+    expect(storage.records.get("pulled")?.gameVersion).toBe("2.8.1");
+    const push = account.pushes.find((entry) => entry.id === "pushed");
+    expect((push?.body.plan as { gameVersion?: string } | undefined)?.gameVersion).toBe("2.8.1");
+    expect(storage.records.get("pushed")?.gameVersion).toBe("2.8.1");
+  });
+
+  it("a pulled plan with no version leaves no stale one on the summary, and a pull of the name alone keeps it", async () => {
+    storage.records.set("old", {
+      id: "old",
+      name: "Old",
+      createdAt: T0,
+      updatedAt: T1,
+      metaUpdatedAt: T1,
+      remoteUpdatedAt: T1,
+      gameVersion: "2.8.1",
+      project: { ...createNewProject(), gameVersion: "2.8.1" },
+    });
+    storage.records.set("renamed", {
+      id: "renamed",
+      name: "Renamed",
+      createdAt: T0,
+      updatedAt: T1,
+      metaUpdatedAt: T1,
+      remoteUpdatedAt: T1,
+      gameVersion: "2.8.1",
+      project: { ...createNewProject(), gameVersion: "2.8.1" },
+    });
+    account.library.designs = [
+      remote("old", { updatedAt: T2, planUpdatedAt: T2 }),
+      remote("renamed", { name: "Renamed again", updatedAt: T2, planUpdatedAt: T1 }),
+    ];
+    account.plans.set("old", createNewProject());
+
+    await syncLibraryNow();
+
+    expect("gameVersion" in storage.records.get("old")!.project).toBe(false);
+    expect(storage.records.get("old")?.gameVersion).toBeUndefined();
+    expect(storage.records.get("renamed")).toMatchObject({ name: "Renamed again", gameVersion: "2.8.1" });
+  });
+
+  it("a listing-only summary has no version until its plan is pulled", () => {
+    // The account's listing carries no plan: the tab knows no version yet, never "2.9".
+    const summary = remoteMetaToSummary(remote("listed"));
+    expect("gameVersion" in summary).toBe(false);
   });
 });

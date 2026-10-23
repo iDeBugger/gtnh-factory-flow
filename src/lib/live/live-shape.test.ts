@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { diffPlans, type LivePlan } from "./ops";
-import { withRecipesTheyName } from "./live-shape";
+import { liveShape, withRecipesTheyName } from "./live-shape";
 
 const recipe = (id: string) => ({ id, machineName: "Electric Blast Furnace", inputs: [], outputs: [] });
 const card = (id: string, recipeId: string) => ({ id, recipeId, position: { x: 0, y: 0 } });
@@ -32,5 +32,15 @@ describe("withRecipesTheyName", () => {
     };
     const ops = withRecipesTheyName(diffPlans(here, next), shared, next);
     expect(ops.flatMap((op) => (op.o === "put" && op.c === "recipes" ? [op.id] : []))).toEqual(["dataset:two"]);
+  });
+});
+
+describe("liveShape", () => {
+  // Set when a plan is made and never edited; a live service built before the field would refuse it as a meta op.
+  it("leaves out the plan's game version", () => {
+    const plan: LivePlan = { gameVersion: "2.8.1", recipes: [], nodes: [] };
+    expect(liveShape(plan).gameVersion).toBeUndefined();
+    expect(diffPlans(liveShape({ recipes: [], nodes: [] }), liveShape(plan))).toEqual([]);
+    expect(diffPlans(liveShape(plan), liveShape({ ...plan, gameVersion: "2.9" }))).toEqual([]);
   });
 });

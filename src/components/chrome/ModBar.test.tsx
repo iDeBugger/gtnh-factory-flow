@@ -6,6 +6,8 @@ import { useDesignStore } from "@/store/design-store";
 import { writeWorkspaceView } from "@/lib/workspace-view";
 import { OPEN_FEEDBACK_EVENT } from "./chrome-events";
 import { ModBar } from "./ModBar";
+import { NEW_PLAN_VERSION_STORAGE_KEY } from "@/lib/datasets/new-plan-version";
+import type { DatasetManifest } from "@/lib/datasets/types";
 import { useCommunityAuthStore } from "@/store/community-auth-store";
 import { openLibrary, readLibraryTabState } from "@/lib/library/library-tab";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
@@ -53,7 +55,7 @@ beforeEach(() => {
   modLink.sendPlanToMod.mockResolvedValue(false);
   clipboard.copyToClipboard.mockResolvedValue(true);
   window.localStorage.clear();
-  useFactoryStore.setState({ rateUnit: "second", powerDisplayUnit: "eu", undoHistory: [], redoHistory: [], isReadOnly: false });
+  useFactoryStore.setState({ datasetManifest: undefined, rateUnit: "second", powerDisplayUnit: "eu", undoHistory: [], redoHistory: [], isReadOnly: false });
   useDesignStore.setState({ designs: [], publicViews: [], activeDesignId: undefined });
   writeWorkspaceView({ averageMachineDraw: true });
   useCommunityAuthStore.setState({ user: undefined, hasHydrated: true });
@@ -403,6 +405,17 @@ describe("the top bar's one row", () => {
     ]);
   });
 
+  it("the New plans picker shows its version alone in the icons dress", () => {
+    useFactoryStore.setState({ datasetManifest: bothVersions });
+    renderBar();
+    resize(900);
+    expect(key("new-plan-version").textContent).toBe("New plans: GTNH 2.9");
+    resize(300);
+    expect(fit()).not.toBe("roomy");
+    expect(key("new-plan-version").textContent).toBe("2.9");
+    expect(key("new-plan-version").getAttribute("aria-label")).toBe("New plans: GTNH 2.9");
+  });
+
   it("each icon key keeps its name for a screen reader and leads its tip with it", () => {
     renderBar();
     resize(ICONS_BELOW - 1);
@@ -498,5 +511,50 @@ describe("the top bar's one row", () => {
     resize(500);
     expect(key("drawer-side")).toBeNull();
     expect(key("drawer-items")).toBeNull();
+  });
+});
+
+function datasetVersion(id: string, gtnhVersion: string) {
+  return {
+    id,
+    gtnhVersion,
+    channel: "stable" as const,
+    publishedAt: "2026-10-20T00:00:00.000Z",
+    manifestPath: "/datasets/gtnh/datasets.manifest.json",
+    recipeDatasetPath: `/datasets/gtnh/${id}/recipes.json.gz`,
+    sourceInfo: { sourceId: "recex" as const, generatedAt: "2026-10-20T00:00:00.000Z" },
+  };
+}
+const bothVersions: DatasetManifest = {
+  schemaVersion: 1,
+  latestStableVersion: "local-2.9.0-rc-2",
+  versions: [datasetVersion("local-2.9.0-rc-2", "2.9.0-RC-2"), datasetVersion("local-2.8.1", "2.8.1")],
+};
+
+describe("the New plans picker", () => {
+  it("the picker is visible and writes the choice", () => {
+    useFactoryStore.setState({ datasetManifest: bothVersions });
+    renderBar();
+    // Between the tabs' + and the account's keys.
+    const order = [...document.querySelectorAll("[data-mb]")].map((element) => element.getAttribute("data-mb"));
+    expect(order[0]).toBe("new-plan-version");
+    expect(key("new-plan-version").textContent).toBe("New plans: GTNH 2.9");
+    fireEvent.click(key("new-plan-version"));
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')];
+    expect(items.map((item) => item.textContent)).toEqual(["GTNH 2.9", "GTNH 2.8.1"]);
+    fireEvent.click(items[1]!);
+    expect(window.localStorage.getItem(NEW_PLAN_VERSION_STORAGE_KEY)).toBe("2.8.1");
+    expect(key("new-plan-version").textContent).toBe("New plans: GTNH 2.8.1");
+  });
+
+  it("is not on a site with one version, nor on a phone's bar (the + menu has it there)", () => {
+    useFactoryStore.setState({ datasetManifest: { ...bothVersions, versions: [bothVersions.versions[0]!] } });
+    renderBar();
+    expect(document.querySelector('[data-mb="new-plan-version"]')).toBeNull();
+    cleanup();
+    viewport.compact = true;
+    useFactoryStore.setState({ datasetManifest: bothVersions });
+    renderBar();
+    expect(document.querySelector('[data-mb="new-plan-version"]')).toBeNull();
   });
 });

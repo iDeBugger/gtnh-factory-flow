@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Recipe } from "@/lib/model/types";
 import { pickRecipeRefMatch } from "@/lib/import-export/recipe-ref-match";
-import type { DatasetVersion } from "./types";
+import type { DatasetManifest, DatasetVersion } from "./types";
 import {
   noteRecipesRefreshed,
   noteRecipesRequested,
   recipesToRefresh,
   resolveProjectRecipes,
+  startLandingRefresh,
 } from "./refresh-project-recipes";
+import { isRestorableRecipe } from "./restorable-recipes";
 
 /**
  * The dataset behind the loader: bodies by id, and the resolve service the way the server
@@ -15,8 +17,11 @@ import {
  * output, scored by `pickRecipeRefMatch`, offered from 300 up.
  */
 const datasetRecipes = new Map<string, Recipe>();
+/** Every body fetch, as `<dataset version>|<recipe id>`. */
+const fetched = vi.hoisted(() => [] as string[]);
 vi.mock("./browser-loader", () => ({
-  getRecipeDatasetRecipe: async (_manifestUrl: string, _version: unknown, id: string) => {
+  getRecipeDatasetRecipe: async (_manifestUrl: string, version: { id: string }, id: string) => {
+    fetched.push(`${version.id}|${id}`);
     const found = datasetRecipes.get(id);
     if (!found) throw new Error(`404 ${id}`);
     return found;
@@ -119,5 +124,146 @@ describe("resolveProjectRecipes", () => {
     expect(migration).toEqual({ [saved.id]: current.id });
     expect(refreshed.map((recipe) => recipe.id)).toEqual([current.id]);
     expect(refreshed[0]?.inputs.filter((input) => input.kind === "item")).toHaveLength(6);
+  });
+});
+
+describe("the landing refresh", () => {
+  const manifest = {
+    schemaVersion: 1,
+    latestStableVersion: "local-2.9.0-rc-2",
+    versions: [
+      { id: "local-2.9.0-rc-2", gtnhVersion: "2.9.0-RC-2" },
+      { id: "local-2.8.1", gtnhVersion: "2.8.1" },
+    ],
+  } as unknown as DatasetManifest;
+  const dataset29 = { datasetVersionId: "local-2.9.0-rc-2", gtnhVersion: "2.9.0-RC-2" };
+  const dataset281 = { datasetVersionId: "local-2.8.1", gtnhVersion: "2.8.1" };
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("landing refresh never runs across versions", async () => {
+    datasetRecipes.clear();
+    datasetRecipes.set("r1", { ...recipe("r1", true), source: { datasetVersionId: "local-2.8.1" } });
+    fetched.length = 0;
+    const plan = { gameVersion: "2.8.1", recipes: [recipe("r1", false)] };
+    const checked = new Map<string, boolean>();
+    const requested = new WeakSet<Recipe>();
+    const apply = vi.fn();
+    const run = (dataset: typeof dataset29) =>
+      startLandingRefresh({
+        dataset,
+        manifest,
+        manifestUrl: "/m.json",
+        project: plan,
+        checked,
+        requested,
+        stillServes: () => true,
+        apply,
+      });
+
+    // A 2.8.1 plan with the 2.9 dataset active (its own still loading): nothing is asked.
+    expect(run(dataset29)).toBeUndefined();
+    await flush();
+    expect(fetched).toEqual([]);
+    expect(apply).not.toHaveBeenCalled();
+
+    // Its dataset lands: one refresh, against 2.8.1.
+    expect(run(dataset281)).toBeTypeOf("function");
+    await flush();
+    expect(fetched).toEqual(["local-2.8.1|r1"]);
+    expect(apply).toHaveBeenCalledTimes(1);
+
+    // The same recipes again: nothing more.
+    expect(run(dataset281)).toBeUndefined();
+  });
+
+  it("drops an answer that lands after the board moved to another version", async () => {
+    datasetRecipes.clear();
+    datasetRecipes.set("r1", recipe("r1", true));
+    const apply = vi.fn();
+    let serves = true;
+    startLandingRefresh({
+      dataset: dataset29,
+      manifest,
+      manifestUrl: "/m.json",
+      project: { recipes: [recipe("r1", false)] },
+      checked: new Map(),
+      requested: new WeakSet(),
+      stillServes: () => serves,
+      apply,
+    });
+    serves = false;
+    await flush();
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it("asks a dropped refresh again when its plan is back", async () => {
+    datasetRecipes.clear();
+    datasetRecipes.set("r1", recipe("r1", false));
+    fetched.length = 0;
+    const checked = new Map<string, boolean>();
+    const requested = new WeakSet<Recipe>();
+    const project = { recipes: [recipe("r1", false)] };
+    const apply = vi.fn();
+    const run = () =>
+      startLandingRefresh({
+        dataset: dataset29,
+        manifest,
+        manifestUrl: "/m.json",
+        project,
+        checked,
+        requested,
+        stillServes: () => true,
+        apply,
+      });
+    // Dropped by a switch away (the board no longer serves): no retry is asked.
+    const retry = vi.fn();
+    let serves = false;
+    startLandingRefresh({
+      dataset: dataset29,
+      manifest,
+      manifestUrl: "/m.json",
+      project,
+      checked,
+      requested,
+      stillServes: () => serves,
+      apply,
+      retry,
+    });
+    await flush();
+    expect(retry).not.toHaveBeenCalled();
+    serves = true;
+    // Dropped by an edit on the same plan: a retry is asked at once.
+    startLandingRefresh({
+      dataset: dataset29,
+      manifest,
+      manifestUrl: "/m.json",
+      project,
+      checked,
+      requested,
+      stillServes: () => serves,
+      apply,
+      retry,
+    })!();
+    await flush();
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(apply).not.toHaveBeenCalled();
+    fetched.length = 0;
+    run();
+    await flush();
+    expect(fetched).toEqual(["local-2.9.0-rc-2|r1"]);
+    expect(apply).toHaveBeenCalledTimes(1);
+  });
+
+  it("restorable recipes are per dataset", () => {
+    const checked = new Map<string, boolean>();
+    // The 2.9 dataset's body carries a table; 2.8.1's body of the same id has none.
+    noteRecipesRefreshed([recipe("shared", true)], "local-2.9.0-rc-2", checked);
+    noteRecipesRefreshed([recipe("shared", false)], "local-2.8.1", checked);
+    const on = (datasetVersionId: string) =>
+      ({ ...recipe("shared", true), source: { datasetVersionId } }) as Recipe;
+    expect(isRestorableRecipe(on("local-2.9.0-rc-2"))).toBe(true);
+    expect(isRestorableRecipe(on("local-2.8.1"))).toBe(false);
+    // A body with no dataset named is never known to come back.
+    expect(isRestorableRecipe(recipe("shared", true))).toBe(false);
   });
 });

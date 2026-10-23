@@ -601,7 +601,12 @@ function toSummaryOf(record: DesignSummary & { project?: unknown }): DesignSumma
   return summary;
 }
 
-function remoteMetaToSummary(remote: RemoteDesignMeta): DesignSummary {
+/**
+ * A summary from the account's listing alone. The listing carries no plan, so
+ * it has no game version: a tab made from it shows none until the plan is
+ * pulled (`writeDesign` then reads it off the plan), never a guessed 2.9.
+ */
+export function remoteMetaToSummary(remote: RemoteDesignMeta): DesignSummary {
   const summary: DesignSummary = {
     id: remote.id,
     name: remote.name,

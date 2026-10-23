@@ -19,6 +19,12 @@ import { create, type StateCreator, type StoreApi } from "zustand";
 import { createNewProject } from "@/examples";
 import type { DatasetManifest, RecipeDataset } from "@/lib/datasets";
 import {
+  DEFAULT_DATASET_MANIFEST_URL,
+  pickDatasetVersionFor,
+} from "@/lib/datasets/remote";
+import { DatasetCache, datasetServesPlan, refusesRecipeOnPlan } from "@/lib/datasets/dataset-cache";
+import { DEFAULT_GAME_VERSION, planGameVersion, type GameVersion } from "@/lib/model/game-version";
+import {
   canonicalizeResourceHandleId,
   dedupeEdgeWires,
   findDuplicateEdge,
@@ -318,6 +324,14 @@ interface FactoryStore {
   editTasks: (edit: (project: FactoryProject) => FactoryProject) => void;
   setDatasetManifest: (manifest: DatasetManifest, manifestUrl: string) => void;
   setDataset: (dataset: RecipeDataset) => void;
+  /**
+   * Make the dataset of `gameVersion` the active one, loading it once and keeping it
+   * cached. It becomes active only while the open plan is on that version: a load that
+   * lands after the player moved to a tab on another version only fills the cache.
+   * Resolves to the dataset, or undefined when this site does not serve the version
+   * (or it failed to load).
+   */
+  ensureDatasetFor: (gameVersion: GameVersion) => Promise<RecipeDataset | undefined>;
   /**
    * Swap the plan's stored recipe bodies for the dataset's. `migration`
    * maps a stored id the dataset no longer has to the id of the recipe
@@ -1070,6 +1084,14 @@ function withViewerGuard(
   };
 }
 
+/** The catalogs this page has loaded (`ensureDatasetFor`): switching back to a tab on the other version is instant. */
+let datasetCache = new DatasetCache();
+
+/** Tests: start from an empty cache, with a loader of their own. */
+export function replaceDatasetCacheForTests(cache: DatasetCache): void {
+  datasetCache = cache;
+}
+
 /** Where the board's camera is looking, in flow space (setFlowViewportCenter); new cards land there. */
 let viewportCenter: FactoryNode["position"] | undefined;
 
@@ -1314,18 +1336,21 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
     set((state) => ({
       datasetManifest: manifest,
       datasetManifestUrl: manifestUrl,
+      // Never a hidden version: the open plan's own, else 2.9's, until a dataset lands.
       selectedDatasetVersionId:
         state.selectedDatasetVersionId ??
-        manifest.latestStableVersion ??
-        manifest.latestDailyVersion ??
-        manifest.versions[0]?.id,
+        (pickDatasetVersionFor(manifest, planGameVersion(state.project)) ??
+          pickDatasetVersionFor(manifest, DEFAULT_GAME_VERSION))?.id,
       datasetError: undefined,
     }));
   },
   setDataset: (dataset) => {
     setPresentation((state) => ({
       dataset,
-      project: refreshProjectResourceIcons(state.project, dataset),
+      // Another version's icons are not this plan's: the plan is left as it is.
+      ...(datasetServesPlan(dataset, state.project)
+        ? { project: refreshProjectResourceIcons(state.project, dataset) }
+        : {}),
       recipeResourceHistory: refreshResourceHistoryIcons(state.recipeResourceHistory, dataset),
       recipeBrowserResource: state.recipeBrowserResource
         ? refreshBrowserResourceIcon(state.recipeBrowserResource, dataset)
@@ -1338,6 +1363,48 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
       datasetError: undefined,
       isDatasetLoading: false,
     }));
+  },
+  ensureDatasetFor: async (gameVersion) => {
+    const manifest = get().datasetManifest;
+    if (!manifest) {
+      return undefined;
+    }
+    const wanted = () => planGameVersion(get().project) === gameVersion;
+    const version = pickDatasetVersionFor(manifest, gameVersion);
+    if (!version) {
+      // Nothing to wait for: the open plan's version is not served here.
+      if (wanted() && get().isDatasetLoading) set({ isDatasetLoading: false });
+      return undefined;
+    }
+    const manifestUrl = get().datasetManifestUrl ?? DEFAULT_DATASET_MANIFEST_URL;
+    const activate = (dataset: RecipeDataset) => {
+      if (!wanted()) {
+        return;
+      }
+      if (get().dataset?.datasetVersionId === dataset.datasetVersionId) {
+        if (get().isDatasetLoading) set({ isDatasetLoading: false });
+        return;
+      }
+      get().setDataset(dataset);
+    };
+    const cached = datasetCache.get(version.id);
+    if (cached) {
+      activate(cached);
+      return cached;
+    }
+    if (wanted()) {
+      set({ isDatasetLoading: true });
+    }
+    try {
+      const dataset = await datasetCache.load(manifestUrl, version);
+      activate(dataset);
+      return dataset;
+    } catch (error) {
+      if (wanted()) {
+        get().setDatasetError(error instanceof Error ? error.message : "Dataset load failed.");
+      }
+      return undefined;
+    }
   },
   refreshProjectRecipes: (recipes, migration = {}) => quietly(() => {
     setPresentation((state) => {
@@ -1821,6 +1888,7 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
     set((state) => refactorNodeToState(state, nodeId, recipe, options));
   },
   swapMachineRecipe: (nodeId, recipe) => {
+    if (refusesDatasetRecipe(get(), recipe)) return;
     set((state) => swapMachineRecipeToState(state, nodeId, recipe));
   },
   updateNode: (nodeId, patch) => {
@@ -1895,6 +1963,7 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
     );
   },
   addRecipeToNode: (nodeId, recipe, options) => {
+    if (refusesDatasetRecipe(get(), recipe)) return false;
     let added = false;
     set((state) => {
       const node = state.project.nodes.find((entry) => entry.id === nodeId);
@@ -2474,6 +2543,7 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
     });
   },
   setNodeRecipe: (nodeId, recipe) => {
+    if (refusesDatasetRecipe(get(), recipe)) return;
     set((state) => {
       const node = state.project.nodes.find((entry) => entry.id === nodeId);
       if (!node || node.recipeId === recipe.id) {
@@ -5023,6 +5093,11 @@ function canConnectPendingSlots(
   );
 }
 
+/** The store's backstop for every add, swap and refactor path (`refusesRecipeOnPlan`). */
+function refusesDatasetRecipe(state: FactoryStore, recipe: Recipe): boolean {
+  return refusesRecipeOnPlan(state, recipe);
+}
+
 function findRecipeForPlanning(state: FactoryStore, recipeId: string): Recipe | undefined {
   return (
     state.dataset?.recipes.find((recipe) => recipe.id === recipeId) ??
@@ -5043,6 +5118,7 @@ function addRecipeNodeToState(
     machineConfigTiers?: Record<string, string>;
   },
 ): Partial<FactoryStore> {
+  if (refusesDatasetRecipe(state, recipe)) return state;
   const index = state.project.nodes.length;
   const center = state.flowViewportCenter ?? viewportCenter;
   const viewportPosition = center
@@ -5132,6 +5208,7 @@ function addConnectedRecipeNodeToState(
   resource: RecipeInputContextResource,
   options?: { machineHandlerId?: string; inputPicks?: RecipeInputPicks },
 ): Partial<FactoryStore> {
+  if (refusesDatasetRecipe(state, recipe)) return state;
   const anchorNode = state.project.nodes.find((node) => node.id === anchorNodeId);
   const anchorRecipe = state.project.recipes.find((entry) => entry.id === anchorNode?.recipeId);
 
@@ -5480,6 +5557,7 @@ function refactorNodeToState(
   recipe: Recipe,
   options?: { machineHandlerId?: string; machineConfigTiers?: Record<string, string> },
 ): Partial<FactoryStore> {
+  if (refusesDatasetRecipe(state, recipe)) return state;
   const node = state.project.nodes.find((entry) => entry.id === nodeId);
   if (!node) {
     return addRecipeNodeToState(state, recipe, undefined, { ...options, focusCamera: true });

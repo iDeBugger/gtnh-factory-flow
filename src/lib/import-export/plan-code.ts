@@ -1,6 +1,6 @@
 import { normalizeProjectFuelProfiles } from "../model/fuels";
 import { factoryProjectSchema } from "../model/schemas";
-import type { FactoryProject } from "../model/types";
+import type { FactoryProject, Recipe } from "../model/types";
 import { isPowerRecipe } from "../power/power-recipe";
 import { isRestorableRecipe } from "../datasets/restorable-recipes";
 import { FactoryJsonError, parseFactoryProjectJson } from "./factory-json";
@@ -29,14 +29,14 @@ export const PLAN_CODE_HASH_KEY = "p";
 /**
  * The plan without the GregTech overclock tables the dataset will put back
  * when it lands on a board (`recipesToRefresh`), about half a big plan. A
- * table is left out only when this page has seen the dataset carry one for
- * that id (`isRestorableRecipe`); otherwise the stored table is the only copy
+ * table is left out only when this page has seen the dataset the body came
+ * from carry one for that id (`isRestorableRecipe`); otherwise the stored table is the only copy
  * and it travels. Power recipes (made here, not by the dataset) and the small
  * bee and crop tables stay whole. Used for copied plans and account sync.
  */
 export function withoutRuntimeTables(
   project: FactoryProject,
-  canRestore: (recipeId: string) => boolean = isRestorableRecipe,
+  canRestore: (recipe: Recipe) => boolean = isRestorableRecipe,
 ): FactoryProject {
   return {
     ...project,
@@ -44,7 +44,7 @@ export function withoutRuntimeTables(
       if (
         isPowerRecipe(recipe) ||
         !recipe.runtimeCalculation?.sourceKind.startsWith("gregtech-") ||
-        !canRestore(recipe.id)
+        !canRestore(recipe)
       ) {
         return recipe;
       }

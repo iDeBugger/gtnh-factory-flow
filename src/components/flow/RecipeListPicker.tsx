@@ -14,6 +14,13 @@ import type { Recipe, ResourceAmount } from "@/lib/model/types";
 import { ResourceIcon } from "@/components/nei/ResourceIcon";
 import { MinecraftTooltip } from "@/components/nei/MinecraftTooltip";
 import { useFactoryStore } from "@/store/factory-store";
+import {
+  activeVersionServesPlan,
+  OTHER_VERSION_RECIPE_MESSAGE,
+  refusesRecipeOnPlan,
+  unservedPlanVersion,
+} from "@/lib/datasets/dataset-cache";
+import { recipesNotOnSiteText } from "@/lib/datasets/new-plan-version";
 
 // One list fetch per kind and dataset version, shared by every picker.
 const cachedLists = new Map<string, { versionId: string; recipes: RecipeSummary[] }>();
@@ -69,9 +76,13 @@ export function RecipeListPicker({
   const datasetManifestUrl = useFactoryStore((state) => state.datasetManifestUrl);
   const datasetManifest = useFactoryStore((state) => state.datasetManifest);
   const selectedDatasetVersionId = useFactoryStore((state) => state.selectedDatasetVersionId);
-  const version: DatasetVersion | undefined = datasetManifest?.versions.find(
-    (entry) => entry.id === selectedDatasetVersionId,
-  );
+  // While the plan's own version loads nothing is listed (the list reads as loading), so no other version's crop or
+  // mob is offered; a plan for a version this site has none for says so.
+  const servesPlan = useFactoryStore(activeVersionServesPlan);
+  const unservedVersion = useFactoryStore(unservedPlanVersion);
+  const version: DatasetVersion | undefined = servesPlan
+    ? datasetManifest?.versions.find((entry) => entry.id === selectedDatasetVersionId)
+    : undefined;
   const manifestUrl = datasetManifestUrl ?? DEFAULT_DATASET_MANIFEST_URL;
 
   const [recipes, setRecipes] = useState<RecipeSummary[]>(() => {
@@ -176,6 +187,11 @@ export function RecipeListPicker({
     }
     try {
       const recipe = await getRecipeDatasetRecipe(manifestUrl, version, summary.id);
+      // The tab may have moved to a plan on another version while the body was fetched.
+      if (refusesRecipeOnPlan(useFactoryStore.getState(), recipe)) {
+        setError(OTHER_VERSION_RECIPE_MESSAGE);
+        return;
+      }
       onPick(recipe);
       onClose();
     } catch (cause) {
@@ -210,7 +226,9 @@ export function RecipeListPicker({
         className="mb-1 h-7 w-full border border-[var(--mc-33)] bg-[var(--mc-85)] px-2 text-[12px] font-bold text-[var(--mc-ink)] shadow-[inset_1px_1px_0_var(--mc-100),inset_-1px_-1px_0_var(--mc-54)] outline-none focus:border-cyan-700 focus:bg-[var(--mc-100)]"
         aria-label={`Search ${noun}`}
       />
-      {isLoading ? (
+      {unservedVersion ? (
+        <div className="px-2 py-3 text-[12px] font-bold text-[var(--mc-ink-muted)]">{recipesNotOnSiteText(unservedVersion)}</div>
+      ) : isLoading || !version ? (
         <div className="flex items-center gap-2 px-2 py-3 text-[12px] font-bold text-[var(--mc-ink)]">
           <LoaderCircle className="h-4 w-4 animate-spin" /> Loading {noun}...
         </div>

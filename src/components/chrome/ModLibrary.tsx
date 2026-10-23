@@ -1,5 +1,6 @@
 "use client";
 
+import { readNewPlanVersion } from "@/lib/datasets/new-plan-version";
 import "./chrome.css";
 import "./library.css";
 
@@ -311,7 +312,7 @@ function MyPlans({ query }: { query: string }) {
         onClick={() => {
           playBoardSound("tick");
           leaveWelcomeTab();
-          void addDesign();
+          void addDesign({ gameVersion: readNewPlanVersion(useFactoryStore.getState().datasetManifest) });
         }}
       >
         + New plan

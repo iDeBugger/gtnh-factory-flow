@@ -1,3 +1,4 @@
+import type { GameVersion } from "@/lib/model/game-version";
 import type { EntryIcon, FactoryProject } from "@/lib/model/types";
 import type { DesignStats } from "./design-stats";
 
@@ -35,6 +36,13 @@ export interface DesignSummary {
   communityPlanId?: string;
   /** This design is a task board (its plan's `primaryView` is "tasks"), copied out so a menu can list the boards without loading plans. */
   taskBoard?: boolean;
+  /**
+   * The plan's game version as written, copied out so the strip can show it
+   * without loading plans. Absent when the plan has none (read as 2.9 with
+   * `planGameVersion`) and on a summary made from an account listing alone,
+   * which carries no plan: there the version is unknown until it is pulled.
+   */
+  gameVersion?: GameVersion;
   /**
    * SYNC BOOKKEEPING. `updatedAt` above moves when the PLAN is saved;
    * `metaUpdatedAt` moves on any change at all (rename, close, folder,
@@ -143,8 +151,8 @@ export function conflictCopyName(name: string, taken: Iterable<string>): string 
  * must never move it: if a save lands between a writer's read and write,
  * writing the old summary back puts the stamp behind the plan, and the saving
  * tab then reads its own next save as another tab's (a spurious conflict
- * copy). The marks read off the plan (icon, stat row, post link) stay the
- * stored plan's for the same reason.
+ * copy). The marks read off the plan (icon, stat row, post link, game
+ * version) stay the stored plan's for the same reason.
  */
 export function keepStoredPlanMarks(
   summary: DesignSummary,
@@ -157,6 +165,7 @@ export function keepStoredPlanMarks(
   delete kept.icon;
   delete kept.stats;
   delete kept.communityPlanId;
+  delete kept.gameVersion;
   if (stored.icon) {
     kept.icon = stored.icon;
   }
@@ -165,6 +174,9 @@ export function keepStoredPlanMarks(
   }
   if (stored.communityPlanId) {
     kept.communityPlanId = stored.communityPlanId;
+  }
+  if (stored.gameVersion) {
+    kept.gameVersion = stored.gameVersion;
   }
   return kept;
 }
@@ -320,6 +332,9 @@ export function toDesignSummary(record: DesignRecord): DesignSummary {
   }
   if (record.project.primaryView === "tasks") {
     summary.taskBoard = true;
+  }
+  if (record.project.gameVersion) {
+    summary.gameVersion = record.project.gameVersion;
   }
   if (record.cloud) {
     summary.cloud = record.cloud;

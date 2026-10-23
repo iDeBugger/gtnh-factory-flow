@@ -1,22 +1,15 @@
 "use client";
 
-import {
-  noteRecipesRefreshed,
-  noteRecipesRequested,
-  recipesToRefresh,
-  resolveProjectRecipes,
-} from "@/lib/datasets/refresh-project-recipes";
+import { startLandingRefresh } from "@/lib/datasets/refresh-project-recipes";
+import { datasetServesPlan } from "@/lib/datasets/dataset-cache";
+import { gameVersionOfDataset, planGameVersion } from "@/lib/model/game-version";
 import type { Recipe } from "@/lib/model/types";
 import { useDeviceSettings, writeDeviceSettings } from "@/lib/device-settings";
-import { memo, useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   DEFAULT_DATASET_MANIFEST_URL,
   fetchDatasetManifest,
-  pickDefaultDatasetVersion,
 } from "@/lib/datasets";
-import {
-  initRecipeDatasetVersion,
-} from "@/lib/datasets/browser-loader";
 import { loadResourceHistory, useFactoryStore } from "@/store/factory-store";
 import { useDesignStore } from "@/store/design-store";
 import { useCommunityAuthStore } from "@/store/community-auth-store";
@@ -81,7 +74,7 @@ export function FactoryPlannerApp() {
   const saveActiveProject = useDesignStore((state) => state.saveActiveProject);
   const activeDesignId = useDesignStore((state) => state.activeDesignId);
   const setDatasetManifest = useFactoryStore((state) => state.setDatasetManifest);
-  const setDataset = useFactoryStore((state) => state.setDataset);
+  const ensureDatasetFor = useFactoryStore((state) => state.ensureDatasetFor);
   const refreshProjectRecipes = useFactoryStore((state) => state.refreshProjectRecipes);
   const setDatasetLoading = useFactoryStore((state) => state.setDatasetLoading);
   const setDatasetError = useFactoryStore((state) => state.setDatasetError);
@@ -92,77 +85,55 @@ export function FactoryPlannerApp() {
   // brings a recipe back without its runtime table (recipesToRefresh).
   const checkedRecipesRef = useRef<Map<string, boolean>>(new Map());
   const requestedRecipesRef = useRef<WeakSet<Recipe>>(new WeakSet());
-  const datasetVersionId = useFactoryStore((state) => state.dataset?.datasetVersionId);
+  const dataset = useFactoryStore((state) => state.dataset);
   const datasetManifest = useFactoryStore((state) => state.datasetManifest);
   const datasetManifestUrl = useFactoryStore((state) => state.datasetManifestUrl);
+  const planVersion = planGameVersion(project);
+  const [refreshRetry, setRefreshRetry] = useState(0);
+  // The landing refresh: only while the active dataset is the plan's own version. A tab on
+  // the other version waits for its dataset (ensureDatasetFor below), then refreshes.
+  useEffect(
+    () =>
+      startLandingRefresh({
+        dataset,
+        manifest: datasetManifest,
+        manifestUrl: datasetManifestUrl ?? DEFAULT_DATASET_MANIFEST_URL,
+        project: { gameVersion: planVersion, recipes: project.recipes },
+        checked: checkedRecipesRef.current,
+        requested: requestedRecipesRef.current,
+        stillServes: () => {
+          const state = useFactoryStore.getState();
+          return state.dataset === dataset && datasetServesPlan(dataset, state.project);
+        },
+        apply: refreshProjectRecipes,
+        retry: () => setRefreshRetry((count) => count + 1),
+      }),
+    // refreshRetry re-runs the refresh after an answer an edit dropped.
+    [dataset, datasetManifest, datasetManifestUrl, planVersion, project.recipes, refreshProjectRecipes, refreshRetry],
+  );
+  // The active dataset follows the open plan: a tab on the other version loads (or takes
+  // from the cache) that version's dataset. Nothing is re-solved here.
   useEffect(() => {
-    if (!datasetVersionId) {
-      return;
-    }
-    const version = datasetManifest?.versions.find((entry) => entry.id === datasetVersionId);
-    if (!version) {
-      return;
-    }
-    const pending = recipesToRefresh(
-      project.recipes,
-      version.id,
-      checkedRecipesRef.current,
-      requestedRecipesRef.current,
-    );
-    if (pending.length === 0) {
-      return;
-    }
-    noteRecipesRequested(pending, version.id, checkedRecipesRef.current, requestedRecipesRef.current);
-    let cancelled = false;
-    void resolveProjectRecipes(
-      datasetManifestUrl ?? DEFAULT_DATASET_MANIFEST_URL,
-      version,
-      pending,
-    ).then(({ refreshed, migration }) => {
-      noteRecipesRefreshed(refreshed, version.id, checkedRecipesRef.current);
-      if (!cancelled && refreshed.length > 0) {
-        refreshProjectRecipes(refreshed, migration);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [datasetManifest, datasetManifestUrl, datasetVersionId, project.recipes, refreshProjectRecipes]);
+    void ensureDatasetFor(planVersion);
+  }, [activeDesignId, ensureDatasetFor, planVersion]);
   useBoardSoundEffects();
   const skipInitialSaveRef = useRef(true);
   const saveTimeoutRef = useRef<number | undefined>(undefined);
 
+  // The pack picker's choice: that version's dataset, loaded through the cache. It becomes
+  // the active one only on a plan of that version (the landing refresh then follows).
   const loadDatasetVersion = useCallback(
     async (versionId: string) => {
-      const state = useFactoryStore.getState();
-      const manifest = state.datasetManifest;
-      const manifestUrl = state.datasetManifestUrl ?? DEFAULT_DATASET_MANIFEST_URL;
-      const version = manifest?.versions.find((entry) => entry.id === versionId);
-
-      if (!manifest || !version) {
+      const version = useFactoryStore
+        .getState()
+        .datasetManifest?.versions.find((entry) => entry.id === versionId);
+      if (!version) {
         setDatasetError(`Dataset version "${versionId}" is not available in the manifest.`);
         return;
       }
-
-      try {
-        setDatasetLoading(true);
-        const dataset = await initRecipeDatasetVersion(manifestUrl, version);
-        setDataset(dataset);
-        const projectRecipes = useFactoryStore.getState().project.recipes;
-        if (projectRecipes.length > 0) {
-          const { refreshed, migration } = await resolveProjectRecipes(manifestUrl, version, projectRecipes);
-          const checked = new Map<string, boolean>();
-          noteRecipesRequested(projectRecipes, version.id, checked, requestedRecipesRef.current);
-          noteRecipesRefreshed(refreshed, version.id, checked);
-          checkedRecipesRef.current = checked;
-          refreshProjectRecipes(refreshed, migration);
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Dataset load failed.";
-        setDatasetError(message);
-      }
+      await ensureDatasetFor(gameVersionOfDataset(version));
     },
-    [refreshProjectRecipes, setDataset, setDatasetError, setDatasetLoading],
+    [ensureDatasetFor, setDatasetError],
   );
 
   useEffect(() => {
@@ -261,12 +232,10 @@ export function FactoryPlannerApp() {
         }
 
         setDatasetManifest(manifest, DEFAULT_DATASET_MANIFEST_URL);
-        if (!pickDefaultDatasetVersion(manifest)) {
-          setDatasetLoading(false);
-          return;
-        }
-
-        void loadDatasetVersion(pickDefaultDatasetVersion(manifest)!.id);
+        // Boot loads the open plan's version; a version this site does not serve loads nothing.
+        await useFactoryStore
+          .getState()
+          .ensureDatasetFor(planGameVersion(useFactoryStore.getState().project));
       } catch (error) {
         if (cancelled) {
           return;
@@ -282,7 +251,7 @@ export function FactoryPlannerApp() {
     return () => {
       cancelled = true;
     };
-  }, [loadDatasetVersion, setDatasetError, setDatasetLoading, setDatasetManifest]);
+  }, [setDatasetError, setDatasetLoading, setDatasetManifest]);
 
   useEffect(() => {
     if (!hydratedRef.current) {

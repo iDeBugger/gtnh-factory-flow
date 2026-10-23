@@ -140,6 +140,13 @@ describe("live batch checks", () => {
     expect(check([{ o: "meta", f: { primaryView: "kanban" } }])).toMatch(/^plan field primaryView/);
   });
 
+  it("refuse setting or deleting the plan's game version: it is never a live edit", () => {
+    expect(check([{ o: "meta", f: { gameVersion: "2.9" } }])).toMatch(/^plan field gameVersion/);
+    expect(check([{ o: "meta", f: { gameVersion: "2.8.1" } }])).toMatch(/^plan field gameVersion/);
+    expect(check([{ o: "meta", f: {}, d: ["gameVersion"] }])).toMatch(/^plan field gameVersion/);
+    expect(check([{ o: "meta", f: { notes: "n", gameVersion: "2.9" } }])).toMatch(/^plan field gameVersion/);
+  });
+
   it("refuse deleting a required field, whatever else the patch carries", () => {
     // A field named __proto__ never gets this far (readOps refuses it); were it
     // to, the position it names is still required of the annotation itself.

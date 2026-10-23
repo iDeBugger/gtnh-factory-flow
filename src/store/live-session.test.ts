@@ -628,6 +628,38 @@ describe("live editing in the store", () => {
     expect(useLiveSession.getState()).toMatchObject({ status: "live", doc: bobDoc });
   });
 
+  it("a joiner's opened shared plan reads 2.8.1", async () => {
+    // Nothing open yet: the joiner opens bob's plan from Shared with me.
+    service.plan = JSON.parse(
+      JSON.stringify({ ...planWith(annotation("n1", "live")), gameVersion: "2.8.1" }),
+    ) as LivePlan;
+    useFactoryStore.getState().markHydratedProject(createNewProject());
+    useDesignStore.setState({ designs: [], activeDesignId: undefined, isHydrated: true });
+    useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
+    stop = startLiveSessions({
+      url: () => "ws://live.test/live",
+      createSocket: (url) => service.connect(url),
+    });
+    await settle();
+    const ref = { ownerId: BOB, ownerName: "bob", designId: DESIGN };
+    await useDesignStore
+      .getState()
+      .openSharedDesign(ref, "Live", { ...planWith(annotation("n1", "read")), gameVersion: "2.8.1" });
+    await settle();
+
+    expect(useLiveSession.getState()).toMatchObject({ status: "live", doc: `${BOB}:${DESIGN}` });
+    expect(annotations()[0]!.text).toBe("live");
+    expect(useFactoryStore.getState().project.gameVersion).toBe("2.8.1");
+    const ops: LiveOp[] = [{ o: "meta", f: { notes: "from bob" } }];
+    service.plan = applyOps(service.plan, ops);
+    service.seq += 1;
+    service.reply({ t: "ops", doc: `${BOB}:${DESIGN}`, seq: service.seq, by: BOB, cid: "bob-1", ops });
+    await settle();
+    expect(useFactoryStore.getState().project).toMatchObject({ notes: "from bob", gameVersion: "2.8.1" });
+    const copy = [...storage.records.values()].find((record) => record.cloud?.ownerId === BOB);
+    expect(copy?.project.gameVersion).toBe("2.8.1");
+  });
+
   it("says nothing when this person leaves a shared plan on purpose", async () => {
     await openLiveDesign(planWith(annotation("n1", "one")));
     const bobDoc = `${BOB}:${DESIGN}`;

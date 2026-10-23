@@ -1,4 +1,4 @@
-import { DEFAULT_DATASET_MANIFEST_URL } from "@/lib/datasets";
+import { DEFAULT_DATASET_MANIFEST_URL, pickDatasetVersionFor } from "@/lib/datasets";
 import {
   getRecipeDatasetRecipe,
   getRecipeDatasetRecipeIds,
@@ -20,6 +20,7 @@ import { pickRecipeRefMatch, recipeContentRef } from "@/lib/import-export/recipe
 import { cloneImportedProject, parseFactoryProjectJson, serializeFactoryProject } from "@/lib/import-export";
 import { untagCommunityPlan } from "@/lib/community/client";
 import { useFactoryStore } from "@/store/factory-store";
+import { planGameVersion } from "@/lib/model/game-version";
 import { useDesignStore } from "@/store/design-store";
 import { flashNotice } from "@/components/flow/clean/rail/NoticeBar";
 
@@ -459,24 +460,29 @@ export function looksLikePlanJson(text: string): boolean {
 
 /**
  * Open plan JSON (an exported file's text, or the same pasted) as a NEW design tab, never over the plan on the
- * board. Recipes are hydrated against the selected dataset; ones it lacks keep the plan's embedded body.
+ * board. Recipes are hydrated against the dataset of the plan's own game version, whatever the open tab is on; ones it
+ * lacks keep the plan's embedded body. A plan whose version this site does not serve opens as it was written.
  */
 export async function openPlanJsonText(text: string, fallbackName = "Imported plan"): Promise<void> {
-  const factory = useFactoryStore.getState();
-  const selectedDatasetVersion = factory.datasetManifest?.versions.find(
-    (version) => version.id === factory.selectedDatasetVersionId,
-  );
   const importedProject = refreshImportedProjectEdges(
     cloneImportedProject(untagCommunityPlan(parseFactoryProjectJson(text)) as FactoryProject),
   );
   const name = importedProject.name || fallbackName;
   const { importProjectAsDesign } = useDesignStore.getState();
+  const gameVersion = planGameVersion(importedProject);
+  const factory = useFactoryStore.getState();
+  // Hydration asks the recipe endpoints by version and needs no catalog; the catalog only
+  // warms in the cache so the new tab opens ready.
+  const datasetVersion = factory.datasetManifest && pickDatasetVersionFor(factory.datasetManifest, gameVersion);
+  if (datasetVersion) {
+    void factory.ensureDatasetFor(gameVersion);
+  }
   // A new tab has no camera of its own yet, so it lands framed on the imported cards.
-  if (!selectedDatasetVersion) {
+  if (!datasetVersion) {
     await importProjectAsDesign(importedProject, name);
     return;
   }
-  const hydration = await hydrateImportedProjectRecipes(importedProject, selectedDatasetVersion);
+  const hydration = await hydrateImportedProjectRecipes(importedProject, datasetVersion);
   await importProjectAsDesign(refreshImportedProjectEdges(hydration.project), name);
 }
 

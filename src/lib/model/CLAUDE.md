@@ -59,6 +59,23 @@ Types, Zod schemas, resource keys, recipe rules, and the load funnel
 - `machine-list.ts` (`buildMachineList`): one row per card. Build counts the card's
   `machineCount`; Solve / Pool sum its sections' required machines, fractions kept.
 
+## Game version (game-version.ts)
+
+- `FactoryProject.gameVersion` is the plan's version family ("2.9", "2.8.1"), set when the
+  plan is made and never edited. Read it through `planGameVersion`: absent or blank is 2.9,
+  and nothing writes the field into an old plan on load. Any other string is kept as
+  written. `gameVersionOfDataset` maps a dataset's `gtnhVersion` to its family.
+- Live editing leaves it out (`live-shape.ts` `DROPPED_FIELDS`): it is never a meta op, and
+  the live service refuses a batch that sets or deletes it (`validate.ts` `NEVER_LIVE_FIELDS`).
+- New plans are stamped by the caller: `createNewProject(v)`, `addDesign({ gameVersion })`,
+  `addTaskBoard({ gameVersion })`; with no version none is written. `DesignSummary.gameVersion`
+  is copied off the plan (`toDesignSummary`, kept by `keepStoredPlanMarks`); a summary from the
+  account listing alone has none until the plan is pulled.
+- Exam: `game-version.test.ts`, the round trips in `factory-json.test.ts` and
+  `plan-code.test.ts`, `live-shape.test.ts`, the library PUT's `route.test.ts`, and the
+  stored paths: `design-library.test.ts`, `design-store.test.ts`, `library-sync.test.ts`,
+  `project-normalize.test.ts`, `validate.test.ts`, `room.test.ts`, `live-session.test.ts`.
+
 ## The load funnel (project-normalize.ts)
 
 `normalizeLoadedProject` snaps positions to the grid and migrates legacy shapes (trash

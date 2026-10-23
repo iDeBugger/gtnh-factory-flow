@@ -258,6 +258,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A plan on a version other than the default: its version after the name, in a small amber chip. */
+.mt-version {
+  flex: none;
+  margin-left: 3px;
+  padding: 0 2px;
+  line-height: 10px;
+  background: rgba(224, 166, 58, 0.16);
+  color: #e0a63a;
+}
 .mt-close {
   display: none;
   position: absolute;

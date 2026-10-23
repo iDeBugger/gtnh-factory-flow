@@ -783,6 +783,19 @@ input.rail-box-edit {
   -webkit-mask-image: none;
   mask-image: none;
 }
+/* A notice whose whole sentence is its rule wraps instead of fading out: the row grows, the rest keep one line. */
+.rail-notice[data-wrap] {
+  height: auto;
+  min-height: 24px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.rail-notice[data-wrap] .rail-notice-text {
+  white-space: normal;
+  text-overflow: clip;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
 
 /* Popups and menus: the mod's menu fill (#3c3e45) with its bevel and hard drop shadow. */
 .rail-popup,

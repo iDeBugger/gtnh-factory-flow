@@ -7,9 +7,13 @@ import { readLibraryTabState, openLibrary } from "@/lib/library/library-tab";
 import { onSfx } from "@/lib/sound/sfx";
 import { useDesignStore } from "@/store/design-store";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
+import { useFactoryStore } from "@/store/factory-store";
+import { writeNewPlanVersion } from "@/lib/datasets/new-plan-version";
+import type { DatasetManifest } from "@/lib/datasets/types";
 import { ModTabs } from "./ModTabs";
 
-vi.mock("@/lib/compact-view", () => ({ isCompactViewport: () => false }));
+const viewport = vi.hoisted(() => ({ compact: false }));
+vi.mock("@/lib/compact-view", () => ({ isCompactViewport: () => viewport.compact, useIsCompactViewport: () => viewport.compact }));
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -36,6 +40,8 @@ const actions = {
 beforeEach(() => {
   window.localStorage.clear();
   window.sessionStorage.clear();
+  viewport.compact = false;
+  useFactoryStore.setState({ datasetManifest: undefined });
   for (const fn of Object.values(actions)) fn.mockClear();
   useDesignStore.setState({
     designs: [design("a", "Benzene"), design("b", "ref-chain"), design("c", "Parked", { closed: true })],
@@ -301,5 +307,89 @@ describe("dragging the plan tabs", () => {
     last.focus();
     fireEvent.keyDown(last, { key: "ArrowRight", ctrlKey: true, shiftKey: true });
     expect(actions.reorderDesigns).not.toHaveBeenCalled();
+  });
+});
+
+function datasetVersion(id: string, gtnhVersion: string) {
+  return {
+    id,
+    gtnhVersion,
+    channel: "stable" as const,
+    publishedAt: "2026-10-20T00:00:00.000Z",
+    manifestPath: "/datasets/gtnh/datasets.manifest.json",
+    recipeDatasetPath: `/datasets/gtnh/${id}/recipes.json.gz`,
+    sourceInfo: { sourceId: "recex" as const, generatedAt: "2026-10-20T00:00:00.000Z" },
+  };
+}
+const bothVersions: DatasetManifest = {
+  schemaVersion: 1,
+  latestStableVersion: "local-2.9.0-rc-2",
+  versions: [datasetVersion("local-2.9.0-rc-2", "2.9.0-RC-2"), datasetVersion("local-2.8.1", "2.8.1")],
+};
+const menuItem = (label: string) =>
+  [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')].find((element) =>
+    element.textContent?.startsWith(label),
+  )!;
+
+describe("plans on two game versions", () => {
+  it("+ New plan makes a plan on the picker's version", () => {
+    useFactoryStore.setState({ datasetManifest: bothVersions });
+    writeNewPlanVersion("2.8.1");
+    render(<ModTabs {...props} />);
+    fireEvent.click(screen.getByLabelText("New plan"));
+    fireEvent.click(menuItem("New plan"));
+    expect(actions.addDesign).toHaveBeenCalledWith({ gameVersion: "2.8.1" });
+  });
+
+  it("+ New plan makes a 2.9 plan when the remembered version is not served", () => {
+    useFactoryStore.setState({ datasetManifest: { ...bothVersions, versions: [bothVersions.versions[0]!] } });
+    writeNewPlanVersion("2.8.1");
+    render(<ModTabs {...props} />);
+    fireEvent.click(screen.getByLabelText("New plan"));
+    fireEvent.click(menuItem("New plan"));
+    expect(actions.addDesign).toHaveBeenCalledWith({ gameVersion: "2.9" });
+  });
+
+  it("a 2.9 plan shows no chip; a 2.8.1 plan's tab shows 2.8.1", () => {
+    useDesignStore.setState({
+      designs: [design("a", "Benzene"), design("b", "Old steel", { gameVersion: "2.8.1" }), design("c", "Future", { gameVersion: "2.10" })],
+    });
+    render(<ModTabs {...props} />);
+    const tab = (name: string) => screen.getByText(name).closest(".mt-tab")!;
+    expect(tab("Benzene").querySelector(".mt-version")).toBeNull();
+    expect(tab("Old steel").querySelector(".mt-version")?.textContent).toBe("2.8.1");
+    expect(tab("Future").querySelector(".mt-version")?.textContent).toBe("2.10");
+    // The tip's last line is the plan's version, on every tab.
+    const lastLine = (name: string) => JSON.parse(tab(name).getAttribute("data-tip")!).notes.at(-1).text;
+    expect(lastLine("Benzene")).toBe("GTNH 2.9");
+    expect(lastLine("Old steel")).toBe("GTNH 2.8.1");
+  });
+
+  it("a phone's + menu has the New plans row, which picks the version", () => {
+    viewport.compact = true;
+    useFactoryStore.setState({ datasetManifest: bothVersions });
+    render(<ModTabs {...props} />);
+    fireEvent.click(screen.getByLabelText("New plan"));
+    expect(rows()).toContain("New plans: GTNH 2.9");
+    fireEvent.click(menuItem("New plans: GTNH 2.9"));
+    expect(rows()).toEqual(["GTNH 2.9", "GTNH 2.8.1"]);
+    fireEvent.click(menuItem("GTNH 2.8.1"));
+    fireEvent.click(screen.getByLabelText("New plan"));
+    expect(rows()).toContain("New plans: GTNH 2.8.1");
+    fireEvent.click(menuItem("New plan"));
+    expect(actions.addDesign).toHaveBeenCalledWith({ gameVersion: "2.8.1" });
+  });
+
+  it("the desktop + menu and a site with one version have no New plans row", () => {
+    useFactoryStore.setState({ datasetManifest: bothVersions });
+    render(<ModTabs {...props} />);
+    fireEvent.click(screen.getByLabelText("New plan"));
+    expect(rows().some((row) => row?.startsWith("New plans"))).toBe(false);
+    cleanup();
+    viewport.compact = true;
+    useFactoryStore.setState({ datasetManifest: { ...bothVersions, versions: [bothVersions.versions[0]!] } });
+    render(<ModTabs {...props} />);
+    fireEvent.click(screen.getByLabelText("New plan"));
+    expect(rows().some((row) => row?.startsWith("New plans"))).toBe(false);
   });
 });

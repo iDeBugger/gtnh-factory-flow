@@ -36,8 +36,8 @@ afterAll(async () => {
 });
 
 describe("the library design PUT", () => {
-  it("stores the plan's game data, view and tasks as sent", async () => {
-    const plan = planWithAdditions();
+  it("stores the plan's game data, game version, view and tasks as sent", async () => {
+    const plan = { ...planWithAdditions(), gameVersion: "2.8.1" };
     const stamp = "2026-10-14T12:00:00.000Z";
     const context = { params: Promise.resolve({ designId: "design-additions" }) };
     const response = await PUT(
@@ -68,6 +68,7 @@ describe("the library design PUT", () => {
     const stored = (await read.json()).plan as FactoryProject;
     expect(stored.gtnhplanner).toEqual(plan.gtnhplanner);
     expect(stored.primaryView).toBe("tasks");
+    expect(stored.gameVersion).toBe("2.8.1");
     expect(stored.nodes[0]!.gtnhplanner).toEqual(plan.nodes[0]!.gtnhplanner);
     expect(stored.storages?.[0]?.gtnhplanner).toEqual(plan.storages?.[0]?.gtnhplanner);
     expect(stored.edges[0]!.gtnhplanner).toEqual(plan.edges[0]!.gtnhplanner);

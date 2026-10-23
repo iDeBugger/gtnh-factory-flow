@@ -34,6 +34,9 @@ import type { ShareMode } from "@/components/community/SharePlanDialog";
 import { isLiveConfigured } from "@/lib/live/live-config";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { ChecklistIcon } from "./pixel-icons";
+import { useIsCompactViewport } from "@/lib/compact-view";
+import { readNewPlanVersion, servedGameVersions, useNewPlanVersion, writeNewPlanVersion } from "@/lib/datasets/new-plan-version";
+import { DEFAULT_GAME_VERSION, gameVersionLabel, planGameVersion } from "@/lib/model/game-version";
 
 /** What the tab strip asks of the bar: the dialogs it does not own. */
 export interface ModTabsActions {
@@ -68,6 +71,7 @@ const TAB_GAP = 2;
 
 type TabMenu =
   | { kind: "plus"; anchor: ChromeAnchor }
+  | { kind: "version"; anchor: ChromeAnchor }
   | { kind: "tab"; anchor: ChromeAnchor; id: string; name: string }
   | { kind: "delete"; anchor: ChromeAnchor; id: string; name: string };
 
@@ -87,6 +91,13 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
   const designs = openDesigns(allDesigns);
   const linkedPostId = useFactoryStore((state) => state.project.metadata?.communityPlanId);
   const solving = useSolvingBooks();
+  const manifest = useFactoryStore((state) => state.datasetManifest);
+  const newPlanVersion = useNewPlanVersion(manifest);
+  const servedVersions = servedGameVersions(manifest);
+  // A phone's bar has no room for the New plans picker: it is a row of the + menu there.
+  const compact = useIsCompactViewport();
+  /** New plans are made for the picker's version, read at the moment of the press. */
+  const newPlanOptions = () => ({ gameVersion: readNewPlanVersion(useFactoryStore.getState().datasetManifest) });
 
   const [menu, setMenu] = useState<TabMenu>();
   const [renaming, setRenaming] = useState<string>();
@@ -324,6 +335,9 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
   };
 
   const entries = (m: TabMenu): MenuEntry[] => {
+    if (m.kind === "version") {
+      return newPlanVersionEntries(servedVersions, newPlanVersion);
+    }
     if (m.kind === "plus") {
       return [
         {
@@ -332,9 +346,18 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
             playSfx("ui.page");
             leaveWelcomeTab();
             leaveLibrary();
-            void addDesign();
+            void addDesign(newPlanOptions());
           },
         },
+        ...(compact && servedVersions.length > 1
+          ? [
+              {
+                label: `New plans: ${gameVersionLabel(newPlanVersion)}`,
+                tip: "The GTNH version a new plan is made for",
+                onSelect: () => setMenu({ kind: "version", anchor: m.anchor }),
+              } satisfies MenuEntry,
+            ]
+          : []),
         // Task boards come with live plans (the mod's + list has the same row).
         ...(isLiveConfigured()
           ? [
@@ -345,7 +368,7 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
                   playSfx("ui.page");
                   leaveWelcomeTab();
                   leaveLibrary();
-                  void addTaskBoard();
+                  void addTaskBoard(newPlanOptions());
                 },
               },
             ]
@@ -488,6 +511,7 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
           })}
           {designs.map((design) => {
             const active = design.id === activeDesignId && !publicView;
+            const version = planGameVersion(design);
             const isRenaming = renaming === design.id;
             return (
               <div
@@ -532,6 +556,7 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
                       id: `tab|${design.id}`,
                       title: design.name,
                       sub: "Middle-click to close, right-click for more",
+                      notes: [{ text: gameVersionLabel(version), tone: "muted" }],
                     }))}
               >
                 {isRenaming ? (
@@ -546,6 +571,11 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
                   <>
                     {design.taskBoard ? <ChecklistIcon className="mt-tasks" /> : null}
                     <span className="mt-name">{design.name}</span>
+                    {version !== DEFAULT_GAME_VERSION ? (
+                      <span className="mt-version" data-plan-version={version} aria-label={gameVersionLabel(version)}>
+                        {version}
+                      </span>
+                    ) : null}
                   </>
                 )}
                 {active && solving ? <span className="mt-solving" aria-label="Still working out this plan's numbers" /> : null}
@@ -610,14 +640,26 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
         <ChromeMenu
           anchor={menu.anchor}
           entries={entries(menu)}
-          label={menu.kind === "plus" ? "New plan" : `Plan options for ${menu.name}`}
-          title={menu.kind === "delete" ? `Delete '${menu.name}' for good?` : undefined}
-          minWidth={menu.kind === "plus" ? 190 : menu.kind === "delete" ? 150 : 170}
+          label={menu.kind === "plus" ? "New plan" : menu.kind === "version" ? "New plans" : `Plan options for ${menu.name}`}
+          title={menu.kind === "delete" ? `Delete '${menu.name}' for good?` : menu.kind === "version" ? "New plans" : undefined}
+          minWidth={menu.kind === "plus" ? 190 : menu.kind === "delete" ? 150 : menu.kind === "version" ? 120 : 170}
           onClose={closeMenu}
         />
       ) : null}
     </div>
   );
+}
+
+/** The New plans picker's rows: one per version this site serves, the chosen one marked. */
+export function newPlanVersionEntries(served: readonly string[], chosen: string): MenuEntry[] {
+  return served.map((version) => ({
+    label: gameVersionLabel(version),
+    current: version === chosen,
+    onSelect: () => {
+      playSfx("ui.tick");
+      writeNewPlanVersion(version);
+    },
+  }));
 }
 
 /** The pixel cross of the close key: two five-pixel diagonals. */

@@ -50,6 +50,31 @@ Every save goes through `persistCanvas` in design-store.ts:
   re-finds a missing one by CONTENT (`resolve-recipes`, then a name search scored by
   content). Never accept a name match alone.
 
+## Plan version
+
+- A plan belongs to one GTNH version, `FactoryProject.gameVersion` ("2.9", "2.8.1"). Absent means 2.9: plans saved
+  before the field read as 2.9 through `planGameVersion` and are never rewritten to say so (One mode: a load never
+  writes). Rules of the field itself are in `src/lib/model/CLAUDE.md` (Game version).
+- The active dataset follows the open plan (`ensureDatasetFor`, `DatasetCache` in `src/lib/datasets/dataset-cache.ts`:
+  one load in flight per version, every loaded catalog kept, a late load only fills the cache). `datasetServesPlan` /
+  `activeVersionServesPlan` guard every recipe refresh, recipe add (`refusesRecipeOnPlan`, at every add, swap and
+  refactor path), icon refresh and paste: while a tab's own dataset loads the board waits, and a dataset switch never
+  re-solves.
+- Live editing leaves the field out (`live-shape.ts` `DROPPED_FIELDS`), and the service refuses a batch that sets it.
+- A version this site serves no dataset for (`unservedPlanVersion`: a file stamped "2.10") opens with its stored recipe
+  bodies, is never refreshed, and shows `PlanVersionNotice` ("This plan is for GTNH <v>. This site has recipes
+  for ..."); the recipe browser, the item list and the crop and mob lists say "Recipes for GTNH <v> are not on this
+  site." The notice's Convert key shows only once conversion hands it an action.
+- New plans: every `addDesign` / `addTaskBoard` caller passes `readNewPlanVersion(manifest)`
+  (`src/lib/datasets/new-plan-version.ts`), and so do the blank plans the library makes itself (the seed after the
+  last plan is deleted, the first-run seed). The tour's sandbox plan stays unstamped on purpose: it is a scratch 2.9
+  plan the tour throws away. The choice is remembered per device (`gtnh-factory-flow.new-plan-version.v1`;
+  allowed, as it has a visible control: the top bar's New plans key, a row of the + menu on a phone). A remembered
+  version this site no longer serves, or no manifest yet, reads as 2.9. A pick storage refuses holds for the page.
+- Exam: `new-plan-version.test.ts`, `dataset-cache.test.ts`, `refresh-project-recipes.test.ts`, the "active dataset
+  follows the open plan" block of `factory-store.test.ts`, `ModBar.test.tsx` and `ModTabs.test.tsx` (picker, chip,
+  + menu), `notices.test.ts` (the unserved notice). In the real app: `scratch/probes/plan-version.mjs`.
+
 ## Library posts are copies
 
 - A post is like an uploaded file. Someone else's post opens as a NEW design with no link

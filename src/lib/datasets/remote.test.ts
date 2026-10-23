@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickDefaultDatasetVersion } from "./remote";
+import { pickDatasetVersionFor, pickDefaultDatasetVersion } from "./remote";
 import type { DatasetManifest } from "./types";
 
 describe("remote dataset selection", () => {
@@ -18,12 +18,52 @@ describe("remote dataset selection", () => {
   });
 });
 
-function datasetVersion(id: string, channel: "stable" | "daily") {
+describe("pickDatasetVersionFor", () => {
+  it("pickDatasetVersionFor picks the family and never a hidden version", () => {
+    const manifest: DatasetManifest = {
+      schemaVersion: 1,
+      latestStableVersion: "local-2.9.0-rc-2",
+      versions: [
+        datasetVersion("local-2.9.0-rc-1", "stable", "2.9.0-RC-1", "2026-10-01T00:00:00.000Z"),
+        datasetVersion("local-2.9.0-rc-2", "stable", "2.9.0-RC-2", "2026-09-01T00:00:00.000Z"),
+        datasetVersion("local-2.8.1", "stable", "2.8.1"),
+        datasetVersion("local-2.8.4", "stable", "2.8.4"),
+      ],
+    };
+    // 2.9: the stable version wins even over a newer 2.9 build.
+    expect(pickDatasetVersionFor(manifest, "2.9")?.id).toBe("local-2.9.0-rc-2");
+    expect(pickDatasetVersionFor(manifest, "2.8.1")?.id).toBe("local-2.8.1");
+    // 2.8.4 is listed but hidden: not served.
+    expect(pickDatasetVersionFor(manifest, "2.8.4")).toBeUndefined();
+    expect(pickDatasetVersionFor(manifest, "2.10")).toBeUndefined();
+  });
+
+  it("takes the newest build of a family when the stable version is another family", () => {
+    const manifest: DatasetManifest = {
+      schemaVersion: 1,
+      latestStableVersion: "local-2.8.1",
+      versions: [
+        datasetVersion("a-2.9", "daily", "2.9.0-beta-2", "2026-08-01T00:00:00.000Z"),
+        datasetVersion("b-2.9", "daily", "2.9.0-RC-2", "2026-09-01T00:00:00.000Z"),
+        datasetVersion("local-2.8.1", "stable", "2.8.1"),
+      ],
+    };
+    expect(pickDatasetVersionFor(manifest, "2.9")?.id).toBe("b-2.9");
+    expect(pickDatasetVersionFor(manifest, "2.8.1")?.id).toBe("local-2.8.1");
+  });
+});
+
+function datasetVersion(
+  id: string,
+  channel: "stable" | "daily",
+  gtnhVersion = id,
+  publishedAt = "2026-05-20T00:00:00.000Z",
+) {
   return {
     id,
-    gtnhVersion: id,
+    gtnhVersion,
     channel,
-    publishedAt: "2026-05-20T00:00:00.000Z",
+    publishedAt,
     manifestPath: "/datasets/gtnh/datasets.manifest.json",
     recipeDatasetPath: `/datasets/gtnh/${id}/recipes.json.gz`,
     sourceInfo: {

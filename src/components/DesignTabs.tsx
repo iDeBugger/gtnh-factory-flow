@@ -1,5 +1,6 @@
 "use client";
 
+import { readNewPlanVersion } from "@/lib/datasets/new-plan-version";
 import { useDropdownDismiss } from "@/lib/hooks/use-dropdown-dismiss";
 
 import { Compass, Library, Plus, SquareKanban } from "lucide-react";
@@ -706,7 +707,7 @@ export function DesignTabs() {
           type="button"
           onClick={() => {
             leaveWelcomeTab();
-            void addDesign();
+            void addDesign({ gameVersion: readNewPlanVersion(useFactoryStore.getState().datasetManifest) });
           }}
           aria-label="New design"
           {...(planBoard ? tipAttrs(newTabTip("tab|new")) : {})}
@@ -719,7 +720,7 @@ export function DesignTabs() {
             type="button"
             onClick={() => {
               leaveWelcomeTab();
-              void addTaskBoard();
+              void addTaskBoard({ gameVersion: readNewPlanVersion(useFactoryStore.getState().datasetManifest) });
             }}
             aria-label="New task board"
             title="New task board"

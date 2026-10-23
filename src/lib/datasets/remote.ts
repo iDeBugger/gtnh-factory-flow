@@ -1,4 +1,5 @@
 import { parseDatasetManifestJson } from "../import-export";
+import { gameVersionOfDataset, type GameVersion } from "../model/game-version";
 import type { DatasetManifest, DatasetVersion } from "./types";
 
 export const DEFAULT_DATASET_MANIFEST_URL =
@@ -21,8 +22,8 @@ export async function fetchDatasetManifest(
 }
 
 /**
- * Dataset versions never offered in the picker, even if a manifest still
- * lists them. 2.8.4 is no longer supported; only 2.9 is.
+ * Dataset versions never offered in the picker or loaded for a plan, even if a
+ * manifest still lists them. 2.8.4 is no longer supported; 2.9 and 2.8.1 are.
  */
 export const HIDDEN_DATASET_VERSION_IDS = new Set(["local-2.8.4"]);
 
@@ -45,6 +46,32 @@ export function pickDefaultDatasetVersion(manifest: DatasetManifest): DatasetVer
   }
 
   return selectable[0];
+}
+
+/**
+ * The dataset that serves plans of `gameVersion`, or undefined when this site
+ * serves no such version. Hidden versions never serve a plan. For 2.9 the
+ * manifest's stable version wins when it is a 2.9 build; otherwise, and for
+ * every other family, the newest build of that family.
+ */
+export function pickDatasetVersionFor(
+  manifest: DatasetManifest,
+  gameVersion: GameVersion,
+): DatasetVersion | undefined {
+  const family = manifest.versions.filter(
+    (version) => !HIDDEN_DATASET_VERSION_IDS.has(version.id) && gameVersionOfDataset(version) === gameVersion,
+  );
+  if (gameVersion === "2.9") {
+    const stable = family.find((version) => version.id === manifest.latestStableVersion);
+    if (stable) {
+      return stable;
+    }
+  }
+  return family.reduce<DatasetVersion | undefined>(
+    (newest, version) =>
+      !newest || Date.parse(version.publishedAt) > Date.parse(newest.publishedAt) ? version : newest,
+    undefined,
+  );
 }
 
 function withCacheBust(url: string): string {
