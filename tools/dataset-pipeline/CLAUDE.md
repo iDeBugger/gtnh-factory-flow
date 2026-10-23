@@ -35,7 +35,8 @@ Recipe ids come from what a recipe is, never from the export: `recipeContentKey`
 cell of a shaped pattern. The id is `oracle:<category>:<map>:<hash>` with no dataset
 version, so a rebuild or another pack keeps every unchanged recipe's id with nothing to
 carry. Recipes sharing a key take `-2`, `-3`... in the order of a hash of their whole body.
-Bees, crops, veins, mobs and underground fluids keep ids named by their game identity.
+Bees, crops, veins, small ores, mobs and underground fluids keep ids named by their game identity,
+and only the same identity folds: two veins with the same ores in other dimensions stay two veins.
 Some recipes differ between two exports of one pack because the game rolls them (Crop
 Breeder and assembly line ore picks, Gadomancy aspects, and Thaumcraft's generated item
 aspects behind essentia smelting): 18 to 70 ids across three pairs of exports. A plan
@@ -43,6 +44,41 @@ holding one finds it again by content (`resolveProjectRecipes`). Exam: `normaliz
 
 Datasets built before this carry versioned ids (`oracle:local-2.9.0-beta-2:...`) and the
 published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such builds.
+
+## Pre-2.9 exports
+
+2.8.1 (`-PgtnhPack=2.8.1`, GT5U 5.09.51) normalizes with the same code. Exam: the
+"a GTNH 2.8.1 export" block in `normalize-oracle-export.test.mjs`, over
+`__fixtures__/oracle-2.8.1-sample.json` (trimmed from the real export). What differs:
+
+- No version in the export: `gtnhVersion` is `GTNH_DATASET_VERSION_LABEL` (`2.8.1`), the id
+  `GTNH_DATASET_VERSION_ID` (`local-2.8.1`). A version-specific rule keys on `gtnhVersion`, never the id.
+- GT++ maps are `gtpp.recipe.*`: ids read them as `gt.recipe.*` (`gameRecipeMapId`), so unchanged
+  recipes keep their 2.9 id. Two took other names in 2.9: `cokeoven` is `industrialcokeoven`, and
+  `thermalgeneratorfuel` (the Thermal Boiler, which shares its id with GT's geothermal fuel map) is
+  `thermalboiler` (`RECIPE_MAP_ID_RENAMES`).
+- Cell fills and empties live in `gt.recipe.fluidcanner` ("Fluid Canner"), mirrored into the Tank like the Canner.
+- `gt.recipe.multiblockrockbreaker` is exported untranslated (its name is its id) and with no
+  catalysts: it is named Boldarnator (`UNTRANSLATED_RECIPE_MAP_NAMES`, used only when the name is the id).
+- No fluid alternatives (5.09.51 has no `mAltFluidInputs` or `mOreDictAlt`): fluid slots carry none.
+- No CropsNH (`cropsnh-crop-cards` is `not_present`): IC2 crops normalize alone; 159 of 160 drop
+  something (Weed drops nothing in the game either).
+- Mining: dimensions carry no `tier`, so none is written; small ores name dimensions by full name
+  in `dims` (no `enabledDims`), resolved through the `fullName` alias; veins have no `dimHeightRanges`.
+  5.09.51's NEI plugin lists only `OreMixes`, so the oracle also reads bartworks' `BWOreLayer.sList`
+  (Ross128b/ba) and `WorldGenEvergladesOreLayer.sList`, with each vein's chance among its dimension's
+  veins. Everglades veins take 2.9's ids (`ore.mix.gtpp<n>`, n their `validOreveins` number) and its
+  dimension naming (`dimensionDarkWorld`, `Eg`, added to `dimensions`); every 2.8.1 Everglades layer
+  generates at y 5-14 whatever it is given, and the export says so.
+- `getMaxCatalystDurability` takes the catalyst stack there (no argument in 2.9); the oracle tries both,
+  so Chemical Plant catalysts export `wearingInputs` on both. Nothing reads `wearingInputs` yet.
+- Machine names are the version's own (Primitive Blast Furnace, Naquadah Reactor Mark I, Zhuhai -
+  Fishing Port); `machineType` keeps them, so tables keyed by name need the 2.8.1 spelling too.
+- Generators named Mark I to IV fold into one tiered family (Plasma Generator Mark, EV to ZPM);
+  2.9's Mk-I names keep one family per mark.
+- 2.8.1 registers one arcane wand or sceptre recipe per rod and cap pair, all with the same
+  output item (the wand is its NBT): they stay apart by their grid items, but share one output
+  resource and display name.
 
 ## Exporting on Apple Silicon
 
@@ -62,6 +98,15 @@ on a case-sensitive Docker volume: the pack has file names that differ only in c
 - The mod writes `icon-colors.json` beside the icons (`IconColors`, a step-for-step port of
   `getDominantOpaqueColor`); `stage-rendered-icons.mjs` decodes only icons it lacks. The two
   must stay identical.
+- The icon cache (`GTNH_ICON_CACHE_DIR`) is one PNG per icon plus `icon-pack.bin` (`IconCache`):
+  every cached icon's bytes and colour in one file, rewritten by an export that changed it. Opening
+  a file through the bind mount costs about 0.7 ms however many threads ask, so hits read file
+  by file take over a minute; pack hits run on the encode threads with no decode. A pack entry
+  serves while its PNG keeps the size and mtime it was packed with; same size with another mtime
+  is compared byte for byte first. A pack hit skips the item check (`IconChecks`) and the colour,
+  so the pack format carries their answers on fixed images: changing either sets old packs aside
+  without a manual bump. The first export over a cache with no usable pack reads file by file.
+  Clone a run dir's `icon-cache` with `cp -cRp`: without kept mtimes every entry is re-read once.
 
 ## Import principles
 
@@ -81,6 +126,17 @@ on a case-sensitive Docker volume: the pack has file names that differ only in c
   lone capped handler, or its `maximumTier` disappears. Exam:
   `scripts/singleblock-tiers.test.mjs`. A multiblock whose name collides with a
   singleblock gets its own id.
+- Thaumcraft arcane recipes (`ShapedArcaneRecipe`, `ShapelessArcaneRecipe`, the same classes in
+  2.8.1 and 2.9) keep their grid in `input`, read through `getInput()`: a shaped cell exports its
+  3x3 `gridSlot` (row * 3 + column), placed there and keyed by it like shaped crafting; a
+  shapeless recipe takes every entry. A cell stack of size 0 counts as one item. A cell the
+  oracle cannot read is counted in `unresolvedGridInputs` with its class and text
+  (`unresolvedGridCells`); the normalizer lists those recipes in the oracle report
+  (`unresolvedArcaneGrids`) and refuses the export above 2. Arcane subclasses (Automagy's
+  filter copy, Witching Gadgets' photo) land in the generic "Thaumcraft" map. Arcane ids from
+  before the grid (RC-2 and older) carry aspects only: plans find them again by output and
+  exact aspect cost (`isGridlessArcaneMatch` in `src/lib/import-export/recipe-ref-match.ts`,
+  kept on for good).
 - Concrete items carry their oredict membership.
 - NEI layout: keep exported slot positions and progress bars; empty slots stay visible;
   non-consumed slots stay visible except TGS tool placeholders; never replace a real slot
@@ -91,9 +147,30 @@ on a case-sensitive Docker volume: the pack has file names that differ only in c
   `machine-data/` beside `oracle-export.json` (`MachineDataExport`, ids only, no icons), for
   `tools/audits/import-machine-side-data.mjs`. The export's order of the radio hatch's GT++
   rods changes on every launch, so the importer sorts the materials by id.
+- IC2 crop drops are sampled from the crop card on a simulated tile, at the largest size
+  where `canBeHarvested` holds (Eating Plant drops only below its max size). An item's amount per
+  harvest round is (its summed stack sizes + its hits x (gain + 1) / 100) / samples, keyed by id,
+  damage and NBT: the game adds the gain bonus to the one stack a round drops, so Red Wheat at gain
+  31 makes 1.32 items a round, not 0.32 per item. `IC2.random` and the world's random are seeded
+  per crop and stat set, so a rebuild samples the same harvests; crops rolling their own generator
+  (GT's ThreadLocalRandom, CropsPP's XSTR) still move a little. Crop methods are called with
+  `setAccessible` (`invokeCrop`; CropsPP's Bonsais are a package-private class). During `getGain`
+  the tile reports `OracleCropWorld`, an all-air world with no constructor run, so Red Wheat and
+  Mana Bean can read it (Mana Bean exports only the bean of no crystal cluster under it). Each block
+  a crop asks for under it (`isBlockBelow`) and a redstone signal is sampled again on its own;
+  conditions with the same items at the same rates share one recipe
+  `ic2-crop:<owner>:<id>:under-<block>` (or `:redstone-signal`) whose `metadata.requirements`
+  ("Needs Red Granite under it") the recipe search card shows (`CropRequirementNote`); the plain
+  crop keeps its id. IC2's own cards export their lang key (`ic2.crop.redwheat`) as the name, on
+  2.8.1 and 2.9: the normalizer names them after their seed bag ("Redwheat Seeds" is Redwheat),
+  else from the key's last part (`ic2CropDisplayName`); ids never use the name. Exam: the IC2 crop
+  block in `normalize-oracle-export.test.mjs`.
 - Extreme Entity Crusher mobs come from the `kubatech-eec-mobs` oracle adapter (drop
   chances replayed in `eec-drops.mjs`). Sparge Tower rolled outputs and fusion startup EU
   are per-recipe export fields; `sparge-byproducts.mjs` appends rolled slots AFTER the
-  exported ones so recipe ids stay stable.
+  exported ones so recipe ids stay stable. The oracle picks the GT++ maps for sparge and
+  wear data by name without the mod prefix (`isGtppMap`: `gtpp.recipe.*` to 2.8,
+  `gt.recipe.*` since 2.9). The normalizer refuses an export whose sparging map has
+  recipes but none with `spargeFluidOutputs` (listed in the oracle report's `failures`).
 - Faint fluid icons: repair only captures under 20% mean opacity, starting from the
   original PNGs (`normalize-fluid-icon-alpha.mjs`).

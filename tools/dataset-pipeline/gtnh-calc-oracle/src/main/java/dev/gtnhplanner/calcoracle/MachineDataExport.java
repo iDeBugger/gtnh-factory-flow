@@ -97,6 +97,11 @@ public final class MachineDataExport {
             Map<String, Object> counts = ctx.map();
             if (base instanceof Map) {
                 for (Map.Entry<?, ?> e : ((Map<?, ?>) base).entrySet()) {
+                    // 2.8.1 keeps a product the tree lacks (Dark Oak's fruit) as a null stack; 2.9 leaves
+                    // it out. Either way the tree makes none of it, so the mode is left out.
+                    if (!(e.getValue() instanceof ItemStack)) {
+                        continue;
+                    }
                     counts.put(
                         ((Enum<?>) e.getKey()).name().toLowerCase(Locale.ROOT),
                         Integer.valueOf(((ItemStack) e.getValue()).stackSize)

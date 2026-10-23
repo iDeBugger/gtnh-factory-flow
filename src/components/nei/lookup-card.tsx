@@ -21,6 +21,7 @@ import {
   isRecipeInputConsumed,
   machineCycleTicks,
 } from "@/lib/model";
+import { getIc2CropRequirements } from "@/lib/model/passive-production";
 import type { ResourceAmount } from "@/lib/model/types";
 import { energyPerUnitSuffix, type TimeRateUnit } from "@/lib/model/rate-unit";
 import { formatCompact, resourceLabel } from "@/lib/model/resources";
@@ -399,9 +400,22 @@ export const LookupRecipeCard = memo(function LookupRecipeCard({
           );
         })}
       </div>
+      <CropRequirementNote recipe={recipe} />
     </article>
   );
 });
+
+/**
+ * What an IC2 crop needs to drop this card's items, under the rails ("Needs Red Granite under it."): one crop with
+ * several support blocks is several cards whose outputs differ, and only this line says which block each wants.
+ */
+export function CropRequirementNote({ recipe }: { recipe: Pick<RecipeSummary, "metadata"> }) {
+  const requirements = getIc2CropRequirements(recipe);
+  if (requirements.length === 0) {
+    return null;
+  }
+  return <p className="nrw-card-note">{requirements.map((requirement) => `${requirement}.`).join(" ")}</p>;
+}
 
 /**
  * A generator answering the stencil, as its board card: its name in the head, what it burns down the left, the EU it

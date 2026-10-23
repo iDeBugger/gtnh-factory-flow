@@ -233,6 +233,20 @@ function readSubSoilRequirement(requirements: unknown): string | undefined {
   );
 }
 
+/**
+ * What an IC2 crop needs to drop this recipe's items, as the pipeline wrote it: a block
+ * under it ("Needs Red Granite under it") or a redstone signal. One IC2 crop card becomes
+ * one recipe per such need; the crop's plain recipe has none. CropsNH crops keep theirs in
+ * `metadata.cropsNh.requirements` (read by `getCropsNhStats`).
+ */
+export function getIc2CropRequirements(recipe: Pick<Recipe, "metadata">): string[] {
+  const meta = recipe.metadata as { cropsNh?: unknown; requirements?: unknown } | undefined;
+  if (!meta || meta.cropsNh !== undefined || !Array.isArray(meta.requirements)) {
+    return [];
+  }
+  return meta.requirements.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
+}
+
 // The following mirror TileEntityCropSticks (verified against 2.9 bytecode):
 // getNutrientsPerCycle, getGrowthRate, doGrowth and harvest.
 

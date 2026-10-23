@@ -1,5 +1,11 @@
 package dev.gtnhplanner.calcoracle;
 
+import bartworks.system.material.Werkstoff;
+import bartworks.system.oregen.BWOreLayer;
+import bartworks.system.oregen.BWWorldGenRoss128b;
+import bartworks.system.oregen.BWWorldGenRoss128ba;
+import galacticgreg.api.enums.DimensionDef;
+import gregtech.api.GregTechAPI;
 import gregtech.api.enums.Materials;
 import gtneioreplugin.util.DimensionHelper;
 import gtneioreplugin.util.GT5OreLayerHelper;
@@ -10,6 +16,8 @@ import net.minecraft.item.ItemStack;
 import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.fluids.FluidRegistry;
 import net.minecraftforge.fluids.FluidStack;
+import toxiceverglades.gen.WorldGenEvergladesOreLayer;
+import toxiceverglades.gen.WorldGenEvergladesOres;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -69,6 +77,20 @@ public final class MiningExportImpl implements MiningExport {
         } catch (Throwable ignored) {
             // A failure here also fails the vein export below, which reports it.
         }
+        try {
+            // The NEI plugin's arrays leave the Toxic Everglades out; its veins name it, so
+            // list it the way 2.9's plugin does, or they would lose its abbreviation.
+            if (!WorldGenEvergladesOreLayer.sList.isEmpty()) {
+                Map<String, Object> everglades = ctx.map();
+                everglades.put("id", EVERGLADES_DIM);
+                everglades.put("name", EVERGLADES_DIM);
+                everglades.put("fullName", EVERGLADES_DIM);
+                everglades.put("abbr", EVERGLADES_ABBR);
+                dimensions.add(everglades);
+            }
+        } catch (Throwable ignored) {
+            // No Everglades in this pack: its veins are not exported either.
+        }
         domain.put("dimensions", dimensions);
         exportMiningOreVeins(adapters, domain, ctx);
         exportMiningSmallOres(adapters, domain, ctx);
@@ -108,23 +130,248 @@ public final class MiningExportImpl implements MiningExport {
             }
 
             // HashMap order is not the game's; sort by vein name so two exports line up.
+            TreeMap<String, Map<String, Object>> byId = new TreeMap<String, Map<String, Object>>();
             for (GT5OreLayerHelper.OreLayerWrapper vein
                 : new TreeMap<String, GT5OreLayerHelper.OreLayerWrapper>(byName).values()) {
                 if (vein == null) {
                     continue;
                 }
-                veins.add(oreVein(vein, chancesByVein.get(vein), ctx));
+                byId.put(vein.veinName, oreVein(vein, chancesByVein.get(vein), ctx));
+            }
+            // 5.09.51's NEI plugin lists only OreMixes. Bartworks' Ross128b/ba veins and the
+            // Toxic Everglades veins generate from lists of their own, so read those too.
+            List<String> extraWarnings = new ArrayList<String>();
+            List<ExtraVein> extras = new ArrayList<ExtraVein>();
+            try {
+                ross128Veins(extras, ctx);
+            } catch (Throwable t) {
+                extraWarnings.add("bartworks Ross128 veins: " + t);
+            }
+            try {
+                evergladesVeins(extras, ctx);
+            } catch (Throwable t) {
+                extraWarnings.add("Toxic Everglades veins: " + t);
+            }
+            addExtraVeins(byId, extras, ctx);
+            veins.addAll(byId.values());
+            if (!extraWarnings.isEmpty()) {
+                StringBuilder joined = new StringBuilder();
+                for (String warning : extraWarnings) {
+                    joined.append(joined.length() == 0 ? "" : "; ").append(warning);
+                }
+                domain.put("veins", veins);
+                adapters.add(ctx.adapter(
+                    "gregtech-ore-veins", "partial", true, byName.size() + extras.size(), veins.size(), started,
+                    joined.toString()));
+                return;
             }
             domain.put("veins", veins);
             String status = veins.isEmpty() ? "partial" : "computed";
             String warning = veins.isEmpty()
                 ? "GregTech ore vein helper was present, but no veins were exported."
                 : null;
-            adapters.add(ctx.adapter("gregtech-ore-veins", status, true, byName.size(), veins.size(), started, warning));
+            adapters.add(ctx.adapter(
+                "gregtech-ore-veins", status, true, byName.size() + extras.size(), veins.size(), started, warning));
         } catch (Throwable t) {
             adapters.add(ctx.adapter("gregtech-ore-veins", "partial", true, 0, veins.size(), started, t.toString()));
             domain.put("veins", veins);
         }
+    }
+
+    // A vein read from a worldgen list outside OreMixes, before its per-dimension chance is known.
+    private static final class ExtraVein {
+        String id;
+        String name;
+        int weight;
+        int density;
+        int size;
+        String heightRange;
+        String dim;
+        String dimAbbr;
+        List<Map<String, Object>> ores;
+    }
+
+    // The Toxic Everglades' world provider name. 5.09.51's NEI plugin does not know the
+    // dimension, so it has no abbreviation there; Eg is the one 2.9's plugin gives it.
+    private static final String EVERGLADES_DIM = "dimensionDarkWorld";
+    private static final String EVERGLADES_ABBR = "Eg";
+
+    // Adds the extra veins, with each one's chance among every vein of its dimension, the
+    // rule the NEI plugin applies to OreMixes. A GT vein of the same id wins.
+    private void addExtraVeins(TreeMap<String, Map<String, Object>> byId, List<ExtraVein> extras, MiningContext ctx) {
+        Map<String, Integer> weightByDim = new TreeMap<String, Integer>();
+        for (ExtraVein vein : extras) {
+            if (byId.containsKey(vein.id)) {
+                continue;
+            }
+            Integer sum = weightByDim.get(vein.dim);
+            weightByDim.put(vein.dim, Integer.valueOf((sum == null ? 0 : sum.intValue()) + vein.weight));
+        }
+        for (Map<String, Object> gtVein : byId.values()) {
+            Object dims = gtVein.get("dims");
+            if (!(dims instanceof List)) {
+                continue;
+            }
+            for (Object dim : (List<?>) dims) {
+                Integer sum = weightByDim.get(dim);
+                if (sum != null) {
+                    weightByDim.put((String) dim, Integer.valueOf(sum.intValue() + ((Integer) gtVein.get("weight")).intValue()));
+                }
+            }
+        }
+        for (ExtraVein vein : extras) {
+            if (byId.containsKey(vein.id) || vein.ores.isEmpty()) {
+                continue;
+            }
+            Map<String, Object> exported = ctx.map();
+            exported.put("id", ctx.safeString(vein.id));
+            exported.put("name", ctx.safeString(vein.name == null || vein.name.isEmpty() ? vein.id : vein.name));
+            exported.put("weight", Integer.valueOf(vein.weight));
+            exported.put("density", Integer.valueOf(vein.density));
+            exported.put("size", Integer.valueOf(vein.size));
+            exported.put("heightRange", vein.heightRange);
+            exported.put("dims", Collections.singletonList(vein.dim));
+            if (vein.dimAbbr != null) {
+                exported.put("dimAbbrs", Collections.singletonList(vein.dimAbbr));
+                int total = weightByDim.get(vein.dim).intValue();
+                if (total > 0) {
+                    Map<String, Object> chances = ctx.map();
+                    chances.put(vein.dimAbbr, Double.valueOf(((double) vein.weight) / ((double) total)));
+                    exported.put("dimChances", chances);
+                }
+            }
+            exported.put("ores", vein.ores);
+            byId.put(vein.id, exported);
+        }
+    }
+
+    // Bartworks keeps its Ross128b and Ross128ba veins in BWOreLayer.sList (enabled ones
+    // only). A layer is a GT material or a bartworks Werkstoff, told apart by bwOres.
+    private void ross128Veins(List<ExtraVein> extras, MiningContext ctx) {
+        String[] roles = new String[] { "primary", "secondary", "between", "sporadic" };
+        for (BWOreLayer layer : new ArrayList<BWOreLayer>(BWOreLayer.sList)) {
+            if (layer == null) {
+                continue;
+            }
+            String dim;
+            if (layer instanceof BWWorldGenRoss128ba) {
+                dim = DimensionDef.DimNames.ROSS128BA;
+            } else if (layer instanceof BWWorldGenRoss128b) {
+                dim = DimensionDef.DimNames.ROSS128B;
+            } else {
+                continue;
+            }
+            ExtraVein vein = new ExtraVein();
+            vein.id = layer.mWorldGenName;
+            vein.weight = layer.mWeight;
+            vein.density = layer.mDensity;
+            vein.size = layer.mSize;
+            vein.heightRange = layer.mMinY + "-" + layer.mMaxY;
+            vein.dim = dim;
+            List<String> abbrs = abbreviations(Collections.singletonList(dim));
+            vein.dimAbbr = abbrs == null ? null : abbrs.get(0);
+            vein.ores = new ArrayList<Map<String, Object>>();
+            List<ItemStack> stacks = layer.getStacks();
+            List<org.apache.commons.lang3.tuple.Pair<Integer, Boolean>> raw = layer.getStacksRawData();
+            for (int index = 0; index < roles.length && index < raw.size(); index++) {
+                int meta = raw.get(index).getLeft().intValue();
+                boolean werkstoff = Boolean.TRUE.equals(raw.get(index).getRight());
+                Map<String, Object> material;
+                String materialName;
+                if (werkstoff) {
+                    Werkstoff found = Werkstoff.werkstoffHashMap.get(Short.valueOf((short) meta));
+                    if (found == null) {
+                        continue;
+                    }
+                    material = ctx.map();
+                    material.put("id", Integer.valueOf(found.getmID()));
+                    ctx.putIfPresent(material, "internalName", found.getVarName());
+                    materialName = found.getLocalizedName();
+                    ctx.putIfPresent(material, "name", materialName);
+                } else {
+                    Materials found = meta >= 0 && meta < GregTechAPI.sGeneratedMaterials.length
+                        ? GregTechAPI.sGeneratedMaterials[meta]
+                        : null;
+                    if (found == null) {
+                        continue;
+                    }
+                    material = oreMaterial(found, ctx);
+                    materialName = (String) material.get("name");
+                }
+                // The vein is named after its primary layer, as 2.9 names these veins.
+                if (index == 0) {
+                    vein.name = materialName;
+                }
+                Map<String, Object> exportedLayer = ctx.map();
+                exportedLayer.put("role", roles[index]);
+                exportedLayer.put("material", material);
+                ctx.putIfPresent(exportedLayer, "ore", index < stacks.size() ? ctx.itemStack(stacks.get(index)) : null);
+                vein.ores.add(exportedLayer);
+            }
+            extras.add(vein);
+        }
+    }
+
+    // The Toxic Everglades generate from WorldGenEvergladesOreLayer.sList (enabled ones
+    // only). validOreveins numbers the same veins 0 to 19 in registration order, the
+    // numbers 2.9 names them by (ore.mix.gtpp0 is the base Iron vein), so a vein keeps
+    // its id across the two packs. Every 2.8.1 layer sets mMinY 5 and mMaxY 14 whatever
+    // its constructor is given, so that is the height it generates at.
+    private void evergladesVeins(List<ExtraVein> extras, MiningContext ctx) {
+        List<WorldGenEvergladesOreLayer> enabled = WorldGenEvergladesOreLayer.sList;
+        String[] roles = new String[] { "primary", "secondary", "between", "sporadic" };
+        for (Map.Entry<Long, WorldGenEvergladesOreLayer> entry
+            : new TreeMap<Long, WorldGenEvergladesOreLayer>(WorldGenEvergladesOres.validOreveins).entrySet()) {
+            WorldGenEvergladesOreLayer layer = entry.getValue();
+            if (layer == null || !containsIdentity(enabled, layer)) {
+                continue;
+            }
+            ExtraVein vein = new ExtraVein();
+            vein.id = "ore.mix.gtpp" + entry.getKey();
+            vein.weight = layer.mWeight;
+            vein.density = layer.mDensity;
+            vein.size = layer.mSize;
+            vein.heightRange = layer.mMinY + "-" + layer.mMaxY;
+            vein.dim = EVERGLADES_DIM;
+            vein.dimAbbr = EVERGLADES_ABBR;
+            vein.ores = new ArrayList<Map<String, Object>>();
+            gtPlusPlus.core.material.Material[] materials = new gtPlusPlus.core.material.Material[] {
+                layer.mPrimary, layer.mSecondary, layer.mBetween, layer.mSporadic
+            };
+            for (int index = 0; index < roles.length; index++) {
+                gtPlusPlus.core.material.Material material = materials[index];
+                if (material == null) {
+                    continue;
+                }
+                if (index == 0) {
+                    vein.name = material.getLocalizedName();
+                }
+                Map<String, Object> exportedMaterial = ctx.map();
+                ctx.putIfPresent(exportedMaterial, "internalName", material.getUnlocalizedName());
+                ctx.putIfPresent(exportedMaterial, "name", material.getLocalizedName());
+                Map<String, Object> exportedLayer = ctx.map();
+                exportedLayer.put("role", roles[index]);
+                exportedLayer.put("material", exportedMaterial);
+                ItemStack ore = null;
+                try {
+                    ore = material.getOre(1);
+                } catch (Throwable ignored) {
+                    // No ore registered for the material: the layer keeps its material only.
+                }
+                ctx.putIfPresent(exportedLayer, "ore", ctx.itemStack(ore));
+                vein.ores.add(exportedLayer);
+            }
+            extras.add(vein);
+        }
+    }
+
+    private static boolean containsIdentity(List<?> list, Object value) {
+        for (Object item : list) {
+            if (item == value) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Map<String, Object> oreVein(

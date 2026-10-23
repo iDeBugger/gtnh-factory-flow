@@ -110,3 +110,117 @@ describe("finding a recipe again after its id changed", () => {
     expect(scoreRecipeRefCandidate(recipeContentRef(exported), withoutCircuit)).toBeGreaterThanOrEqual(400);
   });
 });
+
+/**
+ * Arcane recipes as RC-2 published them (aspects only, or one wrong item for a shapeless
+ * recipe) and as the oracle exports them now, with the grid. The ids are the real ones.
+ */
+describe("finding an arcane recipe a plan saved before the grid was exported", () => {
+  type Slot = [kind: "item" | "aspect", id: string, amount: number];
+  const arcane = (id: string, name: string, inputs: Slot[], outputs: Slot[]): Recipe =>
+    ({
+      id,
+      name: `Thaumcraft Arcane Crafting: ${name}`,
+      kind: "gregtech_machine",
+      category: "thaumcraft",
+      machineType: "Thaumcraft Arcane Crafting",
+      minimumTier: "NONE",
+      durationTicks: 1,
+      eut: 0,
+      inputs: inputs.map(([kind, slotId, amount]) => ({ kind, id: slotId, amount })),
+      outputs: outputs.map(([kind, slotId, amount]) => ({ kind, id: slotId, amount })),
+      source: { datasetVersionId: "x", recipeMap: "Thaumcraft Arcane Crafting", exporter: "gtnh-oracle" },
+    }) as Recipe;
+  const aspect = (tag: string, amount: number): Slot => ["aspect", `thaumcraft:aspect:${tag}`, amount];
+  const VIS_READER: Slot = ["item", "automagy:blockvisreader", 1];
+  const visCost = ["aer", "terra", "ignis", "aqua", "ordo", "perditio"].map((tag) => aspect(tag, 3));
+
+  const oldVisReader = arcane(
+    "oracle:local-2.9.0-beta-2:thaumcraft:arcane:df14c68650e5b3d1",
+    "Vis Reader",
+    visCost,
+    [VIS_READER],
+  );
+  const newVisReader = arcane(
+    "oracle:thaumcraft:arcane:4b2a36407c59a55f",
+    "Vis Reader",
+    [
+      ["item", "thaumcraft:itemthaumometer", 1],
+      ["item", "thaumcraft:blockcosmeticsolid@6", 1],
+      ["item", "minecraft:quartz", 1],
+      ["item", "thaumcraft:blockcosmeticsolid@6", 1],
+      ["item", "thaumcraft:blockcosmeticsolid@6", 1],
+      ["item", "automagy:blockredcrystal", 1],
+      ...visCost,
+    ],
+    [VIS_READER],
+  );
+
+  it("an aspect-only recipe finds its recipe by output and aspect cost", () => {
+    const cheaper = arcane("oracle:thaumcraft:arcane:cheaper", "Vis Reader", [
+      ["item", "minecraft:quartz", 1],
+      ...visCost.map(([kind, id]): Slot => [kind, id, 2]),
+    ], [VIS_READER]);
+    const match = pickRecipeRefMatch(recipeContentRef(oldVisReader), [cheaper, newVisReader]);
+    expect(match?.candidate.id).toBe("oracle:thaumcraft:arcane:4b2a36407c59a55f");
+    expect(match?.exact).toBe(false);
+    expect(match?.score).toBeGreaterThanOrEqual(300);
+  });
+
+  it("a shapeless recipe saved with one wrong item finds its recipe", () => {
+    const oldPearl = arcane(
+      "oracle:local-2.9.0-beta-2:thaumcraft:arcane:445e0c28fc55ef9d",
+      "Shattered Avarice Pearl",
+      [["item", "choice:674e356f2771cdf6", 1], aspect("perditio", 2)],
+      [["item", "automagy:horizontal", 2]],
+    );
+    const newPearl = arcane(
+      "oracle:thaumcraft:arcane:b289f12592a4b6b5",
+      "Shattered Avarice Pearl",
+      [["item", "automagy:avaricepearl", 1], ["item", "automagy:shardsliver@5", 1], aspect("perditio", 2)],
+      [["item", "automagy:horizontal", 2]],
+    );
+    const match = pickRecipeRefMatch(recipeContentRef(oldPearl), [newPearl]);
+    expect(match?.candidate.id).toBe(newPearl.id);
+    expect(match?.score).toBeGreaterThanOrEqual(300);
+  });
+
+  it("an arcane subclass in the generic Thaumcraft map finds its recipe too, if its one item is in the grid", () => {
+    const inThaumcraftMap = (recipe: Recipe): Recipe => ({
+      ...recipe,
+      machineType: "Thaumcraft",
+      source: { ...recipe.source, recipeMap: "Thaumcraft" },
+    }) as Recipe;
+    const WHITELIST: Slot = ["item", "automagy:enchantedpaper@1", 1];
+    const oldCopy = inThaumcraftMap(
+      arcane("oracle:local-2.9.0-beta-2:thaumcraft:thaumcraft:1f45a2466bd17978", "Runic Whitelist", [
+        ["item", "automagy:enchantedpaper@2", 1],
+        aspect("ordo", 2),
+      ], [WHITELIST]),
+    );
+    const newCopy = inThaumcraftMap(
+      arcane("oracle:thaumcraft:thaumcraft:new", "Runic Whitelist", [
+        ["item", "automagy:enchantedpaper@2", 1],
+        ["item", "oredict:dyeWhite", 1],
+        aspect("ordo", 2),
+      ], [WHITELIST]),
+    );
+    expect(scoreRecipeRefCandidate(recipeContentRef(oldCopy), newCopy)).toBeGreaterThanOrEqual(300);
+    // The saved item is a real one: a candidate without it is another recipe.
+    const without = { ...newCopy, inputs: newCopy.inputs.filter((input) => input.id !== "automagy:enchantedpaper@2") };
+    without.inputs.push({ kind: "item", id: "minecraft:paper", amount: 1 } as Recipe["inputs"][number]);
+    expect(scoreRecipeRefCandidate(recipeContentRef(oldCopy), without)).toBeLessThan(300);
+  });
+
+  it("never stands in for another machine's recipe or a recipe with its full grid", () => {
+    const crafted = { ...newVisReader, machineType: "Shaped Crafting", source: { recipeMap: "Shaped Crafting" } };
+    expect(scoreRecipeRefCandidate(recipeContentRef(oldVisReader), crafted as Recipe)).toBe(0);
+    // A ref that already lists the grid is matched by the ordinary tiers only.
+    const otherGrid = arcane("oracle:thaumcraft:arcane:other", "Vis Reader", [
+      ["item", "minecraft:quartz", 1],
+      ["item", "minecraft:glass", 1],
+      ...visCost,
+    ], [VIS_READER]);
+    expect(scoreRecipeRefCandidate(recipeContentRef(newVisReader), otherGrid)).toBeLessThan(300);
+  });
+});

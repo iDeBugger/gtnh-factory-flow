@@ -1,0 +1,2458 @@
+{
+ "schemaVersion": 1,
+ "exporter": "gtnh-calculation-oracle",
+ "format": "dev.gtnhplanner.oracle.v1",
+ "generatedAt": "2026-10-23T10:02:03.492Z",
+ "minecraftVersion": "1.7.10",
+ "adapters": [
+  {
+   "id": "ore-dictionary",
+   "status": "computed",
+   "detected": true,
+   "subjectCount": 46587,
+   "recipeCount": 25368,
+   "durationMillis": 499
+  },
+  {
+   "id": "gregtech-recipe-maps",
+   "status": "computed",
+   "detected": true,
+   "subjectCount": 148,
+   "recipeCount": 161650,
+   "durationMillis": 7903
+  },
+  {
+   "id": "minecraft-forge-crafting",
+   "status": "computed",
+   "detected": true,
+   "subjectCount": 1,
+   "recipeCount": 60547,
+   "durationMillis": 1459
+  },
+  {
+   "id": "minecraft-furnace",
+   "status": "computed",
+   "detected": true,
+   "subjectCount": 1,
+   "recipeCount": 6131,
+   "durationMillis": 71
+  },
+  {
+   "id": "thaumcraft-nei-layouts",
+   "status": "computed",
+   "detected": true,
+   "subjectCount": 8,
+   "recipeCount": 0,
+   "durationMillis": 425
+  },
+  {
+   "id": "thaumcraft-crafting",
+   "status": "computed",
+   "detected": true,
+   "subjectCount": 1,
+   "recipeCount": 22487,
+   "durationMillis": 3116
+  },
+  {
+   "id": "thaumcraft-essentia-smelting",
+   "status": "computed",
+   "detected": true,
+   "subjectCount": 1,
+   "recipeCount": 16423,
+   "durationMillis": 3116
+  },
+  {
+   "id": "forestry-bee-species",
+   "status": "computed",
+   "detected": true,
+   "subjectCount": 1,
+   "recipeCount": 482,
+   "durationMillis": 56
+  },
+  {
+   "id": "ic2-crop-cards",
+   "status": "computed",
+   "detected": true,
+   "subjectCount": 1,
+   "recipeCount": 160,
+   "durationMillis": 289
+  },
+  {
+   "id": "cropsnh-crop-cards",
+   "status": "not_present",
+   "detected": false,
+   "subjectCount": 0,
+   "recipeCount": 0,
+   "durationMillis": 0
+  },
+  {
+   "id": "kubatech-eec-mobs",
+   "status": "computed",
+   "detected": true,
+   "subjectCount": 1,
+   "recipeCount": 362,
+   "durationMillis": 261
+  },
+  {
+   "id": "gregtech-ore-veins",
+   "status": "computed",
+   "detected": true,
+   "subjectCount": 79,
+   "recipeCount": 79,
+   "durationMillis": 2
+  },
+  {
+   "id": "gregtech-small-ores",
+   "status": "computed",
+   "detected": true,
+   "subjectCount": 55,
+   "recipeCount": 55,
+   "durationMillis": 0
+  },
+  {
+   "id": "gregtech-underground-fluids",
+   "status": "computed",
+   "detected": true,
+   "subjectCount": 30,
+   "recipeCount": 30,
+   "durationMillis": 1
+  }
+ ],
+ "loadedMods": [],
+ "domains": [
+  {
+   "id": "oreDictionary",
+   "entries": {
+    "dustGlowstone": [
+     {
+      "kind": "item",
+      "id": "minecraft:glowstone_dust",
+      "registryId": "minecraft:glowstone_dust",
+      "meta": 0,
+      "amount": 1,
+      "displayName": "Glowstone Dust",
+      "modId": "minecraft"
+     }
+    ]
+   }
+  },
+  {
+   "id": "gregtech",
+   "recipeMaps": [
+    {
+     "id": "gt.recipe.assembler",
+     "name": "Assembler",
+     "sourceClass": "gregtech.api.recipe.RecipeMap",
+     "catalysts": [
+      {
+       "resource": {
+        "kind": "item",
+        "id": "gregtech:gt.blockmachines@10780",
+        "registryId": "gregtech:gt.blockmachines",
+        "meta": 10780,
+        "amount": 1,
+        "displayName": "Elite Assembling Machine",
+        "modId": "gregtech",
+        "tooltip": [
+         "Elite Assembling Machine",
+         "Avengers, Assemble!",
+         "Machine Type: Assembler",
+         "Voltage IN: 32,768 (LuV)",
+         "Capacity: 2,097,152 EU"
+        ]
+       },
+       "priority": 0,
+       "sourceClass": "gregtech.api.metatileentity.implementations.MTEBasicMachineWithRecipe",
+       "multiblock": false
+      },
+      {
+       "resource": {
+        "kind": "item",
+        "id": "gregtech:gt.blockmachines@10781",
+        "registryId": "gregtech:gt.blockmachines",
+        "meta": 10781,
+        "amount": 1,
+        "displayName": "Elite Assembling Machine II",
+        "modId": "gregtech",
+        "tooltip": [
+         "Elite Assembling Machine II",
+         "Avengers, Assemble!",
+         "Machine Type: Assembler",
+         "Voltage IN: 131,072 (ZPM)",
+         "Capacity: 8,388,608 EU"
+        ]
+       },
+       "priority": 0,
+       "sourceClass": "gregtech.api.metatileentity.implementations.MTEBasicMachineWithRecipe",
+       "multiblock": false
+      }
+     ],
+     "recipes": [
+      {
+       "id": "b4eed8de4bc6f672",
+       "enabled": true,
+       "durationTicks": 2400,
+       "eut": 1920,
+       "specialValue": 0,
+       "itemInputs": [
+        {
+         "kind": "item",
+         "id": "dreamcraft:item.circuitiv",
+         "registryId": "dreamcraft:item.CircuitIV",
+         "meta": 0,
+         "amount": 1,
+         "displayName": "Any IV Circuit",
+         "modId": "dreamcraft",
+         "alternatives": [
+          {
+           "kind": "item",
+           "id": "dreamcraft:item.circuitiv",
+           "registryId": "dreamcraft:item.CircuitIV",
+           "meta": 0,
+           "amount": 1,
+           "displayName": "Any IV Circuit",
+           "modId": "dreamcraft"
+          },
+          {
+           "kind": "item",
+           "id": "gregtech:gt.metaitem.03@32086",
+           "registryId": "gregtech:gt.metaitem.03",
+           "meta": 32086,
+           "amount": 1,
+           "displayName": "Quantum Assembly",
+           "modId": "gregtech"
+          },
+          {
+           "kind": "item",
+           "id": "gregtech:gt.metaitem.01@32705",
+           "registryId": "gregtech:gt.metaitem.01",
+           "meta": 32705,
+           "amount": 1,
+           "displayName": "Mainframe",
+           "modId": "gregtech"
+          },
+          {
+           "kind": "item",
+           "id": "gregtech:gt.metaitem.03@32084",
+           "registryId": "gregtech:gt.metaitem.03",
+           "meta": 32084,
+           "amount": 1,
+           "displayName": "Nano Supercomputer",
+           "modId": "gregtech"
+          },
+          {
+           "kind": "item",
+           "id": "gregtech:gt.metaitem.03@32089",
+           "registryId": "gregtech:gt.metaitem.03",
+           "meta": 32089,
+           "amount": 1,
+           "displayName": "Crystal Processor",
+           "modId": "gregtech"
+          }
+         ]
+        },
+        {
+         "kind": "item",
+         "id": "gregtech:gt.metaitem.01@32597",
+         "registryId": "gregtech:gt.metaitem.01",
+         "meta": 32597,
+         "amount": 1,
+         "displayName": "Lapotronic Energy Orb",
+         "modId": "gregtech"
+        },
+        {
+         "kind": "item",
+         "id": "gregtech:gt.integrated_circuit@1",
+         "registryId": "gregtech:gt.integrated_circuit",
+         "meta": 1,
+         "amount": 1,
+         "displayName": "Programmed Circuit",
+         "modId": "gregtech",
+         "consumed": false
+        }
+       ],
+       "itemOutputs": [
+        {
+         "kind": "item",
+         "id": "afsu:alc",
+         "registryId": "AFSU:ALC",
+         "meta": 0,
+         "amount": 1,
+         "displayName": "AFB",
+         "modId": "AFSU"
+        }
+       ],
+       "fluidInputs": [],
+       "fluidOutputs": [],
+       "nonConsumedInputs": [],
+       "runtimeCalculation": {
+        "sourceKind": "gregtech-overclock-calculator",
+        "sourceClass": "gregtech.api.util.OverclockCalculator",
+        "recipeMap": "Assembler",
+        "status": "computed",
+        "oracleEligible": true,
+        "strict": true,
+        "generatedAt": "2026-10-23T10:02:05.671Z",
+        "variantFormat": "tierIndex,durationTicks,eut[,profile,configKey]",
+        "compactVariants": [
+         [
+          4,
+          2400,
+          1920
+         ],
+         [
+          5,
+          1200,
+          7680
+         ],
+         [
+          6,
+          600,
+          30720
+         ],
+         [
+          7,
+          300,
+          122880
+         ],
+         [
+          8,
+          150,
+          491520
+         ],
+         [
+          9,
+          75,
+          1966080
+         ],
+         [
+          10,
+          37,
+          7864320
+         ],
+         [
+          11,
+          18,
+          31457280
+         ],
+         [
+          12,
+          9,
+          125829120
+         ],
+         [
+          13,
+          4,
+          503316480
+         ],
+         [
+          14,
+          1,
+          8646911284551352000
+         ]
+        ]
+       }
+      },
+      {
+       "id": "2e6bfdbd4a864d04",
+       "enabled": true,
+       "durationTicks": 200,
+       "eut": 64,
+       "specialValue": 0,
+       "itemInputs": [
+        {
+         "kind": "item",
+         "id": "awwayoftime:blankslate",
+         "registryId": "AWWayofTime:blankSlate",
+         "meta": 0,
+         "amount": 4,
+         "displayName": "Blank Slate",
+         "modId": "AWWayofTime"
+        },
+        {
+         "kind": "item",
+         "id": "awwayoftime:weakbloodorb",
+         "registryId": "AWWayofTime:weakBloodOrb",
+         "meta": 0,
+         "amount": 1,
+         "displayName": "Weak Blood Orb",
+         "modId": "AWWayofTime",
+         "consumed": false
+        }
+       ],
+       "itemOutputs": [
+        {
+         "kind": "item",
+         "id": "awwayoftime:alchemicalwizardrybloodrune",
+         "registryId": "AWWayofTime:AlchemicalWizardrybloodRune",
+         "meta": 0,
+         "amount": 1,
+         "displayName": "Blood Rune",
+         "modId": "AWWayofTime"
+        }
+       ],
+       "fluidInputs": [
+        {
+         "kind": "fluid",
+         "id": "wet.concrete",
+         "amount": 1152,
+         "displayName": "Wet Concrete"
+        }
+       ],
+       "fluidOutputs": [],
+       "nonConsumedInputs": [],
+       "runtimeCalculation": {
+        "sourceKind": "gregtech-overclock-calculator",
+        "sourceClass": "gregtech.api.util.OverclockCalculator",
+        "recipeMap": "Assembler",
+        "status": "computed",
+        "oracleEligible": true,
+        "strict": true,
+        "generatedAt": "2026-10-23T10:02:05.671Z",
+        "variantFormat": "tierIndex,durationTicks,eut[,profile,configKey]",
+        "compactVariants": [
+         [
+          2,
+          200,
+          64
+         ],
+         [
+          3,
+          100,
+          256
+         ],
+         [
+          4,
+          50,
+          1024
+         ],
+         [
+          5,
+          25,
+          4096
+         ],
+         [
+          6,
+          12,
+          16384
+         ],
+         [
+          7,
+          6,
+          65536
+         ],
+         [
+          8,
+          3,
+          262144
+         ],
+         [
+          9,
+          1,
+          1048576
+         ],
+         [
+          10,
+          1,
+          4194304
+         ],
+         [
+          11,
+          1,
+          16777216
+         ],
+         [
+          12,
+          1,
+          67108864
+         ],
+         [
+          13,
+          1,
+          268435456
+         ],
+         [
+          14,
+          1,
+          4611686018427388000
+         ]
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "id": "gt.recipe.fluidcanner",
+     "name": "Fluid Canner",
+     "sourceClass": "gregtech.api.recipe.RecipeMap",
+     "catalysts": [
+      {
+       "resource": {
+        "kind": "item",
+        "id": "gregtech:gt.blockmachines@11180",
+        "registryId": "gregtech:gt.blockmachines",
+        "meta": 11180,
+        "amount": 1,
+        "displayName": "Elite Fluid Canner",
+        "modId": "gregtech",
+        "tooltip": [
+         "Elite Fluid Canner",
+         "Puts Fluids into and out of Containers",
+         "Machine Type: Fluid Canner",
+         "Voltage IN: 32,768 (LuV)",
+         "Capacity: 2,097,152 EU"
+        ]
+       },
+       "priority": 0,
+       "sourceClass": "gregtech.api.metatileentity.implementations.MTEBasicMachineWithRecipe",
+       "multiblock": false
+      },
+      {
+       "resource": {
+        "kind": "item",
+        "id": "gregtech:gt.blockmachines@11181",
+        "registryId": "gregtech:gt.blockmachines",
+        "meta": 11181,
+        "amount": 1,
+        "displayName": "Elite Fluid Canner II",
+        "modId": "gregtech",
+        "tooltip": [
+         "Elite Fluid Canner II",
+         "Puts Fluids into and out of Containers",
+         "Machine Type: Fluid Canner",
+         "Voltage IN: 131,072 (ZPM)",
+         "Capacity: 8,388,608 EU"
+        ]
+       },
+       "priority": 0,
+       "sourceClass": "gregtech.api.metatileentity.implementations.MTEBasicMachineWithRecipe",
+       "multiblock": false
+      }
+     ],
+     "recipes": [
+      {
+       "id": "b1362ff84597afc1",
+       "enabled": true,
+       "durationTicks": 16,
+       "eut": 1,
+       "specialValue": 0,
+       "itemInputs": [
+        {
+         "kind": "item",
+         "id": "ic2:itemcellempty",
+         "registryId": "IC2:itemCellEmpty",
+         "meta": 0,
+         "amount": 1,
+         "displayName": "Empty Cell",
+         "modId": "IC2"
+        }
+       ],
+       "itemOutputs": [
+        {
+         "kind": "item",
+         "id": "ic2:itemcellempty@10",
+         "registryId": "IC2:itemCellEmpty",
+         "meta": 10,
+         "amount": 1,
+         "displayName": "Hot Coolant Cell",
+         "modId": "IC2"
+        }
+       ],
+       "fluidInputs": [
+        {
+         "kind": "fluid",
+         "id": "ic2hotcoolant",
+         "amount": 1000,
+         "displayName": "IC2 Hot Coolant"
+        }
+       ],
+       "fluidOutputs": [],
+       "nonConsumedInputs": [],
+       "runtimeCalculation": {
+        "sourceKind": "gregtech-overclock-calculator",
+        "sourceClass": "gregtech.api.util.OverclockCalculator",
+        "recipeMap": "Fluid Canner",
+        "status": "computed",
+        "oracleEligible": true,
+        "strict": true,
+        "generatedAt": "2026-10-23T10:02:07.929Z",
+        "variantFormat": "tierIndex,durationTicks,eut[,profile,configKey]",
+        "compactVariants": [
+         [
+          0,
+          16,
+          1
+         ],
+         [
+          1,
+          16,
+          1
+         ],
+         [
+          2,
+          8,
+          4
+         ],
+         [
+          3,
+          4,
+          16
+         ],
+         [
+          4,
+          2,
+          64
+         ],
+         [
+          5,
+          1,
+          256
+         ],
+         [
+          6,
+          1,
+          1024
+         ],
+         [
+          7,
+          1,
+          4096
+         ],
+         [
+          8,
+          1,
+          16384
+         ],
+         [
+          9,
+          1,
+          65536
+         ],
+         [
+          10,
+          1,
+          262144
+         ],
+         [
+          11,
+          1,
+          1048576
+         ],
+         [
+          12,
+          1,
+          4194304
+         ],
+         [
+          13,
+          1,
+          16777216
+         ],
+         [
+          14,
+          1,
+          72057594037927940
+         ]
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "id": "gtpp.recipe.multimixer",
+     "name": "Multiblock Mixer",
+     "sourceClass": "gregtech.api.recipe.RecipeMap",
+     "catalysts": [
+      {
+       "resource": {
+        "kind": "item",
+        "id": "gregtech:gt.blockmachines@31084",
+        "registryId": "gregtech:gt.blockmachines",
+        "meta": 31084,
+        "amount": 1,
+        "displayName": "Steam Blender",
+        "modId": "gregtech",
+        "tooltip": [
+         "Steam Blender",
+         "Machine Type: Mixer",
+         "8 Parallels",
+         "125% Speed",
+         "62.5% Steam Usage",
+         "High Pressure Doubles Speed and Steam Usage",
+         "-----------------------------------------",
+         "Hold [LSHIFT] to display structure guidelines",
+         "Added by: EvgenWarGold"
+        ]
+       },
+       "priority": 0,
+       "sourceClass": "gtPlusPlus.xmod.gregtech.common.tileentities.machines.multi.processing.steam.MTESteamMixer",
+       "multiblock": true
+      }
+     ],
+     "recipes": [
+      {
+       "id": "af167d288b5d01c3",
+       "enabled": true,
+       "durationTicks": 60,
+       "eut": 31457280,
+       "specialValue": 0,
+       "itemInputs": [
+        {
+         "kind": "item",
+         "id": "gregtech:gt.blockmetal5@2",
+         "registryId": "gregtech:gt.blockmetal5",
+         "meta": 2,
+         "amount": 64,
+         "displayName": "Block of Neutronium",
+         "modId": "gregtech"
+        },
+        {
+         "kind": "item",
+         "id": "avaritia:resource_block",
+         "registryId": "Avaritia:Resource_Block",
+         "meta": 0,
+         "amount": 64,
+         "displayName": "Cosmic Neutronium Block",
+         "modId": "Avaritia"
+        },
+        {
+         "kind": "item",
+         "id": "universalsingularities:universal.vanilla.singularity@2",
+         "registryId": "universalsingularities:universal.vanilla.singularity",
+         "meta": 2,
+         "amount": 1,
+         "displayName": "Diamond Singularity",
+         "modId": "universalsingularities"
+        }
+       ],
+       "itemOutputs": [
+        {
+         "kind": "item",
+         "id": "avaritia:resource@8",
+         "registryId": "Avaritia:Resource",
+         "meta": 8,
+         "amount": 1,
+         "displayName": "Star Fuel",
+         "modId": "Avaritia"
+        }
+       ],
+       "fluidInputs": [
+        {
+         "kind": "fluid",
+         "id": "naquadah based liquid fuel mkv",
+         "amount": 1000,
+         "displayName": "Naquadah Based Liquid Fuel MkV"
+        },
+        {
+         "kind": "fluid",
+         "id": "exciteddtec",
+         "amount": 128000,
+         "displayName": "Excited Dimensionally Transcendent Exotic Catalyst"
+        }
+       ],
+       "fluidOutputs": [],
+       "nonConsumedInputs": [],
+       "runtimeCalculation": {
+        "sourceKind": "gregtech-overclock-calculator",
+        "sourceClass": "gregtech.api.util.OverclockCalculator",
+        "recipeMap": "Multiblock Mixer",
+        "status": "computed",
+        "oracleEligible": true,
+        "strict": true,
+        "generatedAt": "2026-10-23T10:02:11.801Z",
+        "variantFormat": "tierIndex,durationTicks,eut[,profile,configKey]",
+        "compactVariants": [
+         [
+          11,
+          60,
+          31457280
+         ],
+         [
+          12,
+          30,
+          125829120
+         ],
+         [
+          13,
+          15,
+          503316480
+         ],
+         [
+          14,
+          1,
+          8646911284551352000
+         ]
+        ]
+       }
+      },
+      {
+       "id": "6d9d6cbc7fba753d",
+       "enabled": true,
+       "durationTicks": 300,
+       "eut": 120,
+       "specialValue": 0,
+       "itemInputs": [
+        {
+         "kind": "item",
+         "id": "botany:misc@7",
+         "registryId": "Botany:misc",
+         "meta": 7,
+         "amount": 1,
+         "displayName": "Weedkiller",
+         "modId": "Botany"
+        },
+        {
+         "kind": "item",
+         "id": "harvestcraft:seaweeditem",
+         "registryId": "harvestcraft:seaweedItem",
+         "meta": 0,
+         "amount": 32,
+         "displayName": "Seaweed",
+         "modId": "harvestcraft"
+        },
+        {
+         "kind": "item",
+         "id": "gregtech:gt.metaitem.01@2817",
+         "registryId": "gregtech:gt.metaitem.01",
+         "meta": 2817,
+         "amount": 1,
+         "displayName": "Salt",
+         "modId": "gregtech",
+         "alternatives": [
+          {
+           "kind": "item",
+           "id": "gregtech:gt.metaitem.01@2817",
+           "registryId": "gregtech:gt.metaitem.01",
+           "meta": 2817,
+           "amount": 1,
+           "displayName": "Salt",
+           "modId": "gregtech"
+          },
+          {
+           "kind": "item",
+           "id": "harvestcraft:saltitem",
+           "registryId": "harvestcraft:saltItem",
+           "meta": 0,
+           "amount": 1,
+           "displayName": "Salt",
+           "modId": "harvestcraft"
+          }
+         ]
+        }
+       ],
+       "itemOutputs": [
+        {
+         "kind": "item",
+         "id": "biomesoplenty:coral1@11",
+         "registryId": "BiomesOPlenty:coral1",
+         "meta": 11,
+         "amount": 32,
+         "displayName": "Kelp",
+         "modId": "BiomesOPlenty"
+        }
+       ],
+       "fluidInputs": [
+        {
+         "kind": "fluid",
+         "id": "weedex9000",
+         "amount": 100,
+         "displayName": "Weed-EX 9000"
+        }
+       ],
+       "fluidOutputs": [],
+       "nonConsumedInputs": [],
+       "runtimeCalculation": {
+        "sourceKind": "gregtech-overclock-calculator",
+        "sourceClass": "gregtech.api.util.OverclockCalculator",
+        "recipeMap": "Multiblock Mixer",
+        "status": "computed",
+        "oracleEligible": true,
+        "strict": true,
+        "generatedAt": "2026-10-23T10:02:11.801Z",
+        "variantFormat": "tierIndex,durationTicks,eut[,profile,configKey]",
+        "compactVariants": [
+         [
+          2,
+          300,
+          120
+         ],
+         [
+          3,
+          150,
+          480
+         ],
+         [
+          4,
+          75,
+          1920
+         ],
+         [
+          5,
+          37,
+          7680
+         ],
+         [
+          6,
+          18,
+          30720
+         ],
+         [
+          7,
+          9,
+          122880
+         ],
+         [
+          8,
+          4,
+          491520
+         ],
+         [
+          9,
+          2,
+          1966080
+         ],
+         [
+          10,
+          1,
+          7864320
+         ],
+         [
+          11,
+          1,
+          31457280
+         ],
+         [
+          12,
+          1,
+          125829120
+         ],
+         [
+          13,
+          1,
+          503316480
+         ],
+         [
+          14,
+          1,
+          8646911284551352000
+         ]
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "id": "gtpp.recipe.cokeoven",
+     "name": "Coke Oven",
+     "sourceClass": "gregtech.api.recipe.RecipeMap",
+     "catalysts": [
+      {
+       "resource": {
+        "kind": "item",
+        "id": "gregtech:gt.blockmachines@791",
+        "registryId": "gregtech:gt.blockmachines",
+        "meta": 791,
+        "amount": 1,
+        "displayName": "Industrial Coke Oven",
+        "modId": "gregtech",
+        "tooltip": [
+         "Industrial Coke Oven",
+         "Machine Type: Coke Oven, ICO",
+         "Processes Logs and Coal into Charcoal and Coal Coke.",
+         "18 Parallels with Heat Resistant Casings",
+         "30 Parallels with Heat Proof Casings",
+         "-4% EU Usage per Voltage Tier",
+         "80 Pollution per second",
+         "-----------------------------------------",
+         "Hold [LSHIFT] to display structure guidelines"
+        ]
+       },
+       "priority": 0,
+       "sourceClass": "gtPlusPlus.xmod.gregtech.common.tileentities.machines.multi.processing.MTEIndustrialCokeOven",
+       "multiblock": true
+      }
+     ],
+     "recipes": [
+      {
+       "id": "2d34459828ada480",
+       "enabled": true,
+       "durationTicks": 2048,
+       "eut": 64,
+       "specialValue": 0,
+       "itemInputs": [
+        {
+         "kind": "item",
+         "id": "gregtech:gt.integrated_circuit@1",
+         "registryId": "gregtech:gt.integrated_circuit",
+         "meta": 1,
+         "amount": 1,
+         "displayName": "Programmed Circuit",
+         "modId": "gregtech",
+         "consumed": false
+        },
+        {
+         "kind": "item",
+         "id": "minecraft:coal_block",
+         "registryId": "minecraft:coal_block",
+         "meta": 0,
+         "amount": 8,
+         "displayName": "Block of Coal",
+         "modId": "minecraft",
+         "alternatives": [
+          {
+           "kind": "item",
+           "id": "minecraft:coal_block",
+           "registryId": "minecraft:coal_block",
+           "meta": 0,
+           "amount": 8,
+           "displayName": "Block of Coal",
+           "modId": "minecraft"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@14",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 14,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Red Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@9",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 9,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Cyan Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@3",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 3,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Light Blue Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@5",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 5,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Lime Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@4",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 4,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Yellow Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@8",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 8,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Light Gray Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@1",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 1,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Orange Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@15",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 15,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Black Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@6",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 6,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Pink Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@11",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 11,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Blue Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 0,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (White Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@12",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 12,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Brown Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@7",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 7,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Gray Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@2",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 2,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Magenta Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@10",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 10,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Purple Frequency)",
+           "modId": "ExtraUtilities"
+          },
+          {
+           "kind": "item",
+           "id": "extrautilities:color_blockcoal@13",
+           "registryId": "ExtraUtilities:color_blockCoal",
+           "meta": 13,
+           "amount": 8,
+           "displayName": "Colored Block of Coal (Green Frequency)",
+           "modId": "ExtraUtilities"
+          }
+         ]
+        }
+       ],
+       "itemOutputs": [
+        {
+         "kind": "item",
+         "id": "railcraft:cube",
+         "registryId": "Railcraft:cube",
+         "meta": 0,
+         "amount": 8,
+         "displayName": "Block of Coal Coke",
+         "modId": "Railcraft"
+        }
+       ],
+       "fluidInputs": [],
+       "fluidOutputs": [
+        {
+         "kind": "fluid",
+         "id": "creosote",
+         "amount": 32000,
+         "displayName": "Creosote Oil"
+        }
+       ],
+       "nonConsumedInputs": [],
+       "runtimeCalculation": {
+        "sourceKind": "gregtech-overclock-calculator",
+        "sourceClass": "gregtech.api.util.OverclockCalculator",
+        "recipeMap": "Coke Oven",
+        "status": "computed",
+        "oracleEligible": true,
+        "strict": true,
+        "generatedAt": "2026-10-23T10:02:11.666Z",
+        "variantFormat": "tierIndex,durationTicks,eut[,profile,configKey]",
+        "compactVariants": [
+         [
+          2,
+          2048,
+          64
+         ],
+         [
+          3,
+          1024,
+          256
+         ],
+         [
+          4,
+          512,
+          1024
+         ],
+         [
+          5,
+          256,
+          4096
+         ],
+         [
+          6,
+          128,
+          16384
+         ],
+         [
+          7,
+          64,
+          65536
+         ],
+         [
+          8,
+          32,
+          262144
+         ],
+         [
+          9,
+          16,
+          1048576
+         ],
+         [
+          10,
+          8,
+          4194304
+         ],
+         [
+          11,
+          4,
+          16777216
+         ],
+         [
+          12,
+          2,
+          67108864
+         ],
+         [
+          13,
+          1,
+          268435456
+         ],
+         [
+          14,
+          1,
+          4611686018427388000
+         ]
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "id": "gt.recipe.thermalgeneratorfuel",
+     "name": "Thermal Generator Fuels",
+     "sourceClass": "gregtech.api.recipe.RecipeMap",
+     "catalysts": [
+      {
+       "resource": {
+        "kind": "item",
+        "id": "gregtech:gt.blockmachines@830",
+        "registryId": "gregtech:gt.blockmachines",
+        "meta": 830,
+        "amount": 1,
+        "displayName": "Basic Geothermal Engine",
+        "modId": "gregtech",
+        "tooltip": [
+         "Basic Geothermal Engine",
+         "Requires Pahoehoe Lava or Normal Lava as Fuel",
+         "Generates power at 72% Efficiency per tick",
+         "Causes 100 Pollution per second",
+         "Added by: Alkalus - [GT++]",
+         "Voltage OUT: 2,048 (EV)",
+         "Capacity: 164,352 EU"
+        ]
+       },
+       "priority": 0,
+       "sourceClass": "gtPlusPlus.xmod.gregtech.common.tileentities.generators.MTEGeothermalGenerator",
+       "multiblock": false
+      }
+     ],
+     "recipes": [
+      {
+       "id": "3f5fe678ae4e9f93",
+       "enabled": true,
+       "durationTicks": 1,
+       "eut": 0,
+       "specialValue": 32,
+       "itemInputs": [
+        {
+         "kind": "item",
+         "id": "minecraft:lava_bucket",
+         "registryId": "minecraft:lava_bucket",
+         "meta": 0,
+         "amount": 1,
+         "displayName": "Lava Bucket",
+         "modId": "minecraft"
+        }
+       ],
+       "itemOutputs": [],
+       "fluidInputs": [],
+       "fluidOutputs": [],
+       "nonConsumedInputs": [],
+       "runtimeCalculation": {
+        "sourceKind": "gregtech-overclock-calculator",
+        "sourceClass": "gregtech.api.util.OverclockCalculator",
+        "recipeMap": "Thermal Generator Fuels",
+        "status": "computed",
+        "oracleEligible": true,
+        "strict": true,
+        "generatedAt": "2026-10-23T10:02:11.557Z",
+        "variantFormat": "tierIndex,durationTicks,eut[,profile,configKey]",
+        "compactVariants": [
+         [
+          0,
+          1,
+          0
+         ],
+         [
+          1,
+          1,
+          0
+         ],
+         [
+          2,
+          1,
+          0
+         ],
+         [
+          3,
+          1,
+          0
+         ],
+         [
+          4,
+          1,
+          0
+         ],
+         [
+          5,
+          1,
+          0
+         ],
+         [
+          6,
+          1,
+          0
+         ],
+         [
+          7,
+          1,
+          0
+         ],
+         [
+          8,
+          1,
+          0
+         ],
+         [
+          9,
+          1,
+          0
+         ],
+         [
+          10,
+          1,
+          0
+         ],
+         [
+          11,
+          1,
+          0
+         ],
+         [
+          12,
+          1,
+          0
+         ],
+         [
+          13,
+          1,
+          0
+         ],
+         [
+          14,
+          1,
+          0
+         ]
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "id": "gtpp.recipe.thermalgeneratorfuel",
+     "name": "Thermal Boiler",
+     "sourceClass": "gregtech.api.recipe.RecipeMap",
+     "catalysts": [
+      {
+       "resource": {
+        "kind": "item",
+        "id": "gregtech:gt.blockmachines@875",
+        "registryId": "gregtech:gt.blockmachines",
+        "meta": 875,
+        "amount": 1,
+        "displayName": "Thermal Boiler",
+        "modId": "gregtech",
+        "tooltip": [
+         "Thermal Boiler",
+         "Machine Type: Boiler",
+         "Converts Water & Heat into Steam",
+         "Filters raw materials from lava",
+         "Explodes if water is not supplied",
+         "Consult user manual for more information",
+         "700 Pollution per second",
+         "-----------------------------------------",
+         "Hold [LSHIFT] to display structure guidelines"
+        ]
+       },
+       "priority": 0,
+       "sourceClass": "gtPlusPlus.xmod.gregtech.common.tileentities.machines.multi.production.MTEThermalBoiler",
+       "multiblock": true
+      }
+     ],
+     "recipes": [
+      {
+       "id": "49da3d6d93136964",
+       "enabled": true,
+       "durationTicks": 20,
+       "eut": 0,
+       "specialValue": 0,
+       "itemInputs": [],
+       "itemOutputs": [
+        {
+         "kind": "item",
+         "id": "gregtech:gt.metaitem.01@11035",
+         "registryId": "gregtech:gt.metaitem.01",
+         "meta": 11035,
+         "amount": 1,
+         "displayName": "Copper Ingot",
+         "modId": "gregtech",
+         "chance": 0.0444
+        },
+        {
+         "kind": "item",
+         "id": "gregtech:gt.metaitem.01@11057",
+         "registryId": "gregtech:gt.metaitem.01",
+         "meta": 11057,
+         "amount": 1,
+         "displayName": "Tin Ingot",
+         "modId": "gregtech",
+         "chance": 0.0222
+        },
+        {
+         "kind": "item",
+         "id": "minecraft:gold_ingot",
+         "registryId": "minecraft:gold_ingot",
+         "meta": 0,
+         "amount": 1,
+         "displayName": "Gold Ingot",
+         "modId": "minecraft",
+         "chance": 0.0056
+        },
+        {
+         "kind": "item",
+         "id": "gregtech:gt.metaitem.01@11054",
+         "registryId": "gregtech:gt.metaitem.01",
+         "meta": 11054,
+         "amount": 1,
+         "displayName": "Silver Ingot",
+         "modId": "gregtech",
+         "chance": 0.0056
+        },
+        {
+         "kind": "item",
+         "id": "gregtech:gt.metaitem.01@11080",
+         "registryId": "gregtech:gt.metaitem.01",
+         "meta": 11080,
+         "amount": 1,
+         "displayName": "Tantalum Ingot",
+         "modId": "gregtech",
+         "chance": 0.0056
+        },
+        {
+         "kind": "item",
+         "id": "gregtech:gt.metaitem.01@2841",
+         "registryId": "gregtech:gt.metaitem.01",
+         "meta": 2841,
+         "amount": 1,
+         "displayName": "Tungstate Dust",
+         "modId": "gregtech",
+         "chance": 0.0125
+        },
+        {
+         "kind": "item",
+         "id": "minecraft:obsidian",
+         "registryId": "minecraft:obsidian",
+         "meta": 0,
+         "amount": 1,
+         "displayName": "Obsidian",
+         "modId": "minecraft",
+         "chance": 0.1
+        }
+       ],
+       "fluidInputs": [
+        {
+         "kind": "fluid",
+         "id": "lava",
+         "amount": 1000,
+         "displayName": "Lava"
+        },
+        {
+         "kind": "fluid",
+         "id": "water",
+         "amount": 100,
+         "displayName": "Water"
+        }
+       ],
+       "fluidOutputs": [
+        {
+         "kind": "fluid",
+         "id": "ic2pahoehoelava",
+         "amount": 1000,
+         "displayName": "Pahoehoe Lava"
+        },
+        {
+         "kind": "fluid",
+         "id": "steam",
+         "amount": 16000,
+         "displayName": "Steam"
+        }
+       ],
+       "nonConsumedInputs": [],
+       "runtimeCalculation": {
+        "sourceKind": "gregtech-overclock-calculator",
+        "sourceClass": "gregtech.api.util.OverclockCalculator",
+        "recipeMap": "Thermal Boiler",
+        "status": "computed",
+        "oracleEligible": true,
+        "strict": true,
+        "generatedAt": "2026-10-23T10:02:11.875Z",
+        "variantFormat": "tierIndex,durationTicks,eut[,profile,configKey]",
+        "compactVariants": [
+         [
+          0,
+          20,
+          0
+         ],
+         [
+          1,
+          20,
+          0
+         ],
+         [
+          2,
+          10,
+          0
+         ],
+         [
+          3,
+          5,
+          0
+         ],
+         [
+          4,
+          2,
+          0
+         ],
+         [
+          5,
+          1,
+          0
+         ],
+         [
+          6,
+          1,
+          0
+         ],
+         [
+          7,
+          1,
+          0
+         ],
+         [
+          8,
+          1,
+          0
+         ],
+         [
+          9,
+          1,
+          0
+         ],
+         [
+          10,
+          1,
+          0
+         ],
+         [
+          11,
+          1,
+          0
+         ],
+         [
+          12,
+          1,
+          0
+         ],
+         [
+          13,
+          1,
+          0
+         ],
+         [
+          14,
+          1,
+          0
+         ]
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "id": "gt.recipe.multiblockrockbreaker",
+     "name": "gt.recipe.multiblockrockbreaker",
+     "sourceClass": "gregtech.api.recipe.RecipeMap",
+     "recipes": [
+      {
+       "id": "a8ba6200d400ad9e",
+       "enabled": true,
+       "durationTicks": 16,
+       "eut": 30,
+       "specialValue": 0,
+       "itemInputs": [
+        {
+         "kind": "item",
+         "id": "gregtech:gt.integrated_circuit@4",
+         "registryId": "gregtech:gt.integrated_circuit",
+         "meta": 4,
+         "amount": 1,
+         "displayName": "Programmed Circuit",
+         "modId": "gregtech",
+         "consumed": false
+        },
+        {
+         "kind": "item",
+         "id": "etfuturum:blue_ice",
+         "registryId": "etfuturum:blue_ice",
+         "meta": 0,
+         "amount": 1,
+         "displayName": "Blue Ice",
+         "modId": "etfuturum",
+         "consumed": false
+        },
+        {
+         "kind": "item",
+         "id": "minecraft:soul_sand",
+         "registryId": "minecraft:soul_sand",
+         "meta": 0,
+         "amount": 1,
+         "displayName": "Soul Sand",
+         "modId": "minecraft",
+         "consumed": false
+        }
+       ],
+       "itemOutputs": [
+        {
+         "kind": "item",
+         "id": "botania:stone@1",
+         "registryId": "Botania:stone",
+         "meta": 1,
+         "amount": 1,
+         "displayName": "Basalt",
+         "modId": "Botania"
+        }
+       ],
+       "fluidInputs": [],
+       "fluidOutputs": [],
+       "nonConsumedInputs": [],
+       "runtimeCalculation": {
+        "sourceKind": "gregtech-overclock-calculator",
+        "sourceClass": "gregtech.api.util.OverclockCalculator",
+        "recipeMap": "gt.recipe.multiblockrockbreaker",
+        "status": "computed",
+        "oracleEligible": true,
+        "strict": true,
+        "generatedAt": "2026-10-23T10:02:11.052Z",
+        "variantFormat": "tierIndex,durationTicks,eut[,profile,configKey]",
+        "compactVariants": [
+         [
+          1,
+          16,
+          30
+         ],
+         [
+          2,
+          8,
+          120
+         ],
+         [
+          3,
+          4,
+          480
+         ],
+         [
+          4,
+          2,
+          1920
+         ],
+         [
+          5,
+          1,
+          7680
+         ],
+         [
+          6,
+          1,
+          30720
+         ],
+         [
+          7,
+          1,
+          122880
+         ],
+         [
+          8,
+          1,
+          491520
+         ],
+         [
+          9,
+          1,
+          1966080
+         ],
+         [
+          10,
+          1,
+          7864320
+         ],
+         [
+          11,
+          1,
+          31457280
+         ],
+         [
+          12,
+          1,
+          125829120
+         ],
+         [
+          13,
+          1,
+          503316480
+         ],
+         [
+          14,
+          1,
+          2161727821137838000
+         ]
+        ]
+       }
+      }
+     ],
+     "catalysts": []
+    }
+   ]
+  },
+  {
+   "id": "crafting",
+   "recipes": [
+    {
+     "id": "360301effbcdab81",
+     "className": "ganymedes01.etfuturum.recipes.crafting.ShapedEtFuturumRecipe",
+     "type": "shaped",
+     "width": 0,
+     "height": 0,
+     "inputs": [
+      {
+       "kind": "item",
+       "id": "minecraft:stone",
+       "registryId": "minecraft:stone",
+       "meta": 0,
+       "amount": 1,
+       "displayName": "Stone",
+       "modId": "minecraft",
+       "slotIndex": 0
+      },
+      {
+       "kind": "item",
+       "id": "minecraft:stone",
+       "registryId": "minecraft:stone",
+       "meta": 0,
+       "amount": 1,
+       "displayName": "Stone",
+       "modId": "minecraft",
+       "slotIndex": 3
+      },
+      {
+       "kind": "item",
+       "id": "minecraft:stone",
+       "registryId": "minecraft:stone",
+       "meta": 0,
+       "amount": 1,
+       "displayName": "Stone",
+       "modId": "minecraft",
+       "slotIndex": 4
+      },
+      {
+       "kind": "item",
+       "id": "minecraft:stone",
+       "registryId": "minecraft:stone",
+       "meta": 0,
+       "amount": 1,
+       "displayName": "Stone",
+       "modId": "minecraft",
+       "slotIndex": 6
+      },
+      {
+       "kind": "item",
+       "id": "minecraft:stone",
+       "registryId": "minecraft:stone",
+       "meta": 0,
+       "amount": 1,
+       "displayName": "Stone",
+       "modId": "minecraft",
+       "slotIndex": 7
+      },
+      {
+       "kind": "item",
+       "id": "minecraft:stone",
+       "registryId": "minecraft:stone",
+       "meta": 0,
+       "amount": 1,
+       "displayName": "Stone",
+       "modId": "minecraft",
+       "slotIndex": 8
+      }
+     ],
+     "output": {
+      "kind": "item",
+      "id": "etfuturum:stone_stairs",
+      "registryId": "etfuturum:stone_stairs",
+      "meta": 0,
+      "amount": 4,
+      "displayName": "Stone Stairs",
+      "modId": "etfuturum"
+     }
+    }
+   ]
+  },
+  {
+   "id": "smelting",
+   "recipes": [
+    {
+     "id": "126c26527e45ba29",
+     "input": {
+      "kind": "item",
+      "id": "harvestcraft:calamarirawitem@32767",
+      "registryId": "harvestcraft:calamarirawItem",
+      "meta": 32767,
+      "amount": 1,
+      "displayName": "Raw Calamari",
+      "modId": "harvestcraft"
+     },
+     "output": {
+      "kind": "item",
+      "id": "harvestcraft:calamaricookeditem",
+      "registryId": "harvestcraft:calamaricookedItem",
+      "meta": 0,
+      "amount": 1,
+      "displayName": "Cooked Calamari",
+      "modId": "harvestcraft"
+     }
+    }
+   ]
+  },
+  {
+   "id": "thaumcraft",
+   "recipes": [
+    {
+     "id": "cc4ff8e00d210563",
+     "sourceList": "craftingRecipes",
+     "type": "crucible",
+     "className": "thaumcraft.api.crafting.CrucibleRecipe",
+     "research": "ALCHEMICALDUPLICATION",
+     "output": {
+      "kind": "item",
+      "id": "minecraft:glowstone_dust",
+      "registryId": "minecraft:glowstone_dust",
+      "meta": 0,
+      "amount": 2,
+      "displayName": "Glowstone Dust",
+      "modId": "minecraft"
+     },
+     "catalyst": {
+      "kind": "oreDictionary",
+      "names": [
+       "dustGlowstone"
+      ]
+     },
+     "aspects": [
+      {
+       "kind": "aspect",
+       "id": "thaumcraft:aspect:lux",
+       "tag": "lux",
+       "amount": 3,
+       "displayName": "Lux",
+       "iconPath": "/nei/thaumcraft/aspects/lux.png",
+       "dominantColor": "#fff663"
+      },
+      {
+       "kind": "aspect",
+       "id": "thaumcraft:aspect:sensus",
+       "tag": "sensus",
+       "amount": 1,
+       "displayName": "Sensus",
+       "iconPath": "/nei/thaumcraft/aspects/sensus.png",
+       "dominantColor": "#0fd9ff"
+      }
+     ],
+     "durationTicks": 20
+    }
+   ]
+  },
+  {
+   "id": "forestryBees",
+   "species": [
+    {
+     "uid": "magicbees.speciesAMLightning",
+     "name": "Fulguric",
+     "className": "forestry.apiculture.genetics.alleles.AlleleBeeSpecies",
+     "input": {
+      "kind": "item",
+      "id": "forestry:beeprincessge",
+      "registryId": "Forestry:beePrincessGE",
+      "meta": 0,
+      "amount": 1,
+      "displayName": "Fulguric Princess",
+      "modId": "Forestry",
+      "nbt": "{MaxH:10,IsAnalyzed:0b,Genome:{Chromosomes:[0:{Slot:0b,UID0:\"magicbees.speciesAMLightning\",UID1:\"magicbees.speciesAMLightning\"},1:{Slot:1b,UID0:\"magicbees.speedBlinding\",UID1:\"magicbees.speedBlinding\"},2:{Slot:2b,UID0:\"forestry.lifespanShortest\",UID1:\"forestry.lifespanShortest\"},3:{Slot:3b,UID0:\"forestry.fertilityNormal\",UID1:\"forestry.fertilityNormal\"},4:{Slot:4b,UID0:\"forestry.toleranceNone\",UID1:\"forestry.toleranceNone\"},5:{Slot:5b,UID0:\"forestry.boolTrue\",UID1:\"forestry.boolTrue\"},6:{Slot:7b,UID0:\"forestry.toleranceNone\",UID1:\"forestry.toleranceNone\"},7:{Slot:8b,UID0:\"forestry.boolFalse\",UID1:\"forestry.boolFalse\"},8:{Slot:9b,UID0:\"forestry.boolFalse\",UID1:\"forestry.boolFalse\"},9:{Slot:10b,UID0:\"magicbees.flowerflowerArsMagicaPlant\",UID1:\"magicbees.flowerflowerArsMagicaPlant\"},10:{Slot:11b,UID0:\"forestry.floweringSlowest\",UID1:\"forestry.floweringSlowest\"},11:{Slot:12b,UID0:\"forestry.territoryLargest\",UID1:\"forestry.territoryLargest\"},12:{Slot:13b,UID0:\"extrabees.effect.lightning\",UID1:\"extrabees.effect.lightning\"}]},Health:10}"
+     },
+     "products": [
+      {
+       "resource": {
+        "kind": "item",
+        "id": "magicbees:comb@22",
+        "registryId": "MagicBees:comb",
+        "meta": 22,
+        "amount": 1,
+        "displayName": "Potent Comb",
+        "modId": "MagicBees"
+       },
+       "rawChance": 0.11999999731779099,
+       "chance": 0.11999999731779099
+      }
+     ],
+     "cycleTicks": 550
+    }
+   ]
+  },
+  {
+   "id": "ic2Crops",
+   "crops": [
+    {
+     "className": "gtPlusPlus.xmod.bartcrops.crops.Crop_Hemp",
+     "id": "104",
+     "name": "Hemp",
+     "owner": "Gtplusplus",
+     "tier": 2,
+     "attributes": [
+      {
+       "kind": "oreDictionary",
+       "names": [
+        "Green"
+       ]
+      },
+      {
+       "kind": "oreDictionary",
+       "names": [
+        "Soil"
+       ]
+      },
+      {
+       "kind": "oreDictionary",
+       "names": [
+        "Orange"
+       ]
+      }
+     ],
+     "displayItem": {
+      "kind": "item",
+      "id": "minecraft:string",
+      "registryId": "minecraft:string",
+      "meta": 0,
+      "amount": 1,
+      "displayName": "String",
+      "modId": "minecraft"
+     },
+     "variants": [
+      {
+       "id": "23-31-0",
+       "label": "GTNH crop manager baseline 23/31/0",
+       "growth": 23,
+       "gain": 31,
+       "resistance": 0,
+       "seed": {
+        "kind": "item",
+        "id": "ic2:itemcropseed",
+        "registryId": "IC2:itemCropSeed",
+        "meta": 0,
+        "amount": 1,
+        "displayName": "Hemp Seeds",
+        "modId": "IC2",
+        "nbt": "{growth:23b,scan:4b,gain:31b,name:\"Hemp\",owner:\"Gtplusplus\",resistance:0b}"
+       },
+       "drops": [
+        {
+         "resource": {
+          "kind": "item",
+          "id": "minecraft:string",
+          "registryId": "minecraft:string",
+          "meta": 0,
+          "amount": 2.894156,
+          "displayName": "String",
+          "modId": "minecraft"
+         }
+        },
+        {
+         "resource": {
+          "kind": "item",
+          "id": "minecraft:string",
+          "registryId": "minecraft:string",
+          "meta": 0,
+          "amount": 1.518641,
+          "displayName": "String",
+          "modId": "minecraft"
+         }
+        },
+        {
+         "resource": {
+          "kind": "item",
+          "id": "minecraft:string",
+          "registryId": "minecraft:string",
+          "meta": 0,
+          "amount": 2.336757,
+          "displayName": "String",
+          "modId": "minecraft"
+         }
+        }
+       ],
+       "durationTicks": 94208
+      },
+      {
+       "id": "31-31-31",
+       "label": "Perfect stats 31/31/31",
+       "growth": 31,
+       "gain": 31,
+       "resistance": 31,
+       "seed": {
+        "kind": "item",
+        "id": "ic2:itemcropseed",
+        "registryId": "IC2:itemCropSeed",
+        "meta": 0,
+        "amount": 1,
+        "displayName": "Hemp Seeds",
+        "modId": "IC2",
+        "nbt": "{growth:31b,scan:4b,gain:31b,name:\"Hemp\",owner:\"Gtplusplus\",resistance:31b}"
+       },
+       "drops": [
+        {
+         "resource": {
+          "kind": "item",
+          "id": "minecraft:string",
+          "registryId": "minecraft:string",
+          "meta": 0,
+          "amount": 3.163864,
+          "displayName": "String",
+          "modId": "minecraft"
+         }
+        },
+        {
+         "resource": {
+          "kind": "item",
+          "id": "minecraft:string",
+          "registryId": "minecraft:string",
+          "meta": 0,
+          "amount": 1.437728,
+          "displayName": "String",
+          "modId": "minecraft"
+         }
+        },
+        {
+         "resource": {
+          "kind": "item",
+          "id": "minecraft:string",
+          "registryId": "minecraft:string",
+          "meta": 0,
+          "amount": 2.318777,
+          "displayName": "String",
+          "modId": "minecraft"
+         }
+        }
+       ],
+       "durationTicks": 94208
+      },
+      {
+       "id": "1-1-1",
+       "label": "Low stats 1/1/1",
+       "growth": 1,
+       "gain": 1,
+       "resistance": 1,
+       "seed": {
+        "kind": "item",
+        "id": "ic2:itemcropseed",
+        "registryId": "IC2:itemCropSeed",
+        "meta": 0,
+        "amount": 1,
+        "displayName": "Hemp Seeds",
+        "modId": "IC2",
+        "nbt": "{growth:1b,scan:4b,gain:1b,name:\"Hemp\",owner:\"Gtplusplus\",resistance:1b}"
+       },
+       "drops": [
+        {
+         "resource": {
+          "kind": "item",
+          "id": "minecraft:string",
+          "registryId": "minecraft:string",
+          "meta": 0,
+          "amount": 0.563321,
+          "displayName": "String",
+          "modId": "minecraft"
+         }
+        },
+        {
+         "resource": {
+          "kind": "item",
+          "id": "minecraft:string",
+          "registryId": "minecraft:string",
+          "meta": 0,
+          "amount": 0.357299,
+          "displayName": "String",
+          "modId": "minecraft"
+         }
+        },
+        {
+         "resource": {
+          "kind": "item",
+          "id": "minecraft:string",
+          "registryId": "minecraft:string",
+          "meta": 0,
+          "amount": 1.012152,
+          "displayName": "String",
+          "modId": "minecraft"
+         }
+        }
+       ],
+       "durationTicks": 94208
+      }
+     ],
+     "seed": {
+      "kind": "item",
+      "id": "ic2:itemcropseed",
+      "registryId": "IC2:itemCropSeed",
+      "meta": 0,
+      "amount": 1,
+      "displayName": "Hemp Seeds",
+      "modId": "IC2",
+      "nbt": "{growth:23b,scan:4b,gain:31b,name:\"Hemp\",owner:\"Gtplusplus\",resistance:0b}"
+     },
+     "drops": [
+      {
+       "resource": {
+        "kind": "item",
+        "id": "minecraft:string",
+        "registryId": "minecraft:string",
+        "meta": 0,
+        "amount": 2.894156,
+        "displayName": "String",
+        "modId": "minecraft"
+       }
+      },
+      {
+       "resource": {
+        "kind": "item",
+        "id": "minecraft:string",
+        "registryId": "minecraft:string",
+        "meta": 0,
+        "amount": 1.518641,
+        "displayName": "String",
+        "modId": "minecraft"
+       }
+      },
+      {
+       "resource": {
+        "kind": "item",
+        "id": "minecraft:string",
+        "registryId": "minecraft:string",
+        "meta": 0,
+        "amount": 2.336757,
+        "displayName": "String",
+        "modId": "minecraft"
+       }
+      }
+     ],
+     "durationTicks": 94208,
+     "notes": "Crop-card drops exported from the live IC2/CropsNH API using a simulated server crop tile."
+    }
+   ]
+  },
+  {
+   "id": "cropsNhCrops",
+   "crops": []
+  },
+  {
+   "id": "mining",
+   "notes": "GregTech worldgen exported through the NEI ore plugin helpers bundled in GT5-Unofficial. A vein's weight is its relative pick weight among the veins that can generate in a dimension; dimChances are the plugin's computed per-dimension probabilities keyed by dimension abbreviation. Density and size describe how the picked vein fills chunks. Small ores generate independently at amountPerChunk tries per chunk, and undergroundFluids list per-dimension chunk deposits.",
+   "dimensions": [
+    {
+     "id": "Overworld",
+     "name": "Overworld",
+     "fullName": "Overworld",
+     "abbr": "Ow"
+    },
+    {
+     "id": "Twilight",
+     "name": "Twilight",
+     "fullName": "Twilight Forest",
+     "abbr": "TF"
+    },
+    {
+     "id": "GalaxySpace_Io",
+     "name": "Io",
+     "fullName": "Io",
+     "abbr": "Io"
+    },
+    {
+     "id": "GalaxySpace_Venus",
+     "name": "Venus",
+     "fullName": "Venus",
+     "abbr": "Ve"
+    },
+    {
+     "id": "GalaxySpace_TcetiE",
+     "name": "TcetiE",
+     "fullName": "TcetiE",
+     "abbr": "TE"
+    }
+   ],
+   "veins": [
+    {
+     "id": "ore.mix.apatite",
+     "name": "Apatite",
+     "weight": 60,
+     "density": 2,
+     "size": 16,
+     "heightRange": "40-60",
+     "dims": [
+      "Overworld",
+      "TcetiE",
+      "Twilight Forest"
+     ],
+     "dimAbbrs": [
+      "Ow",
+      "TE",
+      "TF"
+     ],
+     "dimChances": {
+      "Ow": 0.039473684210526314,
+      "TE": 0.06586169045005488,
+      "TF": 0.05698005698005698
+     },
+     "ores": [
+      {
+       "role": "primary",
+       "material": {
+        "id": 530,
+        "internalName": "Apatite",
+        "name": "Apatite"
+       },
+       "ore": {
+        "kind": "item",
+        "id": "gregtech:gt.blockores@530",
+        "registryId": "gregtech:gt.blockores",
+        "meta": 530,
+        "amount": 1,
+        "displayName": "Apatite Ore",
+        "modId": "gregtech"
+       }
+      },
+      {
+       "role": "secondary",
+       "material": {
+        "id": 530,
+        "internalName": "Apatite",
+        "name": "Apatite"
+       },
+       "ore": {
+        "kind": "item",
+        "id": "gregtech:gt.blockores@530",
+        "registryId": "gregtech:gt.blockores",
+        "meta": 530,
+        "amount": 1,
+        "displayName": "Apatite Ore",
+        "modId": "gregtech"
+       }
+      },
+      {
+       "role": "between",
+       "material": {
+        "id": 534,
+        "internalName": "TricalciumPhosphate",
+        "name": "Tricalcium Phosphate"
+       },
+       "ore": {
+        "kind": "item",
+        "id": "gregtech:gt.blockores@534",
+        "registryId": "gregtech:gt.blockores",
+        "meta": 534,
+        "amount": 1,
+        "displayName": "Tricalcium Phosphate Ore",
+        "modId": "gregtech"
+       }
+      },
+      {
+       "role": "sporadic",
+       "material": {
+        "id": 607,
+        "internalName": "Pyrochlore",
+        "name": "Pyrochlore"
+       },
+       "ore": {
+        "kind": "item",
+        "id": "gregtech:gt.blockores@607",
+        "registryId": "gregtech:gt.blockores",
+        "meta": 607,
+        "amount": 1,
+        "displayName": "Pyrochlore Ore",
+        "modId": "gregtech"
+       }
+      }
+     ]
+    }
+   ],
+   "smallOres": [
+    {
+     "id": "ore.small.amber",
+     "material": {
+      "id": 514,
+      "internalName": "Amber",
+      "name": "Amber"
+     },
+     "heightRange": "5-35",
+     "amountPerChunk": 2,
+     "dims": [
+      "Twilight Forest"
+     ],
+     "drops": [
+      {
+       "kind": "item",
+       "id": "gregtech:gt.metaitem.02@30514",
+       "registryId": "gregtech:gt.metaitem.02",
+       "meta": 30514,
+       "amount": 1,
+       "displayName": "Exquisite Amber",
+       "modId": "gregtech"
+      },
+      {
+       "kind": "item",
+       "id": "gregtech:gt.metaitem.02@29514",
+       "registryId": "gregtech:gt.metaitem.02",
+       "meta": 29514,
+       "amount": 1,
+       "displayName": "Flawless Amber",
+       "modId": "gregtech"
+      },
+      {
+       "kind": "item",
+       "id": "thaumcraft:itemresource@6",
+       "registryId": "Thaumcraft:ItemResource",
+       "meta": 6,
+       "amount": 1,
+       "displayName": "Amber",
+       "modId": "Thaumcraft"
+      },
+      {
+       "kind": "item",
+       "id": "gregtech:gt.metaitem.02@28514",
+       "registryId": "gregtech:gt.metaitem.02",
+       "meta": 28514,
+       "amount": 1,
+       "displayName": "Flawed Amber",
+       "modId": "gregtech"
+      },
+      {
+       "kind": "item",
+       "id": "gregtech:gt.metaitem.01@5514",
+       "registryId": "gregtech:gt.metaitem.01",
+       "meta": 5514,
+       "amount": 1,
+       "displayName": "Crushed Amber Ore",
+       "modId": "gregtech"
+      },
+      {
+       "kind": "item",
+       "id": "gregtech:gt.metaitem.02@27514",
+       "registryId": "gregtech:gt.metaitem.02",
+       "meta": 27514,
+       "amount": 1,
+       "displayName": "Chipped Amber",
+       "modId": "gregtech"
+      },
+      {
+       "kind": "item",
+       "id": "gregtech:gt.metaitem.01@3514",
+       "registryId": "gregtech:gt.metaitem.01",
+       "meta": 3514,
+       "amount": 1,
+       "displayName": "Impure Pile of Amber Dust",
+       "modId": "gregtech"
+      }
+     ]
+    }
+   ],
+   "undergroundFluids": [
+    {
+     "fluidId": "carbondioxide",
+     "fluid": {
+      "kind": "fluid",
+      "id": "carbondioxide",
+      "amount": 1,
+      "displayName": "Carbon Dioxide"
+     },
+     "deposits": [
+      {
+       "dim": "Io",
+       "chance": 4444,
+       "minAmount": 0,
+       "maxAmount": 750
+      },
+      {
+       "dim": "Ve",
+       "chance": 3333,
+       "minAmount": 0,
+       "maxAmount": 1500
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

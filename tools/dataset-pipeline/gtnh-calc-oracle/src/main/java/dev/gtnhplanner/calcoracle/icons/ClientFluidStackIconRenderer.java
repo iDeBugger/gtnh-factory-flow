@@ -6,13 +6,10 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
-
-import javax.imageio.ImageIO;
 
 import dev.gtnhplanner.calcoracle.GtnhCalcOracleMod;
 
@@ -66,18 +63,20 @@ public final class ClientFluidStackIconRenderer {
         }
     }
 
-    public static void exportQueuedIconsThen(Runnable afterExport) {
+    /** Runs after the item icons, on the same cache. */
+    static void exportQueuedIconsThen(IconCache cache, Runnable afterExport) {
         Minecraft minecraft = Minecraft.getMinecraft();
         if (minecraft == null) {
             afterExport.run();
             return;
         }
 
-        minecraft.displayGuiScreen(new QueuedFluidIconExportScreen(afterExport));
+        minecraft.displayGuiScreen(new QueuedFluidIconExportScreen(cache, afterExport));
     }
 
     private static final class QueuedFluidIconExportScreen extends GuiScreen {
 
+        private final IconCache cache;
         private final Runnable afterExport;
         private final Iterator<Map.Entry<String, FluidStack>> iterator;
         private final int total;
@@ -87,7 +86,8 @@ public final class ClientFluidStackIconRenderer {
         private int skipped;
         private boolean finished;
 
-        private QueuedFluidIconExportScreen(Runnable afterExport) {
+        private QueuedFluidIconExportScreen(IconCache cache, Runnable afterExport) {
+            this.cache = cache;
             this.afterExport = afterExport;
             this.iterator = PENDING_FLUIDS_BY_KEY.entrySet().iterator();
             this.total = PENDING_FLUIDS_BY_KEY.size();
@@ -114,7 +114,7 @@ public final class ClientFluidStackIconRenderer {
                 processed++;
                 batch++;
                 try {
-                    MaterializedFluidIconResult result = materializeIcon(entry.getKey(), entry.getValue());
+                    MaterializedFluidIconResult result = materializeIcon(entry.getKey(), entry.getValue(), cache);
                     if (result == MaterializedFluidIconResult.RENDERED) {
                         rendered++;
                     } else if (result == MaterializedFluidIconResult.CACHE_HIT) {
@@ -168,7 +168,8 @@ public final class ClientFluidStackIconRenderer {
         SKIPPED
     }
 
-    private static MaterializedFluidIconResult materializeIcon(String key, FluidStack stack) throws Exception {
+    private static MaterializedFluidIconResult materializeIcon(String key, FluidStack stack, IconCache cache)
+        throws Exception {
         String filename = ICONS_BY_FLUID_KEY.get(key);
         if (filename == null || filename.length() == 0) {
             return MaterializedFluidIconResult.SKIPPED;
@@ -184,17 +185,13 @@ public final class ClientFluidStackIconRenderer {
             return MaterializedFluidIconResult.SKIPPED;
         }
 
+        // A fluid's cache file only has to decode: fluids are drawn without the item checks.
         File cachedFile = ClientItemStackIconRenderer.cacheFileForKey("fluid:" + key, filename);
-        if (cachedFile.isFile()) {
-            Files.copy(cachedFile.toPath(), outFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            IconColors.record(filename, ImageIO.read(outFile));
-            return MaterializedFluidIconResult.CACHE_HIT;
-        }
         File legacyCachedFile = ClientItemStackIconRenderer.cacheFile(filename);
-        if (legacyCachedFile.isFile()) {
-            Files.copy(legacyCachedFile.toPath(), outFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            Files.copy(legacyCachedFile.toPath(), cachedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            IconColors.record(filename, ImageIO.read(outFile));
+        if (
+            (cache.has(cachedFile.getName()) || cache.has(legacyCachedFile.getName()))
+                && cache.materialize(filename, cachedFile, legacyCachedFile, outFile, false)
+        ) {
             return MaterializedFluidIconResult.CACHE_HIT;
         }
 
@@ -204,13 +201,11 @@ public final class ClientFluidStackIconRenderer {
             return MaterializedFluidIconResult.SKIPPED;
         }
 
-        IconColors.record(filename, image);
-        ImageIO.write(image, "png", outFile);
-        File cacheDir = ClientItemStackIconRenderer.cacheDir();
-        if (!cacheDir.exists()) {
-            cacheDir.mkdirs();
-        }
-        ImageIO.write(image, "png", cachedFile);
+        String colour = IconColors.dominantOpaqueColor(image);
+        IconColors.recordColour(filename, colour);
+        byte[] png = ClientItemStackIconRenderer.encodePng(image);
+        Files.write(outFile.toPath(), png);
+        cache.store(cachedFile, png, colour);
         return MaterializedFluidIconResult.RENDERED;
     }
 

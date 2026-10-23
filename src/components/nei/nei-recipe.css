@@ -385,6 +385,13 @@
 .nrw-card-named {
   flex: 0 1 auto;
 }
+/* A crop card's growing need, the width of the card under its rails. */
+.nrw-card-note {
+  grid-column: 1 / -1;
+  margin: 2px 0 4px;
+  padding: 0 2px;
+  color: var(--cc-muted);
+}
 /* A name too long for the head at 8 px takes two lines of it. */
 .nrw .cc-name[data-wrap] {
   height: 20px;

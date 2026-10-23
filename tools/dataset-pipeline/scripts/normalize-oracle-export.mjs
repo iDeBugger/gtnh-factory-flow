@@ -25,6 +25,9 @@ import {
 const inputPath = process.argv[2];
 const outputPath = process.argv[3];
 const GT_VOLTAGE_NAMES = VOLTAGE_TIER_NAMES;
+// Arcane recipes with an unreadable grid cell an export may carry (listed in the
+// oracle report) before it is refused; see arcaneGridGaps.
+const ARCANE_UNRESOLVED_GRID_CEILING = 2;
 if (!inputPath || !outputPath) {
   throw new Error("Usage: normalize-oracle-export.mjs <oracle.json> <recipes.json>");
 }
@@ -95,10 +98,20 @@ const recipeSignatures = new Set();
 // Coke Oven. Left to their localized names they fold into one misleading
 // "Coke Oven" family, so the ICO map wears its machine's name instead.
 const RECIPE_MAP_DISPLAY_NAMES = new Map([["gtpp.recipe.cokeoven", "Industrial Coke Oven"]]);
+// Maps the game exports with no translation, their name left as their id
+// (2.8.1's Boldarnator map). Used only when the export's name is the bare id,
+// so a translated name always wins.
+const UNTRANSLATED_RECIPE_MAP_NAMES = new Map([["gt.recipe.multiblockrockbreaker", "Boldarnator"]]);
 // GT++ merged into GregTech in 2.9.0-RC-1: its gtpp.recipe.* maps are
-// gt.recipe.* there, and the Industrial Coke Oven's map took the machine's
-// name. Ids use the newest name, so a recipe keeps its id across that merge.
-const RECIPE_MAP_ID_RENAMES = new Map([["gtpp.recipe.cokeoven", "gt.recipe.industrialcokeoven"]]);
+// gt.recipe.* there. Two took other names: the Industrial Coke Oven's map took
+// the machine's name, and the Thermal Boiler's (GT++ called it
+// thermalgeneratorfuel, the id of GT's own geothermal fuel map) became
+// thermalboiler. Ids use the newest name, so a recipe keeps its id across that
+// merge and never shares an id prefix with another machine's map.
+const RECIPE_MAP_ID_RENAMES = new Map([
+  ["gtpp.recipe.cokeoven", "gt.recipe.industrialcokeoven"],
+  ["gtpp.recipe.thermalgeneratorfuel", "gt.recipe.thermalboiler"],
+]);
 
 // Fields, at any depth, a rebuild may change without the recipe changing:
 // names, icons, tooltips (some mods randomize them), stamps and the version.
@@ -179,8 +192,11 @@ console.log(`Wrote ${dataset.recipes.length} oracle recipe(s) to ${outputPath}.`
 
 function normalizeGregtech(domain) {
   for (const recipeMap of domain?.recipeMaps ?? []) {
+    const exportedName = text(recipeMap.name, recipeMap.id ?? "GregTech");
     const machineType =
-      RECIPE_MAP_DISPLAY_NAMES.get(recipeMap.id) ?? text(recipeMap.name, recipeMap.id ?? "GregTech");
+      RECIPE_MAP_DISPLAY_NAMES.get(recipeMap.id) ??
+      (exportedName === recipeMap.id ? UNTRANSLATED_RECIPE_MAP_NAMES.get(recipeMap.id) : undefined) ??
+      exportedName;
     recipeMaps.add(machineType);
     setRecipeMapIcon(machineType, recipeMap.icon);
     if (recipeMap.id === "gt.recipe.furnace") {
@@ -575,10 +591,11 @@ function normalizeThaumcraft(domain) {
       contentId: {
         idParts: ["thaumcraft", rawRecipe.type],
         key: recipeContentKey(machineType, {
-          inputs,
+          inputs: normalizedRecipe.keyInputs ?? inputs,
           outputs,
           durationTicks,
-          positional: rawRecipe.type === "arcane",
+          // An arcane layout from NEI has no grid cells, so its slot positions stand in.
+          positional: !normalizedRecipe.keyInputs && rawRecipe.type === "arcane",
         }),
       },
       name: `${machineType}: ${resourceLabel(output)}`,
@@ -662,9 +679,10 @@ function normalizeThaumcraftRecipe(rawRecipe) {
   };
   const addInput = (rawResource, slot, slotIndex) => {
     const resource = resourceAmount(rawResource, { neiSlot: slot });
-    if (!resource) return;
+    if (!resource) return undefined;
     inputs.push(resource);
     addSlot("input", resource.kind, slotIndex, slot);
+    return resource;
   };
 
   const outputSlot =
@@ -720,14 +738,32 @@ function normalizeThaumcraftRecipe(rawRecipe) {
     (rawRecipe.aspects ?? []).forEach((entry, index) => addInput(entry, aspectSlots[index], index));
   } else if (type === "arcane") {
     const componentSlots = thaumcraftArcaneComponentSlots();
+    // A shaped ingredient sits in its exported 3x3 cell (`gridSlot`), which also goes into the
+    // recipe's id: the same items in another pattern are another recipe. Shapeless ingredients
+    // and aspects fill their slots in order and carry no position.
     const rawInputs = [
       rawRecipe.centralInput,
       rawRecipe.catalyst,
       ...(rawRecipe.components ?? []),
     ].filter(Boolean);
-    rawInputs.forEach((entry, index) => addInput(entry, componentSlots[index], index));
+    const keyInputs = [];
+    rawInputs.forEach((entry, index) => {
+      const gridSlot = Number.isInteger(entry.gridSlot) ? entry.gridSlot : undefined;
+      const resource = addInput(entry, componentSlots[gridSlot ?? index], gridSlot ?? index);
+      if (resource) keyInputs.push(gridSlot === undefined ? resource : { ...resource, gridSlot });
+    });
     const aspectSlots = thaumcraftArcaneAspectSlots((rawRecipe.aspects ?? []).length);
-    (rawRecipe.aspects ?? []).forEach((entry, index) => addInput(entry, aspectSlots[index], index));
+    (rawRecipe.aspects ?? []).forEach((entry, index) => {
+      const resource = addInput(entry, aspectSlots[index], index);
+      if (resource) keyInputs.push(resource);
+    });
+    return {
+      output,
+      outputs: output ? [output] : [],
+      inputs,
+      keyInputs,
+      nei: slots.length > 0 ? { slots, progressBars } : undefined,
+    };
   } else {
     [rawRecipe.centralInput, rawRecipe.catalyst, ...(rawRecipe.components ?? [])].forEach(
       (entry, index) => addInput(entry, compactCraftingInputPositions(6)[index], index),
@@ -1116,84 +1152,220 @@ function voltageTierIndexForEuT(eut) {
 }
 
 function normalizeIc2Crops(domain) {
-  const machineType = "IC2 Crop";
-  for (const crop of domain?.crops ?? []) {
-    const baseVariant =
-      (crop.variants ?? []).find((variant) => variant.id === "23-31-0") ??
-      (crop.variants ?? []).find((variant) => variant.id === "31-31-31") ??
-      (crop.variants ?? [])[0] ??
-      crop;
-    const outputs = cropOutputs(baseVariant.drops ?? crop.drops);
-    if (outputs.length === 0) {
-      continue;
-    }
-    const input = cropSeedInput(crop);
-    const durationTicks = positiveInt(baseVariant.durationTicks ?? crop.durationTicks, 200);
-
-    recipeMaps.add(machineType);
-    setRecipeMapIcon(
-      machineType,
-      crop.seed ?? crop.displayItem ?? baseVariant.drops?.[0]?.resource,
+  for (const rawCrop of domain?.crops ?? []) {
+    const crop = { ...rawCrop, name: ic2CropDisplayName(rawCrop) };
+    const variants = crop.variants ?? [];
+    const conditional = variants.filter((variant) => ic2CropConditions(variant).length > 0);
+    addIc2CropRecipe(
+      crop,
+      variants.filter((variant) => ic2CropConditions(variant).length === 0),
+      conditional.length === 0 ? crop : undefined,
     );
-    addRecipe({
-      id: recipeId("ic2-crop", crop.owner, crop.id ?? crop.name ?? hashRecipe(crop)),
-      name: `${machineType}: ${text(crop.name, crop.id ?? "Crop")}`,
-      kind: "crop_produce",
-      category: "ic2-crop",
-      machineType,
-      minimumTier: "NONE",
-      durationTicks,
-      eut: 0,
-      inputs: input ? [input] : [],
-      outputs,
-      runtimeCalculation: {
-        sourceKind: "passive-crop",
-        sourceClass: crop.className,
-        recipeMap: machineType,
-        status: "computed",
-        oracleEligible: true,
-        strict: true,
-        generatedAt,
-        variants: cropRuntimeVariants(crop, outputs, durationTicks),
-        warnings: [
-          "Crop drops are calculated by live IC2/CropsNH crop-card methods with a simulated server crop tile. Environment-specific support blocks are represented by separate controls when the crop exposes enough data.",
-        ],
-      },
-      notes: [
-        "Exported by the GTNH calculation oracle from IC2/CropsNH crop-card APIs.",
-        crop.owner ? `Owner: ${crop.owner}` : undefined,
-        crop.tier !== undefined ? `Tier: ${crop.tier}` : undefined,
-      ]
-        .filter(Boolean)
-        .join(" "),
-      source: {
-        datasetVersionId,
-        recipeMap: machineType,
-        exporter: "gtnh-oracle",
-        rawRecipeId: `${crop.owner ?? "unknown"}:${crop.id ?? crop.name ?? hashRecipe(crop)}`,
-      },
-      metadata: {
-        cropOwner: crop.owner,
-        cropId: crop.id,
-        cropTier: crop.tier,
-      },
-      nei: {
-        slots: [
-          { side: "input", kind: "item", slotIndex: 0, x: 34, y: 35 },
-          ...outputs.map((output, index) => ({
-            side: "output",
-            kind: output.kind,
-            slotIndex: index,
-            x: 124 + index * 18,
-            y: 35,
-          })),
-        ],
-        progressBars: [
-          { x: 78, y: 35, width: 24, height: 17, direction: "right", texture: "arrow" },
-        ],
-      },
-    });
+    // A crop that drops something else on a block under it or with a redstone signal
+    // (Stonelillies, Magic Metal Berry, Red Wheat) is one recipe per such condition.
+    const groups = new Map();
+    for (const variant of conditional) {
+      const key = ic2CropConditions(variant)
+        .map((condition) => text(condition.key, ""))
+        .join("|");
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key).push(variant);
+    }
+    for (const group of groups.values()) {
+      addIc2CropRecipe(crop, group, undefined, ic2CropConditions(group[0]));
+    }
   }
+}
+
+// IC2's own crop cards export their unlocalized name (`ic2.crop.redwheat`). The game names
+// the crop's seed bag "<name> Seeds" with the translated name, so that is the display name;
+// a crop with no seed bag takes a name made from the key's last part.
+function ic2CropDisplayName(crop) {
+  const name = text(crop.name, undefined);
+  if (!name || !/^[\w-]+(\.[\w-]+)+$/.test(name)) {
+    return name;
+  }
+  const seedName = text(crop.seed?.displayName, "");
+  const fromSeed = seedName.match(/^(.+) Seeds$/)?.[1]?.trim();
+  if (fromSeed && !fromSeed.includes(".")) {
+    return fromSeed;
+  }
+  return name
+    .slice(name.lastIndexOf(".") + 1)
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function ic2CropConditions(variant) {
+  return Array.isArray(variant?.conditions) ? variant.conditions.filter((condition) => condition?.key) : [];
+}
+
+// The sentence follows CropsNH's growth requirements ("Needs ... under it"), which the
+// app reads as a block under the crop.
+function ic2CropRequirement(conditions) {
+  const blocks = conditions.filter((condition) => condition.kind !== "redstoneSignal");
+  const parts = [];
+  if (blocks.length > 0) {
+    parts.push(`Needs ${ic2CropBlockNames(blocks)} under it`);
+  }
+  if (conditions.some((condition) => condition.kind === "redstoneSignal")) {
+    parts.push("Needs a redstone signal");
+  }
+  return parts.join(". ");
+}
+
+function ic2CropBlockNames(blocks) {
+  return [...new Set(blocks.map(ic2CropBlockName))].join(" or ");
+}
+
+// A player-facing name for a block under a crop, never a registry id. The oracle names a
+// block after its item; a block with no item of its own (the skull block) comes back as its
+// registry id, so it takes the name of the item with that id, else a name made from the id.
+function ic2CropBlockName(condition) {
+  const id = text(condition.block ?? condition.oreDict, text(condition.key, ""));
+  const name = text(condition.displayName, "");
+  if (name && name !== id && !/^[\w.-]+:[\w./-]+$/.test(name)) {
+    return name;
+  }
+  if (condition.block) {
+    const item = resources.get(`item:${canonicalResourceId("item", condition.block)}`);
+    if (item?.displayName && !item.displayName.includes(":")) {
+      return item.displayName;
+    }
+  }
+  const bare = id.slice(id.indexOf(":") + 1);
+  return bare
+    .replace(/^(block|stone|ore)(?=[A-Z])/, "$1 ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_.]+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function ic2CropConditionLabel(conditions) {
+  const blocks = conditions.filter((condition) => condition.kind !== "redstoneSignal");
+  const parts = [];
+  if (blocks.length > 0) {
+    parts.push(`on ${ic2CropBlockNames(blocks)}`);
+  }
+  if (conditions.some((condition) => condition.kind === "redstoneSignal")) {
+    parts.push("with a redstone signal");
+  }
+  return parts.join(", ");
+}
+
+function ic2CropConditionSlug(conditions) {
+  return conditions
+    .map((condition) =>
+      condition.kind === "redstoneSignal"
+        ? "redstone-signal"
+        : `under-${text(condition.oreDict ?? condition.block, condition.key)}`,
+    )
+    .join("-or-");
+}
+
+function addIc2CropRecipe(crop, variants, fallback, conditions = []) {
+  const machineType = "IC2 Crop";
+  const baseVariant =
+    variants.find((variant) => variant.id === "23-31-0") ??
+    variants.find((variant) => variant.id === "31-31-31") ??
+    variants[0] ??
+    fallback;
+  if (!baseVariant) {
+    return;
+  }
+  const outputs = cropOutputs(baseVariant.drops ?? fallback?.drops);
+  if (outputs.length === 0) {
+    return;
+  }
+  const input = cropSeedInput(crop);
+  const durationTicks = positiveInt(baseVariant.durationTicks ?? fallback?.durationTicks, 200);
+  const cropKey = crop.id ?? crop.name ?? hashRecipe(crop);
+  const conditionSlug = conditions.length > 0 ? ic2CropConditionSlug(conditions) : undefined;
+  const requirement = conditions.length > 0 ? ic2CropRequirement(conditions) : undefined;
+
+  recipeMaps.add(machineType);
+  setRecipeMapIcon(
+    machineType,
+    crop.seed ?? crop.displayItem ?? baseVariant.drops?.[0]?.resource,
+  );
+  addRecipe({
+    id: recipeId("ic2-crop", crop.owner, cropKey, conditionSlug),
+    name: `${machineType}: ${text(crop.name, crop.id ?? "Crop")}${
+      conditions.length > 0 ? ` (${ic2CropConditionLabel(conditions)})` : ""
+    }`,
+    kind: "crop_produce",
+    category: "ic2-crop",
+    machineType,
+    minimumTier: "NONE",
+    durationTicks,
+    eut: 0,
+    inputs: input ? [input] : [],
+    outputs,
+    runtimeCalculation: {
+      sourceKind: "passive-crop",
+      sourceClass: crop.className,
+      recipeMap: machineType,
+      status: "computed",
+      oracleEligible: true,
+      strict: true,
+      generatedAt,
+      variants: cropRuntimeVariants(variants, outputs, durationTicks),
+      warnings: [
+        "Crop drops are calculated by live IC2/CropsNH crop-card methods with a simulated server crop tile. Environment-specific support blocks are represented by separate controls when the crop exposes enough data.",
+      ],
+    },
+    notes: [
+      "Exported by the GTNH calculation oracle from IC2/CropsNH crop-card APIs.",
+      crop.owner ? `Owner: ${crop.owner}` : undefined,
+      crop.tier !== undefined ? `Tier: ${crop.tier}` : undefined,
+      requirement ? `${requirement}.` : undefined,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    source: {
+      datasetVersionId,
+      recipeMap: machineType,
+      exporter: "gtnh-oracle",
+      rawRecipeId: `${crop.owner ?? "unknown"}:${cropKey}${conditionSlug ? `:${conditionSlug}` : ""}`,
+    },
+    metadata: removeUndefined({
+      cropOwner: crop.owner,
+      cropId: crop.id,
+      cropTier: crop.tier,
+      requirements: requirement ? [requirement] : undefined,
+      cropConditions:
+        conditions.length > 0
+          ? conditions.map((condition) =>
+              removeUndefined({
+                kind: text(condition.kind, undefined),
+                oreDict: text(condition.oreDict, undefined),
+                block: text(condition.block, undefined),
+                displayName:
+                  condition.kind === "redstoneSignal" ? text(condition.displayName, undefined) : ic2CropBlockName(condition),
+              }),
+            )
+          : undefined,
+    }),
+    nei: {
+      slots: [
+        { side: "input", kind: "item", slotIndex: 0, x: 34, y: 35 },
+        ...outputs.map((output, index) => ({
+          side: "output",
+          kind: output.kind,
+          slotIndex: index,
+          x: 124 + index * 18,
+          y: 35,
+        })),
+      ],
+      progressBars: [
+        { x: 78, y: 35, width: 24, height: 17, direction: "right", texture: "arrow" },
+      ],
+    },
+  });
 }
 
 // CropsNH steady-state reference point: perfect 31/31/31 seeds on a fully
@@ -1672,8 +1844,8 @@ function cropOutputs(rawDrops) {
     .filter(Boolean);
 }
 
-function cropRuntimeVariants(crop, fallbackOutputs, fallbackDurationTicks) {
-  const variants = (crop.variants ?? [])
+function cropRuntimeVariants(cropVariants, fallbackOutputs, fallbackDurationTicks) {
+  const variants = cropVariants
     .map((variant) => {
       const outputs = cropOutputs(variant.drops);
       if (outputs.length === 0) {
@@ -2174,7 +2346,7 @@ async function writeOracleReport(dataset) {
       recipe.runtimeCalculation?.status === "computed" &&
       recipe.runtimeCalculation?.variants?.length > 0,
   );
-  const failures = runtimeRecipes
+  const runtimeFailures = runtimeRecipes
     .filter((recipe) => !computedRuntimeRecipes.includes(recipe))
     .map((recipe) => ({
       id: recipe.id,
@@ -2182,6 +2354,20 @@ async function writeOracleReport(dataset) {
       machineType: recipe.machineType,
       status: recipe.runtimeCalculation?.status ?? "missing",
     }));
+  const gridGaps = arcaneGridGaps(raw);
+  const exportGaps = [
+    ...spargeExportGaps(raw),
+    ...(gridGaps.length > ARCANE_UNRESOLVED_GRID_CEILING
+      ? [
+          {
+            status: "arcane-grid-cells-unresolved",
+            recipeCount: gridGaps.length,
+            message: `Export gap: ${gridGaps.length} arcane recipe(s) have grid cells the oracle could not read (at most ${ARCANE_UNRESOLVED_GRID_CEILING} allowed), so they would ship without those ingredients.`,
+          },
+        ]
+      : []),
+  ];
+  const failures = [...runtimeFailures, ...exportGaps];
   const adapterWarnings = (raw.adapters ?? [])
     .filter((adapter) => adapter.status === "partial" || adapter.status === "missing")
     .map((adapter) => ({
@@ -2200,9 +2386,11 @@ async function writeOracleReport(dataset) {
     recipeCount: dataset.recipes.length,
     runtimeEligibleRecipeCount: runtimeRecipes.length,
     runtimeComputedRecipeCount: computedRuntimeRecipes.length,
-    runtimeMissingRecipeCount: failures.length,
+    runtimeMissingRecipeCount: runtimeFailures.length,
     failures,
     adapterWarnings,
+    // Arcane recipes missing a grid cell, each with the cells' class and text.
+    unresolvedArcaneGrids: gridGaps,
     notes:
       "Strict mode fails only for recipes that are exported as oracle-eligible but lack computed runtime variants. Adapter warnings are preserved for coverage tracking.",
   };
@@ -2211,11 +2399,60 @@ async function writeOracleReport(dataset) {
     path.join(outDir, "oracle", "oracle-report.json"),
     `${JSON.stringify(report, null, 2)}\n`,
   );
-  if (oracleStrict && failures.length > 0) {
+  if (exportGaps.length > 0) {
     throw new Error(
-      `Oracle strict mode failed: ${failures.length} oracle-eligible recipe(s) have no computed runtime calculation. See oracle/oracle-report.json.`,
+      exportGaps.map((gap) => gap.message).join("\n") + "\nSee oracle/oracle-report.json.",
     );
   }
+  if (oracleStrict && runtimeFailures.length > 0) {
+    throw new Error(
+      `Oracle strict mode failed: ${runtimeFailures.length} oracle-eligible recipe(s) have no computed runtime calculation. See oracle/oracle-report.json.`,
+    );
+  }
+}
+
+/**
+ * Arcane recipes the oracle exported with grid cells it could not read
+ * (`unresolvedGridInputs`): such a recipe ships short of an ingredient. A few
+ * are listed in the oracle report; more than ARCANE_UNRESOLVED_GRID_CEILING
+ * means the grid reader broke, and the export is refused.
+ */
+function arcaneGridGaps(rawExport) {
+  return (rawExport.domains ?? [])
+    .filter((domain) => domain?.id === "thaumcraft")
+    .flatMap((domain) => domain.recipes ?? [])
+    .filter((recipe) => Number(recipe?.unresolvedGridInputs) > 0)
+    .map((recipe) => ({
+      output: recipe.output?.id,
+      displayName: recipe.output?.displayName,
+      research: recipe.research,
+      className: recipe.className,
+      unresolvedGridInputs: recipe.unresolvedGridInputs,
+      cells: recipe.unresolvedGridCells ?? [],
+    }));
+}
+
+/**
+ * Sparging maps whose recipes came without their rolled outputs. The oracle
+ * exports `spargeFluidOutputs` only for the maps it recognises by name, so a
+ * renamed map loses the returned gas and every byproduct without an error;
+ * such an export is refused rather than published with salt-only cards.
+ */
+function spargeExportGaps(rawExport) {
+  return (rawExport.domains ?? [])
+    .flatMap((domain) => domain?.recipeMaps ?? [])
+    .filter(
+      (recipeMap) =>
+        gameRecipeMapId(recipeMap.id) === "gt.recipe.lftr.sparging" &&
+        (recipeMap.recipes?.length ?? 0) > 0 &&
+        !recipeMap.recipes.some((recipe) => Array.isArray(recipe?.spargeFluidOutputs)),
+    )
+    .map((recipeMap) => ({
+      recipeMapId: recipeMap.id,
+      status: "sparge-byproducts-missing",
+      recipeCount: recipeMap.recipes.length,
+      message: `Export gap: ${recipeMap.recipes.length} recipe(s) in ${recipeMap.id} carry no spargeFluidOutputs, so their returned gas and byproducts would be lost.`,
+    }));
 }
 
 async function stageRenderedIcons(sourceDir, datasetOutDir) {
@@ -2370,7 +2607,14 @@ function recipeId(...parts) {
     .join(":")}`;
 }
 
+// A recipe named by a game identity (a vein, small ore, bee, crop, mob or
+// underground fluid) is that identity: two veins with the same ores in other
+// dimensions are two veins, and only the same identity exported twice folds.
+// Content-keyed recipes reach here without an id and fold by what they do.
 function recipeSignature(recipe) {
+  if (recipe.id !== undefined) {
+    return JSON.stringify({ identity: recipe.id });
+  }
   return JSON.stringify({
     machineType: recipe.machineType,
     inputs: recipe.inputs.map((entry) => [entry.kind, entry.id, entry.amount, entry.consumed]),

@@ -142,6 +142,8 @@ export function scoreRecipeRefCandidate(
     score = EXACT_SCORE;
   } else if (sameInputIds && sameOutputIds) {
     score = 300 + (sameTiming ? 50 : 0) + (sameAmounts ? 25 : 0);
+  } else if (isGridlessArcaneMatch(ref, refInputs, candidate, candidateInputs)) {
+    score = 300 + (sameTiming ? 50 : 0);
   } else {
     const ratio = refKnowsInputs ? overlapRatio(refInputIds, candidateInputIds) : 0;
     score = 100 + Math.round(ratio * 100) + (sameOutputIds ? 20 : 0) + (sameTiming ? 10 : 0);
@@ -154,6 +156,46 @@ export function scoreRecipeRefCandidate(
     score += 2;
   }
   return score;
+}
+
+// Maps holding Thaumcraft arcane workbench recipes: the arcane map, and the generic
+// Thaumcraft map, where arcane subclasses (Automagy's filter copy, Witching Gadgets'
+// photo developing) land.
+const ARCANE_MAPS = new Set(["Thaumcraft Arcane Crafting", "Thaumcraft"]);
+
+/**
+ * Arcane recipes were once exported with their vis cost and no grid: no items, or for a
+ * shapeless recipe one item that was often wrong. Their ids changed when the grid came in,
+ * and no content tier can match a ref missing the items. Such a ref (at most one item, while
+ * the candidate has more) still names its recipe by what it makes and its exact aspect cost.
+ *
+ * This stays on for good: a plan saved against such a dataset can be opened or imported at
+ * any time. A ref's one real item must still be in the candidate's grid; only an old
+ * `choice:` pseudo-item (an ingredient list read as alternatives) is let through unchecked.
+ */
+function isGridlessArcaneMatch(
+  ref: RecipeContentRef,
+  refInputs: RecipeRefSlot[],
+  candidate: RecipeRefCandidate,
+  candidateInputs: RecipeRefSlot[],
+): boolean {
+  if (ref.machineType !== candidate.machineType || !ARCANE_MAPS.has(ref.machineType)) {
+    return false;
+  }
+  const isAspect = (slot: RecipeRefSlot) => slot.kind === "aspect";
+  const refItems = refInputs.filter((slot) => !isAspect(slot));
+  const candidateItems = candidateInputs.filter((slot) => !isAspect(slot));
+  const candidateItemIds = new Set(candidateItems.map(slotKey));
+  return (
+    refItems.length <= 1 &&
+    candidateItems.length > refItems.length &&
+    refItems.every((slot) => slot.id.startsWith("choice:") || candidateItemIds.has(slotKey(slot))) &&
+    sameMultiset(
+      refInputs.filter(isAspect).map(slotAmountKey),
+      candidateInputs.filter(isAspect).map(slotAmountKey),
+    ) &&
+    sameMultiset(ref.outputs.map(slotAmountKey), candidate.outputs.map(slotAmountKey))
+  );
 }
 
 /**

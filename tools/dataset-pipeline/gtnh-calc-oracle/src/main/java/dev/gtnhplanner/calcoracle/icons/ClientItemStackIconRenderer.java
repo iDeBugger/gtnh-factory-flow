@@ -12,7 +12,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -23,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -313,6 +313,11 @@ public final class ClientItemStackIconRenderer {
     private static final class GridBatch {
         private final IconGrid grid = new IconGrid();
         private final List<PendingIcon> pending = new ArrayList<PendingIcon>();
+        private final IconCache cache;
+
+        GridBatch(IconCache cache) {
+            this.cache = cache;
+        }
 
         void add(final String key, ItemStack stack, File outFile, File cachedFile, ThreadPoolExecutor encoder,
             IconTally tally) throws Exception {
@@ -377,7 +382,7 @@ public final class ClientItemStackIconRenderer {
                     @Override
                     public void run() {
                         try {
-                            tally.count(finishIcon(icon.key, icon.pixels, icon.outFile, icon.cachedFile));
+                            tally.count(finishIcon(icon.key, icon.pixels, icon.outFile, icon.cachedFile, cache));
                         } catch (Throwable t) {
                             tally.count(MaterializedIconResult.SKIPPED);
                             markSkipped(icon.key);
@@ -512,14 +517,32 @@ public final class ClientItemStackIconRenderer {
             // Item and fluid icons both render with every animation on its first frame.
             IconAnimationFreezer.freeze();
 
+            // Icons whose cache file failed its check on an encode thread render now.
             int batch = 0;
-            while (batch < ICON_EXPORT_BATCH_SIZE && iterator.hasNext()) {
-                final Map.Entry<String, ItemStack> entry = iterator.next();
-                processed++;
+            for (PendingRender retry; (retry = pass.retries.poll()) != null;) {
                 batch++;
                 try {
+                    pass.batch.add(retry.key, retry.stack, retry.outFile, retry.cachedFile, pass.encoder, pass.tally);
+                } catch (Throwable t) {
+                    pass.tally.count(MaterializedIconResult.SKIPPED);
+                    markSkipped(retry.key);
+                    warnRenderFailure(retry.stack, t);
+                }
+            }
+
+            // A frame draws up to a batch of icons; cache hits draw nothing and go to the encode threads, so a frame
+            // hands over many more of them. Frames are capped at 30 a second on a menu screen.
+            int seen = 0;
+            while (batch < ICON_EXPORT_BATCH_SIZE && seen < ICON_EXPORT_BATCH_SIZE * HITS_PER_DRAW && iterator.hasNext()) {
+                final Map.Entry<String, ItemStack> entry = iterator.next();
+                processed++;
+                seen++;
+                try {
                     MaterializedIconResult result = materializeIcon(entry.getKey(), entry.getValue(), pass);
-                    if (result != MaterializedIconResult.QUEUED) {
+                    if (result == MaterializedIconResult.QUEUED) {
+                        batch++;
+                    } else if (result != MaterializedIconResult.HIT_QUEUED) {
+                        batch++;
                         pass.tally.count(result);
                     }
                 } catch (Throwable t) {
@@ -548,7 +571,8 @@ public final class ClientItemStackIconRenderer {
             // Every frame ends with its icons read back, so nothing waits in the grid across a frame.
             pass.flush();
 
-            if (!iterator.hasNext()) {
+            // The pass ends once every cache hit is written; a hit that fell back to rendering is drawn first.
+            if (!iterator.hasNext() && pass.outstandingHits.get() == 0 && pass.retries.isEmpty()) {
                 finished = true;
                 // The icon map names only icons that were written, so it waits for the encoder to drain.
                 pass.encoder.shutdown();
@@ -569,10 +593,11 @@ public final class ClientItemStackIconRenderer {
                         + pass.tally.skipped.get()
                         + "."
                 );
-                ClientFluidStackIconRenderer.exportQueuedIconsThen(new Runnable() {
+                ClientFluidStackIconRenderer.exportQueuedIconsThen(pass.cache, new Runnable() {
                     @Override
                     public void run() {
                         IconAnimationFreezer.thaw();
+                        pass.cache.close();
                         try {
                             IconColors.write(iconDir());
                         } catch (IOException e) {
@@ -632,7 +657,28 @@ public final class ClientItemStackIconRenderer {
         RENDERED,
         CACHE_HIT,
         SKIPPED,
-        QUEUED
+        /** Drawn into the grid; counted when its encode finishes. */
+        QUEUED,
+        /** Handed to an encode thread as a cache hit; counted there, or rendered after all. */
+        HIT_QUEUED
+    }
+
+    /** Cache hits handed over per icon a frame may draw: a hit costs the render thread a lookup and a hand-off. */
+    private static final int HITS_PER_DRAW = Integer.getInteger("gtnh.oracle.iconHitsPerDraw", 16);
+
+    /** An icon whose cache file failed its check off the render thread, waiting to be drawn after all. */
+    private static final class PendingRender {
+        final String key;
+        final ItemStack stack;
+        final File outFile;
+        final File cachedFile;
+
+        PendingRender(String key, ItemStack stack, File outFile, File cachedFile) {
+            this.key = key;
+            this.stack = stack;
+            this.outFile = outFile;
+            this.cachedFile = cachedFile;
+        }
     }
 
     /**
@@ -643,11 +689,13 @@ public final class ClientItemStackIconRenderer {
     private static final class IconPass {
         final ThreadPoolExecutor encoder = newEncoder();
         final IconTally tally = new IconTally();
-        final GridBatch batch = new GridBatch();
+        final IconCache cache = IconCache.open(cacheDir());
+        final GridBatch batch = new GridBatch(cache);
         final File outDir = iconDir();
         final boolean outDirReady = outDir.exists() || outDir.mkdirs();
         final Set<String> iconNames = listNames(outDir);
-        final Set<String> cacheNames = listNames(cacheDir());
+        final AtomicInteger outstandingHits = new AtomicInteger();
+        final ConcurrentLinkedQueue<PendingRender> retries = new ConcurrentLinkedQueue<PendingRender>();
 
         void flush() {
             batch.flush(encoder, tally);
@@ -682,44 +730,66 @@ public final class ClientItemStackIconRenderer {
             return MaterializedIconResult.SKIPPED;
         }
 
+        long start = System.nanoTime();
         final File cachedFile = cacheFileForKey(key, filename);
-        if (pass.cacheNames.contains(cachedFile.getName())) {
-            if (isUsableCachedIcon(cachedFile)) {
-                Files.copy(cachedFile.toPath(), outFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                pass.iconNames.add(filename);
-                IconColors.record(filename, ImageIO.read(outFile));
-                return MaterializedIconResult.CACHE_HIT;
-            }
-            cachedFile.delete();
-            pass.cacheNames.remove(cachedFile.getName());
-        }
-        File legacyCachedFile = cacheFile(filename);
-        if (pass.cacheNames.contains(legacyCachedFile.getName())) {
-            if (isUsableCachedIcon(legacyCachedFile)) {
-                Files.copy(legacyCachedFile.toPath(), outFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                Files.copy(legacyCachedFile.toPath(), cachedFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                pass.iconNames.add(filename);
-                pass.cacheNames.add(cachedFile.getName());
-                IconColors.record(filename, ImageIO.read(outFile));
-                return MaterializedIconResult.CACHE_HIT;
-            }
-            legacyCachedFile.delete();
-            pass.cacheNames.remove(legacyCachedFile.getName());
-        }
+        final File legacyCachedFile = cacheFile(filename);
+        pass.cache.timings.cacheKey.addAndGet(IconCache.Timings.since(start));
 
         // The name counts as taken once queued, so a second stack with the same file name is skipped as before.
-        pass.batch.add(key, stack, outFile, cachedFile, pass.encoder, pass.tally);
         pass.iconNames.add(filename);
+        if (pass.cache.has(cachedFile.getName()) || pass.cache.has(legacyCachedFile.getName())) {
+            queueCacheHit(key, stack, filename, outFile, cachedFile, legacyCachedFile, pass);
+            pass.cache.timings.renderThread.addAndGet(IconCache.Timings.since(start));
+            return MaterializedIconResult.HIT_QUEUED;
+        }
+
+        pass.batch.add(key, stack, outFile, cachedFile, pass.encoder, pass.tally);
         return MaterializedIconResult.QUEUED;
     }
 
+    /**
+     * A cache hit on an encode thread: the cache writes the icon and its colour. One that fails its check goes back
+     * to the render thread to be drawn. When the pool is full the render thread runs it itself.
+     */
+    private static void queueCacheHit(final String key, final ItemStack stack, final String filename,
+        final File outFile, final File cachedFile, final File legacyCachedFile, final IconPass pass) {
+        pass.outstandingHits.incrementAndGet();
+        try {
+            executeCacheHit(key, stack, filename, outFile, cachedFile, legacyCachedFile, pass);
+        } catch (Throwable t) {
+            // A hit the pool did not take renders instead, so the pass still ends.
+            pass.retries.add(new PendingRender(key, stack, outFile, cachedFile));
+            pass.outstandingHits.decrementAndGet();
+        }
+    }
+
+    private static void executeCacheHit(final String key, final ItemStack stack, final String filename,
+        final File outFile, final File cachedFile, final File legacyCachedFile, final IconPass pass) {
+        pass.encoder.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (pass.cache.materialize(filename, cachedFile, legacyCachedFile, outFile, true)) {
+                        pass.tally.count(MaterializedIconResult.CACHE_HIT);
+                    } else {
+                        pass.retries.add(new PendingRender(key, stack, outFile, cachedFile));
+                    }
+                } catch (Throwable t) {
+                    pass.retries.add(new PendingRender(key, stack, outFile, cachedFile));
+                } finally {
+                    pass.outstandingHits.decrementAndGet();
+                }
+            }
+        });
+    }
+
     /** The CPU half of an icon, safe off the render thread: tint, base, checks, one PNG encode, two writes. */
-    private static MaterializedIconResult finishIcon(String key, RenderedPixels pixels, File outFile, File cachedFile)
-        throws IOException {
+    private static MaterializedIconResult finishIcon(String key, RenderedPixels pixels, File outFile, File cachedFile,
+        IconCache cache) throws IOException {
         BufferedImage image = imageFromRgbaBuffer(pixels.overlay);
         applyTint(pixels.tint, image);
         image = withContainerBase(pixels, image);
-        if (!imageHasVisiblePixels(image) || missingTextureRatio(image) >= 0.5D) {
+        if (!IconChecks.usable(argbOf(image))) {
             markSkipped(key);
             return MaterializedIconResult.SKIPPED;
         }
@@ -727,14 +797,11 @@ public final class ClientItemStackIconRenderer {
         BufferedImage pixelArt = asPixelArt(image);
         BufferedImage stored = pixelArt != null ? pixelArt : image;
         // The colour of the pixels written, as a cache hit and the normalizer read them back.
-        IconColors.record(outFile.getName(), stored);
+        String colour = IconColors.dominantOpaqueColor(stored);
+        IconColors.recordColour(outFile.getName(), colour);
         byte[] png = encodePng(stored);
         Files.write(outFile.toPath(), png);
-        File cacheDir = cacheDir();
-        if (!cacheDir.exists()) {
-            cacheDir.mkdirs();
-        }
-        Files.write(cachedFile.toPath(), png);
+        cache.store(cachedFile, png, colour);
         return MaterializedIconResult.RENDERED;
     }
 
@@ -795,15 +862,6 @@ public final class ClientItemStackIconRenderer {
         }
     }
 
-    private static boolean isUsableCachedIcon(File file) {
-        try {
-            BufferedImage image = ImageIO.read(file);
-            return image != null && imageHasVisiblePixels(image) && missingTextureRatio(image) < 0.5D;
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
     static BufferedImage imageFromRgbaBuffer(ByteBuffer buffer) {
         BufferedImage image = new BufferedImage(ICON_SIZE, ICON_SIZE, BufferedImage.TYPE_INT_ARGB);
         int[] argb = argbOf(image);
@@ -833,33 +891,11 @@ public final class ClientItemStackIconRenderer {
     }
 
     static boolean imageHasVisiblePixels(BufferedImage image) {
-        for (int value : argbOf(image)) {
-            if (((value >>> 24) & 255) > 0) {
-                return true;
-            }
-        }
-        return false;
+        return IconChecks.hasVisiblePixels(argbOf(image));
     }
 
-    private static double missingTextureRatio(BufferedImage image) {
-        int visiblePixels = 0;
-        int missingTexturePixels = 0;
-        for (int value : argbOf(image)) {
-            int alpha = (value >>> 24) & 255;
-            if (alpha == 0) {
-                continue;
-            }
-
-            visiblePixels++;
-            int red = (value >> 16) & 255;
-            int green = (value >> 8) & 255;
-            int blue = value & 255;
-            if (red >= 220 && green <= 40 && blue >= 220) {
-                missingTexturePixels++;
-            }
-        }
-
-        return visiblePixels > 0 ? (double) missingTexturePixels / (double) visiblePixels : 0.0D;
+    static double missingTextureRatio(BufferedImage image) {
+        return IconChecks.missingTextureRatio(argbOf(image));
     }
 
     private static void applyTint(int color, BufferedImage image) {

@@ -10,6 +10,7 @@ import gregtech.api.recipe.RecipeMap;
 import gregtech.api.recipe.RecipeMapBackend;
 import gregtech.api.util.GTRecipe;
 import gregtech.api.util.GTRecipeConstants;
+import net.minecraft.block.Block;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -50,6 +51,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.TreeMap;
 
 public final class GtnhCalcOracleExporter implements MiningContext, MachineDataContext {
 
@@ -295,11 +297,11 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
                     exportedRecipe.put("itemOutputs", outputItemStacks(recipe));
                     exportedRecipe.put("fluidInputs", fluidInputs);
                     exportedRecipe.put("fluidOutputs", fluidStacks(recipe.mFluidOutputs));
-                    if ("gtpp.recipe.lftr.sparging".equals(map.unlocalizedName)) {
+                    if (isGtppMap(map.unlocalizedName, "lftr.sparging")) {
                         putSpargeByproducts(exportedRecipe, recipe);
                     }
-                    if ("gtpp.recipe.fluidchemicaleactor".equals(map.unlocalizedName)
-                        || "gtpp.recipe.oremill".equals(map.unlocalizedName)) {
+                    if (isGtppMap(map.unlocalizedName, "fluidchemicaleactor")
+                        || isGtppMap(map.unlocalizedName, "oremill")) {
                         putWearingInputs(exportedRecipe, recipe);
                     }
                     exportedRecipe.put("nonConsumedInputs", specialItems(recipe.mSpecialItems));
@@ -1351,9 +1353,16 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
         recipe.put("className", className);
         putIfPresent(recipe, "research", firstString(rawRecipe, "research", "researchKey", "key"));
         putIfPresent(recipe, "output", resourceFromUnknown(firstObject(rawRecipe, "getRecipeOutput", "recipeOutput", "output")));
-        putIfPresent(recipe, "centralInput", resourceFromUnknown(firstObject(rawRecipe, "getRecipeInput", "recipeInput", "input")));
-        putIfPresent(recipe, "catalyst", resourceFromUnknown(firstObject(rawRecipe, "getCatalyst", "catalyst")));
-        List<Map<String, Object>> components = resourcesFromUnknown(firstObject(rawRecipe, "getComponents", "components", "recipeItems"));
+        String arcaneGrid = thaumcraftArcaneGridKind(rawRecipe);
+        List<Map<String, Object>> components;
+        if (arcaneGrid != null) {
+            // The arcane grid is the recipe's `input`, never a central input.
+            components = thaumcraftArcaneGridComponents(rawRecipe, arcaneGrid, recipe);
+        } else {
+            putIfPresent(recipe, "centralInput", resourceFromUnknown(firstObject(rawRecipe, "getRecipeInput", "recipeInput", "input")));
+            putIfPresent(recipe, "catalyst", resourceFromUnknown(firstObject(rawRecipe, "getCatalyst", "catalyst")));
+            components = resourcesFromUnknown(firstObject(rawRecipe, "getComponents", "components", "recipeItems"));
+        }
         List<Map<String, Object>> aspects = aspectResources(firstObject(rawRecipe, "getAspects", "aspects"));
         putIfPresent(recipe, "components", components);
         putIfPresent(recipe, "aspects", aspects);
@@ -1363,6 +1372,125 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
         }
         putIfPresent(recipe, "instability", firstNumber(rawRecipe, "getInstability", "instability"));
         return recipe;
+    }
+
+    /**
+     * "shaped" or "shapeless" for Thaumcraft 4's arcane workbench recipes (and their subclasses), else null.
+     * Their grid has none of the infusion field names: it is `input` behind getInput().
+     */
+    private String thaumcraftArcaneGridKind(Object rawRecipe) {
+        for (Class<?> type = rawRecipe.getClass(); type != null; type = type.getSuperclass()) {
+            String name = type.getName();
+            if ("thaumcraft.api.crafting.ShapedArcaneRecipe".equals(name)) return "shaped";
+            if ("thaumcraft.api.crafting.ShapelessArcaneRecipe".equals(name)) return "shapeless";
+        }
+        return null;
+    }
+
+    /**
+     * The arcane grid's ingredients. Shaped: an Object[] of width x height cells, each an ItemStack, an oredict
+     * list or null; each ingredient carries its 3x3 cell (`gridSlot`, row * 3 + column) since a pattern's layout
+     * is part of the recipe. Shapeless: one entry per ingredient, no cell. A cell the oracle cannot read is
+     * counted in `unresolvedGridInputs` and described in `unresolvedGridCells` (its class and text), so the
+     * normalizer can report it rather than ship the recipe short.
+     */
+    private List<Map<String, Object>> thaumcraftArcaneGridComponents(
+        Object rawRecipe,
+        String kind,
+        Map<String, Object> recipe
+    ) {
+        List<Map<String, Object>> components = new ArrayList<Map<String, Object>>();
+        Object input = invokeBest(rawRecipe, "getInput", new Object[0]);
+        if (input == null) {
+            input = readField(rawRecipe, "input");
+        }
+        List<Map<String, Object>> unresolved = new ArrayList<Map<String, Object>>();
+        if ("shaped".equals(kind)) {
+            Number width = asNumber(readField(rawRecipe, "width"));
+            Number height = asNumber(readField(rawRecipe, "height"));
+            int columns = width == null || width.intValue() <= 0 ? 3 : width.intValue();
+            putIfPresent(recipe, "width", width);
+            putIfPresent(recipe, "height", height);
+            int index = 0;
+            for (Object cell : iterable(input)) {
+                int cellIndex = index++;
+                if (cell == null) {
+                    continue;
+                }
+                int gridSlot = (cellIndex / columns) * 3 + cellIndex % columns;
+                Map<String, Object> resource = resourceFromUnknown(thaumcraftArcaneGridCell(cell));
+                if (resource == null) {
+                    unresolved.add(thaumcraftUnresolvedGridCell(cell, Integer.valueOf(gridSlot)));
+                    continue;
+                }
+                resource.put("gridSlot", Integer.valueOf(gridSlot));
+                components.add(resource);
+            }
+        } else {
+            for (Object entry : iterable(input)) {
+                if (entry == null) {
+                    continue;
+                }
+                Map<String, Object> resource = resourceFromUnknown(thaumcraftArcaneGridCell(entry));
+                if (resource == null) {
+                    unresolved.add(thaumcraftUnresolvedGridCell(entry, null));
+                    continue;
+                }
+                components.add(resource);
+            }
+        }
+        if (!unresolved.isEmpty()) {
+            recipe.put("unresolvedGridInputs", Integer.valueOf(unresolved.size()));
+            recipe.put("unresolvedGridCells", unresolved);
+        }
+        return components;
+    }
+
+    /**
+     * A grid cell as one ingredient. A crafting cell always consumes one item, but some recipes register a
+     * stack of size 0 (Warded Glass's Wand Focus: Warding in 2.9), which itemStack() would refuse.
+     */
+    private Object thaumcraftArcaneGridCell(Object cell) {
+        if (cell instanceof ItemStack) {
+            return thaumcraftArcaneGridStack((ItemStack) cell);
+        }
+        if (cell instanceof List) {
+            List<Object> stacks = new ArrayList<Object>();
+            for (Object entry : (List<?>) cell) {
+                stacks.add(entry instanceof ItemStack ? thaumcraftArcaneGridStack((ItemStack) entry) : entry);
+            }
+            return stacks;
+        }
+        return cell;
+    }
+
+    private ItemStack thaumcraftArcaneGridStack(ItemStack stack) {
+        if (stack.stackSize > 0) {
+            return stack;
+        }
+        ItemStack one = stack.copy();
+        one.stackSize = 1;
+        return one;
+    }
+
+    private Map<String, Object> thaumcraftUnresolvedGridCell(Object cell, Integer gridSlot) {
+        Map<String, Object> described = map();
+        putIfPresent(described, "gridSlot", gridSlot);
+        described.put("className", cell.getClass().getName());
+        String text;
+        try {
+            text = safeString(cell);
+        } catch (Throwable t) {
+            // An ItemStack with no item throws from toString().
+            text = t.toString();
+        }
+        described.put("text", text);
+        if (cell instanceof ItemStack) {
+            ItemStack stack = (ItemStack) cell;
+            described.put("stackSize", Integer.valueOf(stack.stackSize));
+            described.put("hasItem", Boolean.valueOf(stack.getItem() != null));
+        }
+        return described;
     }
 
     private Map<String, Object> beeSpecies(Object allele) {
@@ -1428,22 +1556,27 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
     private Map<String, Object> cropCard(Object crop) {
         Map<String, Object> exported = map();
         exported.put("className", crop.getClass().getName());
-        putIfPresent(exported, "id", firstString(crop, "getId", "id", "name"));
-        putIfPresent(exported, "name", firstString(crop, "displayName", "getDisplayName", "name"));
-        putIfPresent(exported, "owner", firstString(crop, "owner", "getOwner"));
-        putIfPresent(exported, "tier", firstNumber(crop, "tier", "getTier"));
-        putIfPresent(exported, "attributes", resourcesFromUnknown(firstObject(crop, "attributes", "getAttributes")));
-        Object displayItem = firstObject(crop, "getDisplayItem", "getBaseSeed");
+        putIfPresent(exported, "id", cropString(crop, "getId", "id", "name"));
+        putIfPresent(exported, "name", cropString(crop, "displayName", "getDisplayName", "name"));
+        putIfPresent(exported, "owner", cropString(crop, "owner", "getOwner"));
+        putIfPresent(exported, "tier", asNumber(cropObject(crop, "tier", "getTier")));
+        putIfPresent(exported, "attributes", resourcesFromUnknown(cropObject(crop, "attributes", "getAttributes")));
+        Object displayItem = cropObject(crop, "getDisplayItem", "getBaseSeed");
         if (displayItem == null) {
-            displayItem = invokeBest(crop, "getDisplayItem", new Object[] { crop });
+            displayItem = invokeCrop(crop, "getDisplayItem", new Object[] { crop });
         }
         putIfPresent(exported, "displayItem", resourceFromUnknown(displayItem));
         List<Map<String, Object>> variants = cropVariants(crop);
         putIfPresent(exported, "variants", variants);
-        if (!variants.isEmpty()) {
-            putIfPresent(exported, "seed", variants.get(0).get("seed"));
-            putIfPresent(exported, "drops", variants.get(0).get("drops"));
-            putIfPresent(exported, "durationTicks", variants.get(0).get("durationTicks"));
+        // The top-level drops are the crop's own, with nothing special under it.
+        for (Map<String, Object> variant : variants) {
+            if (variant.containsKey("conditions")) {
+                continue;
+            }
+            putIfPresent(exported, "seed", variant.get("seed"));
+            putIfPresent(exported, "drops", variant.get("drops"));
+            putIfPresent(exported, "durationTicks", variant.get("durationTicks"));
+            break;
         }
         exported.put(
             "notes",
@@ -1452,83 +1585,238 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
         return exported;
     }
 
+    private static final String[][] CROP_STAT_VARIANTS = new String[][] {
+        { "23-31-0", "GTNH crop manager baseline 23/31/0", "23", "31", "0" },
+        { "31-31-31", "Perfect stats 31/31/31", "31", "31", "31" },
+        { "1-1-1", "Low stats 1/1/1", "1", "1", "1" },
+    };
+
+    /**
+     * One variant per stat set with nothing special around the crop. A crop whose drops ask
+     * for a block under it or a redstone signal (Stonelillies, Magic Metal Berry, Red Wheat)
+     * is sampled again once per thing it asked for. Conditions whose drops match (same items,
+     * same rates) share one set of variants carrying all of them, and a condition whose
+     * drops match the plain crop's adds nothing. Only what the crop asks while every answer
+     * is no is found: a query it makes only after a yes is never sampled.
+     */
     private List<Map<String, Object>> cropVariants(Object crop) {
+        String cropKey = cropString(crop, "owner", "getOwner") + ":" + cropString(crop, "getId", "id", "name");
         List<Map<String, Object>> variants = new ArrayList<Map<String, Object>>();
-        addCropVariant(variants, crop, "23-31-0", "GTNH crop manager baseline 23/31/0", 23, 31, 0);
-        addCropVariant(variants, crop, "31-31-31", "Perfect stats 31/31/31", 31, 31, 31);
-        addCropVariant(variants, crop, "1-1-1", "Low stats 1/1/1", 1, 1, 1);
+        CropEnvironment plain = new CropEnvironment(null, true);
+        for (String[] stats : CROP_STAT_VARIANTS) {
+            addCropVariant(variants, crop, cropKey, stats, plain, null);
+        }
+        if (plain.asked.isEmpty()) {
+            return variants;
+        }
+
+        Object plainDrops = variants.isEmpty() ? null : variants.get(0).get("drops");
+        List<Object> groupDrops = new ArrayList<Object>();
+        List<List<Map<String, Object>>> groups = new ArrayList<List<Map<String, Object>>>();
+        for (Map.Entry<String, Map<String, Object>> entry : plain.asked.entrySet()) {
+            CropEnvironment environment = new CropEnvironment(entry.getKey(), false);
+            String[] stats = CROP_STAT_VARIANTS[0];
+            int gain = Integer.parseInt(stats[3]);
+            Object tile = cropTileProxy(crop, Integer.parseInt(stats[2]), gain, Integer.parseInt(stats[4]), cropMaxSize(crop), environment);
+            List<Map<String, Object>> drops = cropDrops(crop, tile, gain, cropHarvestSize(crop, tile), environment, cropRandomSeed(cropKey, stats[0]));
+            if (drops.isEmpty() || cropDropsMatch(drops, plainDrops)) {
+                continue;
+            }
+            int group = -1;
+            for (int index = 0; index < groupDrops.size(); index++) {
+                if (cropDropsMatch(drops, groupDrops.get(index))) {
+                    group = index;
+                    break;
+                }
+            }
+            if (group < 0) {
+                groupDrops.add(drops);
+                groups.add(new ArrayList<Map<String, Object>>());
+                group = groups.size() - 1;
+            }
+            groups.get(group).add(entry.getValue());
+        }
+        for (List<Map<String, Object>> conditions : groups) {
+            CropEnvironment environment = new CropEnvironment(String.valueOf(conditions.get(0).get("key")), false);
+            for (String[] stats : CROP_STAT_VARIANTS) {
+                addCropVariant(variants, crop, cropKey, stats, environment, conditions);
+            }
+        }
         return variants;
+    }
+
+    /**
+     * Whether two sampled drop lists give the same items at the same rates. Every sample of
+     * one crop and stat set starts from the same seed, so crops whose randomness comes from
+     * the seeded sources agree exactly; the 0.5% slack absorbs the ones that roll their own.
+     */
+    private boolean cropDropsMatch(Object left, Object right) {
+        Map<String, Double> a = cropDropAmounts(left);
+        Map<String, Double> b = cropDropAmounts(right);
+        if (a.isEmpty() || !a.keySet().equals(b.keySet())) {
+            return false;
+        }
+        for (Map.Entry<String, Double> entry : a.entrySet()) {
+            double x = entry.getValue().doubleValue();
+            double y = b.get(entry.getKey()).doubleValue();
+            if (Math.abs(x - y) > 0.005D * Math.max(Math.abs(x), Math.abs(y))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private Map<String, Double> cropDropAmounts(Object drops) {
+        Map<String, Double> amounts = new TreeMap<String, Double>();
+        if (drops instanceof List) {
+            for (Object drop : (List<?>) drops) {
+                Object resource = drop instanceof Map ? ((Map<?, ?>) drop).get("resource") : null;
+                if (!(resource instanceof Map)) {
+                    continue;
+                }
+                Object id = ((Map<?, ?>) resource).get("id");
+                Object nbt = ((Map<?, ?>) resource).get("nbt");
+                Number amount = asNumber(((Map<?, ?>) resource).get("amount"));
+                if (id != null && amount != null) {
+                    amounts.put(id + (nbt == null ? "" : String.valueOf(nbt)), Double.valueOf(amount.doubleValue()));
+                }
+            }
+        }
+        return amounts;
     }
 
     private void addCropVariant(
         List<Map<String, Object>> variants,
         Object crop,
-        String key,
-        String label,
-        int growth,
-        int gain,
-        int resistance
+        String cropKey,
+        String[] stats,
+        CropEnvironment environment,
+        List<Map<String, Object>> conditions
     ) {
-        Object tile = cropTileProxy(crop, growth, gain, resistance, cropMaxSize(crop));
-        List<Map<String, Object>> drops = cropDrops(crop, tile, gain);
+        int growth = Integer.parseInt(stats[2]);
+        int gain = Integer.parseInt(stats[3]);
+        int resistance = Integer.parseInt(stats[4]);
+        long seed = cropRandomSeed(cropKey, stats[0]);
+        Object tile = cropTileProxy(crop, growth, gain, resistance, cropMaxSize(crop), environment);
+        int harvestSize = cropHarvestSize(crop, tile);
+        List<Map<String, Object>> drops = cropDrops(crop, tile, gain, harvestSize, environment, seed);
         if (drops.isEmpty()) {
             return;
         }
 
         Map<String, Object> variant = map();
-        variant.put("id", key);
-        variant.put("label", label);
+        variant.put("id", stats[0]);
+        variant.put("label", stats[1]);
         variant.put("growth", Integer.valueOf(growth));
         variant.put("gain", Integer.valueOf(gain));
         variant.put("resistance", Integer.valueOf(resistance));
+        if (conditions != null) {
+            variant.put("conditions", conditions);
+        }
         putIfPresent(variant, "seed", itemStack(generateCropSeed(crop, growth, gain, resistance, 4)));
         variant.put("drops", drops);
-        variant.put("durationTicks", Integer.valueOf(cropDurationTicks(crop, tile)));
+        seedCropRandom(seed, environment);
+        variant.put("durationTicks", Integer.valueOf(cropDurationTicks(crop, tile, harvestSize)));
         variants.add(variant);
     }
 
-    private List<Map<String, Object>> cropDrops(Object crop, Object tile, int gain) {
-        int samples = Math.max(1, Integer.getInteger("gtnh.oracle.cropDropSamples", 256).intValue());
-        Map<String, Map<String, Object>> resourcesByKey = new LinkedHashMap<String, Map<String, Object>>();
-        Map<String, Double> amountsByKey = new LinkedHashMap<String, Double>();
-        int maxSize = cropMaxSize(crop);
+    /**
+     * A fixed seed per crop and stat set, so two exports sample the same harvests. Conditions
+     * share their crop's seed, so blocks that make a crop drop the same thing sample alike.
+     */
+    private long cropRandomSeed(String cropKey, String statsId) {
+        long hash = 0xcbf29ce484222325L;
+        String text = cropKey + "|" + statsId;
+        for (int index = 0; index < text.length(); index++) {
+            hash ^= text.charAt(index);
+            hash *= 0x100000001b3L;
+        }
+        return hash;
+    }
 
-        for (int index = 0; index < samples; index++) {
-            invokeBest(tile, "setSize", new Object[] { Byte.valueOf((byte) maxSize) });
-            Object rawDrop = invokeBest(crop, "getGain", new Object[] { tile });
-            if (!(rawDrop instanceof ItemStack)) {
-                continue;
+    /**
+     * Seeds the random sources a crop card rolls: IC2's shared `IC2.random` (Stickreed's size
+     * after harvest, many IC2 and CropsPP drops) and the simulated world's. Crops that roll
+     * their own generator (GT's ThreadLocalRandom, a fresh XSTR) stay random between exports.
+     */
+    private void seedCropRandom(long seed, CropEnvironment environment) {
+        try {
+            Object random = readStaticField(Class.forName("ic2.core.IC2"), "random");
+            if (random instanceof java.util.Random) {
+                ((java.util.Random) random).setSeed(seed);
             }
-            ItemStack drop = ((ItemStack) rawDrop).copy();
-            if (drop.getItem() == null || drop.stackSize <= 0) {
-                continue;
-            }
-            String key = stackKey(drop);
-            if (key.length() == 0) {
-                continue;
-            }
-            if (!resourcesByKey.containsKey(key)) {
-                Map<String, Object> resource = itemStack(drop);
-                if (resource != null) {
+        } catch (Throwable ignored) {
+        }
+        if (environment.world != null && environment.world.rand != null) {
+            environment.world.rand.setSeed(seed);
+        }
+    }
+
+    /**
+     * The expected drop of each item per harvest. Each harvest round the game calls getGain and
+     * then adds one to that stack with chance (gain + 1) / 100, so an item's amount per round is
+     * (its summed stack sizes + the number of rounds it dropped x (gain + 1) / 100) / samples,
+     * times the average number of rounds. Items are keyed by id, damage and NBT (never by stack
+     * size), and listed in that key's order so the slots do not move between exports.
+     */
+    private List<Map<String, Object>> cropDrops(
+        Object crop,
+        Object tile,
+        int gain,
+        int harvestSize,
+        CropEnvironment environment,
+        long seed
+    ) {
+        int samples = Math.max(1, Integer.getInteger("gtnh.oracle.cropDropSamples", 256).intValue());
+        Map<String, Map<String, Object>> resourcesByKey = new TreeMap<String, Map<String, Object>>();
+        Map<String, Double> stackSums = new TreeMap<String, Double>();
+        Map<String, Integer> hits = new TreeMap<String, Integer>();
+
+        seedCropRandom(seed, environment);
+        environment.sampling = true;
+        try {
+            for (int index = 0; index < samples; index++) {
+                invokeBest(tile, "setSize", new Object[] { Byte.valueOf((byte) harvestSize) });
+                Object rawDrop = invokeCrop(crop, "getGain", new Object[] { tile });
+                environment.notePowerAsked();
+                if (!(rawDrop instanceof ItemStack)) {
+                    continue;
+                }
+                ItemStack drop = ((ItemStack) rawDrop).copy();
+                if (drop.getItem() == null || drop.stackSize <= 0) {
+                    continue;
+                }
+                String key = cropDropKey(drop);
+                if (key == null) {
+                    continue;
+                }
+                if (!resourcesByKey.containsKey(key)) {
+                    Map<String, Object> resource = itemStack(drop);
+                    if (resource == null) {
+                        continue;
+                    }
                     resourcesByKey.put(key, resource);
                 }
+                Double sum = stackSums.get(key);
+                stackSums.put(key, Double.valueOf((sum == null ? 0.0D : sum.doubleValue()) + drop.stackSize));
+                Integer count = hits.get(key);
+                hits.put(key, Integer.valueOf((count == null ? 0 : count.intValue()) + 1));
             }
-            Double current = amountsByKey.get(key);
-            amountsByKey.put(key, Double.valueOf((current == null ? 0.0D : current.doubleValue()) + drop.stackSize));
+        } finally {
+            environment.sampling = false;
         }
 
         double dropRounds = cropAverageDropRounds(crop, gain);
         double stackIncrease = (gain + 1) / 100.0D;
         List<Map<String, Object>> drops = new ArrayList<Map<String, Object>>();
-        for (Map.Entry<String, Double> entry : amountsByKey.entrySet()) {
-            Map<String, Object> resource = resourcesByKey.get(entry.getKey());
-            if (resource == null) {
-                continue;
-            }
-            double amount = ((entry.getValue().doubleValue() / samples) + stackIncrease) * dropRounds;
+        for (Map.Entry<String, Map<String, Object>> entry : resourcesByKey.entrySet()) {
+            double sum = stackSums.get(entry.getKey()).doubleValue();
+            int count = hits.get(entry.getKey()).intValue();
+            double amount = ((sum + count * stackIncrease) / samples) * dropRounds;
             if (!(amount > 0.0D)) {
                 continue;
             }
+            Map<String, Object> resource = entry.getValue();
             resource.put("amount", Double.valueOf(round(amount, 6)));
             Map<String, Object> drop = map();
             drop.put("resource", resource);
@@ -1537,8 +1825,37 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
         return drops;
     }
 
+    // One item, whatever its stack size: registry id, damage and NBT.
+    private String cropDropKey(ItemStack stack) {
+        Object registryId = Item.itemRegistry.getNameForObject(stack.getItem());
+        if (registryId == null) {
+            return null;
+        }
+        return registryId + "@" + stack.getItemDamage() + (stack.stackTagCompound == null ? "" : stack.stackTagCompound.toString());
+    }
+
+    /**
+     * The size a crop is harvested at: its largest size where canBeHarvested holds. Most
+     * crops are harvested at their max size; IC2's Eating Plant only below it (4 and 5 of 6)
+     * and drops nothing at 6. A crop that never answers keeps its max size.
+     */
+    private int cropHarvestSize(Object crop, Object tile) {
+        int maxSize = cropMaxSize(crop);
+        for (int size = maxSize; size >= 1; size--) {
+            invokeBest(tile, "setSize", new Object[] { Byte.valueOf((byte) size) });
+            Object harvestable = invokeCrop(crop, "canBeHarvested", new Object[] { tile });
+            if (!(harvestable instanceof Boolean)) {
+                return maxSize;
+            }
+            if (((Boolean) harvestable).booleanValue()) {
+                return size;
+            }
+        }
+        return maxSize;
+    }
+
     private double cropAverageDropRounds(Object crop, int gain) {
-        Number rawChance = asNumber(invokeBest(crop, "dropGainChance", new Object[0]));
+        Number rawChance = asNumber(invokeCrop(crop, "dropGainChance", new Object[0]));
         double chance = rawChance == null ? 1.0D : rawChance.doubleValue();
         chance *= Math.pow(1.03D, gain);
 
@@ -1561,15 +1878,14 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
         return Math.exp(-0.5D * x * x) / Math.sqrt(2.0D * Math.PI);
     }
 
-    private int cropDurationTicks(Object crop, Object tile) {
-        int maxSize = cropMaxSize(crop);
-        int startSize = Math.max(1, Math.min(maxSize - 1, cropSizeAfterHarvest(crop, tile)));
+    private int cropDurationTicks(Object crop, Object tile, int harvestSize) {
+        int startSize = Math.max(1, Math.min(harvestSize - 1, cropSizeAfterHarvest(crop, tile)));
         int tickRate = readStaticInt("ic2.core.crop.TileEntityCrop", "tickRate", 256);
         int growthRate = Math.max(1, cropGrowthRate(crop, tile));
         int totalTicks = 0;
-        for (int size = startSize; size < maxSize; size++) {
+        for (int size = startSize; size < harvestSize; size++) {
             invokeBest(tile, "setSize", new Object[] { Byte.valueOf((byte) size) });
-            Number duration = asNumber(invokeBest(crop, "growthDuration", new Object[] { tile }));
+            Number duration = asNumber(invokeCrop(crop, "growthDuration", new Object[] { tile }));
             int growthDuration = duration == null ? 200 : Math.max(1, duration.intValue());
             totalTicks += Math.max(1, (int) Math.ceil(growthDuration / (double) growthRate)) * tickRate;
         }
@@ -1577,7 +1893,7 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
     }
 
     private int cropGrowthRate(Object crop, Object tile) {
-        Number weight = asNumber(invokeBest(crop, "weightInfluences", new Object[] { tile, Float.valueOf(1.0F), Float.valueOf(1.0F), Float.valueOf(1.0F) }));
+        Number weight = asNumber(invokeCrop(crop, "weightInfluences", new Object[] { tile, Float.valueOf(1.0F), Float.valueOf(1.0F), Float.valueOf(1.0F) }));
         if (weight != null && weight.intValue() > 0) {
             return weight.intValue();
         }
@@ -1586,16 +1902,140 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
     }
 
     private int cropSizeAfterHarvest(Object crop, Object tile) {
-        Number size = asNumber(invokeBest(crop, "getSizeAfterHarvest", new Object[] { tile }));
+        Number size = asNumber(invokeCrop(crop, "getSizeAfterHarvest", new Object[] { tile }));
         return size == null ? Math.max(1, cropMaxSize(crop) - 1) : Math.max(1, size.intValue());
     }
 
     private int cropMaxSize(Object crop) {
-        Number maxSize = firstNumber(crop, "maxSize", "getMaxSize");
+        Number maxSize = asNumber(cropObject(crop, "maxSize", "getMaxSize"));
         return maxSize == null ? 1 : Math.max(1, maxSize.intValue());
     }
 
-    private Object cropTileProxy(final Object crop, int growth, int gain, int resistance, int size) {
+    /**
+     * Calls a crop-card method even when the card's class is not public: CropsPP's Bonsais
+     * are a package-private class, so a plain reflective call on their public overrides
+     * throws IllegalAccessException. Only crop cards are called this way, so no other
+     * exporter domain changes what it can reach.
+     */
+    private Object invokeCrop(Object crop, String methodName, Object[] args) {
+        if (crop == null || methodName == null) {
+            return null;
+        }
+        for (Method method : crop.getClass().getMethods()) {
+            if (!method.getName().equals(methodName) || method.getParameterTypes().length != args.length) {
+                continue;
+            }
+            try {
+                method.setAccessible(true);
+                return method.invoke(crop, args);
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
+    }
+
+    private Object cropObject(Object crop, String... names) {
+        for (String name : names) {
+            Object value = invokeCrop(crop, name, new Object[0]);
+            if (value != null) {
+                return value;
+            }
+            value = readField(crop, name);
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String cropString(Object crop, String... names) {
+        Object value = cropObject(crop, names);
+        return value == null ? null : String.valueOf(value);
+    }
+
+    /**
+     * What the simulated crop tile answers about its surroundings. A plain environment has
+     * nothing special under the crop and no redstone signal, and records each block and
+     * signal the crop asks for while its drops are sampled. A condition environment answers
+     * yes to exactly one of them. The world exists only while drops are sampled, so the
+     * crop's other calls (growth, harvest size) see no world, as before.
+     */
+    private static final class CropEnvironment {
+        final String present;
+        final boolean recording;
+        final Map<String, Map<String, Object>> asked = new LinkedHashMap<String, Map<String, Object>>();
+        final OracleCropWorld world = OracleCropWorld.create();
+        boolean sampling;
+
+        CropEnvironment(String present, boolean recording) {
+            this.present = present;
+            this.recording = recording;
+            if (world != null) {
+                world.powered = "redstone".equals(present);
+            }
+        }
+
+        Object world() {
+            return sampling ? world : null;
+        }
+
+        boolean blockBelow(Object query, GtnhCalcOracleExporter exporter) {
+            Map<String, Object> condition = exporter.cropBlockCondition(query);
+            if (condition == null) {
+                return false;
+            }
+            String key = String.valueOf(condition.get("key"));
+            if (recording && sampling && !asked.containsKey(key)) {
+                asked.put(key, condition);
+            }
+            return key.equals(present);
+        }
+
+        void notePowerAsked() {
+            if (world == null || !world.powerAsked) {
+                return;
+            }
+            world.powerAsked = false;
+            if (recording && !asked.containsKey("redstone")) {
+                Map<String, Object> condition = new LinkedHashMap<String, Object>();
+                condition.put("key", "redstone");
+                condition.put("kind", "redstoneSignal");
+                condition.put("displayName", "a redstone signal");
+                asked.put("redstone", condition);
+            }
+        }
+    }
+
+    private Map<String, Object> cropBlockCondition(Object query) {
+        Map<String, Object> condition = map();
+        condition.put("kind", "blockBelow");
+        if (query instanceof String) {
+            String oreName = (String) query;
+            condition.put("key", "ore:" + oreName);
+            condition.put("oreDict", oreName);
+            List<ItemStack> ores = OreDictionary.getOres(oreName);
+            String name = ores == null || ores.isEmpty() ? null : displayName(ores.get(0));
+            condition.put("displayName", name == null || name.length() == 0 ? oreName : name);
+            return condition;
+        }
+        if (query instanceof Block) {
+            Block block = (Block) query;
+            String registryId = String.valueOf(Block.blockRegistry.getNameForObject(block));
+            condition.put("key", "block:" + registryId);
+            condition.put("block", registryId);
+            String name = null;
+            try {
+                name = displayName(new ItemStack(block));
+            } catch (Throwable ignored) {
+            }
+            condition.put("displayName", name == null || name.length() == 0 ? registryId : name);
+            return condition;
+        }
+        return null;
+    }
+
+    private Object cropTileProxy(final Object crop, int growth, int gain, int resistance, int size, final CropEnvironment environment) {
+        final GtnhCalcOracleExporter exporter = this;
         try {
             Class<?> cropTileClass = Class.forName("ic2.api.crops.ICropTile");
             final byte[] cropSize = new byte[] { (byte) Math.max(1, size) };
@@ -1651,13 +2091,15 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
                     if ("getHumidity".equals(name) || "getNutrients".equals(name) || "getAirQuality".equals(name)) {
                         return Byte.valueOf((byte) 10);
                     }
-                    if ("getWorld".equals(name)) return null;
+                    if ("getWorld".equals(name)) return environment.world();
                     if ("getLocation".equals(name)) return new ChunkCoordinates(0, 64, 0);
                     if ("getLightLevel".equals(name)) return Integer.valueOf(15);
                     if ("pick".equals(name) || "harvest".equals(name)) return Boolean.FALSE;
                     if ("harvest_automated".equals(name)) return new ItemStack[0];
                     if ("reset".equals(name) || "updateState".equals(name)) return null;
-                    if ("isBlockBelow".equals(name)) return Boolean.FALSE;
+                    if ("isBlockBelow".equals(name)) {
+                        return Boolean.valueOf(args != null && args.length > 0 && environment.blockBelow(args[0], exporter));
+                    }
                     if ("generateSeeds".equals(name)) {
                         Object seedCrop = args != null && args.length > 0 ? args[0] : crop;
                         int seedGrowth = args != null && args.length > 1 && args[1] instanceof Number ? ((Number) args[1]).intValue() : cropGrowth[0];
@@ -2314,6 +2756,14 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
     }
 
     /**
+     * A GT++ map by its name without the mod prefix: GT++ names its maps gtpp.recipe.* up to
+     * 2.8 and gt.recipe.* since it merged into GregTech in 2.9.
+     */
+    static boolean isGtppMap(String unlocalizedName, String name) {
+        return ("gt.recipe." + name).equals(unlocalizedName) || ("gtpp.recipe." + name).equals(unlocalizedName);
+    }
+
+    /**
      * A sparge tower rolls its byproducts at run time (MTESpargeTower.randomizeByproducts):
      * the recipe registers the returned sparge gas and every byproduct at 0 L, which the plain
      * fluid list drops, and caps each byproduct at SPARGE_MAX_BYPRODUCT. Both are exported so
@@ -2383,7 +2833,7 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
                 Map<String, Object> entry = null;
                 if (Boolean.TRUE.equals(isCatalyst.invoke(null, probe))) {
                     entry = map();
-                    entry.put("durability", chemBase.getMethod("getMaxCatalystDurability").invoke(null));
+                    entry.put("durability", maxCatalystDurability(chemBase, probe));
                     Object carrier = readStaticField(
                         Class.forName("gtPlusPlus.xmod.gregtech.api.enums.GregtechItemList"),
                         "EmptyCatalystCarrier");
@@ -2408,6 +2858,15 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
         }
         if (!wearing.isEmpty()) {
             exportedRecipe.put("wearingInputs", wearing);
+        }
+    }
+
+    /** One durability for every catalyst on 2.9; 2.8.1's GT5U 5.09.51 asks for the stack. */
+    private static Object maxCatalystDurability(Class<?> chemBase, ItemStack probe) throws Exception {
+        try {
+            return chemBase.getMethod("getMaxCatalystDurability").invoke(null);
+        } catch (NoSuchMethodException e) {
+            return chemBase.getMethod("getMaxCatalystDurability", ItemStack.class).invoke(null, probe);
         }
     }
 

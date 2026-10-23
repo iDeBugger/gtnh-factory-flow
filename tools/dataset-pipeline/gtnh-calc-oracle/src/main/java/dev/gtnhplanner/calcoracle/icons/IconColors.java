@@ -19,7 +19,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * The dominant colour of each written icon, worked out while its pixels are still in memory, so the dataset
  * normalizer does not decode every PNG again. The arithmetic is `getDominantOpaqueColor` in the pipeline's
  * icon-utils.mjs step for step (same doubles, same rounding, ties kept in first-seen order): both must give the
- * same hex for the same pixels.
+ * same hex for the same pixels. The icon pack stores these colours; its format includes this function's answers on
+ * fixed images (IconCache.fingerprint), so a change here sets every pack aside.
  */
 public final class IconColors {
 
@@ -30,6 +31,11 @@ public final class IconColors {
 
     public static void record(String filename, BufferedImage image) {
         COLORS_BY_FILE.put(filename, dominantOpaqueColor(image));
+    }
+
+    /** A colour worked out earlier for the same bytes: a cache hit takes it from the icon pack. */
+    public static void recordColour(String filename, String colour) {
+        COLORS_BY_FILE.put(filename, colour);
     }
 
     /** Writes every recorded colour, sorted by file name so two exports of the same icons write the same file. */
@@ -50,11 +56,16 @@ public final class IconColors {
     }
 
     public static String dominantOpaqueColor(BufferedImage image) {
+        return dominantOpaqueColor(argbOf(image));
+    }
+
+    /** The same on pixels already read out as ARGB ints, row by row from the top. */
+    public static String dominantOpaqueColor(int[] argb) {
         Map<Long, double[]> buckets = new LinkedHashMap<Long, double[]>();
         // An icon has few distinct colours: each one's HSL is worked out once. The sums still run pixel by pixel in
         // the same order, so they come out the same.
         Map<Integer, double[]> hslByRgb = new HashMap<Integer, double[]>();
-        for (int value : argbOf(image)) {
+        for (int value : argb) {
             int alpha = (value >>> 24) & 255;
             if (alpha < 24) {
                 continue;

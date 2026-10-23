@@ -390,8 +390,9 @@ export async function getDatasetRecipeIds(versionId: string): Promise<string[]> 
  * rebuilds; the recipe's content is. Each ref carries its slots, ticks and
  * EU, and the candidates (every recipe in the ref's map that makes its first
  * output, from the lookup index) are scored by `pickRecipeRefMatch`. Only a
- * candidate with the same resources in and out is offered; otherwise the
- * importer keeps the plan's embedded body. A rawRecipeId hit is consulted for
+ * candidate with the same resources in and out is offered (or, for an arcane
+ * recipe saved before its grid was exported, the same output and aspect cost);
+ * otherwise the importer keeps the plan's embedded body. A rawRecipeId hit is consulted for
  * refs the content scan could not settle.
  */
 export async function resolveDatasetRecipeRefs(

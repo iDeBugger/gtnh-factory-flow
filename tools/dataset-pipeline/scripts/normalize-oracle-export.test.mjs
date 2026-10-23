@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import oracle281Sample from "./__fixtures__/oracle-2.8.1-sample.json";
 import singleblockCatalysts from "./__fixtures__/singleblock-catalysts.json";
 
 const scriptPath = fileURLToPath(new URL("./normalize-oracle-export.mjs", import.meta.url));
@@ -12,7 +13,7 @@ const scriptPath = fileURLToPath(new URL("./normalize-oracle-export.mjs", import
  * The normalizer runs work at import time, so it is exercised the way the
  * pipeline runs it: as a subprocess over a fixture export.
  */
-function normalize(rawExport) {
+function normalize(rawExport, version = { id: "test-fixture", label: "test" }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "normalize-oracle-"));
   const input = path.join(dir, "oracle-export.json");
   const output = path.join(dir, "recipes.json");
@@ -20,13 +21,17 @@ function normalize(rawExport) {
   execFileSync(process.execPath, [scriptPath, input, output], {
     env: {
       ...process.env,
-      GTNH_DATASET_VERSION_ID: "test-fixture",
-      GTNH_DATASET_VERSION_LABEL: "test",
+      GTNH_DATASET_VERSION_ID: version.id,
+      GTNH_DATASET_VERSION_LABEL: version.label,
     },
     stdio: "pipe",
   });
   const dataset = JSON.parse(fs.readFileSync(output, "utf8"));
+  const reportPath = path.join(dir, "oracle", "oracle-report.json");
+  const report = fs.existsSync(reportPath) ? JSON.parse(fs.readFileSync(reportPath, "utf8")) : undefined;
   fs.rmSync(dir, { recursive: true, force: true });
+  // The oracle report rides along without becoming part of the dataset's shape.
+  Object.defineProperty(dataset, "oracleReport", { value: report, enumerable: false });
   return dataset;
 }
 
@@ -413,6 +418,185 @@ describe("mining worldgen becomes source recipes", () => {
     expect(dataset.recipeMaps).toEqual(
       expect.arrayContaining(["Ore Vein", "Small Ore", "Underground Fluid"]),
     );
+  });
+});
+
+/**
+ * Two GregTech veins can carry the same ores (Nether Quartzite and the space
+ * Quartzite & Quartz vein): they are still two veins, with their own name,
+ * dimensions and stats. Only the same game identity exported twice folds.
+ */
+describe("recipes named by a game identity are not folded by their contents", () => {
+  const quartzOres = [
+    {
+      role: "primary",
+      material: { id: 523, internalName: "Quartzite", name: "Quartzite" },
+      ore: item("gregtech:gt.blockores@523", 1, "Quartzite Ore"),
+    },
+    {
+      role: "secondary",
+      material: { id: 522, internalName: "CertusQuartz", name: "Certus Quartz" },
+      ore: item("gregtech:gt.blockores@522", 1, "Certus Quartz Ore"),
+    },
+  ];
+  const nether = { id: "ore.mix.quartz", name: "Quartzite", weight: 20, density: 2, size: 16,
+    heightRange: "80-120", dims: ["Nether"], dimAbbrs: ["Ne"], ores: quartzOres };
+  const space = { id: "ore.mix.quartzspace", name: "Quartzite & Quartz", weight: 20, density: 2, size: 16,
+    heightRange: "40-80", dims: ["GalacticraftCore_Moon"], dimAbbrs: ["Mo"], ores: quartzOres };
+  const smallOre = (id, dim) => ({
+    id,
+    material: { id: 527, internalName: "GarnetRed", name: "Red Garnet" },
+    heightRange: "10-60",
+    amountPerChunk: 8,
+    dims: [dim],
+    enabledDims: [dim === "Overworld" ? "Ow" : "Mo"],
+    drops: [item("gregtech:gt.metaitem.01@5527", 1, "Raw Red Garnet Ore")],
+  });
+  const miningExport = (veins, smallOres = []) => ({
+    ...MINING_EXPORT,
+    domains: [{ ...MINING_EXPORT.domains[0], veins, smallOres, undergroundFluids: [] }],
+  });
+
+  it("keeps two veins with the same ores in different dimensions, each with its own name and dimensions", () => {
+    const dataset = normalize(miningExport([nether, space]));
+    const veins = dataset.recipes.filter((recipe) => recipe.kind === "ore_vein");
+
+    expect(veins.map((vein) => vein.id).sort()).toEqual([
+      "oracle:ore-vein:ore-mix-quartz",
+      "oracle:ore-vein:ore-mix-quartzspace",
+    ]);
+    const byId = new Map(veins.map((vein) => [vein.metadata.veinId, vein]));
+    expect(byId.get("ore.mix.quartz").name).toBe("Ore Vein: Quartzite");
+    expect(byId.get("ore.mix.quartz").metadata.heightRange).toBe("80-120");
+    expect(JSON.stringify(byId.get("ore.mix.quartz").metadata.dimensions)).toContain("Nether");
+    expect(byId.get("ore.mix.quartzspace").name).toBe("Ore Vein: Quartzite & Quartz");
+    expect(byId.get("ore.mix.quartzspace").metadata.heightRange).toBe("40-80");
+    expect(JSON.stringify(byId.get("ore.mix.quartzspace").metadata.dimensions)).toContain("Moon");
+    expect(JSON.stringify(byId.get("ore.mix.quartzspace").metadata.dimensions)).not.toContain("Nether");
+  });
+
+  it("keeps two small ores that drop the same ore", () => {
+    const dataset = normalize(miningExport([], [smallOre("ore.small.garnetred", "Overworld"),
+      smallOre("ore.small.redgarnet", "GalacticraftCore_Moon")]));
+    const smallOres = dataset.recipes.filter((recipe) => recipe.kind === "small_ore");
+
+    expect(smallOres.map((recipe) => recipe.id).sort()).toEqual([
+      "oracle:small-ore:ore-small-garnetred",
+      "oracle:small-ore:ore-small-redgarnet",
+    ]);
+  });
+
+  it("still folds the same vein exported twice into one recipe", () => {
+    const dataset = normalize(miningExport([nether, { ...nether }]));
+    const veins = dataset.recipes.filter((recipe) => recipe.kind === "ore_vein");
+
+    expect(veins.map((vein) => vein.id)).toEqual(["oracle:ore-vein:ore-mix-quartz"]);
+  });
+});
+
+describe("IC2 crops that drop something only on a block under them or with a redstone signal", () => {
+  const stats = (id, drops, conditions) => ({
+    id, label: id, growth: 23, gain: 31, resistance: 0, durationTicks: 1000,
+    ...(conditions ? { conditions } : {}), drops: drops.map((resource) => ({ resource })),
+  });
+  const redGranite = { key: "ore:stoneGraniteRed", kind: "blockBelow", oreDict: "stoneGraniteRed", displayName: "Red Granite" };
+  const granite = { key: "ore:blockGranite", kind: "blockBelow", oreDict: "blockGranite", displayName: "Granite" };
+  const cobble = { key: "block:minecraft:cobblestone", kind: "blockBelow", block: "minecraft:cobblestone", displayName: "Cobblestone" };
+  const stone = { key: "block:minecraft:stone", kind: "blockBelow", block: "minecraft:stone", displayName: "Stone" };
+  const redstone = { key: "redstone", kind: "redstoneSignal", displayName: "a redstone signal" };
+  const crop = (id, name, variants) => ({
+    className: "Crop", id, name, owner: "berriespp", tier: 3, variants,
+    seed: item("ic2:itemcropseed", 1, `${name} Seeds`),
+  });
+  const cropsExport = (crops) => ({ domains: [{ id: "ic2Crops", crops }] });
+  const ic2Crops = (dataset) => dataset.recipes.filter((recipe) => recipe.category === "ic2-crop");
+
+  it("makes one recipe per condition, named and required, with no plain recipe when the plain crop drops nothing", () => {
+    const dataset = normalize(cropsExport([
+      crop("35", "Red Stonelilly", [
+        stats("23-31-0", [item("gregtech:gt.metaitem.01@2849", 2.5, "Red Granite Dust")], [redGranite]),
+        stats("23-31-0", [item("gregtech:gt.blockgranites", 2.5, "Granite")], [granite]),
+      ]),
+      crop("37", "Gray Stonelilly", [
+        stats("23-31-0", [item("gregtech:gt.metaitem.01@2299", 2.5, "Stone Dust")], [cobble, stone]),
+      ]),
+    ]));
+    const recipes = ic2Crops(dataset);
+
+    expect(recipes.map((recipe) => recipe.id).sort()).toEqual([
+      "oracle:ic2-crop:berriespp:35:under-blockgranite",
+      "oracle:ic2-crop:berriespp:35:under-stonegranitered",
+      "oracle:ic2-crop:berriespp:37:under-minecraft-cobblestone-or-under-minecraft-stone",
+    ]);
+    const gray = recipes.find((recipe) => recipe.metadata.cropId === "37");
+    expect(gray.name).toBe("IC2 Crop: Gray Stonelilly (on Cobblestone or Stone)");
+    expect(gray.metadata.requirements).toEqual(["Needs Cobblestone or Stone under it"]);
+    expect(gray.metadata.cropConditions.map((condition) => condition.block)).toEqual([
+      "minecraft:cobblestone", "minecraft:stone",
+    ]);
+    expect(gray.notes).toContain("Needs Cobblestone or Stone under it.");
+    expect(gray.outputs.map((slot) => slot.id)).toEqual(["gregtech:gt.metaitem.01@2299"]);
+  });
+
+  it("names a block with no item name after the item with its id, else after its id, never by the id", () => {
+    const skullBlock = { key: "block:minecraft:skull", kind: "blockBelow", block: "minecraft:skull", displayName: "minecraft:skull" };
+    const skullOre = { key: "ore:itemSkull", kind: "blockBelow", oreDict: "itemSkull", displayName: "Skeleton Skull" };
+    const fence = { key: "block:minecraft:nether_brick_fence", kind: "blockBelow", block: "minecraft:nether_brick_fence",
+      displayName: "minecraft:nether_brick_fence" };
+    const dataset = normalize({ domains: [
+      { id: "smelting", recipes: [{ id: "s", input: item("minecraft:bone", 1, "Bone"),
+        output: item("minecraft:skull", 1, "Skeleton Skull") }] },
+      { id: "ic2Crops", crops: [
+        crop("58", "Essence Berry", [stats("23-31-0", [item("tconstruct:oreberries@5", 12, "Essence Berry")], [skullBlock, skullOre])]),
+        crop("99", "Fence Berry", [stats("23-31-0", [item("minecraft:stick", 2, "Stick")], [fence])]),
+      ] },
+    ] });
+    const [essence, fenceBerry] = ["58", "99"].map((id) => ic2Crops(dataset).find((recipe) => recipe.metadata.cropId === id));
+
+    expect(essence.metadata.requirements).toEqual(["Needs Skeleton Skull under it"]);
+    expect(essence.name).toBe("IC2 Crop: Essence Berry (on Skeleton Skull)");
+    expect(essence.metadata.cropConditions.map((condition) => condition.displayName)).toEqual(["Skeleton Skull", "Skeleton Skull"]);
+    expect(fenceBerry.metadata.requirements).toEqual(["Needs Nether Brick Fence under it"]);
+    const shown = [essence, fenceBerry].flatMap((recipe) => [recipe.name, recipe.notes, ...recipe.metadata.requirements,
+      ...recipe.metadata.cropConditions.map((condition) => condition.displayName)]);
+    expect(shown.join("\n")).not.toContain("minecraft:");
+  });
+
+  it("names an IC2 crop exported by its lang key after its seed bag, with the same id", () => {
+    const wheat = (name, seed) => ({ ...crop("15", name, [
+      stats("23-31-0", [item("minecraft:redstone", 1.5, "Redstone")]),
+    ]), owner: "IC2", seed });
+    const named = ic2Crops(normalize(cropsExport([wheat("Redwheat", item("ic2:itemcropseed", 1, "Redwheat Seeds"))])))[0];
+    const [fromSeed] = ic2Crops(normalize(cropsExport([wheat("ic2.crop.redwheat", item("ic2:itemcropseed", 1, "Redwheat Seeds"))])));
+    const [fromKey] = ic2Crops(normalize(cropsExport([wheat("ic2.crop.terraWart", undefined)])));
+
+    expect(fromSeed.name).toBe("IC2 Crop: Redwheat");
+    expect(fromSeed.id).toBe(named.id);
+    expect(fromSeed.inputs[0]).toMatchObject({ id: named.inputs[0].id, displayName: "Redwheat Seed" });
+    expect(fromSeed.inputs[0].tooltip).toContain("Crop: Redwheat");
+    expect(fromKey.name).toBe("IC2 Crop: Terra Wart");
+    expect(fromKey.id).toBe(named.id);
+  });
+
+  it("keeps the plain crop's recipe and id and adds the condition beside it", () => {
+    const plainOnly = normalize(cropsExport([crop("15", "Red Wheat", [
+      stats("23-31-0", [item("minecraft:redstone", 1.5, "Redstone"), item("minecraft:wheat", 1.5, "Wheat")]),
+    ])]));
+    const dataset = normalize(cropsExport([crop("15", "Red Wheat", [
+      stats("23-31-0", [item("minecraft:redstone", 1.5, "Redstone"), item("minecraft:wheat", 1.5, "Wheat")]),
+      stats("23-31-0", [item("minecraft:redstone", 3, "Redstone")], [redstone]),
+    ])]));
+    const [plain] = ic2Crops(plainOnly);
+    const recipes = ic2Crops(dataset);
+
+    expect(recipes).toHaveLength(2);
+    const withoutStamp = (recipe) => ({ ...recipe, runtimeCalculation: { ...recipe.runtimeCalculation, generatedAt: undefined } });
+    expect(withoutStamp(recipes.find((recipe) => recipe.id === plain.id))).toEqual(withoutStamp(plain));
+    const powered = recipes.find((recipe) => recipe.id !== plain.id);
+    expect(powered.id).toBe("oracle:ic2-crop:berriespp:15:redstone-signal");
+    expect(powered.name).toBe("IC2 Crop: Red Wheat (with a redstone signal)");
+    expect(powered.metadata.requirements).toEqual(["Needs a redstone signal"]);
+    expect(powered.outputs.map((slot) => slot.id)).toEqual(["minecraft:redstone"]);
   });
 });
 
@@ -834,7 +1018,8 @@ describe("the Extreme Entity Crusher: one recipe per mob", () => {
   });
 });
 
-describe("LFTR sparging: the rolled outputs the recipe registers at 0 L", () => {
+// GT++ names the map gtpp.recipe.lftr.sparging up to 2.8 and gt.recipe.lftr.sparging since 2.9.
+describe.each(["gtpp.recipe.lftr.sparging", "gt.recipe.lftr.sparging"])("LFTR sparging (%s): the rolled outputs the recipe registers at 0 L", (mapId) => {
   const tbSalt = (extra = {}) => ({
     id: "sparge-tb",
     durationTicks: 500,
@@ -858,12 +1043,31 @@ describe("LFTR sparging: the rolled outputs the recipe registers at 0 L", () => 
       fluid("thoriumtetrafluoride", 0, "Thorium Tetrafluoride"),
     ],
   };
-  const exportOf = (recipe) => ({
+  // Another sparging recipe that kept its rolled outputs, so a map can hold a plain one.
+  const heliumSalt = () => ({
+    id: "sparge-he",
+    durationTicks: 500,
+    eut: 7680,
+    itemInputs: [],
+    fluidInputs: [fluid("helium", 500, "Helium"), fluid("molten.spargedtbsalt", 50, "Fluorine Sparged TB Salt")],
+    itemOutputs: [],
+    fluidOutputs: [fluid("molten.heliumspargedtbsalt", 50, "Helium Sparged TB Salt")],
+    spargeGasAmount: 500,
+    spargeMaxByproduct: 200,
+    spargeFluidOutputs: [
+      fluid("molten.heliumspargedtbsalt", 50, "Helium Sparged TB Salt"),
+      fluid("helium", 0, "Helium"),
+      fluid("xenon", 0, "Xenon"),
+      fluid("neon", 0, "Neon"),
+    ],
+  });
+  const exportOf = (...recipes) => ({
     domains: [{
       id: "gregtech",
-      recipeMaps: [{ id: "gtpp.recipe.lftr.sparging", name: "LFTR Gas Sparging", recipes: [recipe] }],
+      recipeMaps: [{ id: mapId, name: "LFTR Gas Sparging", recipes }],
     }],
   });
+  const tbOf = (dataset) => dataset.recipes.find((recipe) => recipe.inputs.some((slot) => slot.id === "molten.tbsalt"));
 
   it("lists the gas handed back and every byproduct at its average, ThF4 included", () => {
     const [recipe] = normalize(exportOf(tbSalt(rolled))).recipes;
@@ -879,9 +1083,292 @@ describe("LFTR sparging: the rolled outputs the recipe registers at 0 L", () => 
   });
 
   it("keeps the recipe id the plain export had, so saved plans keep their card", () => {
-    const [plain] = normalize(exportOf(tbSalt())).recipes;
-    const [full] = normalize(exportOf(tbSalt(rolled))).recipes;
+    const plain = tbOf(normalize(exportOf(tbSalt(), heliumSalt())));
+    const full = tbOf(normalize(exportOf(tbSalt(rolled), heliumSalt())));
     expect(full.id).toBe(plain.id);
     expect(plain.outputs).toHaveLength(1);
+    expect(full.outputs).toHaveLength(7);
+  });
+
+  it("refuses an export whose sparging recipes all lost their rolled outputs", () => {
+    let error;
+    try {
+      normalize(exportOf(tbSalt(), { ...tbSalt(), id: "sparge-tb-2", fluidInputs: [fluid("fluorine", 150, "Fluorine"), fluid("molten.tbsalt", 50, "TB Salt")] }));
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeDefined();
+    expect(String(error.stderr)).toContain(`2 recipe(s) in ${mapId} carry no spargeFluidOutputs`);
+  });
+});
+
+/**
+ * Thaumcraft 4 arcane workbench recipes as the oracle exports them: the grid read from
+ * `getInput()`, a shaped cell carrying its 3x3 position (`gridSlot`), a shapeless recipe one
+ * entry per ingredient, and the vis cost as aspects.
+ */
+describe("Thaumcraft arcane recipes", () => {
+  const aspect = (tag, amount) => ({ kind: "aspect", id: `thaumcraft:aspect:${tag}`, tag, amount, displayName: tag });
+  const at = (resource, gridSlot) => ({ ...resource, gridSlot });
+  const thaumium = { kind: "oreDictionary", names: ["ingotThaumium"] };
+  const plank = item("thaumcraft:blockwoodenplanks", 1, "Greatwood Planks");
+  const arcane = (id, extra) => ({
+    id,
+    sourceList: "craftingRecipes",
+    type: "arcane",
+    className: "thaumcraft.api.crafting.ShapedArcaneRecipe",
+    research: "TEST",
+    durationTicks: 1,
+    ...extra,
+  });
+  // A 2x2 pattern: thaumium over planks, in the grid's top-left corner.
+  const shaped = arcane("shaped", {
+    width: 2,
+    height: 2,
+    output: item("thaumcraft:blocktable@15", 1, "Arcane Table"),
+    components: [at(thaumium, 0), at(thaumium, 1), at(plank, 3), at(plank, 4)],
+    aspects: [aspect("ordo", 5), aspect("aer", 3)],
+  });
+  const exportOf = (...recipes) => ({ domains: [{ id: "thaumcraft", recipes }] });
+  const arcaneRecipes = (dataset) =>
+    dataset.recipes.filter((recipe) => recipe.machineType === "Thaumcraft Arcane Crafting");
+
+  it("a shaped recipe takes its grid items, each in its own cell, and its aspects", () => {
+    const [recipe] = arcaneRecipes(normalize(exportOf(shaped)));
+    expect(recipe.inputs.map((input) => [input.kind, input.id, input.amount])).toEqual([
+      ["item", "oredict:ingotThaumium", 1],
+      ["item", "oredict:ingotThaumium", 1],
+      ["item", "thaumcraft:blockwoodenplanks", 1],
+      ["item", "thaumcraft:blockwoodenplanks", 1],
+      ["aspect", "thaumcraft:aspect:ordo", 5],
+      ["aspect", "thaumcraft:aspect:aer", 3],
+    ]);
+    // Cells 0, 1, 3 and 4 of the 3x3 grid, not the first four in a row.
+    const cells = recipe.nei.slots
+      .filter((slot) => slot.side === "input" && slot.kind === "item")
+      .map(({ x, y }) => ({ x, y }));
+    expect(cells).toEqual([
+      { x: 48, y: 33 },
+      { x: 75, y: 33 },
+      { x: 49, y: 60 },
+      { x: 76, y: 60 },
+    ]);
+  });
+
+  it("the id keys on the pattern, not on the order the aspects come in", () => {
+    const [first] = arcaneRecipes(normalize(exportOf(shaped)));
+    const [reordered] = arcaneRecipes(
+      normalize(exportOf({ ...shaped, aspects: [...shaped.aspects].reverse() })),
+    );
+    expect(reordered.id).toBe(first.id);
+    const flipped = {
+      ...shaped,
+      components: [at(plank, 0), at(plank, 1), at(thaumium, 3), at(thaumium, 4)],
+    };
+    const [other] = arcaneRecipes(normalize(exportOf(flipped)));
+    expect(other.id).not.toBe(first.id);
+  });
+
+  it("a shapeless recipe takes every ingredient, not one of them", () => {
+    const pearl = item("thaumcraft:itemresource@18", 1, "Avarice Pearl");
+    const sliver = item("thaumcraft:itemresource@17", 1, "Sliver of Entropy");
+    const [recipe] = arcaneRecipes(
+      normalize(
+        exportOf(
+          arcane("shapeless", {
+            className: "thaumcraft.api.crafting.ShapelessArcaneRecipe",
+            output: item("thaumcraft:itemresource@19", 1, "Shattered Avarice Pearl"),
+            components: [pearl, sliver],
+            aspects: [aspect("perditio", 8)],
+          }),
+        ),
+      ),
+    );
+    expect(recipe.inputs.map((input) => input.id)).toEqual([
+      "thaumcraft:itemresource@18",
+      "thaumcraft:itemresource@17",
+      "thaumcraft:aspect:perditio",
+    ]);
+  });
+
+  it("lists a recipe with an unreadable grid cell in the oracle report", () => {
+    const short = {
+      ...shaped,
+      components: shaped.components.slice(0, 3),
+      unresolvedGridInputs: 1,
+      unresolvedGridCells: [{ gridSlot: 4, className: "net.minecraft.item.ItemStack", text: "0xitem.null@0" }],
+    };
+    const report = normalize(exportOf(short)).oracleReport;
+    expect(report.unresolvedArcaneGrids).toEqual([
+      expect.objectContaining({
+        output: "thaumcraft:blocktable@15",
+        unresolvedGridInputs: 1,
+        cells: [expect.objectContaining({ gridSlot: 4, className: "net.minecraft.item.ItemStack" })],
+      }),
+    ]);
+    expect(report.failures).toEqual([]);
+  });
+
+  it("refuses an export with more unreadable arcane grids than the ceiling allows", () => {
+    const short = (id) => ({ ...shaped, id, research: id, unresolvedGridInputs: 1, unresolvedGridCells: [] });
+    let error;
+    try {
+      normalize(exportOf(short("a"), short("b"), short("c")));
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeDefined();
+    expect(String(error.stderr)).toContain("3 arcane recipe(s) have grid cells the oracle could not read");
+  });
+
+  it("wands that share an output item but differ by rod stay apart", () => {
+    const wand = (rodId, rodName, nbt) =>
+      arcane(`wand-${rodName}`, {
+        width: 3,
+        height: 3,
+        output: { ...item("thaumcraft:wandcasting@110", 1, `${rodName} Wand`), nbt },
+        components: [at(item("thaumcraft:wandcap", 1, "Iron Cap"), 2), at(item(rodId, 1, rodName), 4), at(item("thaumcraft:wandcap", 1, "Iron Cap"), 6)],
+        aspects: [aspect("aer", 10)],
+      });
+    const recipes = arcaneRecipes(
+      normalize(
+        exportOf(
+          wand("thaumcraft:wandrod@2", "Reed", '{rod:"reed"}'),
+          wand("thaumcraft:wandrod@1", "Obsidian", '{rod:"obsidian"}'),
+        ),
+      ),
+    );
+    expect(recipes).toHaveLength(2);
+    expect(new Set(recipes.map((recipe) => recipe.id)).size).toBe(2);
+  });
+});
+
+/**
+ * A GTNH 2.8.1 export, trimmed from the real one: GT and GT++ maps (GT++ still
+ * names its maps gtpp.recipe.* there), the Fluid Canner map 2.9 folded into
+ * the Canner, crafting, Thaumcraft, a bee, an IC2 crop with no CropsNH beside
+ * it, and mining with no dimension tiers and small ores named by `dims` alone.
+ */
+describe("a GTNH 2.8.1 export", () => {
+  const VERSION = { id: "local-2.8.1", label: "2.8.1" };
+  const gregtechMaps = () => oracle281Sample.domains.find((domain) => domain.id === "gregtech").recipeMaps;
+  const mapsOf = (dataset, recipeMapId) =>
+    dataset.recipes.filter((recipe) => recipe.metadata?.recipeMapId === recipeMapId);
+  // The same maps as 2.9 names them, after GT++ merged into GregTech.
+  const as29 = (renames) => ({
+    ...oracle281Sample,
+    domains: [{
+      id: "gregtech",
+      recipeMaps: gregtechMaps()
+        .filter((map) => renames[map.id])
+        .map((map) => ({ ...map, ...renames[map.id] })),
+    }],
+  });
+  let dataset;
+
+  beforeAll(() => {
+    dataset = normalize(oracle281Sample, VERSION);
+  });
+
+  afterAll(() => {
+    dataset = undefined;
+  });
+
+  it("is a 2.8.1 dataset", () => {
+    expect(dataset.gtnhVersion).toBe("2.8.1");
+    expect(dataset.datasetVersionId).toBe("local-2.8.1");
+    expect(dataset.recipes.every((recipe) => recipe.source.datasetVersionId === "local-2.8.1")).toBe(true);
+  });
+
+  it("lists every recipe map the export has", () => {
+    const names = gregtechMaps().map((map) => map.name);
+    expect(dataset.recipeMaps).toEqual(expect.arrayContaining([
+      ...names.filter((name) => name !== "Coke Oven" && !name.startsWith("gt.recipe.")),
+      "Industrial Coke Oven",
+      "Tank",
+      "Shaped Crafting",
+      "Thaumcraft Crucible",
+      "IC2 Crop",
+      "Ore Vein",
+      "Small Ore",
+      "Underground Fluid",
+    ]));
+  });
+
+  it("a 2.8.1 GT++ map keeps its recipes and gets the same id key as its 2.9 twin", () => {
+    const gtpp = dataset.recipes.filter((recipe) => recipe.metadata?.recipeMapId?.startsWith("gtpp.recipe."));
+    const ids = gtpp.map((recipe) => recipe.id);
+    expect(mapsOf(dataset, "gtpp.recipe.multimixer")).toHaveLength(2);
+    expect(ids.every((id) => id.startsWith("oracle:"))).toBe(true);
+    expect(ids.some((id) => id.includes(":gtpp.recipe."))).toBe(false);
+    // Ids slug the map: gt.recipe.multimixer is `gt-recipe-multimixer`.
+    expect(ids.some((id) => id.includes("gtpp-recipe"))).toBe(false);
+
+    const twin = normalize(as29({
+      "gtpp.recipe.multimixer": { id: "gt.recipe.multimixer" },
+      "gtpp.recipe.cokeoven": { id: "gt.recipe.industrialcokeoven", name: "Industrial Coke Oven" },
+    }), { id: "local-2.9.0-rc-2", label: "2.9.0-RC-2" });
+    expect([
+      ...mapsOf(dataset, "gtpp.recipe.multimixer"),
+      ...mapsOf(dataset, "gtpp.recipe.cokeoven"),
+    ].map((recipe) => recipe.id).sort()).toEqual(twin.recipes.map((recipe) => recipe.id).sort());
+  });
+
+  it("gives GT++'s Thermal Boiler map the id of its 2.9 twin, not GT's geothermal fuel map's", () => {
+    const [boiler] = mapsOf(dataset, "gtpp.recipe.thermalgeneratorfuel");
+    expect(boiler.machineType).toBe("Thermal Boiler");
+    expect(boiler.id.startsWith("oracle:gregtech:gt-recipe-thermalboiler:")).toBe(true);
+    expect(dataset.recipes.some((recipe) => recipe.id.includes("gt-recipe-thermalgeneratorfuel"))).toBe(false);
+
+    const twin = normalize(as29({ "gtpp.recipe.thermalgeneratorfuel": { id: "gt.recipe.thermalboiler" } }));
+    expect(boiler.id).toBe(twin.recipes[0].id);
+  });
+
+  it("names a map the game left untranslated after its machine", () => {
+    const [recipe] = mapsOf(dataset, "gt.recipe.multiblockrockbreaker");
+    expect(recipe.machineType).toBe("Boldarnator");
+    expect(recipe.id.startsWith("oracle:gregtech:gt-recipe-multiblockrockbreaker:")).toBe(true);
+    expect(dataset.recipeMaps).toContain("Boldarnator");
+    expect(dataset.recipeMaps).not.toContain("gt.recipe.multiblockrockbreaker");
+  });
+
+  it("a 2.8.1 fluidcanner recipe is mirrored into the Tank map", () => {
+    const [canner] = mapsOf(dataset, "gt.recipe.fluidcanner");
+    const [tank] = mapsOf(dataset, "planner.tank");
+    expect(canner.machineType).toBe("Fluid Canner");
+    expect(tank).toMatchObject({ machineType: "Tank", eut: 0, durationTicks: 1 });
+    expect(tank.inputs.map((slot) => slot.id)).toEqual(canner.inputs.map((slot) => slot.id));
+    expect(tank.outputs.map((slot) => slot.id)).toEqual(canner.outputs.map((slot) => slot.id));
+  });
+
+  it("2.8.1 ore veins and small ores normalize without dimension tiers", () => {
+    const vein = dataset.recipes.find((recipe) => recipe.kind === "ore_vein");
+    const smallOre = dataset.recipes.find((recipe) => recipe.kind === "small_ore");
+    const fluid = dataset.recipes.find((recipe) => recipe.kind === "underground_fluid");
+    expect(vein.metadata.dimensions.map((dim) => dim.name)).toEqual(["Overworld", "TcetiE", "Twilight"]);
+    // The small ore names its dimension by the full name; the alias resolves it.
+    expect(smallOre.metadata.dimensions).toEqual([{ name: "Twilight", abbr: "TF" }]);
+    for (const dim of [...vein.metadata.dimensions, ...smallOre.metadata.dimensions, ...fluid.metadata.deposits]) {
+      expect(dim.tier).toBeUndefined();
+      expect(dim.tierLabel).toBeUndefined();
+    }
+  });
+
+  it("IC2 crops normalize when cropsNhCrops is not_present", () => {
+    expect(oracle281Sample.adapters.find((adapter) => adapter.id === "cropsnh-crop-cards").status).toBe("not_present");
+    const crop = dataset.recipes.find((recipe) => recipe.category === "ic2-crop");
+    expect(crop).toMatchObject({ name: "IC2 Crop: Hemp", machineType: "IC2 Crop" });
+    expect(crop.outputs.length).toBeGreaterThan(0);
+    expect(new Set(crop.outputs.map((slot) => slot.id))).toEqual(new Set(["minecraft:string"]));
+    expect(dataset.recipes.some((recipe) => recipe.category === "cropsnh-crop")).toBe(false);
+  });
+
+  it("keeps the crafting, Thaumcraft, furnace and bee recipes", () => {
+    const categories = new Set(dataset.recipes.map((recipe) => recipe.category));
+    for (const category of ["crafting", "thaumcraft", "furnace", "forestry-bee"]) {
+      expect(categories.has(category)).toBe(true);
+    }
+    const crucible = dataset.recipes.find((recipe) => recipe.category === "thaumcraft");
+    expect(crucible.inputs[0].id).toBe("oredict:dustGlowstone");
   });
 });
