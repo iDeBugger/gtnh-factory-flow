@@ -1,4 +1,5 @@
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { entryIconSchema } from "@/lib/model/schemas";
 import type { CommunityPlanSummary, EntryIcon, PlanResourceStat } from "@/lib/community/types";
@@ -227,21 +228,55 @@ export async function makeVoterKey(request: Request, deviceId: string): Promise<
 // reset flow — this is a hobby community site.
 // ---------------------------------------------------------------------------
 
-export function hashPassword(password: string): string {
+const scrypt = promisify(scryptCallback) as (
+  password: string,
+  salt: string,
+  keylen: number,
+  options: { maxmem: number },
+) => Promise<Buffer>;
+
+/**
+ * The key derivation runs on libuv's threadpool, never on the event loop:
+ * one derivation takes about 40 ms of CPU, and the synchronous form held
+ * every page, API and dataset answer of the whole site for that long on each
+ * sign-in attempt, which an unauthenticated flood turns into an outage. Node's
+ * defaults (N=16384, r=8, p=1) need 16 MB; the ceiling leaves room above them.
+ */
+const SCRYPT_KEY_BYTES = 64;
+const SCRYPT_MAX_MEMORY = 64 * 1024 * 1024;
+
+function deriveKey(password: string, salt: string): Promise<Buffer> {
+  return scrypt(password, salt, SCRYPT_KEY_BYTES, { maxmem: SCRYPT_MAX_MEMORY });
+}
+
+export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(password, salt, 64).toString("hex");
+  const hash = (await deriveKey(password, salt)).toString("hex");
   return `${salt}:${hash}`;
 }
 
-export function verifyPassword(password: string, stored: string): boolean {
-  const [salt, hash] = stored.split(":");
+/**
+ * A stored hash of nothing anyone types: a sign-in attempt for a name nobody
+ * has derives against it, so an unknown name costs the same as a wrong
+ * password and the answer's timing says nothing about which names exist.
+ */
+const DUMMY_PASSWORD_HASH =
+  "5c669673f6136c24b28f9eda8acbe809:8fcadba8148d088a43a6cc903f5e95bc0db74e714a1393c295e4221fc27995cf820156d205a3e42a79ee585f886a623a90213fb9ba618392db69ffe37783c3ad";
+
+/**
+ * Whether the password matches the stored `salt:hash`. With no stored hash
+ * (no such account) the derivation still runs, against the dummy, and the
+ * answer is false whatever it finds.
+ */
+export async function checkPassword(password: string, stored: string | undefined): Promise<boolean> {
+  const [salt, hash] = (stored ?? DUMMY_PASSWORD_HASH).split(":");
   if (!salt || !hash) {
     return false;
   }
-
-  const candidate = scryptSync(password, salt, 64);
+  const candidate = await deriveKey(password, salt);
   const expected = Buffer.from(hash, "hex");
-  return candidate.length === expected.length && timingSafeEqual(candidate, expected);
+  const matches = candidate.length === expected.length && timingSafeEqual(candidate, expected);
+  return stored !== undefined && matches;
 }
 
 /**

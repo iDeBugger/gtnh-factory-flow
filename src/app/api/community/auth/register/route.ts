@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     const db = getCommunityDb();
     const { data, error } = await db
       .from("community_users")
-      .insert({ username, password_hash: hashPassword(password) })
+      .insert({ username, password_hash: await hashPassword(password) })
       .select("id,username")
       .single<{ id: string; username: string }>();
 

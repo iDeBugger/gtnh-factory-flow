@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import {
+  checkPassword,
   checkRateLimit,
   getCommunityDb,
   isCommunityConfigured,
   makeActorKey,
   makeSessionToken,
   sessionCookieHeader,
-  verifyPassword,
 } from "@/lib/server/community";
 
 export const runtime = "nodejs";
@@ -36,7 +36,9 @@ export async function POST(request: Request) {
       .eq("username", username)
       .single<{ id: string; username: string; password_hash: string; is_admin: boolean }>();
 
-    if (!data || !verifyPassword(password, data.password_hash)) {
+    // The check runs whether or not the name exists, so its timing says nothing about which names do.
+    const ok = await checkPassword(password, data?.password_hash);
+    if (!data || !ok) {
       return NextResponse.json({ error: "Wrong username or password." }, { status: 401 });
     }
 

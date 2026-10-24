@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { forgetSessionUsers, resetDbBreaker } from "@/lib/server/community";
+import { checkPassword, forgetSessionUsers, hashPassword, resetDbBreaker } from "@/lib/server/community";
 import * as login from "./login/route";
 import * as logout from "./logout/route";
 import * as me from "./me/route";
@@ -100,4 +100,43 @@ describe("signing out", () => {
     // The token itself is still good: only its browser forgot it.
     expect(await whoAmI(cookie)).toEqual({ username: "ann_out", isAdmin: false });
   });
+});
+
+describe("password checks", () => {
+  const median = (values: number[]) => values.sort((a, b) => a - b)[Math.floor(values.length / 2)]!;
+  const timed = async (work: () => Promise<unknown>) => {
+    const start = performance.now();
+    await work();
+    return performance.now() - start;
+  };
+
+  it("cost the same for an unknown name as for a wrong password", async () => {
+    const stored = await hashPassword("y");
+    const known: number[] = [];
+    const unknown: number[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      known.push(await timed(() => checkPassword("x", stored)));
+      unknown.push(await timed(() => checkPassword("x", undefined)));
+    }
+    // scrypt takes tens of milliseconds; the bounds are loose on purpose.
+    expect(median(unknown)).toBeGreaterThanOrEqual(10);
+    expect(median(unknown)).toBeLessThanOrEqual(3 * median(known));
+    expect(await checkPassword("x", undefined)).toBe(false);
+    expect(await checkPassword("not-a-password", undefined)).toBe(false);
+    expect(await checkPassword("y", stored)).toBe(true);
+    expect(await checkPassword("x", stored)).toBe(false);
+  }, 20_000);
+
+  it("do not hold the event loop", async () => {
+    const stored = await hashPassword("y");
+    let ticks = 0;
+    const interval = setInterval(() => (ticks += 1), 5);
+    try {
+      await Promise.all(Array.from({ length: 20 }, () => checkPassword("x", stored)));
+    } finally {
+      clearInterval(interval);
+    }
+    // Synchronous scrypt lets the interval fire once or twice while 20 derivations run.
+    expect(ticks).toBeGreaterThanOrEqual(20);
+  }, 20_000);
 });
