@@ -10,6 +10,7 @@ import {
   localDbFetch,
   localDbUrl,
 } from "./local-db/client";
+import { clientAddress } from "./client-address";
 import {
   makeSessionToken,
   readSessionCookie,
@@ -175,22 +176,8 @@ export function getCommunityDb(): SupabaseClient {
   return cachedClient;
 }
 
-/**
- * The address a request came from. The site sits behind Cloudflare and then Caddy, so the TCP peer is a Cloudflare
- * edge and X-Forwarded-For names that edge (Caddy trusts no incoming one). Caddy puts the client's own address in
- * X-Client-Ip, overwriting anything the client sent (its `client_ip` from Cloudflare's CF-Connecting-IP, trusted only
- * from Cloudflare's ranges); without that, CF-Connecting-IP, which Cloudflare always sets itself.
- */
-export function clientAddress(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  return (
-    request.headers.get("x-client-ip")?.trim() ||
-    request.headers.get("cf-connecting-ip")?.trim() ||
-    forwarded?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip")?.trim() ||
-    "local"
-  );
-}
+/** The address a request came from: the one rule lives in client-address.ts. */
+export { clientAddress };
 
 /**
  * A salted hash, so keys never hold raw addresses or ids. The salt is the

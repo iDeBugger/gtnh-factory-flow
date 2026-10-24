@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { queryDatasetRecipes } from "@/lib/server/dataset-query";
+import { resetDatasetBudget } from "@/lib/server/dataset-rate";
 import { GET } from "./route";
 
 vi.mock("@/lib/server/dataset-query", () => ({
@@ -15,6 +16,11 @@ vi.mock("@/lib/server/dataset-query", () => ({
 }));
 
 describe("recipe dataset API route", () => {
+  beforeEach(() => {
+    resetDatasetBudget();
+    vi.mocked(queryDatasetRecipes).mockClear();
+  });
+
   it("accepts aspect resources for recipe lookups", async () => {
     await GET(
       new Request(
@@ -78,9 +84,12 @@ describe("recipe dataset API route", () => {
     );
 
     // An empty include list is a real state: nothing selected.
-    await GET(new Request("http://localhost/api/datasets/stable/recipes?allMaps=1&mapMode=include"), {
-      params: Promise.resolve({ versionId: "stable" }),
-    });
+    await GET(
+      new Request("http://localhost/api/datasets/stable/recipes?allMaps=1&mapMode=include"),
+      {
+        params: Promise.resolve({ versionId: "stable" }),
+      },
+    );
 
     expect(queryDatasetRecipes).toHaveBeenLastCalledWith(
       "stable",
@@ -106,5 +115,49 @@ describe("recipe dataset API route", () => {
         allMaps: false,
       }),
     );
+  });
+
+  it("answers 429 with Retry-After once an address has spent its minute", async () => {
+    // A two-letter query cannot be narrowed by the index, so it costs ten units
+    // of the 1200 an address gets a minute: 120 pass, the 121st waits.
+    const send = () =>
+      GET(
+        new Request("http://localhost/api/datasets/stable/recipes?query=zz", {
+          headers: { "x-client-ip": "203.0.113.9" },
+        }),
+        { params: Promise.resolve({ versionId: "stable" }) },
+      );
+    for (let call = 0; call < 120; call += 1) {
+      expect((await send()).status).toBe(200);
+    }
+
+    const refused = await send();
+    expect(refused.status).toBe(429);
+    expect(refused.headers.get("Retry-After")).toBe("10");
+    await expect(refused.json()).resolves.toEqual({
+      error: "Too many requests. Wait a moment and try again.",
+    });
+    expect(queryDatasetRecipes).toHaveBeenCalledTimes(120);
+
+    // Another address is not held up by it.
+    const other = await GET(
+      new Request("http://localhost/api/datasets/stable/recipes?query=zz", {
+        headers: { "x-client-ip": "203.0.113.10" },
+      }),
+      { params: Promise.resolve({ versionId: "stable" }) },
+    );
+    expect(other.status).toBe(200);
+  });
+
+  it("a narrowed query costs one unit", async () => {
+    for (let call = 0; call < 200; call += 1) {
+      const response = await GET(
+        new Request("http://localhost/api/datasets/stable/recipes?query=iron", {
+          headers: { "x-client-ip": "203.0.113.9" },
+        }),
+        { params: Promise.resolve({ versionId: "stable" }) },
+      );
+      expect(response.status).toBe(200);
+    }
   });
 });

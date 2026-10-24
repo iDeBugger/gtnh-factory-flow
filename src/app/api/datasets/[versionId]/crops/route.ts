@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
 import { listDatasetCropFarmRecipes } from "@/lib/server/dataset-query";
+import { datasetBudgetRefusal, HEAVY_REQUEST_COST } from "@/lib/server/dataset-rate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,6 +12,11 @@ export async function GET(
 ) {
   try {
     const { versionId } = await params;
+    // About 8 MB of JSON per answer.
+    const refusal = datasetBudgetRefusal(request, HEAVY_REQUEST_COST);
+    if (refusal) {
+      return refusal;
+    }
     const result = await listDatasetCropFarmRecipes(versionId);
     return NextResponse.json(result, {
       headers: datasetCacheHeaders(request),

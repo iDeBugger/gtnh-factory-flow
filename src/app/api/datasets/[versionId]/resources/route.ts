@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
 import { queryDatasetResources } from "@/lib/server/dataset-query";
+import { datasetBudgetRefusal, searchRequestCost } from "@/lib/server/dataset-rate";
 import { getResourcePopularity } from "@/lib/server/resource-popularity";
+import { parseSearchQuery } from "@/lib/search/text-search";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,13 +15,18 @@ export async function GET(
   try {
     const { versionId } = await params;
     const url = new URL(request.url);
+    const query = url.searchParams.get("query") ?? "";
+    const refusal = datasetBudgetRefusal(request, searchRequestCost(parseSearchQuery(query).terms));
+    if (refusal) {
+      return refusal;
+    }
     const kindParam = url.searchParams.get("kind");
     const sortParam = url.searchParams.get("sort");
     const sourceParam = url.searchParams.get("source");
     // Never awaits the database: the last good ranking, or none yet.
     const popularity = sortParam === "popular" ? getResourcePopularity() : undefined;
     const result = await queryDatasetResources(versionId, {
-      query: url.searchParams.get("query") ?? "",
+      query,
       offset: parseOffset(url.searchParams.get("offset")),
       limit: parseLimit(url.searchParams.get("limit")),
       kind: kindParam === "item" || kindParam === "fluid" ? kindParam : undefined,

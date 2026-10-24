@@ -22,6 +22,16 @@
 - The image optimizer is off (`images.unoptimized` in next.config.ts): nothing uses next/image, and
   `/_next/image` would hand any same-origin PNG (uploads, dataset textures) to sharp. Pictures are served
   by the app's own routes or plain `<img>`; keep it that way.
+- Every dataset route except `prewarm` spends an in-memory work budget per client address before any dataset
+  work (`dataset-rate.ts`): 1200 units a minute; a cheap request is 1 unit, a heavy one 10 (a text search with a
+  word under three characters or more than three words, `recipe-ids`, `crops`, `resolve-recipes`). Past it the
+  route answers 429 `Too many requests. Wait a moment and try again.` with `Retry-After: 10`, which the search
+  panes show. `GTNH_DATASET_BUDGET_PER_MINUTE` overrides it (`0` disables, for local profiling); without Caddy
+  every request is one address, so a local load test needs that. Floods from many addresses are Cloudflare's.
+  Exam: `dataset-rate.test.ts`, `recipes/route.test.ts`.
+- A text search matches at most six words and at most two of them under three characters
+  (`MAX_SEARCH_TERMS`, `MAX_SHORT_SEARCH_TERMS` in `src/lib/search/text-search.ts`): a word that short cannot use
+  the trigram index and walks every recipe. Exam: `text-search.test.ts`.
 
 ## Prewarm (instrumentation.ts, `prewarmDatasetVersions`)
 
@@ -177,7 +187,11 @@ The instance is small and has gone down under load. Rules:
   day per address and per device, the same words once a month, and at most 10 issues an hour and 40 a day for the
   whole site. Player text is escaped (no pictures, links or HTML in the issue).
 - The client address is Caddy's `X-Client-Ip` (Cloudflare's CF-Connecting-IP, trusted only from Cloudflare's
-  ranges), then CF-Connecting-IP; X-Forwarded-For names a Cloudflare edge (`clientAddress` in community.ts).
+  ranges), then CF-Connecting-IP, each only as an IP literal; nothing else is read (X-Forwarded-For names a
+  Cloudflare edge or the client's own chain, nothing sets X-Real-Ip). One module, `client-address.ts`
+  (`clientAddress`, re-exported by community.ts), used by every per-address rule on the site; a request with
+  neither header is `"local"`. It is trustworthy only because Caddy is the site's only peer: the unit binds
+  loopback and the firewall closes :3000. Exam: `client-address.test.ts`.
 - Emergency stop without a deploy: a Caddy rule answering 503 to `POST /api/feedback` (`/etc/caddy/Caddyfile`, then
   `systemctl reload caddy`).
 - Plans and the picture go to the private `feedback-files` bucket, served by `/api/feedback/files/<id>/<file>`, only

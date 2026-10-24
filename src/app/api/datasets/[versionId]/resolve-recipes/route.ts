@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { type DatasetRecipeRef, resolveDatasetRecipeRefs } from "@/lib/server/dataset-query";
+import { datasetBudgetRefusal, HEAVY_REQUEST_COST } from "@/lib/server/dataset-rate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,6 +11,11 @@ export async function POST(
 ) {
   try {
     const { versionId } = await params;
+    // A plan's worth of recipe lookups per call.
+    const refusal = datasetBudgetRefusal(request, HEAVY_REQUEST_COST);
+    if (refusal) {
+      return refusal;
+    }
     const body = (await request.json()) as { recipes?: DatasetRecipeRef[] };
     return NextResponse.json(
       {

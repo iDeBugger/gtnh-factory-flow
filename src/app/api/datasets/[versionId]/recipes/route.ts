@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
 import { queryDatasetRecipes } from "@/lib/server/dataset-query";
+import { datasetBudgetRefusal, searchRequestCost } from "@/lib/server/dataset-rate";
+import { parseSearchQuery } from "@/lib/search/text-search";
 import {
   MAX_RECIPE_QUERY_CLAUSES,
   parseRecipeQueryClause,
@@ -22,11 +24,16 @@ export async function GET(
   try {
     const { versionId } = await params;
     const url = new URL(request.url);
+    const query = url.searchParams.get("query") ?? "";
+    const refusal = datasetBudgetRefusal(request, searchRequestCost(parseSearchQuery(query).terms));
+    if (refusal) {
+      return refusal;
+    }
     const resourceKind = url.searchParams.get("resourceKind");
     const resourceId = url.searchParams.get("resourceId");
     const clauses = parseClauses(url.searchParams.getAll("clause"));
     const result = await queryDatasetRecipes(versionId, {
-      query: url.searchParams.get("query") ?? "",
+      query,
       resource:
         resourceKind && resourceId && isRecipeResourceKind(resourceKind)
           ? { kind: resourceKind, id: resourceId }
