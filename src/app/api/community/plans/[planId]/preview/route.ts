@@ -6,6 +6,7 @@ import { PLAN_PREVIEW_BUCKET, getPlanPreviewPng } from "@/lib/server/plan-previe
 import {
   getCommunityDb,
   getSessionUser,
+  isAdminRequest,
   isCommunityConfigured,
 } from "@/lib/server/community";
 
@@ -13,10 +14,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * The board photograph a shared link unfurls into. Stored in its own public
- * bucket AT the plan's id — no schema column, no URL to validate: the card
+ * The board photograph a shared link unfurls into. Stored in its own PRIVATE
+ * bucket AT the plan's id (no schema column, no URL to validate: the card
  * route derives the object name from the id it already has, and re-sharing
- * overwrites in place.
+ * overwrites in place) and served only through the GET below, which checks
+ * the post: a bucket URL would show an unpublished post's board to anyone
+ * who had the id. Nothing reads the bucket's public URL.
  *
  * Owner-only, unlike board-image uploads: this picture becomes the plan's
  * public face in every chat the link is pasted into, so only the person who
@@ -35,7 +38,7 @@ async function ensureBucket(): Promise<void> {
   const { data } = await db.storage.getBucket(PLAN_PREVIEW_BUCKET);
   if (!data) {
     const { error } = await db.storage.createBucket(PLAN_PREVIEW_BUCKET, {
-      public: true,
+      public: false,
       fileSizeLimit: BOARD_IMAGE_MAX_BYTES,
     });
     if (error && !/already exists/i.test(error.message)) {
@@ -121,23 +124,47 @@ export async function POST(
 }
 
 /**
- * The photograph itself, for the library's preview page. Anyone may look:
- * it is the same picture every chat unfurl already shows.
+ * The photograph itself, for the library's preview page. A public post's is
+ * the same picture every chat unfurl shows, so anyone may look; an
+ * unpublished post's is its owner's (and the admin's) alone, and the answer
+ * for one reads the same as for a post with no picture, so a stranger learns
+ * nothing the detail route would not tell them.
  */
-export async function GET(_request: Request, context: { params: Promise<{ planId: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ planId: string }> }) {
   if (!isModAndCommunityOn()) {
     return modAndCommunityOffResponse();
   }
+  const none = NextResponse.json({ error: "No preview." }, { status: 404 });
+  if (!isCommunityConfigured()) {
+    return none;
+  }
   const { planId } = await context.params;
+  const { data: row, error } = await getCommunityDb()
+    .from("community_plans")
+    .select("is_public,user_id")
+    .eq("id", planId)
+    .maybeSingle<{ is_public: boolean | null; user_id: string | null }>();
+  if (error || !row) {
+    return none;
+  }
+  const unpublished = row.is_public === false;
+  if (unpublished) {
+    const sessionUser = await getSessionUser(request);
+    if (row.user_id !== sessionUser?.id && !sessionUser?.is_admin && !isAdminRequest(request)) {
+      return none;
+    }
+  }
   const png = await getPlanPreviewPng(planId);
   if (!png) {
-    return NextResponse.json({ error: "No preview." }, { status: 404 });
+    return none;
   }
   return new NextResponse(new Uint8Array(png), {
     headers: {
       "Content-Type": "image/png",
-      // Re-sharing overwrites in place, so a short cache keeps it honest.
-      "Cache-Control": "public, max-age=300",
+      // Re-sharing overwrites in place, so a short cache keeps a public
+      // picture honest. A private one depends on the cookie and must never
+      // sit in a shared cache.
+      "Cache-Control": unpublished ? "private, no-store" : "public, max-age=300",
     },
   });
 }

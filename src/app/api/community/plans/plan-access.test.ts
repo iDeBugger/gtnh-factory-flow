@@ -6,7 +6,14 @@ import { forgetSessionUsers, getCommunityDb, makeSessionToken, resetDbBreaker } 
 import { planWithAdditions } from "@/lib/model/__fixtures__/plan-additions";
 import { withModAndCommunityOn } from "@/test-support/mod-and-community";
 import * as list from "./route";
+import * as plan from "./[planId]/route";
+import * as preview from "./[planId]/preview/route";
 import * as vote from "./[planId]/vote/route";
+
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 /**
  * Who may do what to a community post, against the local database: posting,
@@ -154,6 +161,54 @@ describe("voting on a post", () => {
     expect((await castVote(planId, { deviceId: "made-up-4", value: 1 }, { address: "203.0.113.78" })).status).toBe(200);
     expect((await castVote(planId, { deviceId: "x", value: 1 }, { address, who: "stranger" })).status).toBe(200);
     expect((await planRow(planId)).upvotes).toBe(5);
+  });
+});
+
+describe("a post's board photograph", () => {
+  withModAndCommunityOn();
+
+  const getPreview = (planId: string, who?: string) =>
+    preview.GET(request("GET", `/api/community/plans/${planId}/preview`, { who }), params({ planId }));
+
+  it("shows an unpublished post's picture to its owner only, and to anyone once the post is public", async () => {
+    const planId = await makePlan("Photographed", false);
+    const form = new FormData();
+    form.set("image", new Blob([PNG as BlobPart], { type: "image/png" }), "board.png");
+    const stored = await preview.POST(
+      new Request(`http://localhost/api/community/plans/${planId}/preview`, {
+        method: "POST",
+        headers: { "x-client-ip": nextAddress(), cookie: users.owner!.cookie },
+        body: form,
+      }),
+      params({ planId }),
+    );
+    expect(stored.status).toBe(200);
+
+    const anonymous = await getPreview(planId);
+    expect(anonymous.status).toBe(404);
+    expect(await anonymous.json()).toEqual({ error: "No preview." });
+    expect((await getPreview(planId, "stranger")).status).toBe(404);
+    const owner = await getPreview(planId, "owner");
+    expect(owner.status).toBe(200);
+    expect(owner.headers.get("content-type")).toBe("image/png");
+    expect(owner.headers.get("cache-control")).toBe("private, no-store");
+    expect(Buffer.from(await owner.arrayBuffer()).equals(PNG)).toBe(true);
+
+    const published = await plan.PUT(
+      request("PUT", `/api/community/plans/${planId}`, { who: "owner", body: { isPublic: true } }),
+      params({ planId }),
+    );
+    expect(published.status).toBe(200);
+    const anyone = await getPreview(planId);
+    expect(anyone.status).toBe(200);
+    expect(anyone.headers.get("cache-control")).toBe("public, max-age=300");
+  });
+
+  it("creates the preview bucket private", async () => {
+    const { rows } = await local.db.query<{ public: boolean }>(
+      "select public from local_storage.buckets where id = 'plan-previews'",
+    );
+    expect(rows).toEqual([{ public: false }]);
   });
 });
 
