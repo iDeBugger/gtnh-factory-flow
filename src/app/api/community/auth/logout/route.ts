@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { bumpSessionEpoch, getSessionUser, sessionCookieHeader } from "@/lib/server/community";
 import { notifyLive } from "@/lib/server/cloud-plans";
+import { SIGN_OUT_EVERYWHERE_FAILED } from "@/lib/community/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,7 +11,9 @@ export const dynamic = "force-dynamic";
  * server. With `{ everywhere: true }` and a valid session: the account's
  * session epoch moves, so every token made so far (other browsers, the game)
  * is refused from now on, and the live service is told to drop the account's
- * sockets. Either way the answer clears the cookie.
+ * sockets. A plain sign-out and a successful one everywhere clear the cookie;
+ * a failed one keeps it, so the browser stays signed in like the other
+ * sessions it could not end, and the player can try again.
  */
 export async function POST(request: Request) {
   const clearing = { "Set-Cookie": sessionCookieHeader("", true) };
@@ -26,9 +29,6 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ ok: true }, { headers: clearing });
   } catch {
-    return NextResponse.json(
-      { error: "Could not sign out everywhere. Try again." },
-      { status: 503, headers: clearing },
-    );
+    return NextResponse.json({ error: SIGN_OUT_EVERYWHERE_FAILED }, { status: 503 });
   }
 }

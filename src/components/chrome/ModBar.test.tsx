@@ -22,6 +22,16 @@ const modLink = vi.hoisted(() => ({
 vi.mock("@/lib/mod-link/mod-link", () => modLink);
 const clipboard = vi.hoisted(() => ({ copyToClipboard: vi.fn() }));
 vi.mock("@/lib/clipboard", () => clipboard);
+const communityClient = vi.hoisted(() => ({ logoutCommunityUser: vi.fn(async (_options?: { everywhere?: boolean }) => undefined) }));
+vi.mock("@/lib/community/client", async (original) => ({
+  ...(await original<typeof import("@/lib/community/client")>()),
+  logoutCommunityUser: communityClient.logoutCommunityUser,
+}));
+const notices = vi.hoisted(() => ({ flashNotice: vi.fn() }));
+vi.mock("@/components/flow/clean/rail/NoticeBar", async (original) => ({
+  ...(await original<typeof import("@/components/flow/clean/rail/NoticeBar")>()),
+  flashNotice: notices.flashNotice,
+}));
 // jsdom has no CompressionStream; the code itself is plan-code.test.ts's.
 vi.mock("@/lib/import-export/plan-code", async (original) => ({
   ...(await original<typeof import("@/lib/import-export/plan-code")>()),
@@ -103,6 +113,32 @@ describe("the mod's top bar", () => {
     fireEvent.click(key("account"));
     const rows = [...document.querySelectorAll('[role="menu"] [role="menuitem"] .mm-label')].map((element) => element.textContent);
     expect(rows).toEqual(["ann_smith", "Sign out", "Sign out everywhere"]);
+  });
+
+  it("a failed Sign out everywhere leaves the account signed in and says so", async () => {
+    useCommunityAuthStore.setState({ user: { username: "ann_smith" }, hasHydrated: true });
+    communityClient.logoutCommunityUser.mockRejectedValueOnce(new Error("Could not sign out everywhere. Try again."));
+    renderBar();
+    fireEvent.click(key("account"));
+    const row = [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')].find(
+      (element) => element.querySelector(".mm-label")?.textContent === "Sign out everywhere",
+    )!;
+    await act(async () => {
+      fireEvent.click(row);
+    });
+    expect(communityClient.logoutCommunityUser).toHaveBeenCalledWith({ everywhere: true });
+    expect(useCommunityAuthStore.getState().user?.username).toBe("ann_smith");
+    expect(notices.flashNotice).toHaveBeenCalledWith("warn", "Could not sign out everywhere. Try again.");
+    communityClient.logoutCommunityUser.mockResolvedValueOnce(undefined);
+    fireEvent.click(key("account"));
+    await act(async () => {
+      fireEvent.click(
+        [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')].find(
+          (element) => element.querySelector(".mm-label")?.textContent === "Sign out everywhere",
+        )!,
+      );
+    });
+    expect(useCommunityAuthStore.getState().user).toBeUndefined();
   });
 
   const shareRows = () =>

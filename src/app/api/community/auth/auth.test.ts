@@ -27,6 +27,8 @@ let addresses = 0;
 /** When set, the answer of every account row read waits on it (a slow database); the read itself happens at once. */
 let holdAccountReads: Promise<void> | undefined;
 let heldAccountReads = 0;
+/** When set, every write to the accounts table fails as a database that does not answer. */
+let failAccountWrites = false;
 
 /** A fresh client address per call: the per-address limits never meet across cases. */
 const nextAddress = () => `10.1.${Math.floor(addresses / 250)}.${(addresses++ % 250) + 1}`;
@@ -65,6 +67,9 @@ beforeAll(async () => {
   vi.stubEnv("COMMUNITY_HASH_SALT", "auth-test-salt");
   local = await openLocalDatabase();
   useInProcessLocalDb(async (request) => {
+    if (failAccountWrites && request.method === "PATCH" && request.url.includes("community_users")) {
+      return Response.json({ message: "down", code: "PGRST000", details: "", hint: "" }, { status: 503 });
+    }
     const response = await local.handle(request);
     if (
       holdAccountReads &&
@@ -211,6 +216,21 @@ describe("signing out everywhere", () => {
     expect(await inFlight).toEqual({ username: "ann_race", isAdmin: false });
     // Nothing wrote that row back: the next request reads the moved epoch.
     expect(await whoAmI(cookie)).toBeNull();
+  });
+
+  it("keeps this browser signed in when the database could not end the others, and says so", async () => {
+    const made = await post(register, "register", { username: "ann_down", password: "ann-password" });
+    const cookie = cookieOf(made);
+    failAccountWrites = true;
+    try {
+      const out = await post(logout, "logout", { everywhere: true }, { cookie });
+      expect(out.status).toBe(503);
+      expect(await out.json()).toEqual({ error: "Could not sign out everywhere. Try again." });
+      expect(out.headers.get("set-cookie")).toBeNull();
+    } finally {
+      failAccountWrites = false;
+    }
+    expect(await whoAmI(cookie)).toEqual({ username: "ann_down", isAdmin: false });
   });
 
   it("with no valid session has nothing to revoke, and still clears the cookie", async () => {

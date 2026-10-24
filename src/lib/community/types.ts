@@ -147,6 +147,8 @@ export interface CommunityVoteResponse {
 export const PASSWORD_MIN_LENGTH = 8;
 /** What the forms gated sign-in at before the rule moved; a shorter password never signed anyone in. */
 export const SIGN_IN_PASSWORD_MIN_LENGTH = 6;
+/** What the player reads when Sign out everywhere could not reach the database: this browser stays signed in. */
+export const SIGN_OUT_EVERYWHERE_FAILED = "Could not sign out everywhere. Try again.";
 export const COMMUNITY_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
 /** Board image uploads (the picture annotation): hard cap, client and server. */
 export const BOARD_IMAGE_MAX_BYTES = 4 * 1024 * 1024;

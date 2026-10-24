@@ -16,7 +16,7 @@ interface CommunityAuthStore {
   hydrate: () => Promise<void>;
   setUser: (user?: CommunityUser) => void;
   signOut: () => Promise<void>;
-  /** Ends every session of the account, this browser's included. */
+  /** Ends every session of the account, this browser's included. Rejects, still signed in, when the server could not. */
   signOutEverywhere: () => Promise<void>;
 }
 

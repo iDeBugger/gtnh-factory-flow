@@ -5,6 +5,7 @@ import { useDropdownDismiss } from "@/lib/hooks/use-dropdown-dismiss";
 import { ChevronDown, Factory, LogOut, ShieldCheck, User } from "lucide-react";
 import { useRef, useState } from "react";
 import { openLibrary } from "@/lib/library/library-tab";
+import { SIGN_OUT_EVERYWHERE_FAILED } from "@/lib/community/types";
 import { AuthForm, useCommunityUser } from "./auth";
 
 /**
@@ -15,6 +16,7 @@ export function AccountMenu() {
   const { user, isLoading, setUser, signOut, signOutEverywhere } = useCommunityUser();
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [isAuthOpen, setAuthOpen] = useState(false);
+  const [error, setError] = useState<string>();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useDropdownDismiss(isMenuOpen, { refs: [menuRef], onClose: () => setMenuOpen(false), fade: true });
@@ -101,13 +103,17 @@ export function AccountMenu() {
             type="button"
             title="Signs out every browser and game using this account."
             onClick={() => {
-              setMenuOpen(false);
-              void signOutEverywhere();
+              setError(undefined);
+              signOutEverywhere().then(
+                () => setMenuOpen(false),
+                () => setError(SIGN_OUT_EVERYWHERE_FAILED),
+              );
             }}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-surface-raised"
           >
             <LogOut className="h-3.5 w-3.5 text-fg-muted" /> Sign out everywhere
           </button>
+          {error ? <p className="px-3 py-1 text-xs text-red-500">{error}</p> : null}
         </div>
       ) : null}
     </div>
