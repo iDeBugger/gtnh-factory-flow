@@ -75,9 +75,10 @@ export const SERVICE_LIMITS = {
   /**
    * Plan JSON held in open rooms, in characters as `Room.size` counts them
    * (LIVE_MAX_PLAN_BYTES). Past it, joins that would open a room are refused
-   * as `rate` like a full `maxRooms`. A room still opening counts as a whole
-   * plan (`maxPlanChars`) until its size is known. Resident memory is about
-   * four times this, plus the baseline, plus what rooms already open grow by
+   * as `rate` like a full `maxRooms`. A room still opening counts at its
+   * plan's stored size (`plan_bytes`, read before the plan), or at
+   * `maxPlanChars` when that cannot be read. Resident memory is about four
+   * times this, plus the baseline, plus what rooms already open grow by
    * through edits before the next open checks the budget.
    */
   maxOpenPlanBytes: 64 * 1024 * 1024,
@@ -214,17 +215,27 @@ class RateLimiter {
 /**
  * Joins that passed the open checks and have not finished: their membership
  * query or lease read is pending, so their room is in no count yet. Every
- * check adds them in (a whole plan's worth of bytes per doc, as the size is
- * not known), or a burst of joins fired together would each see nothing held
- * and open together past every limit.
+ * check adds them in, or a burst of joins fired together would each see
+ * nothing held and open together past every limit.
+ *
+ * A doc's bytes are reserved once its stored size is known (read beside the
+ * membership query, before the plan itself); a plan is never read before its
+ * size has been reserved and checked. So the sum of reservations is exact,
+ * and a doc whose size is still on its way counts nothing yet.
  */
 class OpensInFlight {
-  /** Per doc, the accounts opening it and how many of their joins are. */
-  private readonly byDoc = new Map<string, Map<string, number>>();
+  /** Per doc: the accounts opening it with how many joins each, and the bytes reserved for it. */
+  private readonly byDoc = new Map<string, { users: Map<string, number>; bytes: number }>();
+  private reserved = 0;
 
   /** Docs being opened. */
   get docs(): number {
     return this.byDoc.size;
+  }
+
+  /** Bytes reserved for the docs being opened whose size is known. */
+  get reservedBytes(): number {
+    return this.reserved;
   }
 
   /** Docs being opened that `rooms` does not hold yet (the query before the open is pending). */
@@ -241,8 +252,8 @@ class OpensInFlight {
   /** Docs the account is opening, other than those `except` names. */
   countFor(userId: string, except: (doc: string) => boolean): number {
     let count = 0;
-    for (const [doc, users] of this.byDoc) {
-      if (users.has(userId) && !except(doc)) {
+    for (const [doc, entry] of this.byDoc) {
+      if (entry.users.has(userId) && !except(doc)) {
         count += 1;
       }
     }
@@ -250,26 +261,36 @@ class OpensInFlight {
   }
 
   add(doc: string, userId: string): void {
-    let users = this.byDoc.get(doc);
-    if (!users) {
-      users = new Map();
-      this.byDoc.set(doc, users);
+    let entry = this.byDoc.get(doc);
+    if (!entry) {
+      entry = { users: new Map(), bytes: 0 };
+      this.byDoc.set(doc, entry);
     }
-    users.set(userId, (users.get(userId) ?? 0) + 1);
+    entry.users.set(userId, (entry.users.get(userId) ?? 0) + 1);
+  }
+
+  /** The doc's stored size is known: reserved from now until its last join is over. */
+  reserve(doc: string, bytes: number): void {
+    const entry = this.byDoc.get(doc);
+    if (entry && bytes > entry.bytes) {
+      this.reserved += bytes - entry.bytes;
+      entry.bytes = bytes;
+    }
   }
 
   remove(doc: string, userId: string): void {
-    const users = this.byDoc.get(doc);
-    if (!users) {
+    const entry = this.byDoc.get(doc);
+    if (!entry) {
       return;
     }
-    const left = (users.get(userId) ?? 0) - 1;
+    const left = (entry.users.get(userId) ?? 0) - 1;
     if (left > 0) {
-      users.set(userId, left);
+      entry.users.set(userId, left);
     } else {
-      users.delete(userId);
+      entry.users.delete(userId);
     }
-    if (users.size === 0) {
+    if (entry.users.size === 0) {
+      this.reserved -= entry.bytes;
       this.byDoc.delete(doc);
     }
   }
@@ -353,6 +374,8 @@ export class LiveService {
   private readonly accounts = new Map<string, { at: number; account: Promise<Account | undefined> }>();
   private heartbeat?: ReturnType<typeof setInterval>;
   private stopping = false;
+  /** Reading a plan's stored size failed once: said in the log once. */
+  private sizeUnreadable = false;
 
   constructor(private readonly options: LiveServiceOptions) {
     this.journal = new Journal(options.journalDir);
@@ -1097,16 +1120,13 @@ export class LiveService {
       await this.joinRoom(conn, doc);
       return;
     }
-    // Rooms being opened count as whole plans until their size is known.
-    const reserve = this.options.maxPlanChars ?? COMMUNITY_UPLOAD_MAX_BYTES;
+    // Full in rooms or in plan bytes (plans being opened included): the
+    // client asks again in a few seconds.
     if (
       this.rooms.size + this.opening.docsNotIn(this.rooms) >= this.limits.maxRooms ||
-      this.openPlanBytes() + this.opening.docs * reserve >= this.limits.maxOpenPlanBytes
+      this.openPlanBytes() + this.opening.reservedBytes >= this.limits.maxOpenPlanBytes
     ) {
-      // Full, in rooms or in plan bytes: a plan nobody is in makes room,
-      // and the client asks again.
-      this.closeOneIdleRoom();
-      this.error(conn, "rate", "The live service is busy. Try again shortly.", { doc });
+      this.refuseBusy(conn, doc);
       return;
     }
     // Opening a plan costs a membership query and a plan read: so many a
@@ -1125,6 +1145,22 @@ export class LiveService {
     }
   }
 
+  /**
+   * The service is full: refused, and the client asks again. A plan nobody is
+   * in makes room, but only when open rooms fill the budget; when plans still
+   * being opened do, closing one would give away the cache that saves a
+   * returning player a plan read for nothing.
+   */
+  private refuseBusy(conn: Connection, doc: string): void {
+    if (
+      this.rooms.size >= this.limits.maxRooms ||
+      this.openPlanBytes() >= this.limits.maxOpenPlanBytes
+    ) {
+      this.closeOneIdleRoom();
+    }
+    this.error(conn, "rate", "The live service is busy. Try again shortly.", { doc });
+  }
+
   /** Opens a plan nobody has open and joins it, once the database says the account may. */
   private async openRoom(
     conn: Connection,
@@ -1132,10 +1168,15 @@ export class LiveService {
     doc: string,
   ): Promise<void> {
     // Not open: the database says whether it may be, before anything is
-    // opened for it. An open room answers from its own members in joinRoom.
+    // opened for it, and how big the plan is, so its room is budgeted before
+    // the plan is read. An open room answers from its own members in joinRoom.
     let role: Awaited<ReturnType<PlanStore["role"]>>;
+    let size: number | undefined;
     try {
-      role = await this.options.store.role(conn.userId, key.ownerId, key.designId);
+      [role, size] = await Promise.all([
+        this.options.store.role(conn.userId, key.ownerId, key.designId),
+        this.planSize(key.ownerId, key.designId),
+      ]);
     } catch (error) {
       this.log(`${doc}: membership check failed: ${String(error)}`);
       this.error(conn, "rate", "The plan could not be opened. Try again shortly.", { doc });
@@ -1143,6 +1184,16 @@ export class LiveService {
     }
     if (!role) {
       this.error(conn, "forbidden", "This plan is not shared with you.", { doc });
+      return;
+    }
+    // Reserved at its stored size (at the most a plan may be when the size
+    // could not be read), then checked against the reservations made since.
+    this.opening.reserve(doc, size ?? this.options.maxPlanChars ?? COMMUNITY_UPLOAD_MAX_BYTES);
+    if (
+      !this.rooms.has(doc) &&
+      this.openPlanBytes() + this.opening.reservedBytes >= this.limits.maxOpenPlanBytes
+    ) {
+      this.refuseBusy(conn, doc);
       return;
     }
     // The rooms this account opened and left to linger hold their plans in
@@ -1221,6 +1272,25 @@ export class LiveService {
       }
     }
     return docs;
+  }
+
+  /**
+   * A plan's stored size, or undefined when it cannot be read (the design is
+   * gone, or the database has no `plan_bytes` column yet): the caller then
+   * reserves the most a plan may be. Said in the log once, not per join.
+   */
+  private async planSize(ownerId: string, designId: string): Promise<number | undefined> {
+    try {
+      return await this.options.store.size(ownerId, designId);
+    } catch (error) {
+      if (!this.sizeUnreadable) {
+        this.sizeUnreadable = true;
+        this.log(
+          `plan sizes cannot be read, so a plan being opened is budgeted at the most a plan may be: ${String(error)}`,
+        );
+      }
+      return undefined;
+    }
   }
 
   /** Plan JSON held by the rooms open now, in characters. */

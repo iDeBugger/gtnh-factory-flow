@@ -1083,14 +1083,14 @@ describe("the live service", { timeout: 30_000 }, () => {
   });
 
   it("holds the service to the plan bytes it has open", async () => {
-    const { port, service } = await startService({ limits: { maxOpenPlanBytes: 1024 } });
+    // A 6 KB budget: a 4 KB plan fits, and leaves no room for a 2 KB one.
+    const { port, service } = await startService({ limits: { maxOpenPlanBytes: 6000 } });
     const big = await makeDesign({ notes: "n".repeat(4096) });
-    const small = await makeDesign();
+    const small = await makeDesign({ notes: "n".repeat(2000) });
     const ann = await TestClient.open(port, { who: "ann" });
     const bob = await TestClient.open(port, { who: "bob" });
     await ann.hello();
     await bob.hello();
-    // Nothing held yet: the big plan opens, and alone fills the budget.
     await ann.join(big.doc);
     bob.send({ t: "join", doc: small.doc });
     expect(await bob.next("error")).toMatchObject({ code: "rate", doc: small.doc });
@@ -1125,16 +1125,20 @@ describe("the live service", { timeout: 30_000 }, () => {
     expect(service.stats.rooms).toBe(2);
   });
 
-  it("reserves a whole plan's bytes for a room still opening", async () => {
+  it("reserves a plan's stored size for a room still opening", async () => {
     const real = supabasePlanStore();
-    // Room for one plan's reservation, not two: the third join fired while
-    // two plans are being read is refused, whoever sends it.
+    // Three plans of about 2 KB each against a 5 KB budget: the third join
+    // fired while the first two plans are being read is refused, whoever
+    // sends it, since its size is known before anything is read.
     const { port, service } = await startService({
       store: { ...real, lease: (...args) => slow(() => real.lease(...args)) },
-      maxPlanChars: 1024,
-      limits: { maxOpenPlanBytes: 2000 },
+      limits: { maxOpenPlanBytes: 5000 },
     });
-    const plans = await Promise.all([makeDesign(), makeDesign(), makeDesign()]);
+    const plans = await Promise.all([
+      makeDesign({ notes: "n".repeat(1800) }),
+      makeDesign({ notes: "n".repeat(1800) }),
+      makeDesign({ notes: "n".repeat(1800) }),
+    ]);
     const ann = await TestClient.open(port, { who: "ann" });
     const bob = await TestClient.open(port, { who: "bob" });
     await ann.hello();
@@ -1142,12 +1146,61 @@ describe("the live service", { timeout: 30_000 }, () => {
     ann.send({ t: "join", doc: plans[0]!.doc });
     ann.send({ t: "join", doc: plans[1]!.doc });
     bob.send({ t: "join", doc: plans[2]!.doc });
-    expect(await bob.next("error")).toMatchObject({ code: "rate", doc: plans[2]!.doc });
-    await ann.next("snapshot", (frame) => frame.doc === plans[0]!.doc);
-    await ann.next("snapshot", (frame) => frame.doc === plans[1]!.doc);
+    const settled = () =>
+      [...ann.frames, ...bob.frames].filter(
+        (frame) => frame.t === "snapshot" || frame.t === "error",
+      );
+    await until(() => settled().length === 3);
+    expect(settled().filter((frame) => frame.t === "snapshot")).toHaveLength(2);
+    expect(settled().filter((frame) => frame.t === "error")).toMatchObject([{ code: "rate" }]);
     expect(service.stats.rooms).toBe(2);
-    // Open, the two small plans leave room: the refused join goes through.
-    expect((await bob.join(plans[2]!.doc)).doc).toBe(plans[2]!.doc);
+    // Still full once both are open: refused again, and no empty room to close.
+    const refused = settled().find((frame) => frame.t === "error") as { doc: string };
+    bob.send({ t: "join", doc: refused.doc });
+    expect(await bob.next("error")).toMatchObject({ code: "rate", doc: refused.doc });
+    expect(service.stats.rooms).toBe(2);
+  });
+
+  it("opens many small plans at once, each budgeted at its own size", async () => {
+    const real = supabasePlanStore();
+    const { port, service } = await startService({
+      store: { ...real, lease: (...args) => slow(() => real.lease(...args)) },
+    });
+    // Forty accounts, a 100 KB plan each, all opened together (a restart with
+    // everyone connected): 4 MB in all, nowhere near the 64 MB budget, so
+    // every one opens; none is budgeted at the biggest plan allowed.
+    const owners = await Promise.all(
+      Array.from({ length: 40 }, async (_, at) => {
+        const username = `many-${at}`;
+        await makeUser(username);
+        const designId = `design-many-${at}`;
+        const { error } = await getCommunityDb()
+          .from("library_designs")
+          .insert({
+            user_id: users[username]!.id,
+            id: designId,
+            name: "Many",
+            plan: { schemaVersion: PROJECT_SCHEMA_VERSION, id: `many-${at}`, notes: "n".repeat(100_000) },
+          });
+        expect(error).toBeNull();
+        return { username, doc: docKey(users[username]!.id, designId) };
+      }),
+    );
+    const players = await Promise.all(
+      owners.map(async (owner) => {
+        const player = await TestClient.open(port, { who: owner.username });
+        await player.hello();
+        return { player, doc: owner.doc };
+      }),
+    );
+    for (const { player, doc } of players) {
+      player.send({ t: "join", doc });
+    }
+    await Promise.all(
+      players.map(({ player, doc }) => player.next("snapshot", (frame) => frame.doc === doc)),
+    );
+    expect(service.stats.rooms).toBe(40);
+    expect(players.flatMap(({ player }) => player.frames.filter((f) => f.t === "error"))).toEqual([]);
   });
 
   it("limits how many plans an account may open a minute", async () => {

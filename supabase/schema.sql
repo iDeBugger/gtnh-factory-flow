@@ -263,6 +263,11 @@ create index if not exists community_plans_comments_idx on community_plans (comm
 alter table library_designs add column if not exists seq bigint not null default 0;
 alter table library_designs add column if not exists live_lease_until timestamptz;
 alter table library_designs add column if not exists live_lease_token text;
+-- The plan's stored size, read by the live service before it opens a plan
+-- (supabase/migrations/2026-10-24-live-plan-bytes.sql).
+alter table library_designs
+  add column if not exists plan_bytes integer
+  generated always as (octet_length(plan::text)) stored;
 
 create table if not exists library_design_members (
   owner_id uuid not null references community_users (id) on delete cascade,

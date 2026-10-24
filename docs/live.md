@@ -22,7 +22,9 @@ this file is the website's side of it.
 
 A cloud plan is a `library_designs` row, addressed everywhere as `<ownerId>:<designId>` (the doc key). The schema
 additions are `supabase/migrations/2026-10-14-cloud-live.sql`: `seq` (edit batches applied), `live_lease_until` and
-`live_lease_token` (the lease), and `library_design_members`.
+`live_lease_token` (the lease), and `library_design_members`; and `2026-10-24-live-plan-bytes.sql`: `plan_bytes`, the
+plan's stored size, which the service reads before opening a plan to budget its room (without the column every plan
+being opened is budgeted at the 3 MB limit, which caps how many can open at the same moment).
 
 ## How an edit travels
 
@@ -74,11 +76,13 @@ effect within 30 s, dropping anyone no longer shared.
 - A room holding more than 8 MB of journalled batches the database has not taken refuses more as `rate` until a
   flush gets through.
 - At most 8 plans open per account (across its sockets) and 500 in the service (`LIVE_MAX_ROOMS`), holding at most
-  64 MB of plan JSON between them (`LIVE_MAX_PLAN_BYTES`; a room still opening counts as a whole 3 MB plan until it
-  is read). The budget is checked when a room opens: rooms already open can still grow through edits, up to 3 MB
-  each, until the next open notices. Resident memory is about four times the budget plus that growth plus the
-  baseline, so the unit's memory cap and heap follow from it. A full service closes a plan nobody is in and refuses
-  the join as `rate`; the website asks again a few seconds later.
+  64 MB of plan JSON between them (`LIVE_MAX_PLAN_BYTES`; a room still opening counts at its plan's stored size,
+  `plan_bytes`, read before the plan, so plans fired open together are budgeted exactly). The budget is checked when
+  a room opens: rooms already open can still grow through edits, up to 3 MB each, until the next open notices.
+  Resident memory is about four times the budget plus that growth plus the baseline, so the unit's memory cap and
+  heap follow from it. A full service refuses the join as `rate` and the website asks again a few seconds later; it
+  closes a plan nobody is in only when open rooms fill the budget, not when plans still being opened do (a "busy"
+  refusal can come from opens in flight alone).
 - The rooms an account opened and left to linger count against it too: past 8, opening another closes the oldest of
   them. An account opens at most 30 plans a minute (a join of a plan that is not open, its membership query
   included); more are refused as `rate`.

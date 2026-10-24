@@ -49,6 +49,9 @@ class HeldStore implements PlanStore {
   async role() {
     return "owner" as const;
   }
+  async size() {
+    return JSON.stringify(this.plan).length;
+  }
   async lease(_owner: string, _design: string, token: string, until: Date) {
     await this.write("lease", until);
     this.token = token;

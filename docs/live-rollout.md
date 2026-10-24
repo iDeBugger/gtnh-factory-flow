@@ -170,7 +170,10 @@ must find nothing. With `LOCAL_DB=1` and `NODE_ENV=production` neither the websi
 ## 1. The migration (Supabase, additive)
 
 In the Supabase SQL editor of the production project, run `supabase/migrations/2026-10-14-cloud-live.sql` as it is in
-the branch (the same SQL is at the end of `supabase/schema.sql`). It is idempotent:
+the branch (the same SQL is at the end of `supabase/schema.sql`), then `2026-10-24-live-plan-bytes.sql` (the
+`plan_bytes` generated column; without it the service logs once that plan sizes cannot be read and budgets every
+plan being opened at 3 MB, which lets at most `LIVE_MAX_PLAN_BYTES / 3 MB` plans open at the same moment). Both are
+idempotent:
 
 ```sql
 alter table library_designs add column if not exists seq bigint not null default 0;

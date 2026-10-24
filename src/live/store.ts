@@ -35,6 +35,12 @@ export interface PlanStore {
   /** What the account may do with the design: "owner", "editor" or null. */
   role(userId: string, ownerId: string, designId: string): Promise<DesignRole | null>;
   /**
+   * The plan's stored size in bytes (the `plan_bytes` column), so a room can
+   * be budgeted before the plan is read; undefined when the design is missing
+   * or deleted. Throws when the database does not answer.
+   */
+  size(ownerId: string, designId: string): Promise<number | undefined>;
+  /**
    * Takes the lease with `token` whoever held it (one live service per
    * database) and reads the plan. Undefined when the design is missing or deleted.
    */
@@ -94,6 +100,20 @@ export function supabasePlanStore(): PlanStore {
     },
     forgetAccount: forgetSessionUser,
     role: (userId, ownerId, designId) => designRole(db(), userId, ownerId, designId),
+    async size(ownerId, designId) {
+      const { data, error } = await db()
+        .from("library_designs")
+        .select("plan_bytes")
+        .eq("user_id", ownerId)
+        .eq("id", designId)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (error) {
+        fail("Reading the plan size failed", error);
+      }
+      const row = data as { plan_bytes: number | string | null } | null;
+      return row ? Number(row.plan_bytes ?? 0) : undefined;
+    },
     async lease(ownerId, designId, token, until) {
       const { data, error } = await db()
         .from("library_designs")
