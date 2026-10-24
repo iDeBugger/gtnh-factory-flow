@@ -44,8 +44,16 @@ export function claimImageUpload(request: Request): Promise<ImageRefusal | undef
     if (addressDay >= IMAGES_PER_DAY) {
       return { status: 429, error: "That is a lot of images for one day. Try again tomorrow." };
     }
-    if (siteHour >= SITE_IMAGES_PER_HOUR || siteDay >= SITE_IMAGES_PER_DAY) {
-      return { status: 503, error: "Lots of images are being uploaded right now. Try again in a few hours." };
+    // A site cap biting is the owner's to know: every anonymous paste, drop
+    // and picture key answers this until the window passes, and the numbers
+    // can only be raised with that in the log.
+    if (siteDay >= SITE_IMAGES_PER_DAY) {
+      console.warn(`images: the site's ${SITE_IMAGES_PER_DAY} a day are used; uploads refused until tomorrow`);
+      return { status: 503, error: "Lots of images have been uploaded today. Try again tomorrow." };
+    }
+    if (siteHour >= SITE_IMAGES_PER_HOUR) {
+      console.warn(`images: the site's ${SITE_IMAGES_PER_HOUR} an hour are used; uploads refused for the hour`);
+      return { status: 503, error: "Lots of images are being uploaded right now. Try again in an hour." };
     }
     await recordEvents([
       { actorKey: address, action: ACTION },

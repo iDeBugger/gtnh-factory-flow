@@ -106,15 +106,20 @@ describe("board image uploads", () => {
     expect(await refused.json()).toEqual({ error: "That is a lot of images for one day. Try again tomorrow." });
   }, 60_000);
 
-  it("caps the whole site", async () => {
+  it("caps the whole site, says when it opens again, and tells the log", async () => {
+    const warned = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     for (let i = 0; i < SITE_IMAGES_PER_HOUR; i++) {
       expect((await upload(`198.51.${Math.floor(i / 200)}.${i % 200}`)).status).toBe(200);
     }
+    expect(warned).not.toHaveBeenCalled();
     const refused = await upload("198.51.100.250");
     expect(refused.status).toBe(503);
     expect(await refused.json()).toEqual({
-      error: "Lots of images are being uploaded right now. Try again in a few hours.",
+      error: "Lots of images are being uploaded right now. Try again in an hour.",
     });
+    expect(warned).toHaveBeenCalledTimes(1);
+    expect(String(warned.mock.calls[0]![0])).toContain(`${SITE_IMAGES_PER_HOUR} an hour`);
+    warned.mockRestore();
   }, 60_000);
 
   it("refuses what is not an image before counting it", async () => {
