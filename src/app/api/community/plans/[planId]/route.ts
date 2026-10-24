@@ -37,9 +37,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Plan detail. Counts one view per request (client only calls on preview
- * open), except when the caller says `countView=0`: the plan card refreshes
- * this summary in the background, and background reads are not views.
+ * Plan detail. A read that writes nothing: a view is counted by
+ * `POST .../view`, which the client sends when a player opens a post. The
+ * stat card is refreshed here when it is stale, which is a value no caller
+ * can steer.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ planId: string }> }) {
   if (!isModAndCommunityOn()) {
@@ -84,17 +85,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ plan
       return NextResponse.json({ error: "Plan not found." }, { status: 404 });
     }
 
-    const countView = url.searchParams.get("countView") !== "0";
-    if (countView) {
-      await db
-        .from("community_plans")
-        .update({ views: data.views + 1 })
-        .eq("id", planId);
-    }
-    const plan = rowToPlanSummary(
-      { ...data, views: data.views + (countView ? 1 : 0) },
-      sessionUser?.id,
-    );
+    const plan = rowToPlanSummary(data, sessionUser?.id);
     await refreshStaleStats(db, planId, plan);
     if (deviceId) {
       await attachMyVotes([plan], await makeVoterKey(request, deviceId));

@@ -8,6 +8,7 @@ import { withModAndCommunityOn } from "@/test-support/mod-and-community";
 import * as list from "./route";
 import * as plan from "./[planId]/route";
 import * as preview from "./[planId]/preview/route";
+import * as view from "./[planId]/view/route";
 import * as vote from "./[planId]/vote/route";
 
 const PNG = Buffer.from(
@@ -209,6 +210,37 @@ describe("a post's board photograph", () => {
       "select public from local_storage.buckets where id = 'plan-previews'",
     );
     expect(rows).toEqual([{ public: false }]);
+  });
+});
+
+describe("counting views", () => {
+  withModAndCommunityOn();
+
+  it("counts a view on its own POST, never on a read", async () => {
+    const planId = await makePlan("Watched", true);
+    for (let i = 0; i < 2; i++) {
+      const read = await plan.GET(request("GET", `/api/community/plans/${planId}`), params({ planId }));
+      expect(read.status).toBe(200);
+      expect(((await read.json()) as { plan: { views: number } }).plan.views).toBe(0);
+    }
+    expect((await planRow(planId)).views).toBe(0);
+
+    const counted = await view.POST(request("POST", `/api/community/plans/${planId}/view`), params({ planId }));
+    expect(counted.status).toBe(200);
+    expect(await counted.json()).toEqual({ views: 1 });
+    expect((await planRow(planId)).views).toBe(1);
+  });
+
+  it("counts nothing for a stranger on an unpublished post, or for a post that does not exist", async () => {
+    const planId = await makePlan("Unseen", false);
+    const stranger = await view.POST(request("POST", `/api/community/plans/${planId}/view`), params({ planId }));
+    expect(stranger.status).toBe(404);
+    expect(await stranger.json()).toEqual({ error: "Plan not found." });
+    expect((await planRow(planId)).views).toBe(0);
+    const missing = randomUUID();
+    const gone = await view.POST(request("POST", `/api/community/plans/${missing}/view`), params({ planId: missing }));
+    expect(gone.status).toBe(404);
+    expect(await gone.json()).toEqual({ error: "Plan not found." });
   });
 });
 

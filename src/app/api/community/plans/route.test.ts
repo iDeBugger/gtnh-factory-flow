@@ -8,6 +8,7 @@ import * as comment from "./[planId]/comments/[commentId]/route";
 import * as card from "./[planId]/card/route";
 import * as download from "./[planId]/download/route";
 import * as preview from "./[planId]/preview/route";
+import * as view from "./[planId]/view/route";
 
 type Handler = (request: Request, context: { params: Promise<Record<string, string>> }) => Promise<Response>;
 
@@ -28,6 +29,7 @@ const handlers: Array<[string, Handler]> = [
   ["POST /plans/[id]/download", download.POST as unknown as Handler],
   ["POST /plans/[id]/preview", preview.POST as unknown as Handler],
   ["GET /plans/[id]/preview", preview.GET as unknown as Handler],
+  ["POST /plans/[id]/view", view.POST as unknown as Handler],
 ];
 
 function call([name, handler]: [string, Handler]): Promise<Response> {

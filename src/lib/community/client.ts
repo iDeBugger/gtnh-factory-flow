@@ -70,14 +70,18 @@ export async function getCommunityPlan(
   options: { countView?: boolean } = {},
 ): Promise<CommunityPlanSummary> {
   const search = new URLSearchParams({ deviceId: getDeviceId() });
-  // Background lookups (the plan card refreshing its post) are not views.
-  if (options.countView === false) {
-    search.set("countView", "0");
-  }
   const response = await fetch(
     `/api/community/plans/${encodeURIComponent(planId)}?${search.toString()}`,
   );
   const body = await parseJsonOrThrow<{ plan: CommunityPlanSummary }>(response);
+  // A player opening the post is a view, counted by a write of its own; the
+  // read changes nothing. Background lookups (the plan card refreshing its
+  // post) are not views. Best effort: a lost count costs nothing.
+  if (options.countView !== false) {
+    void fetch(`/api/community/plans/${encodeURIComponent(planId)}/view`, { method: "POST" }).catch(
+      () => undefined,
+    );
+  }
   return body.plan;
 }
 
