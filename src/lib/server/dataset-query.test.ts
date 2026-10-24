@@ -15,6 +15,7 @@ import {
   orderByRecipeMap,
   prewarmFirstThenRest,
   prewarmInOrder,
+  queryCatalogResources,
   SHARD_CACHE_BYTES,
   shardHeapBytes,
   withTankMapFace,
@@ -59,7 +60,7 @@ describe("wildcard uses matching", () => {
   });
 });
 
-describe("what an \"any of these\" placeholder stands for", () => {
+describe('what an "any of these" placeholder stands for', () => {
   const catalog = () =>
     ({
       resources: [],
@@ -111,7 +112,9 @@ describe("what an \"any of these\" placeholder stands for", () => {
     const byKey = getChoiceAlternativesByKey(catalog());
 
     expect(
-      byKey.get("item:dreamcraft:circuitlv")?.some((entry) => /^Any /.test(entry.displayName ?? "")),
+      byKey
+        .get("item:dreamcraft:circuitlv")
+        ?.some((entry) => /^Any /.test(entry.displayName ?? "")),
     ).toBe(false);
   });
 });
@@ -150,7 +153,12 @@ describe("a placeholder that sits in two groups", () => {
 });
 
 describe("the Tank map's face", () => {
-  const cell = { kind: "item" as const, id: "ic2:itemcellempty", displayName: "Empty Cell", iconPath: "cell.png" };
+  const cell = {
+    kind: "item" as const,
+    id: "ic2:itemcellempty",
+    displayName: "Empty Cell",
+    iconPath: "cell.png",
+  };
   const lvTank = {
     kind: "item" as const,
     id: "gregtech:gt.blockmachines@818",
@@ -163,7 +171,10 @@ describe("the Tank map's face", () => {
   it("wears the Low Voltage Fluid Tank, called Fluid Tank", () => {
     const icons = withTankMapFace({
       resources: [cell, lvTank] as never,
-      recipeMapIcons: [{ recipeMap: "Tank", resource: cell }, { recipeMap: "Canner", resource: cell }],
+      recipeMapIcons: [
+        { recipeMap: "Tank", resource: cell },
+        { recipeMap: "Canner", resource: cell },
+      ],
     });
     expect(icons?.find((entry) => entry.recipeMap === "Tank")?.resource).toMatchObject({
       id: lvTank.id,
@@ -215,20 +226,45 @@ describe("an all-maps page walks the machines in section order", () => {
 });
 
 describe("a search for an item that has NBT variants", () => {
-  const white = { kind: "item" as const, id: "etfuturum:shulker_box", displayName: "White Shulker Box", iconPath: "white.png" };
+  const white = {
+    kind: "item" as const,
+    id: "etfuturum:shulker_box",
+    displayName: "White Shulker Box",
+    iconPath: "white.png",
+  };
   const catalog = { resources: [white], resourceIndex: [] } as never;
   const recipe = {
     id: "orange-box",
     inputs: [
-      { kind: "item" as const, id: "etfuturum:shulker_box", amount: 1, displayName: "Shulker Box", iconPath: "box.png", tooltip: ["NBT: {Type:0b}"] },
+      {
+        kind: "item" as const,
+        id: "etfuturum:shulker_box",
+        amount: 1,
+        displayName: "Shulker Box",
+        iconPath: "box.png",
+        tooltip: ["NBT: {Type:0b}"],
+      },
       { kind: "item" as const, id: "minecraft:dye@14", amount: 1, displayName: "Orange Dye" },
     ],
-    outputs: [{ kind: "item" as const, id: "etfuturum:shulker_box", amount: 1, displayName: "Orange Shulker Box" }],
+    outputs: [
+      {
+        kind: "item" as const,
+        id: "etfuturum:shulker_box",
+        amount: 1,
+        displayName: "Orange Shulker Box",
+      },
+    ],
   } as never;
 
   it("leaves a slot that is the item with its own name, picture and tooltip", () => {
-    const [box] = (applyUsesResourceContext(recipe, catalog, white) as { inputs: Record<string, unknown>[] }).inputs;
-    expect(box).toMatchObject({ displayName: "Shulker Box", iconPath: "box.png", tooltip: ["NBT: {Type:0b}"] });
+    const [box] = (
+      applyUsesResourceContext(recipe, catalog, white) as { inputs: Record<string, unknown>[] }
+    ).inputs;
+    expect(box).toMatchObject({
+      displayName: "Shulker Box",
+      iconPath: "box.png",
+      tooltip: ["NBT: {Type:0b}"],
+    });
   });
 });
 
@@ -246,7 +282,10 @@ describe("which datasets the server prewarms", () => {
 
   it("puts the default first wherever the manifest lists it", () => {
     expect(
-      datasetPrewarmOrder({ ...manifest, versions: [version("local-2.8.1"), version("local-2.9.0-rc-2")] }),
+      datasetPrewarmOrder({
+        ...manifest,
+        versions: [version("local-2.8.1"), version("local-2.9.0-rc-2")],
+      }),
     ).toEqual(["local-2.9.0-rc-2", "local-2.8.1"]);
   });
 
@@ -394,6 +433,49 @@ describe("the bounded dataset caches", () => {
     expect(cache.keys()).toEqual(["2.9:huge"]);
     cache.set("2.8.1:shard-0001", [], shardHeapBytes(1 * MB));
     expect(cache.keys()).toEqual(["2.8.1:shard-0001"]);
+  });
+
+  it("a blank list asked with a mod reuses the un-modded entry", async () => {
+    const resource = (id: string, recipeCount: number) => ({
+      id,
+      kind: "item" as const,
+      displayName: id.split(":")[1],
+      iconPath: `${id}.png`,
+      recipeCount,
+    });
+    // Direction counts are preset, so nothing reads the lookup index from disk.
+    const catalog = {
+      version: { id: "test" },
+      resources: [],
+      resourceIndex: [
+        resource("gregtech:steel", 5),
+        resource("minecraft:glass", 3),
+        resource("gregtech:copper", 1),
+      ],
+      resourceDirectionCounts: new Map(),
+      recipeMaps: [],
+      recipeCount: 0,
+      shards: [],
+    } as unknown as Parameters<typeof queryCatalogResources>[0];
+    const blank = { query: "", offset: 0, limit: 24 };
+
+    const all = await queryCatalogResources(catalog, blank);
+    const gregtech = await queryCatalogResources(catalog, { ...blank, mod: "gregtech" });
+    const nope = await queryCatalogResources(catalog, { ...blank, mod: "nope" });
+
+    expect(catalog.blankResourceSearches?.count).toBe(1);
+    expect(all.resources.map((entry) => entry.id)).toEqual([
+      "gregtech:steel",
+      "minecraft:glass",
+      "gregtech:copper",
+    ]);
+    expect(gregtech.resources.map((entry) => entry.id)).toEqual([
+      "gregtech:steel",
+      "gregtech:copper",
+    ]);
+    expect(gregtech.total).toBe(2);
+    expect(gregtech.mods).toEqual(all.mods);
+    expect(nope).toMatchObject({ resources: [], total: 0, mods: all.mods });
   });
 
   it("keep 24 blank item lists per version, the least recently read out first", () => {

@@ -682,21 +682,40 @@ export async function queryDatasetResources(
     popularity?: Map<string, number>;
   },
 ) {
-  const catalog = await loadCatalog(versionId);
+  return queryCatalogResources(await loadCatalog(versionId), request);
+}
+
+/** `queryDatasetResources` on a loaded catalog. */
+export async function queryCatalogResources(
+  catalog: LoadedRecipeIndex,
+  request: Parameters<typeof queryDatasetResources>[1],
+) {
   // Nothing typed is the item list as it opens and as it scrolls: every resource, sorted, about a second of the one
   // server thread on RC-2. The answer only changes with the catalog and the popularity sweep, so it is kept.
+  // The mod is not part of the key: the cached list is the un-modded one and a mod view filters it, because the mod
+  // counts are taken before the mod filter and the sort is stable, so the filtered list is the same bytes. Keyed on
+  // the mod, a request with a made-up mod name could push every player's list out of the 24 kept.
   const blankKey =
     request.query.trim() === ""
-      ? JSON.stringify([request.kind ?? "", request.mod ?? "", request.sort ?? "relevance", request.source ?? null])
+      ? JSON.stringify([request.kind ?? "", request.sort ?? "relevance", request.source ?? null])
       : undefined;
   const kept = blankKey === undefined ? undefined : catalog.blankResourceSearches?.get(blankKey);
-  const blank =
-    kept && kept.popularity === request.popularity ? kept.value : await searchDatasetResources(catalog, request);
-  if (blankKey !== undefined && blank !== kept?.value) {
+  const search =
+    kept && kept.popularity === request.popularity
+      ? kept.value
+      : await searchDatasetResources(catalog, blankKey === undefined ? request : { ...request, mod: undefined });
+  if (blankKey !== undefined && search !== kept?.value) {
     catalog.blankResourceSearches ??= createBlankResourceSearchCache();
-    catalog.blankResourceSearches.set(blankKey, { popularity: request.popularity, value: blank });
+    catalog.blankResourceSearches.set(blankKey, { popularity: request.popularity, value: search });
   }
-  const { matches, modCounts, resolved } = blank;
+  const { modCounts, resolved } = search;
+  const matches =
+    blankKey !== undefined && request.mod
+      ? search.matches.filter((match) => {
+          const resource = catalog.resourceIndex[match.resourceIndex];
+          return resource !== undefined && getResourceModId(resource) === request.mod;
+        })
+      : search.matches;
 
   return {
     resources: matches
@@ -717,11 +736,13 @@ export async function queryDatasetResources(
 type ResourceSearch = Awaited<ReturnType<typeof searchDatasetResources>>;
 /**
  * How many blank item lists each loaded version keeps. One holds every match
- * of its kind, mod, sort and source: about 2 MB on 2.9 unfiltered, far less for
- * one mod. Unbounded, every kind, sort and source alone came to about 130 MB
- * per version, and each mod opened added more. 24 covers every sort of every
- * kind (21) and a few filters: at most about 50 MB per version. An evicted
- * list is recomputed in 20-400 ms (the unfiltered ones are the slow ones).
+ * of its kind, sort and source, never narrowed to a mod (a mod view filters
+ * the un-modded list): about 2 MB on 2.9. Unbounded, every kind, sort and
+ * source alone came to about 130 MB per version. 24 covers every sort of every
+ * kind (21) and a few source filters, at most about 50 MB per version, and the
+ * key space (3 kinds x 7 sorts x 3 sources) is too small for any request shape
+ * to evict lists faster than real use. An evicted list is recomputed in 20-400
+ * ms (the unfiltered ones are the slow ones).
  */
 export const BLANK_RESOURCE_SEARCH_KEYS = 24;
 
