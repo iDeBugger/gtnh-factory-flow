@@ -104,6 +104,14 @@ The instance is small and has gone down under load. Rules:
   checkout signs in with no setup. Never add a second read of the variable or a second default. The live service
   exits without it (`src/live/main.ts`); the two must carry the same value.
 - The startup checks warn about a missing or short secret and never throw for it (`startup-checks.ts`).
+- A token is `<userId>.<expiresMs>.<epoch>.<hmac>`; the epoch is the account's `session_epoch` at sign-in, and
+  `getSessionUser` refuses a token whose epoch differs from the row's. "Sign out everywhere" (`POST
+  /api/community/auth/logout` with `{ everywhere: true }`) sets the row's epoch to now (`bumpSessionEpoch`), forgets
+  the cached account and tells the live service (`notifyLive` signed-out). A three-part token from before epochs
+  reads as epoch 0 and stays good until it expires or the account signs out everywhere. The migration
+  `supabase/migrations/2026-10-24-session-epoch.sql` must be applied before a build that reads the column is
+  deployed: the account lookup selects it, and without it every signed-in request answers 503. Exam:
+  `session.test.ts`, `app/api/community/auth/auth.test.ts`.
 - Every database-backed limit counts then records, so `checkRateLimit` runs one at a time per key and action
   (`serially`); a burst for one key is counted one by one. The site is one process, which is what makes the
   in-process queue enough. Sign-in has two limits: 20 attempts per address in 10 minutes (successes included) and

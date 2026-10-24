@@ -12,7 +12,7 @@ import { AuthForm, useCommunityUser } from "./auth";
  * menu when logged in.
  */
 export function AccountMenu() {
-  const { user, isLoading, setUser, signOut } = useCommunityUser();
+  const { user, isLoading, setUser, signOut, signOutEverywhere } = useCommunityUser();
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [isAuthOpen, setAuthOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -96,6 +96,17 @@ export function AccountMenu() {
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-surface-raised"
           >
             <LogOut className="h-3.5 w-3.5 text-fg-muted" /> Sign out
+          </button>
+          <button
+            type="button"
+            title="Signs out every browser and game using this account."
+            onClick={() => {
+              setMenuOpen(false);
+              void signOutEverywhere();
+            }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-surface-raised"
+          >
+            <LogOut className="h-3.5 w-3.5 text-fg-muted" /> Sign out everywhere
           </button>
         </div>
       ) : null}

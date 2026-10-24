@@ -1,0 +1,15 @@
+-- SIGN OUT EVERYWHERE.
+--
+-- Every session token carries the account's epoch at sign-in and is refused
+-- once the row's epoch moved; "Sign out everywhere" sets it to the current
+-- time in milliseconds, so every token of the account, on every device, stops
+-- verifying at once without a session table. Tokens minted before the column
+-- existed carry no epoch and read as 0, the column's default, so nobody is
+-- signed out by the deploy; they stop at their own expiry or the account's
+-- first sign-out-everywhere, whichever comes first.
+--
+-- Apply BEFORE deploying the code that reads it: the account lookup selects
+-- the column, and without it every signed-in request answers 503. The old
+-- code never reads it, so applying early is safe. Additive and idempotent.
+-- Mirrored at the end of supabase/schema.sql.
+alter table community_users add column if not exists session_epoch bigint not null default 0;

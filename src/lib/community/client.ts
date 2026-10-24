@@ -199,8 +199,17 @@ export async function loginCommunityUser(
   return parseJsonOrThrow<CommunityUser>(response);
 }
 
-export async function logoutCommunityUser(): Promise<void> {
-  await fetch("/api/community/auth/logout", { method: "POST" });
+/** Signs out of this browser; `everywhere` also ends every other session of the account. */
+export async function logoutCommunityUser(options: { everywhere?: boolean } = {}): Promise<void> {
+  const response = await fetch("/api/community/auth/logout", {
+    method: "POST",
+    ...(options.everywhere
+      ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ everywhere: true }) }
+      : {}),
+  });
+  if (options.everywhere && !response.ok) {
+    await parseJsonOrThrow(response);
+  }
 }
 
 /**

@@ -27,7 +27,7 @@ describe("session tokens", () => {
     vi.stubEnv("COMMUNITY_HASH_SALT", "salt-a");
     const payload = `${userId}.${Date.now() + 60_000}`;
     const legacy = `${payload}.${createHmac("sha256", "salt-a").update(payload).digest("hex")}`;
-    expect(verifySessionToken(legacy)?.userId).toBe(userId);
+    expect(verifySessionToken(legacy)).toEqual({ userId, expires: expect.any(Number), epoch: 0 });
   });
 
   it("refuse a changed token, another secret's token, and an expired one", () => {
@@ -44,8 +44,22 @@ describe("session tokens", () => {
     vi.stubEnv("COMMUNITY_HASH_SALT", "salt-b");
     expect(verifySessionToken(token)).toBeUndefined();
     vi.stubEnv("COMMUNITY_HASH_SALT", "salt-a");
-    const old = makeSessionToken(userId, Date.now() - 200 * 24 * 60 * 60 * 1000);
+    const old = makeSessionToken(userId, 0, Date.now() - 200 * 24 * 60 * 60 * 1000);
     expect(verifySessionToken(old)).toBeUndefined();
+  });
+
+  it("carry the account's epoch, and a token from before epochs reads as 0", () => {
+    vi.stubEnv("COMMUNITY_HASH_SALT", "salt-a");
+    const token = makeSessionToken(userId, 5);
+    expect(token.split(".")).toHaveLength(4);
+    expect(verifySessionToken(token)).toEqual({ userId, expires: expect.any(Number), epoch: 5 });
+    const [id, expires, , signature] = token.split(".");
+    expect(verifySessionToken(`${id}.${expires}.6.${signature}`)).toBeUndefined();
+    expect(verifySessionToken(`${id}.${expires}.${signature}`)).toBeUndefined();
+    const payload = `${userId}.${Date.now() + 60_000}`;
+    const legacy = `${payload}.${createHmac("sha256", "salt-a").update(payload).digest("hex")}`;
+    expect(verifySessionToken(legacy)?.epoch).toBe(0);
+    expect(verifySessionToken(`${payload}.0.${legacy.split(".")[2]}`)).toBeUndefined();
   });
 
   it("refuse to sign or verify without a real secret in production", () => {

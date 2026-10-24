@@ -225,7 +225,10 @@ export async function makeVoterKey(request: Request, deviceId: string): Promise<
 // ---------------------------------------------------------------------------
 // Dead-simple accounts: username + password, scrypt-hashed, with an HMAC-signed
 // session cookie (session.ts, shared with the live service). No email, no
-// reset flow — this is a hobby community site.
+// reset flow: this is a hobby community site. Every token carries the
+// account's session_epoch; "Sign out everywhere" moves it (bumpSessionEpoch).
+// A password change, when one exists, does the same `session_epoch =
+// Date.now()` in its UPDATE and mints a fresh token for the changer.
 // ---------------------------------------------------------------------------
 
 const scrypt = promisify(scryptCallback) as (
@@ -295,16 +298,24 @@ export interface SessionUser {
   id: string;
   username: string;
   is_admin: boolean;
+  /** Moves on "Sign out everywhere"; a token made under another value is refused. */
+  session_epoch: number;
 }
 
 /**
- * Verifies the session cookie and loads the user, or returns undefined.
- * Throws when the database does not answer (see `loadSessionUser`).
+ * Verifies the session cookie and loads the user, or returns undefined: no
+ * cookie, a bad signature, an expired token, a gone account, or a token from
+ * before the account's last sign-out-everywhere. Throws when the database
+ * does not answer (see `loadSessionUser`).
  */
 export async function getSessionUser(request: Request): Promise<SessionUser | undefined> {
   const token = readSessionCookie(request.headers.get("cookie"));
   const session = token ? verifySessionToken(token) : undefined;
-  return session ? loadSessionUser(session.userId) : undefined;
+  if (!session) {
+    return undefined;
+  }
+  const user = await loadSessionUser(session.userId);
+  return user && user.session_epoch === session.epoch ? user : undefined;
 }
 
 /**
@@ -320,17 +331,39 @@ export async function loadSessionUser(userId: string): Promise<SessionUser | und
   }
   const { data, error } = await getCommunityDb()
     .from("community_users")
-    .select("id,username,is_admin")
+    .select("id,username,is_admin,session_epoch")
     .eq("id", userId)
     .maybeSingle<SessionUser>();
   if (error) {
     throw new Error(error.message || "Account lookup failed.");
   }
+  // bigint arrives as a JSON number; a row from before the column reads as 0.
+  const user = data ? { ...data, session_epoch: Number(data.session_epoch ?? 0) } : undefined;
   if (sessionUsers.size >= SESSION_USER_CACHE_MAX) {
     sessionUsers.clear();
   }
-  sessionUsers.set(userId, { at: Date.now(), user: data ?? undefined });
-  return data ?? undefined;
+  sessionUsers.set(userId, { at: Date.now(), user });
+  return user;
+}
+
+/**
+ * Signs the account out everywhere: every token made so far stops verifying,
+ * here at once (the cache forgets the account) and in the live service once
+ * it hears (`notifyLive` signed-out) or its own cache lapses. A millisecond
+ * stamp needs no read-modify-write, and two concurrent bumps both invalidate.
+ * Returns the new epoch; throws when the database does not answer.
+ */
+export async function bumpSessionEpoch(userId: string): Promise<number> {
+  const epoch = Date.now();
+  const { error } = await getCommunityDb()
+    .from("community_users")
+    .update({ session_epoch: epoch })
+    .eq("id", userId);
+  if (error) {
+    throw new Error(error.message || "Sign out everywhere failed.");
+  }
+  forgetSessionUser(userId);
+  return epoch;
 }
 
 /**
@@ -344,6 +377,11 @@ const sessionUsers = new Map<string, { at: number; user: SessionUser | undefined
 /** For tests: forget the cached accounts. */
 export function forgetSessionUsers(): void {
   sessionUsers.clear();
+}
+
+/** Forget one cached account, so the next request reads its row again. */
+export function forgetSessionUser(userId: string): void {
+  sessionUsers.delete(userId);
 }
 
 /** The admin header, checked in constant time; with no token configured nobody is admin. */

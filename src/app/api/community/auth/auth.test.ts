@@ -1,7 +1,16 @@
+import { createHmac } from "node:crypto";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { checkPassword, forgetSessionUsers, hashPassword, resetDbBreaker } from "@/lib/server/community";
+import {
+  checkPassword,
+  forgetSessionUsers,
+  getCommunityDb,
+  hashPassword,
+  resetDbBreaker,
+} from "@/lib/server/community";
 import * as login from "./login/route";
 import * as logout from "./logout/route";
 import * as me from "./me/route";
@@ -139,4 +148,68 @@ describe("password checks", () => {
     // Synchronous scrypt lets the interval fire once or twice while 20 derivations run.
     expect(ticks).toBeGreaterThanOrEqual(20);
   }, 20_000);
+});
+
+describe("signing out everywhere", () => {
+  it("ends every session of the account, and a fresh sign-in works again", async () => {
+    const made = await post(register, "register", { username: "ann_all", password: "ann-password" });
+    const a = cookieOf(made);
+    const b = cookieOf(await post(login, "login", { username: "ann_all", password: "ann-password" }));
+    const out = await post(logout, "logout", { everywhere: true }, { cookie: a });
+    expect(out.status).toBe(200);
+    expect(await out.json()).toEqual({ ok: true });
+    expect(out.headers.get("set-cookie")).toMatch(/^gtnh_session=; .*Max-Age=0/);
+    expect(await whoAmI(a)).toBeNull();
+    expect(await whoAmI(b)).toBeNull();
+    const c = cookieOf(await post(login, "login", { username: "ann_all", password: "ann-password" }));
+    expect(await whoAmI(c)).toEqual({ username: "ann_all", isAdmin: false });
+    expect(await whoAmI(a)).toBeNull();
+  });
+
+  it("stops a token minted before epochs existed, which works until then", async () => {
+    const made = await post(register, "register", { username: "ann_old", password: "ann-password" });
+    const { data } = await getCommunityDb().from("community_users").select("id").eq("username", "ann_old").single();
+    const { id } = data as { id: string };
+    const payload = `${id}.${Date.now() + 60_000}`;
+    const legacy = `gtnh_session=${payload}.${createHmac("sha256", "auth-test-salt").update(payload).digest("hex")}`;
+    expect(await whoAmI(legacy)).toEqual({ username: "ann_old", isAdmin: false });
+    await post(logout, "logout", { everywhere: true }, { cookie: cookieOf(made) });
+    expect(await whoAmI(legacy)).toBeNull();
+  });
+
+  it("with no valid session has nothing to revoke, and still clears the cookie", async () => {
+    const out = await post(logout, "logout", { everywhere: true });
+    expect(out.status).toBe(200);
+    expect(await out.json()).toEqual({ ok: true });
+    expect(out.headers.get("set-cookie")).toMatch(/Max-Age=0/);
+  });
+
+  it("tells the live service, which closes the account's sockets", async () => {
+    const heard: unknown[] = [];
+    const server = createServer((req, res) => {
+      let text = "";
+      req.on("data", (chunk) => (text += chunk));
+      req.on("end", () => {
+        heard.push({ path: req.url, auth: req.headers.authorization, body: JSON.parse(text) });
+        res.writeHead(200).end("{}");
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    vi.stubEnv("LIVE_INTERNAL_URL", `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+    vi.stubEnv("LIVE_INTERNAL_TOKEN", "internal-secret");
+    try {
+      const made = await post(register, "register", { username: "ann_live", password: "ann-password" });
+      await post(logout, "logout", { everywhere: true }, { cookie: cookieOf(made) });
+      await expect.poll(() => heard.length).toBe(1);
+      expect(heard[0]).toEqual({
+        path: "/internal/signed-out",
+        auth: "Bearer internal-secret",
+        body: { userId: expect.stringMatching(/^[0-9a-f-]{36}$/) },
+      });
+    } finally {
+      server.close();
+      vi.stubEnv("LIVE_INTERNAL_URL", undefined);
+      vi.stubEnv("LIVE_INTERNAL_TOKEN", undefined);
+    }
+  });
 });

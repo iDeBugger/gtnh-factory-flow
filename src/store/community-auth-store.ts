@@ -16,6 +16,8 @@ interface CommunityAuthStore {
   hydrate: () => Promise<void>;
   setUser: (user?: CommunityUser) => void;
   signOut: () => Promise<void>;
+  /** Ends every session of the account, this browser's included. */
+  signOutEverywhere: () => Promise<void>;
 }
 
 /** How long to wait before asking again who is signed in, after the server could not say. */
@@ -44,6 +46,10 @@ export const useCommunityAuthStore = create<CommunityAuthStore>((set, get) => ({
   setUser: (user) => set({ user, hasHydrated: true }),
   signOut: async () => {
     await logoutCommunityUser();
+    set({ user: undefined });
+  },
+  signOutEverywhere: async () => {
+    await logoutCommunityUser({ everywhere: true });
     set({ user: undefined });
   },
 }));

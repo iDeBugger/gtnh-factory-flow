@@ -102,7 +102,7 @@ describe("the mod's top bar", () => {
     expect(key("account").textContent).toBe("AS");
     fireEvent.click(key("account"));
     const rows = [...document.querySelectorAll('[role="menu"] [role="menuitem"] .mm-label')].map((element) => element.textContent);
-    expect(rows).toEqual(["ann_smith", "Sign out"]);
+    expect(rows).toEqual(["ann_smith", "Sign out", "Sign out everywhere"]);
   });
 
   const shareRows = () =>

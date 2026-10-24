@@ -1,8 +1,14 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
- * The account session token: `<userId>.<expiresMs>.<hmac>`, HMAC-SHA256 over
- * `<userId>.<expiresMs>` with COMMUNITY_HASH_SALT. The website keeps it in the
+ * The account session token: `<userId>.<expiresMs>.<epoch>.<hmac>`,
+ * HMAC-SHA256 over `<userId>.<expiresMs>.<epoch>` with COMMUNITY_HASH_SALT.
+ * The epoch is the account's `session_epoch` at sign-in: "Sign out
+ * everywhere" moves the row's epoch, and a token whose epoch differs is
+ * refused by whoever loads the account, so every token of the account stops
+ * at once with no session table. Tokens minted before the epoch existed have
+ * three parts and read as epoch 0, the column's default, until they expire or
+ * the account signs out everywhere. The website keeps the token in the
  * `gtnh_session` cookie; the game sends the same cookie, the live socket's
  * upgrade included. Shared by the Next.js routes (community.ts) and the live
  * service, so both accept exactly the same tokens. No database here.
@@ -12,6 +18,8 @@ export const SESSION_COOKIE = "gtnh_session";
 export const SESSION_DAYS = 180;
 
 const SESSION_USER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SESSION_NUMBER = /^\d{1,16}$/;
+const SESSION_SIGNATURE = /^[0-9a-f]{64}$/;
 
 /** Development only: a checkout signs in with no setup. Never a production key. */
 const DEVELOPMENT_SECRET = "gtnh-factory-hub";
@@ -38,9 +46,16 @@ function sign(payload: string): string {
   return createHmac("sha256", sessionSecret()).update(payload).digest("hex");
 }
 
-export function makeSessionToken(userId: string, now = Date.now()): string {
+export interface SessionClaims {
+  userId: string;
+  expires: number;
+  /** The account's session epoch when the token was made; 0 for a token from before epochs. */
+  epoch: number;
+}
+
+export function makeSessionToken(userId: string, epoch = 0, now = Date.now()): string {
   const expires = now + SESSION_DAYS * 24 * 60 * 60 * 1000;
-  const payload = `${userId}.${expires}`;
+  const payload = `${userId}.${expires}.${epoch}`;
   return `${payload}.${sign(payload)}`;
 }
 
@@ -53,25 +68,29 @@ export function readSessionCookie(cookieHeader: string | null | undefined): stri
 /**
  * The account a token names, when its signature holds (compared in constant
  * time) and it has not expired; otherwise undefined. Says nothing about
- * whether the account still exists.
+ * whether the account still exists or its epoch still matches: the caller
+ * that loads the account checks the epoch.
  */
-export function verifySessionToken(
-  token: string,
-  now = Date.now(),
-): { userId: string; expires: number } | undefined {
+export function verifySessionToken(token: string, now = Date.now()): SessionClaims | undefined {
   const parts = token.split(".");
-  if (parts.length !== 3) {
+  // Three parts is the form before epochs; the two forms differ in part count, so neither can be
+  // rewritten into the other.
+  if (parts.length !== 3 && parts.length !== 4) {
     return undefined;
   }
-  const [userId, expiresText, signature] = parts as [string, string, string];
+  const signature = parts[parts.length - 1]!;
+  const [userId, expiresText] = parts as [string, string, ...string[]];
+  const epochText = parts.length === 4 ? parts[2]! : undefined;
   if (
     !SESSION_USER_ID.test(userId) ||
-    !/^\d{1,16}$/.test(expiresText) ||
-    !/^[0-9a-f]{64}$/.test(signature)
+    !SESSION_NUMBER.test(expiresText) ||
+    (epochText !== undefined && !SESSION_NUMBER.test(epochText)) ||
+    !SESSION_SIGNATURE.test(signature)
   ) {
     return undefined;
   }
-  const expected = Buffer.from(sign(`${userId}.${expiresText}`), "hex");
+  const payload = epochText === undefined ? `${userId}.${expiresText}` : `${userId}.${expiresText}.${epochText}`;
+  const expected = Buffer.from(sign(payload), "hex");
   const given = Buffer.from(signature, "hex");
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
     return undefined;
@@ -80,5 +99,5 @@ export function verifySessionToken(
   if (expires < now) {
     return undefined;
   }
-  return { userId, expires };
+  return { userId, expires, epoch: epochText === undefined ? 0 : Number(epochText) };
 }

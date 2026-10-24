@@ -13,12 +13,13 @@ export function useCommunityUser() {
   const hydrate = useCommunityAuthStore((state) => state.hydrate);
   const setUser = useCommunityAuthStore((state) => state.setUser);
   const signOut = useCommunityAuthStore((state) => state.signOut);
+  const signOutEverywhere = useCommunityAuthStore((state) => state.signOutEverywhere);
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
 
-  return { user, isLoading: !hasHydrated, setUser, signOut };
+  return { user, isLoading: !hasHydrated, setUser, signOut, signOutEverywhere };
 }
 
 /**

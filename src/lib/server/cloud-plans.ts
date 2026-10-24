@@ -119,14 +119,35 @@ export type LiveNotice =
       owner?: { id: string; username: string };
       name?: string;
     }
-  | { kind: "deleted"; ownerId: string; designId: string };
+  | { kind: "deleted"; ownerId: string; designId: string }
+  /** The account signed out everywhere: its open sockets are to close. */
+  | { kind: "signed-out"; userId: string };
+
+function noticeBody(notice: LiveNotice): unknown {
+  if (notice.kind === "signed-out") {
+    return { userId: notice.userId };
+  }
+  const doc = docKey(notice.ownerId, notice.designId);
+  if (notice.kind === "members") {
+    return {
+      doc,
+      members: notice.members,
+      added: notice.added,
+      removed: notice.removed,
+      owner: notice.owner,
+      name: notice.name,
+    };
+  }
+  return { doc };
+}
 
 /** Waits before each retry of a notice the live service did not take (down, or restarting). */
 export const LIVE_NOTICE_RETRY_MS = [1000, 4000, 15_000] as const;
 
 /**
- * Tells the live service that sharing changed or a design went, so open
- * rooms update and anyone no longer allowed is dropped. Quick: one attempt
+ * Tells the live service that sharing changed, a design went or an account
+ * signed out everywhere, so open rooms update and anyone no longer allowed
+ * is dropped. Quick: one attempt
  * is awaited; when the service does not take it (no answer, or a 5xx) it is
  * tried again in the background, `retryMs` apart. The change is already in
  * the database, which the service reads again at every lease renewal (30 s),
@@ -142,19 +163,7 @@ export async function notifyLive(
   if (!base || !token) {
     return false;
   }
-  const doc = docKey(notice.ownerId, notice.designId);
-  const body = JSON.stringify(
-    notice.kind === "members"
-      ? {
-          doc,
-          members: notice.members,
-          added: notice.added,
-          removed: notice.removed,
-          owner: notice.owner,
-          name: notice.name,
-        }
-      : { doc },
-  );
+  const body = JSON.stringify(noticeBody(notice));
   const send = async (): Promise<"taken" | "refused" | "again"> => {
     try {
       const response = await fetchWithDbTimeout(

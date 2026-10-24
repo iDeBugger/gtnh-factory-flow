@@ -63,9 +63,15 @@ export async function POST(request: Request) {
 
       const { data } = await getCommunityDb()
         .from("community_users")
-        .select("id,username,password_hash,is_admin")
+        .select("id,username,password_hash,is_admin,session_epoch")
         .eq("username", username)
-        .single<{ id: string; username: string; password_hash: string; is_admin: boolean }>();
+        .single<{
+          id: string;
+          username: string;
+          password_hash: string;
+          is_admin: boolean;
+          session_epoch: number | null;
+        }>();
 
       // The check runs whether or not the name exists, so its timing says nothing about which names do.
       const ok = await checkPassword(password, data?.password_hash);
@@ -76,7 +82,11 @@ export async function POST(request: Request) {
 
       return NextResponse.json(
         { username: data.username, isAdmin: data.is_admin },
-        { headers: { "Set-Cookie": sessionCookieHeader(makeSessionToken(data.id)) } },
+        {
+          headers: {
+            "Set-Cookie": sessionCookieHeader(makeSessionToken(data.id, Number(data.session_epoch ?? 0))),
+          },
+        },
       );
     });
   } catch (error) {

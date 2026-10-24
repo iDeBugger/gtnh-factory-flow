@@ -277,3 +277,9 @@ create table if not exists library_design_members (
 create index if not exists library_design_members_member on library_design_members (member_id);
 
 alter table library_design_members enable row level security;
+
+-- ---------------------------------------------------------------------------
+-- SIGN OUT EVERYWHERE. The same SQL as
+-- supabase/migrations/2026-10-24-session-epoch.sql, which explains it.
+-- Additive and idempotent.
+alter table community_users add column if not exists session_epoch bigint not null default 0;

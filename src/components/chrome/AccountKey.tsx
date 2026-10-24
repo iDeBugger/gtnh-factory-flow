@@ -18,7 +18,7 @@ import { SignInPanel } from "./SignInPanel";
  * person picture like the other icon keys (`pictures`).
  */
 export function AccountKey({ pictures = false }: { pictures?: boolean }) {
-  const { user, isLoading, signOut } = useCommunityUser();
+  const { user, isLoading, signOut, signOutEverywhere } = useCommunityUser();
   const me = useLiveSession((state) => state.me);
   const [open, setOpen] = useState<{ kind: "form" | "menu"; anchor: ChromeAnchor }>();
   if (isLoading) {
@@ -74,6 +74,11 @@ export function AccountKey({ pictures = false }: { pictures?: boolean }) {
           entries={[
             { label: user.username, disabled: true, onSelect: () => undefined },
             { label: "Sign out", ruleAbove: true, onSelect: () => void signOut() },
+            {
+              label: "Sign out everywhere",
+              tip: "Signs out every browser and game using this account.",
+              onSelect: () => void signOutEverywhere(),
+            },
           ]}
           onClose={() => setOpen(undefined)}
         />
