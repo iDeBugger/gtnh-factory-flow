@@ -14,11 +14,12 @@ export const DATASET_FILE_CACHE_CONTROL = "public, max-age=86400";
 
 /**
  * Streams a file with the validators a cache or a download tool expects: an
- * ETag from size and mtime (a 304 for If-None-Match, so the edge's
- * revalidation after the day costs no bytes), Last-Modified, and one byte
- * range (a resumed download), the range ignored when If-Range names another
- * version. A miss says no-store: a file missing for a moment during a publish
- * must not be cached as missing.
+ * ETag from size and mtime (a 304 for If-None-Match, a list, a weak form or
+ * "*" included, or for If-Modified-Since at second precision when no ETag is
+ * sent, so the edge's revalidation after the day costs no bytes),
+ * Last-Modified, and one byte range (a resumed download), the range ignored
+ * when If-Range names another version. A miss says no-store: a file missing
+ * for a moment during a publish must not be cached as missing.
  */
 export async function serveDatasetFile(
   filePath: string,
@@ -42,7 +43,7 @@ export async function serveDatasetFile(
     "Last-Modified": new Date(stats.mtimeMs).toUTCString(),
   };
   const request = options.requestHeaders;
-  if (request?.get("if-none-match") === etag) {
+  if (isFresh(request, etag, stats.mtimeMs)) {
     return new Response(null, { status: 304, headers });
   }
 
@@ -67,6 +68,19 @@ export async function serveDatasetFile(
       ...(range ? { "Content-Range": `bytes ${start}-${end}/${stats.size}` } : {}),
     },
   });
+}
+
+/** Whether the client's copy is the file: by ETag when it sends one, else by date. */
+function isFresh(request: Headers | undefined, etag: string, mtimeMs: number): boolean {
+  const noneMatch = request?.get("if-none-match");
+  if (noneMatch) {
+    return noneMatch
+      .split(",")
+      .map((tag) => tag.trim().replace(/^W\//, ""))
+      .some((tag) => tag === "*" || tag === etag);
+  }
+  const since = Date.parse(request?.get("if-modified-since") ?? "");
+  return Number.isFinite(since) && Math.floor(mtimeMs / 1000) * 1000 <= since;
 }
 
 /** One `bytes=` range as [start, end], "unsatisfiable", or undefined for none (or several). */

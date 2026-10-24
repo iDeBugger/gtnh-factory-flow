@@ -44,6 +44,32 @@ describe("a served dataset file", () => {
     expect(fresh.status).toBe(304);
     expect(fresh.headers.get("ETag")).toBe(etag);
     expect((await serve({ "if-none-match": '"other"' })).status).toBe(200);
+    // A list, a weak form and "*" are the same question.
+    expect((await serve({ "if-none-match": `"other", ${etag}` })).status).toBe(304);
+    expect((await serve({ "if-none-match": `W/${etag}` })).status).toBe(304);
+    expect((await serve({ "if-none-match": "*" })).status).toBe(304);
+  });
+
+  it("answers 304 to a date no older than the file when no tag is sent", async () => {
+    expect((await serve({ "if-modified-since": "Fri, 02 Jan 2026 03:04:05 GMT" })).status).toBe(
+      304,
+    );
+    expect((await serve({ "if-modified-since": "Sat, 03 Jan 2026 00:00:00 GMT" })).status).toBe(
+      304,
+    );
+    expect((await serve({ "if-modified-since": "Fri, 02 Jan 2026 03:04:04 GMT" })).status).toBe(
+      200,
+    );
+    expect((await serve({ "if-modified-since": "not a date" })).status).toBe(200);
+    // A tag that does not match wins over a matching date.
+    expect(
+      (
+        await serve({
+          "if-none-match": '"other"',
+          "if-modified-since": "Sat, 03 Jan 2026 00:00:00 GMT",
+        })
+      ).status,
+    ).toBe(200);
   });
 
   it("serves one byte range, and the whole file when the range is not for this version", async () => {
