@@ -3,7 +3,7 @@
 import { LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { loginCommunityUser, registerCommunityUser } from "@/lib/community/client";
-import type { CommunityUser } from "@/lib/community/types";
+import { PASSWORD_MIN_LENGTH, SIGN_IN_PASSWORD_MIN_LENGTH, type CommunityUser } from "@/lib/community/types";
 import { useCommunityAuthStore } from "@/store/community-auth-store";
 
 /** Session state shared across headers, the share dialog, and the hub. */
@@ -31,6 +31,8 @@ export function AuthForm({ onSignedIn }: { onSignedIn: (user: CommunityUser) => 
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string>();
   const [isBusy, setBusy] = useState(false);
+  // A new account needs the longer password; signing in takes what the account was made with.
+  const minPassword = mode === "login" ? SIGN_IN_PASSWORD_MIN_LENGTH : PASSWORD_MIN_LENGTH;
 
   const submit = async () => {
     setBusy(true);
@@ -96,7 +98,7 @@ export function AuthForm({ onSignedIn }: { onSignedIn: (user: CommunityUser) => 
       {error ? <p className="text-sm text-red-500">{error}</p> : null}
       <button
         type="submit"
-        disabled={isBusy || username.trim().length < 3 || password.length < 6}
+        disabled={isBusy || username.trim().length < 3 || password.length < minPassword}
         className="inline-flex items-center gap-2 rounded border border-cyan-700 bg-cyan-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}

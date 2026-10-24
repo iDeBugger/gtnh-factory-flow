@@ -6,6 +6,7 @@ import "./library.css";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { loginCommunityUser, registerCommunityUser } from "@/lib/community/client";
+import { PASSWORD_MIN_LENGTH, SIGN_IN_PASSWORD_MIN_LENGTH } from "@/lib/community/types";
 import { useCommunityUser } from "@/components/community/auth";
 import { useDropdownDismiss } from "@/lib/hooks/use-dropdown-dismiss";
 import { getUiScale } from "@/lib/ui-scale";
@@ -25,8 +26,12 @@ export function SignInPanel({ anchor, onClose }: { anchor: ChromeAnchor; onClose
   const scale = getUiScale() * CHROME_SCREEN_K;
   const vw = window.innerWidth / scale;
 
+  // A new account needs the longer password; signing in takes what the account was made with.
+  const minPassword = mode === "login" ? SIGN_IN_PASSWORD_MIN_LENGTH : PASSWORD_MIN_LENGTH;
+  const incomplete = username.trim().length < 3 || password.length < minPassword;
+
   const submit = async () => {
-    if (busy || username.trim().length < 3 || password.length < 6) return;
+    if (busy || incomplete) return;
     setBusy(true);
     setError(undefined);
     try {
@@ -79,7 +84,7 @@ export function SignInPanel({ anchor, onClose }: { anchor: ChromeAnchor; onClose
           onChange={(event) => setPassword(event.target.value)}
         />
         {error ? <div className="ml-sign-error">{error}</div> : <div className="ml-sign-gap" />}
-        <button className="ml-sign-go" type="submit" disabled={busy || username.trim().length < 3 || password.length < 6}>
+        <button className="ml-sign-go" type="submit" disabled={busy || incomplete}>
           {busy ? "..." : mode === "login" ? "Sign in" : "Create account"}
         </button>
         <div

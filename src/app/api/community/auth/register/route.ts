@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { PASSWORD_MIN_LENGTH } from "@/lib/community/types";
 import {
   checkRateLimit,
   getCommunityDb,
@@ -31,9 +32,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (password.length < 6 || password.length > 128) {
+    if (password.length < PASSWORD_MIN_LENGTH || password.length > 128) {
       return NextResponse.json(
-        { error: "Password must be at least 6 characters." },
+        { error: `Password must be at least ${PASSWORD_MIN_LENGTH} characters.` },
         { status: 400 },
       );
     }
