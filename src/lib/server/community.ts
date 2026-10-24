@@ -324,11 +324,28 @@ export async function getSessionUser(request: Request): Promise<SessionUser | un
  * the sign-in button, and the live service would close their socket as a
  * refused sign-in, which the client never retries.
  */
-export async function loadSessionUser(userId: string): Promise<SessionUser | undefined> {
+export function loadSessionUser(userId: string): Promise<SessionUser | undefined> {
   const cached = sessionUsers.get(userId);
   if (cached && Date.now() - cached.at < SESSION_USER_CACHE_MS) {
     return cached.user;
   }
+  if (sessionUsers.size >= SESSION_USER_CACHE_MAX) {
+    sessionUsers.clear();
+  }
+  // The promise is cached before the read answers, so a "Sign out everywhere"
+  // that lands while the read is in flight forgets this entry and nothing
+  // writes the pre-bump row back afterwards. A failed read is dropped.
+  const entry = { at: Date.now(), user: readSessionUser(userId) };
+  sessionUsers.set(userId, entry);
+  entry.user.catch(() => {
+    if (sessionUsers.get(userId) === entry) {
+      sessionUsers.delete(userId);
+    }
+  });
+  return entry.user;
+}
+
+async function readSessionUser(userId: string): Promise<SessionUser | undefined> {
   const { data, error } = await getCommunityDb()
     .from("community_users")
     .select("id,username,is_admin,session_epoch")
@@ -338,12 +355,7 @@ export async function loadSessionUser(userId: string): Promise<SessionUser | und
     throw new Error(error.message || "Account lookup failed.");
   }
   // bigint arrives as a JSON number; a row from before the column reads as 0.
-  const user = data ? { ...data, session_epoch: Number(data.session_epoch ?? 0) } : undefined;
-  if (sessionUsers.size >= SESSION_USER_CACHE_MAX) {
-    sessionUsers.clear();
-  }
-  sessionUsers.set(userId, { at: Date.now(), user });
-  return user;
+  return data ? { ...data, session_epoch: Number(data.session_epoch ?? 0) } : undefined;
 }
 
 /**
@@ -372,7 +384,7 @@ export async function bumpSessionEpoch(userId: string): Promise<number> {
  */
 const SESSION_USER_CACHE_MS = 60_000;
 const SESSION_USER_CACHE_MAX = 5000;
-const sessionUsers = new Map<string, { at: number; user: SessionUser | undefined }>();
+const sessionUsers = new Map<string, { at: number; user: Promise<SessionUser | undefined> }>();
 
 /** For tests: forget the cached accounts. */
 export function forgetSessionUsers(): void {

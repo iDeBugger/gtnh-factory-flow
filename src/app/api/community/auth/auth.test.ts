@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
 import {
+  bumpSessionEpoch,
   checkPassword,
   forgetSessionUsers,
   getCommunityDb,
@@ -23,6 +24,9 @@ import * as register from "./register/route";
 
 let local: LocalDatabase;
 let addresses = 0;
+/** When set, the answer of every account row read waits on it (a slow database); the read itself happens at once. */
+let holdAccountReads: Promise<void> | undefined;
+let heldAccountReads = 0;
 
 /** A fresh client address per call: the per-address limits never meet across cases. */
 const nextAddress = () => `10.1.${Math.floor(addresses / 250)}.${(addresses++ % 250) + 1}`;
@@ -60,7 +64,19 @@ beforeAll(async () => {
   vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "auth-test-salt");
   local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
+  useInProcessLocalDb(async (request) => {
+    const response = await local.handle(request);
+    if (
+      holdAccountReads &&
+      request.method === "GET" &&
+      request.url.includes("community_users") &&
+      request.url.includes("session_epoch")
+    ) {
+      heldAccountReads += 1;
+      await holdAccountReads;
+    }
+    return response;
+  });
 }, 60_000);
 
 afterEach(() => {
@@ -175,6 +191,26 @@ describe("signing out everywhere", () => {
     expect(await whoAmI(legacy)).toEqual({ username: "ann_old", isAdmin: false });
     await post(logout, "logout", { everywhere: true }, { cookie: cookieOf(made) });
     expect(await whoAmI(legacy)).toBeNull();
+  });
+
+  it("stops a token whose account read was in flight when the sign-out landed", async () => {
+    const made = await post(register, "register", { username: "ann_race", password: "ann-password" });
+    const cookie = cookieOf(made);
+    const { data } = await getCommunityDb().from("community_users").select("id").eq("username", "ann_race").single();
+    forgetSessionUsers();
+    // A request with the token starts its row read and stalls in the database.
+    let release!: () => void;
+    holdAccountReads = new Promise<void>((resolve) => (release = resolve));
+    const inFlight = whoAmI(cookie);
+    await vi.waitFor(() => expect(heldAccountReads).toBe(1));
+    holdAccountReads = undefined;
+    // Sign out everywhere lands meanwhile: the row's epoch moves, the cache forgets the account.
+    expect(await bumpSessionEpoch((data as { id: string }).id)).toBeGreaterThan(0);
+    // The stalled read answers with the pre-bump row: fine for the request that started before.
+    release();
+    expect(await inFlight).toEqual({ username: "ann_race", isAdmin: false });
+    // Nothing wrote that row back: the next request reads the moved epoch.
+    expect(await whoAmI(cookie)).toBeNull();
   });
 
   it("with no valid session has nothing to revoke, and still clears the cookie", async () => {

@@ -85,7 +85,8 @@ The instance is small and has gone down under load. Rules:
   is spent, and the budget refills only while demand stays under that. After 5 failures in a
   row the client's breaker answers at once for 15 s without sending (`fetchFromDb`).
 - A failed account lookup throws, never reads as signed out (`loadSessionUser`); accounts are
-  cached a minute. A library answer fails whole when a sharing read fails: the client
+  cached a minute, as the lookup's promise from before it answers, so forgetting an account mid-read
+  (Sign out everywhere) drops the read too and the old row is never written back. A library answer fails whole when a sharing read fails: the client
   removes every shared copy the answer leaves out.
 - Nothing a page needs to render may await a community sweep. `getResourcePopularity`
   answers at once with the last good map (sweep every 6 h, retry after 30 min on failure).
