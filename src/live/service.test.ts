@@ -1039,6 +1039,70 @@ describe("the live service", { timeout: 30_000 }, () => {
     expect((await bob.join(plans[3]!.doc)).doc).toBe(plans[3]!.doc);
   });
 
+  it("closes an account's oldest lingering room when it opens more than its share", async () => {
+    const { port, service } = await startService({
+      limits: { roomsPerAccount: 2 },
+      timing: { lingerMs: 60_000 },
+    });
+    const plans = await Promise.all([makeDesign(), makeDesign(), makeDesign(), makeDesign()]);
+    const ann = await TestClient.open(port, { who: "ann" });
+    await ann.hello();
+    // Paging through plans: each joined, then left to linger.
+    for (const plan of plans) {
+      await ann.join(plan.doc);
+      ann.send({ t: "leave", doc: plan.doc });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    // The first room was closed and let its lease go when the third opened;
+    // the newest still lingers for whoever comes back.
+    await until(async () => (await storedRow(plans[0]!.designId)).live_lease_until === null);
+    expect((await storedRow(plans[3]!.designId)).live_lease_until).not.toBeNull();
+    expect(service.stats.rooms).toBeLessThanOrEqual(3);
+    // A closed room opens again cleanly.
+    const bob = await TestClient.open(port, { who: "bob" });
+    await bob.hello();
+    expect((await bob.join(plans[0]!.doc)).doc).toBe(plans[0]!.doc);
+  });
+
+  it("holds the service to the plan bytes it has open", async () => {
+    const { port, service } = await startService({ limits: { maxOpenPlanBytes: 1024 } });
+    const big = await makeDesign({ notes: "n".repeat(4096) });
+    const small = await makeDesign();
+    const ann = await TestClient.open(port, { who: "ann" });
+    const bob = await TestClient.open(port, { who: "bob" });
+    await ann.hello();
+    await bob.hello();
+    // Nothing held yet: the big plan opens, and alone fills the budget.
+    await ann.join(big.doc);
+    bob.send({ t: "join", doc: small.doc });
+    expect(await bob.next("error")).toMatchObject({ code: "rate", doc: small.doc });
+    // A plan already open costs no new room.
+    expect((await bob.join(big.doc)).doc).toBe(big.doc);
+    ann.send({ t: "leave", doc: big.doc });
+    bob.send({ t: "leave", doc: big.doc });
+    await until(() => service.stats.rooms === 0);
+    expect((await bob.join(small.doc)).doc).toBe(small.doc);
+  });
+
+  it("limits how many plans an account may open a minute", async () => {
+    const { port } = await startService({ limits: { plansOpenedPerMinuteByAccount: 2 } });
+    const plans = await Promise.all([makeDesign(), makeDesign(), makeDesign()]);
+    const ann = await TestClient.open(port, { who: "ann" });
+    await ann.hello();
+    await ann.join(plans[0]!.doc);
+    await ann.join(plans[1]!.doc);
+    ann.send({ t: "join", doc: plans[2]!.doc });
+    expect(await ann.next("error")).toMatchObject({ code: "rate", doc: plans[2]!.doc });
+    // A plan already open is not an open; another account's count is its own.
+    const bob = await TestClient.open(port, { who: "bob" });
+    await bob.hello();
+    expect((await bob.join(plans[0]!.doc)).doc).toBe(plans[0]!.doc);
+    const carol = await TestClient.open(port, { who: "carol" });
+    await carol.hello();
+    carol.send({ t: "join", doc: plans[2]!.doc });
+    expect(await carol.next("error")).toMatchObject({ code: "forbidden", doc: plans[2]!.doc });
+  });
+
   it("lets in only who the room holds as members, and reads them again at every renewal", async () => {
     const { port } = await startService({ timing: { renewMs: 60_000 } });
     const { doc } = await makeDesign();

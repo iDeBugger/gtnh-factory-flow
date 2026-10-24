@@ -63,10 +63,24 @@ export const SERVICE_LIMITS = {
   bufferedBytes: 8 * 1024 * 1024,
   /** A connection already in a plan gets its snapshot again at most this often (and only when it moved on). */
   resnapshotMs: 1000,
-  /** Plans one account may have open at once, across all its connections. */
+  /**
+   * Plans one account may have open at once, across all its connections, and
+   * how many rooms it opened may linger empty: opening another closes the
+   * oldest of them, so paging through plans holds at most this many in memory.
+   */
   roomsPerAccount: 8,
   /** Plans open at once in the whole service (LIVE_MAX_ROOMS); past it, joins wait. */
   maxRooms: 500,
+  /**
+   * Plan JSON held in open rooms, in characters as `Room.size` counts them
+   * (LIVE_MAX_PLAN_BYTES). Past it, joins that would open a room are refused
+   * as `rate` like a full `maxRooms`. A plan's size is known only once it is
+   * read, so one room may overshoot by one plan (3 MB at most): resident
+   * memory is about four times this, plus the baseline.
+   */
+  maxOpenPlanBytes: 64 * 1024 * 1024,
+  /** Plans one account may open (a join of a plan not open, membership query included) in a minute. */
+  plansOpenedPerMinuteByAccount: 30,
   /** Whole-plan writes to the database at once, across every room. */
   flushConcurrency: 4,
   /** Socket upgrades a minute from one account, and from one address (X-Client-Ip behind Caddy). */
@@ -265,6 +279,7 @@ export class LiveService {
   private readonly upgradesByAddress: RateLimiter;
   private readonly nearbyByAccount: RateLimiter;
   private readonly nearbyByAddress: RateLimiter;
+  private readonly opensByAccount: RateLimiter;
   /** Accounts looked up for sessions, each kept `accountCacheMs`. */
   private readonly accounts = new Map<string, { at: number; account: Promise<Account | undefined> }>();
   private heartbeat?: ReturnType<typeof setInterval>;
@@ -279,6 +294,7 @@ export class LiveService {
     this.upgradesByAddress = new RateLimiter(this.limits.upgradesPerMinuteByAddress, 60_000);
     this.nearbyByAccount = new RateLimiter(this.limits.nearbyPerMinuteByAccount, 60_000);
     this.nearbyByAddress = new RateLimiter(this.limits.nearbyPerMinuteByAddress, 60_000);
+    this.opensByAccount = new RateLimiter(this.limits.plansOpenedPerMinuteByAccount, 60_000);
     this.origins = new Set(
       options.allowedOrigins.map(normalizeOrigin).filter((origin): origin is string => !!origin),
     );
@@ -329,6 +345,7 @@ export class LiveService {
           this.upgradesByAddress,
           this.nearbyByAccount,
           this.nearbyByAddress,
+          this.opensByAccount,
         ]) {
           limiter.sweep(now);
         }
@@ -894,32 +911,39 @@ export class LiveService {
     });
   }
 
-  /** The open room for a doc, opening it when needed; undefined when the design is missing or deleted. */
-  private room(doc: string): Promise<Room | undefined> {
+  /**
+   * The open room for a doc, opening it when needed (for `openedBy`, the
+   * account whose join opens it); undefined when the design is missing or deleted.
+   */
+  private room(doc: string, openedBy?: string): Promise<Room | undefined> {
     const existing = this.rooms.get(doc);
     if (existing) {
       return existing;
     }
-    const opening = Room.open(doc, {
-      store: this.options.store,
-      journal: this.journal,
-      flushes: this.flushes,
-      timing: this.timing,
-      maxPlanChars: this.options.maxPlanChars,
-      cids: this.cids,
-      log: this.log,
-      onClosed: (room) => {
-        this.openRooms.delete(room);
-        if (this.rooms.get(room.doc) === opening) {
-          this.rooms.delete(room.doc);
-        }
-        for (const conn of this.connections) {
-          if (conn.rooms.get(room.doc) === room) {
-            conn.rooms.delete(room.doc);
+    const opening = Room.open(
+      doc,
+      {
+        store: this.options.store,
+        journal: this.journal,
+        flushes: this.flushes,
+        timing: this.timing,
+        maxPlanChars: this.options.maxPlanChars,
+        cids: this.cids,
+        log: this.log,
+        onClosed: (room) => {
+          this.openRooms.delete(room);
+          if (this.rooms.get(room.doc) === opening) {
+            this.rooms.delete(room.doc);
           }
-        }
+          for (const conn of this.connections) {
+            if (conn.rooms.get(room.doc) === room) {
+              conn.rooms.delete(room.doc);
+            }
+          }
+        },
       },
-    });
+      openedBy,
+    );
     this.rooms.set(doc, opening);
     void opening.then(
       (room) => {
@@ -985,10 +1009,21 @@ export class LiveService {
       return;
     }
     if (!this.rooms.has(doc)) {
-      if (this.rooms.size >= this.limits.maxRooms) {
-        // Full: a plan nobody is in makes room, and the client asks again.
+      if (
+        this.rooms.size >= this.limits.maxRooms ||
+        this.openPlanBytes() >= this.limits.maxOpenPlanBytes
+      ) {
+        // Full, in rooms or in plan bytes: a plan nobody is in makes room,
+        // and the client asks again.
         this.closeOneIdleRoom();
         this.error(conn, "rate", "The live service is busy. Try again shortly.", { doc });
+        return;
+      }
+      // Opening a plan costs a membership query and a plan read: so many a
+      // minute per account, counted before the query. A client whose join is
+      // refused asks again in a few seconds.
+      if (!this.opensByAccount.take(conn.userId)) {
+        this.error(conn, "rate", "Too many plans opened in a minute. Try again shortly.", { doc });
         return;
       }
       // Not open: the database says whether it may be, before anything is
@@ -1005,12 +1040,22 @@ export class LiveService {
         this.error(conn, "forbidden", "This plan is not shared with you.", { doc });
         return;
       }
+      // The rooms this account opened and left to linger hold their plans in
+      // memory while the account is in none of them, uncounted by its plans
+      // open at once: past its share, the oldest closes as another opens.
+      // Nothing is refused; paging through plans closes one's own empty rooms.
+      const lingering = [...this.openRooms].filter(
+        (room) => room.idle && room.openedBy === conn.userId,
+      );
+      if (lingering.length >= this.limits.roomsPerAccount) {
+        void lingering[0]!.closeIfEmpty();
+      }
     }
     // A room closing as we arrive is replaced by a fresh one.
     for (let attempt = 0; attempt < 3; attempt += 1) {
       let opened: Room | undefined;
       try {
-        opened = await this.room(doc);
+        opened = await this.room(doc, conn.userId);
       } catch (error) {
         this.log(`${doc}: open failed: ${String(error)}`);
         // Not not_found: a client removes its copy of a shared plan on that.
@@ -1067,6 +1112,15 @@ export class LiveService {
       }
     }
     return docs;
+  }
+
+  /** Plan JSON held by the rooms open now, in characters. */
+  private openPlanBytes(): number {
+    let held = 0;
+    for (const room of this.openRooms) {
+      held += room.size;
+    }
+    return held;
   }
 
   /** Closes the room nobody has been in the longest, to make room for another. */

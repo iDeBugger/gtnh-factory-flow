@@ -73,8 +73,13 @@ effect within 30 s, dropping anyone no longer shared.
   journals meanwhile.
 - A room holding more than 8 MB of journalled batches the database has not taken refuses more as `rate` until a
   flush gets through.
-- At most 8 plans open per account (across its sockets) and 500 in the service (`LIVE_MAX_ROOMS`). A full service
-  closes a plan nobody is in and refuses the join as `rate`; the website asks again a few seconds later.
+- At most 8 plans open per account (across its sockets) and 500 in the service (`LIVE_MAX_ROOMS`), holding at most
+  64 MB of plan JSON between them (`LIVE_MAX_PLAN_BYTES`; resident memory is about four times that plus the
+  baseline, so the unit's memory cap and heap follow from it). A full service closes a plan nobody is in and refuses
+  the join as `rate`; the website asks again a few seconds later.
+- The rooms an account opened and left to linger count against it too: past 8, opening another closes the oldest of
+  them. An account opens at most 30 plans a minute (a join of a plan that is not open, its membership query
+  included); more are refused as `rate`.
 
 ## Protocol notes beyond the contract's table
 
@@ -257,7 +262,7 @@ $C --user ann --password annpass1 send <doc> '[{"o":"meta","f":{"primaryView":"t
 `node dist-live/live.mjs` as the systemd unit `gtnh-live` on 127.0.0.1:3001. `next build` and `next start` are
 unchanged. Environment: `COMMUNITY_HASH_SALT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `LIVE_PORT`,
 `LIVE_HOST`, `LIVE_JOURNAL_DIR`, `LIVE_INTERNAL_TOKEN`, `LIVE_ALLOWED_ORIGINS`, `LIVE_MAX_ROOMS` (optional, default 500),
-`NODE_ENV=production`. `LOCAL_DB=1` with `NODE_ENV=production` stops both the website and the service at startup. The website
+`LIVE_MAX_PLAN_BYTES` (optional, default 64 MB of plan JSON in open rooms), `NODE_ENV=production`. `LOCAL_DB=1` with `NODE_ENV=production` stops both the website and the service at startup. The website
 needs `LIVE_INTERNAL_URL` and `LIVE_INTERNAL_TOKEN` at run time and `NEXT_PUBLIC_LIVE_URL` at build time (unset:
 no live features). The rollout, staging first, is `docs/live-rollout.md`.
 

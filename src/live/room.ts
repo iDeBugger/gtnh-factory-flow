@@ -134,7 +134,8 @@ export class Room {
   private journalBytes = 0;
   /** The plan's JSON for snapshots, made once per version of the plan. */
   private planJson: { plan: LivePlan; text: string } | undefined;
-  private size = 0;
+  /** The plan's size in JSON characters, kept exact across batches and flushes. */
+  private chars = 0;
   /** This room's last applied batch ids and their seqs, oldest first. */
   private readonly recent = new Map<string, number>();
   /** This room's lease: every write it makes is conditional on it. */
@@ -157,6 +158,8 @@ export class Room {
   private constructor(
     doc: string,
     private readonly deps: RoomDeps,
+    /** The account whose join opened the room; none when a journal replay did. */
+    readonly openedBy: string | undefined,
   ) {
     const key = parseDocKey(doc)!;
     this.doc = doc;
@@ -167,10 +170,11 @@ export class Room {
   /**
    * Opens a room: takes the lease and reads the plan, replays any journal
    * left by a crash, and starts renewing the lease. Undefined when the design
-   * is missing or deleted.
+   * is missing or deleted. `openedBy` is the account whose join opened it:
+   * the rooms an account leaves lingering are counted against it.
    */
-  static async open(doc: string, deps: RoomDeps): Promise<Room | undefined> {
-    const room = new Room(doc, deps);
+  static async open(doc: string, deps: RoomDeps, openedBy?: string): Promise<Room | undefined> {
+    const room = new Room(doc, deps, openedBy);
     const loaded = await deps.store.lease(
       room.ownerId,
       room.designId,
@@ -215,7 +219,7 @@ export class Room {
     if (replay.length > 0) {
       deps.log(`${doc}: replayed ${replay.length} journalled batches up to seq ${room.seq}`);
     }
-    room.size = sizeOf(room.plan);
+    room.chars = sizeOf(room.plan);
     const [members, names] = await Promise.all([
       deps.store.members(room.ownerId, room.designId),
       deps.store.usernames([room.ownerId]),
@@ -237,6 +241,11 @@ export class Room {
 
   get dirty(): boolean {
     return this.seq > this.flushedSeq;
+  }
+
+  /** The plan's size in JSON characters: what the room holds against the service's plan budget. */
+  get size(): number {
+    return this.chars;
   }
 
   /** Everyone in the room, one entry per connection. */
@@ -338,7 +347,7 @@ export class Room {
       return { kind: "refused", code: "bad_op", msg: prepared.error };
     }
     const ops = prepared.ops;
-    const size = this.size + prepared.sizeChange;
+    const size = this.chars + prepared.sizeChange;
     const limit = this.deps.maxPlanChars ?? COMMUNITY_UPLOAD_MAX_BYTES;
     if (size > limit) {
       return {
@@ -362,7 +371,7 @@ export class Room {
     }
     const durable = this.deps.journal.appendLine(this.doc, line);
     this.content.commit(ops);
-    this.size = size;
+    this.chars = size;
     this.seq = seq;
     this.remember(cid, seq);
     this.noteJournalled(seq, bytes);
@@ -587,7 +596,7 @@ export class Room {
       return false;
     }
     const { plan, seq } = captured;
-    const sizeAtCapture = this.size;
+    const sizeAtCapture = this.chars;
     this.lastFlushAt = Date.now();
     const outcome = await this.deps.store.flush(
       this.ownerId,
@@ -604,7 +613,7 @@ export class Room {
     this.flushedSeq = Math.max(this.flushedSeq, seq);
     this.noteFlushed(seq);
     // Exact again: the stored plan measured, plus what came after it.
-    this.size = sizeOf(plan) + (this.size - sizeAtCapture);
+    this.chars = sizeOf(plan) + (this.chars - sizeAtCapture);
     try {
       await this.deps.journal.trim(this.doc, seq, this.recentCids());
     } catch (error) {

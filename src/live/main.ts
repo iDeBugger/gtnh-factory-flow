@@ -13,6 +13,9 @@
  * - LIVE_INTERNAL_TOKEN: shared with the website for /internal/*.
  * - LIVE_ALLOWED_ORIGINS: comma-separated browser origins (default: localhost:3000).
  * - LIVE_MAX_ROOMS: plans open at once in the whole service (default 500).
+ * - LIVE_MAX_PLAN_BYTES: plan JSON held in open rooms, in bytes (default 64 MB).
+ *   Resident memory is about four times it plus the baseline: size the unit's
+ *   MemoryMax and the heap from it.
  */
 import path from "node:path";
 import { isCommunityConfigured } from "@/lib/server/community";
@@ -51,7 +54,13 @@ async function main() {
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
-  const maxRooms = Number(process.env.LIVE_MAX_ROOMS || "");
+  // A positive integer from the environment, or nothing (the default stands).
+  const positive = (name: string): number | undefined => {
+    const value = Number(process.env[name] || "");
+    return Number.isInteger(value) && value > 0 ? value : undefined;
+  };
+  const maxRooms = positive("LIVE_MAX_ROOMS");
+  const maxOpenPlanBytes = positive("LIVE_MAX_PLAN_BYTES");
   let stop: (signal: string, code?: number) => Promise<void> = async () => undefined;
   const service = new LiveService({
     onShutdownRequest: () => void stop("shutdown request"),
@@ -59,7 +68,10 @@ async function main() {
     journalDir: path.resolve(journalDir ?? path.join("scratch", "local-db", "live-journal")),
     allowedOrigins,
     internalToken: process.env.LIVE_INTERNAL_TOKEN || undefined,
-    limits: Number.isInteger(maxRooms) && maxRooms > 0 ? { maxRooms } : undefined,
+    limits: {
+      ...(maxRooms ? { maxRooms } : {}),
+      ...(maxOpenPlanBytes ? { maxOpenPlanBytes } : {}),
+    },
   });
   const port = await service.start(
     Number(process.env.LIVE_PORT ?? 3001),

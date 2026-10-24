@@ -36,6 +36,10 @@ the game is `docs/design/cloud-live.md` in the game's repository: frames and ops
   refused. Tests of the game paths turn it on with `withModAndCommunityOn()` (`src/test-support/`). Limits that
   need no database come before any lookup (upgrades per address and account, sockets per account); accounts are
   cached a minute. The client address is `X-Client-Ip` only on requests from loopback (Caddy).
+- Every cost an account can cause has a limit charged before the cost: frames by size before decoding (the intake
+  budget), plan opens per minute before the membership query, plan bytes held across open rooms
+  (`LIVE_MAX_PLAN_BYTES`; memory is about four times it) before a room opens, and the rooms an account left to
+  linger (its oldest closes past its share). A new path that reads, decodes or opens anything joins this list.
 - `/internal/*` (Bearer `LIVE_INTERNAL_TOKEN`) is for the Next.js routes; Caddy routes only `/live` and `/live/*` here.
 - Production runs the bundle `npm run build:live` makes (`dist-live/live.mjs`, gitignored); development runs the
   sources with tsx (`npm run live`, `npm run dev:local`).

@@ -234,8 +234,12 @@ LIVE_JOURNAL_DIR=/opt/shared/live-journal
 LIVE_INTERNAL_URL=http://127.0.0.1:3001
 LIVE_INTERNAL_TOKEN=<the token>
 LIVE_ALLOWED_ORIGINS=https://new.gtnhplanner.com,https://gtnhplanner.com
-# Optional: plans open at once in the service (default 500).
+# Optional: plans open at once in the service (default 500), and the plan JSON they may hold
+# between them (default 64 MB). Resident memory is about four times the plan bytes plus
+# about 120 MB: give the unit MemoryMax of at least 4 x LIVE_MAX_PLAN_BYTES + 150 MB and a
+# heap (NODE_OPTIONS=--max-old-space-size) about 100 MB under it. A 400 MB unit takes 32 MB.
 # LIVE_MAX_ROOMS=500
+# LIVE_MAX_PLAN_BYTES=67108864
 EOF
 sudo chown root:<app user> /opt/shared/live.env && sudo chmod 640 /opt/shared/live.env
 ```
@@ -536,6 +540,7 @@ Once the switch has held:
 | `LIVE_INTERNAL_URL` | site | `http://127.0.0.1:3001` |
 | `LIVE_ALLOWED_ORIGINS` | live | `https://new.gtnhplanner.com,https://gtnhplanner.com` |
 | `LIVE_MAX_ROOMS` | live | optional, plans open at once (default `500`) |
+| `LIVE_MAX_PLAN_BYTES` | live | optional, plan JSON held in open rooms (default `67108864`, 64 MB); `MemoryMax` at least 4 x this + 150 MB |
 | `LOCAL_DB` | nobody | never set in production: with `NODE_ENV=production` neither process starts |
 | `NEXT_PUBLIC_LIVE_URL` | site, build time | `/live` (empty: no live features) |
 | `NODE_ENV` | site, live | `production` |
