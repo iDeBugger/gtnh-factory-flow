@@ -1367,7 +1367,7 @@ describe("the live service", { timeout: 30_000 }, () => {
       store: {
         ...store,
         account: (id) =>
-          new Promise((resolve) => setTimeout(() => resolve({ id, username: "ann" }), 500)),
+          new Promise((resolve) => setTimeout(() => resolve({ id, username: "ann", epoch: 0 }), 500)),
       },
     });
     const { socket } = await rawUpgrade(port, "/live", [`Cookie: ${users.ann!.cookie}`]);
