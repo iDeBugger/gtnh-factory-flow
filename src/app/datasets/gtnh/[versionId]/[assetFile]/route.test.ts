@@ -31,8 +31,18 @@ describe("the dataset file route", () => {
     for (const assetFile of ["recipes.json", "recipes.json.raw"]) {
       const response = await get(assetFile);
       expect(response.status).toBe(400);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
       await expect(response.json()).resolves.toEqual({ error: "Invalid dataset path." });
     }
     expect(serveDatasetFile).not.toHaveBeenCalled();
+  });
+
+  it("never lets a miss be cached for the day a file gets", async () => {
+    // The path rule in next.config.ts would otherwise keep a 404 at the edge
+    // through a publish that is replacing the file.
+    vi.mocked(serveDatasetFile).mockRejectedValueOnce(new Error("ENOENT"));
+    const response = await get("recipe-index.json.gz");
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
   });
 });

@@ -89,9 +89,10 @@ const nextConfig: NextConfig = {
         // Next serves everything under public/datasets/gtnh itself, before any
         // route, and the raw recipes.json is about 2 GB per download. Only a
         // rewrite here runs before the public files: the target exists on no
-        // disk, so the request falls through to the [assetFile] route, which
-        // refuses it. It must stay ahead of the dataset proxy below, or a dev
-        // proxy would forward it.
+        // disk, so the request reaches the [assetFile] route, which refuses
+        // it. Every rule here runs in order on the already rewritten path, so
+        // with the dataset proxy below set the renamed path is forwarded and
+        // the backend's own route refuses it; the block must stay first.
         {
           source: "/datasets/gtnh/:version/recipes.json",
           destination: "/datasets/gtnh/:version/recipes.json.raw",
