@@ -37,7 +37,11 @@
   doubling put two datasets over the 3 GB heap on the first 2.8.1 search. The object survives a dev reload:
   restart the dev server after changing how a dataset is loaded or indexed.
 - An HTTP prewarm after start (`/api/datasets/<id>/prewarm`, e.g. a unit's `ExecStartPost`) now joins the
-  startup load or finds it done: with `GTNH_PREWARM_ON_STARTUP=1` it is only a readiness wait.
+  startup load or finds it done: with `GTNH_PREWARM_ON_STARTUP=1` it is only a readiness wait. The HTTP route
+  never reads shards (the route is public, and a shard sweep reads about 2 GB and flushes the shard cache);
+  `GTNH_PREWARM_FULL_DATASETS=1` at start is the only shard warm.
+- A hidden version (`HIDDEN_DATASET_VERSION_IDS`) is refused by `loadCatalog`, so no request can load a third
+  dataset into the heap; the budget below counts only the served versions.
 - Memory, measured on `next start` with the 3 GB heap cap (`scratch/probes/t74-memory.mjs`, median of 5 starts,
   heapUsed after a full GC, process RSS in brackets): 2.9 prewarmed 533 MB; 2.9 and 2.8.1 prewarmed 985 MB
   (2.0 GB); after a fixed browse set on each (searches, the Blast Furnace and wide clause browses, blank item

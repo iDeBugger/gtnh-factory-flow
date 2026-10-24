@@ -10,6 +10,7 @@ import {
   datasetPrewarmOrder,
   ensureLookupSearchIndex,
   getChoiceAlternativesByKey,
+  getDatasetCatalog,
   getWildcardResource,
   orderByRecipeMap,
   prewarmFirstThenRest,
@@ -254,6 +255,11 @@ describe("which datasets the server prewarms", () => {
       "local-2.9.0-rc-2",
       "local-2.8.1",
     ]);
+  });
+
+  it("never loads a hidden version for a request", async () => {
+    // Refused before any disk read: no manifest is needed here.
+    await expect(getDatasetCatalog("local-2.8.4")).rejects.toThrow("not served");
   });
 
   it("logs a failed 2.8.1 prewarm and carries on", async () => {

@@ -1853,6 +1853,13 @@ async function loadManifest(): Promise<DatasetManifest> {
 }
 
 async function loadCatalog(versionId: string): Promise<LoadedRecipeIndex> {
+  // A hidden version is never loaded for a request: a loaded catalog stays in
+  // the heap for the life of the process, and the heap budget counts only the
+  // served versions. The client never asks for one. Every other load
+  // (loadRecipeIndex, the lookup index, shards) starts here.
+  if (HIDDEN_DATASET_VERSION_IDS.has(versionId)) {
+    throw new Error(`Dataset ${versionId} is not served.`);
+  }
   const manifest = await loadManifest();
   const version = manifest.versions.find((entry) => entry.id === versionId);
   if (!version?.resourceIndexPath) {
