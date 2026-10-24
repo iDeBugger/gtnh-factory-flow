@@ -2,7 +2,7 @@
 
 import type { MachineTier, Recipe, ResourceAmount } from "@/lib/model/types";
 import type { RecipeContentRef } from "@/lib/import-export/recipe-ref-match";
-import { APP_VERSION } from "@/lib/version";
+import { DATASET_ANSWER_VERSION, DATASET_ANSWER_VERSION_PARAM } from "./answer-version";
 import { RESOLVE_RECIPES_CHUNK_REFS } from "./resolve-recipes-limits";
 import {
   serializeRecipeQueryClause,
@@ -104,11 +104,6 @@ export async function initRecipeDatasetVersion(
     window.location.origin,
   );
   addDatasetCacheKey(url, version);
-  // The catalog is the one dataset response the SERVER adds to (icons for
-  // synthesized handler families in dataset-query.ts), so the dataset hash
-  // alone does not pin its bytes. The app version joins the cache key so each
-  // release misses cleanly; recipe and shard responses stay hash-only.
-  url.searchParams.set("appVersion", APP_VERSION);
   return fetchJson<RecipeDataset>(url.toString(), { signal: options.signal });
 }
 
@@ -320,9 +315,10 @@ async function fetchJson<T>(
   init?: RequestInit,
   options: { retryWhenBusy?: boolean } = {},
 ): Promise<T> {
-  // No cache mode: every GET here carries the dataset checksum in its URL, so
-  // the browser's HTTP cache can legally reuse responses across reloads and
-  // sessions. The server marks fingerprinted responses immutable to match.
+  // No cache mode: every GET here carries the dataset checksum and the answer
+  // version in its URL (addDatasetCacheKey), so the browser's HTTP cache can
+  // legally reuse responses across reloads and sessions. The server marks such
+  // responses immutable to match.
   const request: RequestInit = {
     headers: {
       Accept: "application/json",
@@ -393,6 +389,12 @@ function waitToRetry(ms: number, signal?: AbortSignal | null): Promise<void> {
   });
 }
 
-function addDatasetCacheKey(url: URL, version: DatasetVersion) {
+/**
+ * Every dataset request's cache key: the dataset's checksum and the version of
+ * the code that answers it (`answer-version.ts`), so neither a republished
+ * dataset nor a deploy that changes an answer is ever served from an old copy.
+ */
+export function addDatasetCacheKey(url: URL, version: DatasetVersion) {
   url.searchParams.set("datasetHash", version.checksumSha256 ?? version.publishedAt ?? version.id);
+  url.searchParams.set(DATASET_ANSWER_VERSION_PARAM, DATASET_ANSWER_VERSION);
 }

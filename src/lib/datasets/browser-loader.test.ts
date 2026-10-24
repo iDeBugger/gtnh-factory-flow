@@ -138,3 +138,52 @@ describe("what the browser does when the server is busy", () => {
     expect(fetchMock).toHaveBeenCalledTimes(8);
   });
 });
+
+describe("the cache key of every dataset request", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.stubGlobal("window", { location: { origin: "http://localhost" } });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("carries the dataset hash and the answer version, so a deploy never reads an old answer", async () => {
+    const { DATASET_ANSWER_VERSION } = await import("./answer-version");
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        urls.push(url);
+        return Promise.resolve(json(200, { recipeIds: [], crops: [], mobs: [], resources: [] }));
+      }),
+    );
+    const api = await loader();
+    await api.initRecipeDatasetVersion("manifest", version);
+    await api.getRecipeDatasetRecipe("manifest", version, "r1");
+    await api.getRecipeDatasetRecipeIds("manifest", version);
+    await api.resolveRecipeDatasetRecipes("manifest", version, []);
+    await api.queryRecipeDatasetRecipes("manifest", version, {
+      query: "steel",
+      mode: "recipes",
+      maxTier: "all",
+      offset: 0,
+      limit: 48,
+    });
+    await api.listRecipeDatasetCrops("manifest", version);
+    await api.listRecipeDatasetMobs("manifest", version);
+    await api.queryRecipeDatasetResources("manifest", version, {
+      query: "steel",
+      offset: 0,
+      limit: 120,
+    });
+
+    expect(urls).toHaveLength(8);
+    for (const url of urls) {
+      const params = new URL(url).searchParams;
+      expect(params.get("datasetHash"), url).toBe("abc");
+      expect(params.get("appVersion"), url).toBe(DATASET_ANSWER_VERSION);
+    }
+  });
+});

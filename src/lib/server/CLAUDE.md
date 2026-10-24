@@ -11,8 +11,13 @@
   candidates, then degrades to ALL. Non-consumed inputs never count against takes-ONLY.
 - All-maps answers page through `recipeMaps` in chip order, best match first inside each
   map (`orderByRecipeMap`).
-- The catalog mixes in server output, so its cache key includes `APP_VERSION`. A new
-  catalog field must be added to `getDatasetCatalog`'s explicit field list (and
+- Every dataset answer is the dataset's bytes run through server code, so every dataset request carries two
+  cache keys (`addDatasetCacheKey` in `browser-loader.ts`): `datasetHash` and the answer version
+  (`appVersion=APP_VERSION`, `src/lib/datasets/answer-version.ts`). `datasetCacheHeaders` marks an answer
+  immutable for a year only when both are there and the version is this release's; anything else is
+  `no-store`, so a deploy that changes a ranking is never served from an old URL. Exam:
+  `dataset-cache-headers.test.ts`, `browser-loader.test.ts`.
+- A new catalog field must be added to `getDatasetCatalog`'s explicit field list (and
   `RecipeDataset` in types.ts) or it never reaches the client.
 - Dataset files other than textures may be replaced in place; textures are
   cache-immutable, so a changed icon needs a new name. The index gzips and the shards are therefore served for a
