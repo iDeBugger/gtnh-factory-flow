@@ -247,10 +247,12 @@ The instance is small and has gone down under load. Rules:
 - A design id is unique per owner only: every route under `/api/library/designs/[id]` takes `?owner=<ownerId>`
   (absent: the caller's own). Owners and members read; members save the plan and its name, never the owner's folders,
   order or stars; only the owner shares, unshares and deletes; a member leaves by removing themselves.
-- Stamps are the client's and the newer row wins, so a stamp more than `STAMP_SKEW_MS` (5 min) ahead of the server is
-  refused with 400 "This device's clock is ahead. Check its date and time." (designs and folders; `isFutureStamp`): one
-  far-future stamp from a member's wrong clock would otherwise make every later save on every device read as behind,
-  silently. Refused, never clamped (the device's local and pushed stamps must agree).
+- Stamps are the client's and the newer row wins, so an edit stamp (`updatedAt`, `planUpdatedAt`) more than
+  `STAMP_SKEW_MS` (5 min) ahead of the server is refused with 400 "This device's clock is ahead. Check its date and
+  time." (designs and folders; `isFutureStamp`): one far-future stamp from a member's wrong clock would otherwise make
+  every later save on every device read as behind, silently. Refused, never clamped (the device's local and pushed
+  stamps must agree). `createdAt` is never judged: it is sent unchanged on every push, so a clock once ahead would
+  refuse the design for good, and nothing orders on it.
 - While `live_lease_until` is in the future the live service is the plan's only writer: the PUT refuses a plan body
   (409 `{ live: true }`) and its write is conditional on the lease. Metadata still goes through.
 - `GET /api/library` keeps listing tombstones (clients rely on it never to reuse a deleted id) and adds each design's

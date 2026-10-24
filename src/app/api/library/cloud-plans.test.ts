@@ -284,6 +284,15 @@ describe("cloud plans over REST", () => {
     );
     expect(wrong.status).toBe(400);
     expect(await wrong.json()).toEqual(clockAhead);
+    // A design made while the clock was ahead keeps saving once it is right: createdAt is never judged.
+    const oldClock = await design.PUT(
+      request("PUT", `/api/library/designs/${clockId}`, "ann", {
+        ...upsertBody("Made ahead", new Date(Date.now() + 3 * 60_000).toISOString()),
+        createdAt: "2999-01-01T00:00:00.000Z",
+      }),
+      params({ designId: clockId }),
+    );
+    expect(oldClock.status).toBe(200);
 
     const futureFolder = await folder.PUT(
       request("PUT", "/api/library/folders/folder-clock", "ann", {

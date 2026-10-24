@@ -136,7 +136,10 @@ export async function PUT(request: Request, context: RouteContext) {
   ) {
     return NextResponse.json({ error: "Bad timestamps." }, { status: 400 });
   }
-  if ([body.createdAt, body.updatedAt, body.planUpdatedAt].some((stamp) => isFutureStamp(stamp))) {
+  // The edit stamps only: `createdAt` is sent unchanged on every push, so a
+  // clock that was ahead once would refuse the design forever, and nothing
+  // orders on it.
+  if (isFutureStamp(body.updatedAt) || isFutureStamp(body.planUpdatedAt)) {
     return NextResponse.json({ error: CLOCK_AHEAD_MESSAGE }, { status: 400 });
   }
   if (body.folderId !== null && body.folderId !== undefined && !isLibraryId(body.folderId)) {
