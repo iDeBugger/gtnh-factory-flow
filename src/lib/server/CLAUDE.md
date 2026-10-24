@@ -93,6 +93,8 @@ The instance is small and has gone down under load. Rules:
 - The design PUT refuses what it can without the database (size, JSON, name, stamps)
   before the rate limit's two queries; the plan schema check follows.
 - Read community plan jsonb about 10 rows per statement, or it hits the statement timeout.
+- `community_events` keeps 31 days (`EVENTS_KEPT_DAYS`; the longest window read is 30): `recordEvents` deletes older
+  rows once an hour per process, and a failed prune never fails a save. Exam: `community-events.test.ts`.
 - The dashboard (restarts, disk IO, memory) needs the repo owner; there is no management
   token here.
 

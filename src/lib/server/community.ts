@@ -515,6 +515,33 @@ export async function recordEvents(events: { actorKey: string; action: string }[
   if (error) {
     throw new Error(`Rate limit record failed: ${error.message}`);
   }
+  await pruneEvents();
+}
+
+/**
+ * Nothing reads an event older than the longest window (30 days, the same
+ * words check), so older rows only cost the small instance disk and its IO
+ * budget. Pruned once an hour per process, after a record; a prune never
+ * fails a save.
+ */
+export const EVENTS_KEPT_DAYS = 31;
+const PRUNE_EVERY_MS = 60 * 60_000;
+let lastPruneAt = 0;
+
+async function pruneEvents(): Promise<void> {
+  const now = Date.now();
+  if (now - lastPruneAt < PRUNE_EVERY_MS) {
+    return;
+  }
+  lastPruneAt = now;
+  try {
+    await getCommunityDb()
+      .from("community_events")
+      .delete()
+      .lt("created_at", new Date(now - EVENTS_KEPT_DAYS * 86_400_000).toISOString());
+  } catch {
+    // The rows stay until the next hour's prune.
+  }
 }
 
 /**
