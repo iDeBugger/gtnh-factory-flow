@@ -141,9 +141,13 @@ The frames are the contract's (version 1). What the service adds or decides:
 
 HTTP on the same port: `GET /live/health` (`{ ok, rooms, connections, flushBacklog }`), `GET /live/nearby` (below), and,
 for the Next.js routes only,
-`POST /internal/members` (`{ doc, members, added?, removed?, owner?, name? }`: `added` and `removed` are account ids that just joined or left, `owner` and `name` what `shared` carries), `/internal/deleted` (`{ doc }`) and `/internal/shutdown` (store
-everything and exit), each with `Authorization: Bearer $LIVE_INTERNAL_TOKEN`. Caddy routes only `/live` and `/live/*`
-to the service, so `/internal` is never reachable from outside.
+`POST /internal/members` (`{ doc, members, added?, removed?, owner?, name? }`: `added` and `removed` are account ids that just joined or left, `owner` and `name` what `shared` carries), `/internal/deleted` (`{ doc }`), `/internal/signed-out`
+(`{ userId }`: the account signed out everywhere, so its open sockets close with 4001 and its cached account is
+forgotten) and `/internal/shutdown` (store everything and exit), each with `Authorization: Bearer $LIVE_INTERNAL_TOKEN`.
+Caddy routes only `/live` and `/live/*` to the service, so `/internal` is never reachable from outside. Without
+`LIVE_INTERNAL_URL` and `LIVE_INTERNAL_TOKEN` on the website the signed-out notice is skipped, as every notice is: an
+open socket then lasts until it reconnects, and the service's account cache (a minute) bounds how long a revoked token
+still opens a new one.
 
 ### Nearby players (for the game's share helper)
 

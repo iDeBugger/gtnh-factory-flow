@@ -45,6 +45,7 @@ class HeldStore implements PlanStore {
   async account() {
     return undefined;
   }
+  forgetAccount() {}
   async role() {
     return "owner" as const;
   }

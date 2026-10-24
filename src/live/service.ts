@@ -32,8 +32,9 @@ import type { PlanStore } from "./store";
  * - `GET /live/nearby?names=` (cookie): accounts in the asker's game, by the
  *   Minecraft names the asker sees there (see `nearby`).
  * - `GET /live/health`: rooms and connections, for checks after a deploy.
- * - `POST /internal/members` and `/internal/deleted` (LIVE_INTERNAL_TOKEN):
- *   the Next.js routes reporting sharing changes and deleted plans.
+ * - `POST /internal/members`, `/internal/deleted` and `/internal/signed-out`
+ *   (LIVE_INTERNAL_TOKEN): the Next.js routes reporting sharing changes,
+ *   deleted plans and accounts signed out everywhere.
  *
  * One live service per database: it takes plan leases without asking whose
  * they were, so a restart picks up its own leases at once.
@@ -436,6 +437,22 @@ export class LiveService {
         return { status: 200, body: { ok: true } };
       }
       const body = (await readJson(req)) as InternalBody;
+      if (url.pathname === "/internal/signed-out") {
+        // Every token the account holds is now refused; its open sockets go
+        // the way a refused sign-in does, and the cached account with them.
+        if (!isAccountId(body?.userId)) {
+          return { status: 400, body: { error: "Bad user." } };
+        }
+        const userId = body.userId.toLowerCase();
+        // Both caches: this service's, and the account loader's own minute.
+        this.accounts.delete(userId);
+        this.options.store.forgetAccount(userId);
+        const closed = [...(this.byUser.get(userId) ?? [])];
+        for (const conn of closed) {
+          conn.ws.close(4001, "auth");
+        }
+        return { status: 200, body: { ok: true, closed: closed.length } };
+      }
       const key = parseDocKey(body?.doc);
       if (!key) {
         return { status: 400, body: { error: "Bad doc." } };
@@ -1236,6 +1253,7 @@ type Account = Awaited<ReturnType<PlanStore["account"]>> & object;
 
 interface InternalBody {
   doc?: unknown;
+  userId?: unknown;
   members?: unknown;
   added?: unknown;
   removed?: unknown;

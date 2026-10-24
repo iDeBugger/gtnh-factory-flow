@@ -11,7 +11,7 @@ import { docKey, type ServerFrame } from "@/lib/live/protocol";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { getCommunityDb, makeSessionToken } from "@/lib/server/community";
+import { forgetSessionUsers, getCommunityDb, makeSessionToken } from "@/lib/server/community";
 import * as designRoute from "@/app/api/library/designs/[designId]/route";
 import * as memberRoute from "@/app/api/library/designs/[designId]/members/[userId]/route";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
@@ -1094,6 +1094,45 @@ describe("the live service", { timeout: 30_000 }, () => {
     });
     const code = await new Promise<number>((resolve) => ws.on("close", (c) => resolve(c)));
     expect(code).toBe(4001);
+  });
+
+  it("closes an account's sockets on the signed-out notice, and refuses the old cookie afterwards", async () => {
+    const { port } = await startService();
+    const ann = await TestClient.open(port, { who: "ann" });
+    await ann.hello();
+    const bob = await TestClient.open(port, { who: "bob" });
+    await bob.hello();
+    // What the website does on Sign out everywhere: the row's epoch moves, then the notice.
+    const epoch = Date.now();
+    await getCommunityDb().from("community_users").update({ session_epoch: epoch }).eq("id", users.ann!.id);
+    const notice = await fetch(`http://127.0.0.1:${port}/internal/signed-out`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${INTERNAL_TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify({ userId: users.ann!.id }),
+    });
+    expect(await notice.json()).toEqual({ ok: true, closed: 1 });
+    await until(() => ann.closed);
+    expect(ann.closeCode).toBe(4001);
+    expect(bob.closed).toBe(false);
+    const again = new WebSocket(`ws://127.0.0.1:${port}/live`, {
+      headers: { cookie: users.ann!.cookie, origin: ORIGIN },
+    });
+    expect(await new Promise<number>((resolve) => again.on("close", (c) => resolve(c)))).toBe(4001);
+    // A fresh sign-in (a token with the new epoch) is let in.
+    const fresh = new WebSocket(`ws://127.0.0.1:${port}/live`, {
+      headers: { cookie: `gtnh_session=${makeSessionToken(users.ann!.id, epoch)}`, origin: ORIGIN },
+    });
+    await new Promise<void>((resolve, reject) => {
+      fresh.once("open", () => resolve());
+      fresh.once("close", (code) => reject(new Error(`closed ${code}`)));
+    });
+    fresh.send(JSON.stringify({ t: "hello", v: 1, client: "web", clientVersion: "test" }));
+    const welcome = await new Promise<string>((resolve) => fresh.once("message", (data) => resolve(data.toString())));
+    expect(JSON.parse(welcome).t).toBe("welcome");
+    fresh.close();
+    // Ann's cookie in the other tests was made under epoch 0.
+    await getCommunityDb().from("community_users").update({ session_epoch: 0 }).eq("id", users.ann!.id);
+    forgetSessionUsers();
   });
 
   it("answers a join the database cannot open as rate, never as not_found or forbidden", async () => {

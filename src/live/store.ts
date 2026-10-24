@@ -1,7 +1,7 @@
 import type { LivePlan } from "@/lib/live/ops";
 import type { LiveMember } from "@/lib/live/protocol";
 import { designRole, listMembers, usernamesFor, type DesignRole } from "@/lib/server/cloud-plans";
-import { getCommunityDb, loadSessionUser } from "@/lib/server/community";
+import { forgetSessionUser, getCommunityDb, loadSessionUser } from "@/lib/server/community";
 
 /**
  * The live service's reads and writes, all through the server's Supabase
@@ -30,6 +30,8 @@ export interface PlanStore {
    * answer. `epoch` is the account's session epoch: a token made under another value is refused.
    */
   account(userId: string): Promise<{ id: string; username: string; epoch: number } | undefined>;
+  /** Forget what `account` cached about an account, so the next lookup reads its row. */
+  forgetAccount(userId: string): void;
   /** What the account may do with the design: "owner", "editor" or null. */
   role(userId: string, ownerId: string, designId: string): Promise<DesignRole | null>;
   /**
@@ -90,6 +92,7 @@ export function supabasePlanStore(): PlanStore {
       const user = await loadSessionUser(userId);
       return user ? { id: user.id, username: user.username, epoch: user.session_epoch } : undefined;
     },
+    forgetAccount: forgetSessionUser,
     role: (userId, ownerId, designId) => designRole(db(), userId, ownerId, designId),
     async lease(ownerId, designId, token, until) {
       const { data, error } = await db()
