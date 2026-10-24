@@ -16,7 +16,8 @@ import { decideDatasetPath } from "@/lib/server/dataset-path-gate";
 export function proxy(request: NextRequest): NextResponse {
   // The dataset files first, on the raw path: see dataset-path-gate.ts for
   // why only a request-level look at the decoded path can gate them.
-  const dataset = decideDatasetPath(new URL(request.url).pathname);
+  const pathname = new URL(request.url).pathname;
+  const dataset = decideDatasetPath(pathname);
   if (dataset.kind === "refuse") {
     return NextResponse.json(
       { error: "Invalid dataset path." },
@@ -26,7 +27,7 @@ export function proxy(request: NextRequest): NextResponse {
   if (dataset.kind === "rewrite") {
     return NextResponse.rewrite(new URL(dataset.pathname, request.url));
   }
-  if (request.nextUrl.pathname.startsWith("/api/") && isCrossSiteWrite(request)) {
+  if (pathname.startsWith("/api/") && isCrossSiteWrite(request)) {
     return NextResponse.json({ error: "Cross-site request refused." }, { status: 403 });
   }
   return NextResponse.next();
