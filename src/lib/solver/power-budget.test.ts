@@ -39,9 +39,9 @@ describe("typed power budget", () => {
     // fed short. The pool is the typed number, to the EU.
     const recipe = lcrRecipe(480, "HV");
     const node = { overclockTier: "LV", powerEuT: 6000 };
-    expect(getNodeRunTier(recipe, node)).toBe("EV");
-    expect(getNodePowerAmps(recipe, node)).toBeCloseTo(6000 / 2048, 9);
-    const report = getNodePowerReport(recipe, node);
+    expect(getNodeRunTier(recipe, node, "2.9")).toBe("EV");
+    expect(getNodePowerAmps(recipe, node, "2.9")).toBeCloseTo(6000 / 2048, 9);
+    const report = getNodePowerReport(recipe, node, "2.9");
     expect(report.typedBudget).toBe(true);
     expect(report.tier).toBe("EV");
     expect(report.poolEuT).toBeCloseTo(6000, 9);
@@ -56,10 +56,10 @@ describe("typed power budget", () => {
       overclockTier: "MV",
       energyHatches: 2,
       powerEuT: 8192,
-    });
+    }, "2.9");
     expect(typed.tier).toBe("IV");
     expect(typed.overclockSteps).toBe(2);
-    const built = getNodePowerReport(recipe, { overclockTier: "MV", energyHatches: 2 });
+    const built = getNodePowerReport(recipe, { overclockTier: "MV", energyHatches: 2 }, "2.9");
     expect(built.typedBudget).toBe(false);
     expect(built.tier).toBe("MV");
     expect(built.poolEuT).toBe(512);
@@ -85,7 +85,7 @@ describe("typed power budget", () => {
         },
       ],
     } as unknown as Recipe;
-    const report = getNodePowerReport(recipe, { overclockTier: "MV", powerEuT: 100000 });
+    const report = getNodePowerReport(recipe, { overclockTier: "MV", powerEuT: 100000 }, "2.9");
     expect(report.typedBudget).toBe(false);
     expect(report.tier).toBe("MV");
   });
@@ -95,12 +95,12 @@ describe("typed power budget", () => {
     // sums their voltages (8,192) for the "tier x N parallels" ordinal: IV.
     // The typed 16,384 must land on the same IV ordinal, not LuV.
     const recipe = icbRecipe();
-    const built = getEffectiveVoltageOrdinal(recipe, { energyHatches: 4 }, "EV");
-    const typed = getEffectiveVoltageOrdinal(recipe, { powerEuT: 16384 }, "EV");
+    const built = getEffectiveVoltageOrdinal(recipe, { energyHatches: 4 }, "EV", "2.9");
+    const typed = getEffectiveVoltageOrdinal(recipe, { powerEuT: 16384 }, "EV", "2.9");
     expect(typed).toBe(built);
     expect(typed).toBe(getVoltageTierIndex("IV"));
     // One EV hatch's worth (2,048) is one hatch, one amp: still EV.
-    expect(getEffectiveVoltageOrdinal(recipe, { powerEuT: 2048 }, "EV")).toBe(
+    expect(getEffectiveVoltageOrdinal(recipe, { powerEuT: 2048 }, "EV", "2.9")).toBe(
       getVoltageTierIndex("EV"),
     );
   });
@@ -109,7 +109,7 @@ describe("typed power budget", () => {
     const report = getNodePowerReport(lcrRecipe(480, "HV"), {
       overclockTier: "LV",
       powerEuT: 300,
-    });
+    }, "2.9");
     expect(report.state).toBe("under-powered");
     expect(describePowerStall(report)).toBe(
       "Needs 480 EU/t. Supplied 300.",
@@ -123,7 +123,7 @@ describe("typed power budget", () => {
       overclockTier: "HV",
       energyHatches: 2,
       powerEuT: 0,
-    });
+    }, "2.9");
     expect(report.typedBudget).toBe(true);
     expect(report.poolEuT).toBe(0);
     expect(report.state).toBe("under-powered");
@@ -135,7 +135,7 @@ describe("typed power budget", () => {
     const report = getNodePowerReport(lcrRecipe(1920, "EV"), {
       overclockTier: "LV",
       powerEuT: 500,
-    });
+    }, "2.9");
     expect(report.state).toBe("over-tier");
   });
 });
@@ -143,7 +143,7 @@ describe("typed power budget", () => {
 describe("power wins", () => {
   it("lists where a budget starts buying something: the draw, then each power-of-four step", () => {
     const recipe = lcrRecipe(480, "HV");
-    const wins = listPowerWins(recipe, { overclockTier: "HV" });
+    const wins = listPowerWins(recipe, { overclockTier: "HV" }, "2.9");
     const euTs = wins.map((win) => win.euT);
     // The recipe runs from its own draw; each overclock costs four times more.
     expect(euTs.slice(0, 4)).toEqual([480, 1920, 7680, 30720]);
@@ -157,12 +157,12 @@ describe("power wins", () => {
   });
 
   it("includes parallel gains on a tier-scaled machine", () => {
-    const wins = listPowerWins(icbRecipe(), { overclockTier: "LV" });
+    const wins = listPowerWins(icbRecipe(), { overclockTier: "LV" }, "2.9");
     expect(wins.some((win) => win.gain.includes("parallels"))).toBe(true);
   });
 
   it("walks to the next and previous win from any budget", () => {
-    const wins = listPowerWins(lcrRecipe(480, "HV"), { overclockTier: "HV" });
+    const wins = listPowerWins(lcrRecipe(480, "HV"), { overclockTier: "HV" }, "2.9");
     expect(nextPowerWin(wins, 6000)?.euT).toBe(7680);
     expect(previousPowerWin(wins, 6000)?.euT).toBe(1920);
     // Sitting exactly on a win steps to the neighbours, not itself.

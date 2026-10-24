@@ -30,11 +30,15 @@ export function formulaText(terms: FormulaTerm[]): string {
     .join("");
 }
 
-/** A number as the formulas show it: whole numbers grouped, fractions to three significant places. */
-export function formulaNumber(value: number): string {
+/**
+ * A number as the formulas show it: whole numbers grouped, fractions to three significant places, or to
+ * `fractionDigits` decimals where a line needs a fixed precision (a draw that sits just past an overclock
+ * boundary must not round onto it).
+ */
+export function formulaNumber(value: number, fractionDigits?: number): string {
   if (!Number.isFinite(value)) return "-";
   if (Number.isInteger(value)) return value.toLocaleString("en-US");
   const abs = Math.abs(value);
-  const digits = abs >= 100 ? 1 : abs >= 1 ? 2 : 3;
+  const digits = fractionDigits ?? (abs >= 100 ? 1 : abs >= 1 ? 2 : 3);
   return Number(value.toFixed(digits)).toLocaleString("en-US", { maximumFractionDigits: digits });
 }

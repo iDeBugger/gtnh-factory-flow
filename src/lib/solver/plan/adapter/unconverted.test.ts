@@ -220,6 +220,68 @@ describe("every wire of an unconverted card is the plan's edge, whatever the oth
     expect(build.edges["ab"]!.transferredPerSecond).toBeCloseTo(2, 6);
   });
 
+  it("card -> buffer -> machine: the taker's port reads the outside flow as its import, with no decision", () => {
+    const plan = project({
+      recipes,
+      nodes: [unconverted("A", "a"), node("B", "b")],
+      storages: [drawer("buf", "y"), drawer("C", "z", { targetPerSecond: 1, targetMode: "at-least" })],
+      edges: [
+        wire("ab", "A", "buf", "y", {}, { toDrawer: true }),
+        wire("bb", "buf", "B", "y", {}, { fromDrawer: true }),
+        wire("bc", "B", "C", "z", {}, { toDrawer: true }),
+      ],
+    });
+    const result = calculateThroughput(plan, { generatedAt: "t" });
+    // The synthetic drawer is not one of the player's, so its port is no drawer port: what comes in from outside
+    // reads as the port's own import (a terminal row), not as a forced gate with a decision to make.
+    expect(result.plan?.forced).toEqual([]);
+    expect(result.plan?.terminals).toEqual([
+      { nodeId: "B", portKey: "B|i|input:item:y", side: "in", perSecond: expect.closeTo(1, 6) },
+    ]);
+  });
+
+  it("a buffer fed by a converted machine and an unconverted card: the machine's output passes first", () => {
+    // X -> M -> buf <- A(unconverted); buf -> B -> Z. M runs the same recipe the card was marked on.
+    const plan = (pins: { M?: number; B?: number }, target?: number) =>
+      project({
+        recipes,
+        nodes: [
+          node("M", "a", pins.M ? { solvePin: pins.M } : {}),
+          unconverted("A", "a"),
+          node("B", "b", pins.B ? { solvePin: pins.B } : {}),
+        ],
+        storages: [
+          drawer("X", "x"),
+          drawer("buf", "y"),
+          drawer("Z", "z", target ? { targetPerSecond: target, targetMode: "at-least" } : {}),
+        ],
+        edges: [
+          wire("xm", "X", "M", "x", {}, { fromDrawer: true }),
+          wire("mb", "M", "buf", "y", {}, { toDrawer: true }),
+          wire("ab", "A", "buf", "y", {}, { toDrawer: true }),
+          wire("bb", "buf", "B", "y", {}, { fromDrawer: true }),
+          wire("bz", "B", "Z", "z", {}, { toDrawer: true }),
+        ],
+      });
+    // Build: M runs its count and passes 1/s through the buffer; the outside covers the rest of B's 2/s.
+    const build = calculateThroughput(plan({ M: 1, B: 2 }), { generatedAt: "t" });
+    expect(build.plan?.failure).toBeUndefined();
+    expect(criticals(build)).toEqual([]);
+    expect(build.nodes["M"]!.theoreticalMachinesRequired).toBeCloseTo(1, 6);
+    expect(build.edges["mb"]!.transferredPerSecond).toBeCloseTo(1, 6);
+    expect(build.edges["bb"]!.transferredPerSecond).toBeCloseTo(2, 6);
+    expect(build.edges["ab"]!.transferredPerSecond).toBeCloseTo(1, 6);
+
+    // Solve: least machinery before least imports, so an unpinned M idles and the outside feeds B, as beside any
+    // player source drawer. The wires still balance at the buffer.
+    const solve = calculateThroughput(plan({}, 1), { generatedAt: "t" });
+    expect(solve.plan?.failure).toBeUndefined();
+    expect(criticals(solve)).toEqual([]);
+    expect(solve.nodes["B"]!.theoreticalMachinesRequired).toBeCloseTo(1, 6);
+    expect(solve.edges["bb"]!.transferredPerSecond).toBeCloseTo(1, 6);
+    expect(solve.edges["mb"]!.transferredPerSecond + solve.edges["ab"]!.transferredPerSecond).toBeCloseTo(1, 6);
+  });
+
   it("machine -> buffer -> card: the buffer's maker ships out of the plan in Build, and has no demand in Solve", () => {
     const plan = (pin?: number) =>
       project({

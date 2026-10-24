@@ -5,9 +5,9 @@
  * (fuel x2, output x3, oxygen 40 L/s) and MTEUniversalChemicalFuelEngine
  * (eff = 1.5 e^(-C/ratio)).
  */
-import { findFuel, fuelOptions, powerPlannerData } from "../planner-data";
+import { findFuel, fuelOptions, type PowerFuelTableName, type PowerTables } from "../planner-data";
 import type { PowerModel, PowerSourceDefinition } from "../types";
-import { formatAmount, items, liters, percent, stat } from "./helpers";
+import { formatAmount, items, liters, percent, stat, type PowerSourceBuilder } from "./helpers";
 
 /**
  * mRuntime counts 0..1001 before it wraps (MTEMultiBlockBase.doRandomMaintenanceDamage),
@@ -20,7 +20,7 @@ interface EngineSpec {
   name: string;
   unlock: string;
   blurb: string;
-  fuels: typeof powerPlannerData.combustionFuels;
+  fuels: PowerFuelTableName;
   baseOutput: number;
   boostedOutput: number;
   booster: string;
@@ -41,7 +41,7 @@ const ENGINE_SPECS: EngineSpec[] = [
     name: "Large Combustion Engine",
     unlock: "EV",
     blurb: "Diesel fuels; oxygen boost triples it.",
-    fuels: powerPlannerData.combustionFuels,
+    fuels: "combustionFuels",
     baseOutput: 2048,
     boostedOutput: 6144,
     booster: "Oxygen",
@@ -55,7 +55,7 @@ const ENGINE_SPECS: EngineSpec[] = [
     name: "Extreme Combustion Engine",
     unlock: "IV",
     blurb: "Jet fuels and HOG; liquid oxygen boost.",
-    fuels: powerPlannerData.eceFuels,
+    fuels: "eceFuels",
     baseOutput: 10900,
     boostedOutput: 32700,
     // Lubricant: the tooltip claims 8000 L/hr, but getAdditiveFactor() is 1,
@@ -70,7 +70,7 @@ const ENGINE_SPECS: EngineSpec[] = [
     name: "Large Semifluid Burner",
     unlock: "EV",
     blurb: "The engine for heavy oils.",
-    fuels: powerPlannerData.semifluidFuels,
+    fuels: "semifluidFuels",
     // Boosted it meters fuel against 4096 and runs at 150% efficiency (MTELargeSemifluidGenerator).
     baseOutput: 2048,
     boostedOutput: 6144,
@@ -80,7 +80,8 @@ const ENGINE_SPECS: EngineSpec[] = [
   },
 ];
 
-function buildEngine(spec: EngineSpec): PowerSourceDefinition {
+function buildEngine(tables: PowerTables, spec: EngineSpec): PowerSourceDefinition {
+  const fuels = tables[spec.fuels];
   return {
     id: spec.id,
     name: spec.name,
@@ -92,13 +93,13 @@ function buildEngine(spec: EngineSpec): PowerSourceDefinition {
         type: "select",
         id: "fuel",
         label: "Fuel",
-        options: fuelOptions(spec.fuels),
-        defaultKey: spec.defaultFuel ?? spec.fuels[0]?.name ?? "",
+        options: fuelOptions(fuels),
+        defaultKey: spec.defaultFuel ?? fuels[0]?.name ?? "",
       },
       { type: "toggle", id: "boost", label: "Oxygen boost", defaultOn: false },
     ],
     compute(read): PowerModel {
-      const fuel = findFuel(spec.fuels, read.select("fuel"));
+      const fuel = findFuel(fuels, read.select("fuel"));
       const boost = read.on("boost");
       const euPerLiter = fuel.euPerLiter ?? 0;
       const blocked =
@@ -153,7 +154,7 @@ function rocketFalloff(energy: number): number {
   return energy * Math.cbrt(30000 / energy) * (energy >= 80000 ? Math.cbrt(80000 / energy) : 1);
 }
 
-const largeRocketEngine: PowerSourceDefinition = {
+const largeRocketEngine = (tables: PowerTables): PowerSourceDefinition => ({
   id: "large-rocket-engine",
   name: "Large Rocket Engine",
   group: "engines",
@@ -164,14 +165,14 @@ const largeRocketEngine: PowerSourceDefinition = {
       type: "select",
       id: "fuel",
       label: "Fuel",
-      options: fuelOptions(powerPlannerData.rocketFuels),
-      defaultKey: powerPlannerData.rocketFuels[0]?.name ?? "",
+      options: fuelOptions(tables.rocketFuels),
+      defaultKey: tables.rocketFuels[0]?.name ?? "",
     },
     { type: "number", id: "throttle", label: "Fuel rate", min: 1, max: 4000, step: 1, defaultValue: 500, unit: "L/s" },
     { type: "toggle", id: "boost", label: "Liquid hydrogen boost", defaultOn: false },
   ],
   compute(read): PowerModel {
-    const fuel = findFuel(powerPlannerData.rocketFuels, read.select("fuel"));
+    const fuel = findFuel(tables.rocketFuels, read.select("fuel"));
     const throttle = read.number("throttle");
     const boost = read.on("boost");
     // The table carries the tag's fuel value x3, as consumeFuel applies it.
@@ -207,14 +208,14 @@ const largeRocketEngine: PowerSourceDefinition = {
       ],
     };
   },
-};
+});
 
 /**
  * Universal Chemical Fuel Engine (Good Generator): burns almost any fuel
  * with Combustion Promoter; efficiency 1.5 x e^(-C / promoterRatio), C from
  * the fuel table.
  */
-const universalChemicalFuelEngine: PowerSourceDefinition = {
+const universalChemicalFuelEngine = (tables: PowerTables): PowerSourceDefinition => ({
   id: "universal-chemical-fuel-engine",
   name: "Universal Chemical Fuel Engine",
   group: "engines",
@@ -225,7 +226,7 @@ const universalChemicalFuelEngine: PowerSourceDefinition = {
       type: "select",
       id: "fuel",
       label: "Fuel",
-      options: fuelOptions(powerPlannerData.ucfeFuels),
+      options: fuelOptions(tables.ucfeFuels),
       defaultKey: "RP-1 (red)",
     },
     { type: "number", id: "flow", label: "Fuel rate", min: 1, max: 100000, step: 1, defaultValue: 500, unit: "L/s" },
@@ -240,7 +241,7 @@ const universalChemicalFuelEngine: PowerSourceDefinition = {
     },
   ],
   compute(read): PowerModel {
-    const fuel = findFuel(powerPlannerData.ucfeFuels, read.select("fuel"));
+    const fuel = findFuel(tables.ucfeFuels, read.select("fuel"));
     const flow = read.number("flow");
     const ratio = read.number("promoterRatio");
     const coefficient = fuel.promoterCoefficient ?? 0.04;
@@ -253,7 +254,28 @@ const universalChemicalFuelEngine: PowerSourceDefinition = {
       stats: [stat("Efficiency", percent(efficiency))],
     };
   },
-};
+});
+
+/**
+ * The Large Neutralization Engine's output, as GT5U 5.09.54.205 computes it
+ * (MTELargeNeutralizationEngine.java:559-566): the int fuel value x litres,
+ * times the booster's float multiplier (1.5F, 1.9F, 2.5F, 5F at :469-485) in
+ * float, truncated to whole EU/t. 2.8.1 has no such engine.
+ */
+export function lneEuPerTick(rate: number, density: number, multiplier: number): number {
+  return Math.trunc(Math.fround(Math.fround(rate * density) * Math.fround(multiplier)));
+}
+
+/**
+ * The robot arms' residue decay boost (MTELargeNeutralizationEngine.java:191-193,
+ * :612-615 at 5.09.54.205): (float) Math.pow(1.2F, tier), 1.4F past IV, times
+ * sqrt(arms) capped at 16, stored as a float. No arms is a boost of 1.
+ */
+export function lneDecayBoost(armTier: number, arms: number): number {
+  if (arms <= 0) return 1;
+  const perTier = Math.fround(Math.pow(Math.fround(armTier <= 4 ? 1.2 : 1.4), armTier));
+  return Math.fround(perTier * Math.sqrt(Math.min(arms, 16)));
+}
 
 /**
  * Large Neutralization Engine (GT++): acids to EU at rate x density, a
@@ -261,7 +283,7 @@ const universalChemicalFuelEngine: PowerSourceDefinition = {
  * boosting toxic-residue decay at the cost of a loss chance. Residue is a
  * rare accumulation, not a steady flow, so it stays in the stats.
  */
-const largeNeutralizationEngine: PowerSourceDefinition = {
+const largeNeutralizationEngine = (tables: PowerTables): PowerSourceDefinition => ({
   id: "large-neutralization-engine",
   name: "Large Neutralization Engine",
   group: "engines",
@@ -272,17 +294,17 @@ const largeNeutralizationEngine: PowerSourceDefinition = {
       type: "select",
       id: "structure",
       label: "Structure",
-      options: powerPlannerData.lneStructureTiers.map((entry) => ({
+      options: tables.lneStructureTiers.map((entry) => ({
         key: entry.name,
         label: entry.name,
       })),
-      defaultKey: powerPlannerData.lneStructureTiers[0]?.name ?? "T1",
+      defaultKey: tables.lneStructureTiers[0]?.name ?? "T1",
     },
     {
       type: "select",
       id: "fuel",
       label: "Acid",
-      options: fuelOptions(powerPlannerData.chemFuels),
+      options: fuelOptions(tables.chemFuels),
       defaultKey: "Molten Redstone",
     },
     // Per TICK, like the game's own fluid-use dial (maxFluidUse) and the
@@ -294,7 +316,7 @@ const largeNeutralizationEngine: PowerSourceDefinition = {
       label: "Base",
       options: [
         { key: "None", label: "None" },
-        ...powerPlannerData.lneBases.map((entry) => ({
+        ...tables.lneBases.map((entry) => ({
           key: entry.name,
           label: `${entry.name} (x${entry.multiplier})`,
         })),
@@ -306,7 +328,7 @@ const largeNeutralizationEngine: PowerSourceDefinition = {
       type: "select",
       id: "armTier",
       label: "Arm tier",
-      options: powerPlannerData.lneRobotArms.map((entry) => ({
+      options: tables.lneRobotArms.map((entry) => ({
         key: entry.name,
         label: entry.name.replace(/^Amount \((.+)\)$/, "$1"),
       })),
@@ -316,26 +338,24 @@ const largeNeutralizationEngine: PowerSourceDefinition = {
   ],
   compute(read): PowerModel {
     const structure =
-      powerPlannerData.lneStructureTiers.find((entry) => entry.name === read.select("structure")) ??
-      powerPlannerData.lneStructureTiers[0];
-    const fuel = findFuel(powerPlannerData.chemFuels, read.select("fuel"));
+      tables.lneStructureTiers.find((entry) => entry.name === read.select("structure")) ??
+      tables.lneStructureTiers[0];
+    const fuel = findFuel(tables.chemFuels, read.select("fuel"));
     const rate = read.number("rate");
     const baseName = read.select("base");
-    const base = powerPlannerData.lneBases.find((entry) => entry.name === baseName);
+    const base = tables.lneBases.find((entry) => entry.name === baseName);
     const arms = Math.min(16, read.number("arms"));
     const armTier =
-      powerPlannerData.lneRobotArms.find((entry) => entry.name === read.select("armTier"))?.tier ??
+      tables.lneRobotArms.find((entry) => entry.name === read.select("armTier"))?.tier ??
       2;
     const density = fuel.euPerLiter ?? 0;
     const multiplier = base?.multiplier ?? 1;
-    const euPerTick = rate * density * multiplier;
+    const euPerTick = lneEuPerTick(rate, density, multiplier);
 
-    // MTELargeNeutralizationEngine, tier = ROBOT_ARMS index (LV 0): decay
-    // boost sqrt(arms) x 1.2^tier (1.4 past IV); one arm lost when a roll of
-    // 45 x (tier + 2) each minute lands under the arm count. Residue is the
-    // workbook's floor/ceil of the ^12.5.
-    const decayBoost =
-      arms === 0 ? 1 : Math.sqrt(arms) * (armTier <= 4 ? 1.2 ** armTier : 1.4 ** armTier);
+    // MTELargeNeutralizationEngine, tier = ROBOT_ARMS index (LV 0): one arm
+    // lost when a roll of 45 x (tier + 2) each minute lands under the arm
+    // count. Residue is the workbook's floor/ceil of the ^12.5.
+    const decayBoost = lneDecayBoost(armTier, arms);
     const lossChance = arms / (45 * (armTier + 2));
     const residueCore = (0.05 * Math.pow(density, 0.8) * rate) / (structure.baseDecay * decayBoost);
     const residueMedian = Math.floor(Math.pow(residueCore, 12.5));
@@ -345,6 +365,9 @@ const largeNeutralizationEngine: PowerSourceDefinition = {
     // with the stored amount (^0.08), so its ceiling is at a full tank:
     // baseDecay x armBoost x capacity^0.08. A positive net there means no
     // equilibrium fits inside the tank and the engine eventually explodes.
+    // These residue figures stay in doubles although the Java takes Math.pow(fuel, 0.8F) x 0.05F
+    // and ^0.08F (:196-213): they are the workbook's statistical estimate of a random walk,
+    // shown rounded, not a tick simulation, so the float literals cannot move a shown digit.
     const residuePerTick = 0.05 * Math.pow(density, 0.8) * rate;
     const decayAtFull =
       structure.baseDecay * decayBoost * Math.pow(structure.residueCapacity, 0.08);
@@ -379,11 +402,13 @@ const largeNeutralizationEngine: PowerSourceDefinition = {
           : undefined,
     };
   },
-};
+});
 
-export const engineSources: PowerSourceDefinition[] = [
-  ...ENGINE_SPECS.map(buildEngine),
-  largeRocketEngine,
-  largeNeutralizationEngine,
-  universalChemicalFuelEngine,
-];
+export const buildEngineSources: PowerSourceBuilder = (tables) => {
+  return [
+    ...ENGINE_SPECS.map((spec) => buildEngine(tables, spec)),
+    largeRocketEngine(tables),
+    largeNeutralizationEngine(tables),
+    universalChemicalFuelEngine(tables),
+  ];
+};

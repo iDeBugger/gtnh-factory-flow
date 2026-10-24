@@ -235,7 +235,7 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
         ariaLabel="Plans"
         width={pictures ? undefined : 42}
         open={library.active}
-        tip={modOn ? "Plans: your plans, the ones shared with you, and Community" : "Plans: your plans and the ones shared with you"}
+        tip={plansTip(LIVE, modOn)}
         // Opens the library on My plans, and shuts it again; its shelves are along its top.
         onClick={() => (library.active ? leaveLibrary() : openLibrary({ kind: "all" }))}
       >
@@ -326,6 +326,13 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
       {inviting ? <PlanShareDialog onClose={() => setInviting(false)} /> : null}
     </>
   );
+}
+
+/** The Plans key's tip names only the shelves this build has: shared plans come with live plans, Community with the setting. */
+export function plansTip(live: boolean, community: boolean): string {
+  const shelves = ["your plans", ...(live ? ["the ones shared with you"] : []), ...(community ? ["Community"] : [])];
+  const list = shelves.length > 2 ? `${shelves.slice(0, -1).join(", ")}, and ${shelves.at(-1)}` : shelves.join(" and ");
+  return `Plans: ${list}`;
 }
 
 const LIVE_STATUS_TIP: Record<"live" | "connecting" | "offline", string> = {

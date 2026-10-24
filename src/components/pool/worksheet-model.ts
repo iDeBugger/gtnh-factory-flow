@@ -19,9 +19,11 @@ import {
   applyTreeGrowthSimulatorToolInputs,
   isTreeGrowthSimulatorToolControl,
 } from "@/lib/model/recipe-tool-slots";
+import { planGameVersion, type GameVersion } from "@/lib/model/game-version";
 
 /** Presentation of the existing books. Never moves cards or runs another solve. */
 export function buildWorksheetGroups(project: FactoryProject, result: ThroughputResult) {
+  const gameVersion = planGameVersion(project);
   const recipes = new Map(project.recipes.map((recipe) => [recipe.id, recipe]));
   const machines = new Map(buildMachineList(project, result).map((entry) => [entry.nodeId, entry]));
   return project.nodes.map((owner) => ({
@@ -29,7 +31,7 @@ export function buildWorksheetGroups(project: FactoryProject, result: Throughput
     machine: machines.get(owner.id),
     sections: listNodeSections(owner).map(({ node, section }) => {
       const recipe = recipes.get(node.recipeId);
-      const display = recipe ? worksheetRecipe(recipe, node) : undefined;
+      const display = recipe ? worksheetRecipe(recipe, node, gameVersion) : undefined;
       const verdict = deriveNodeVerdict(project, result, node.id);
       return {
         section,
@@ -47,16 +49,16 @@ export function buildWorksheetGroups(project: FactoryProject, result: Throughput
   }));
 }
 
-function worksheetRecipe(recipe: Recipe, node: FactoryNode): Recipe {
-  const contextual = applyRecipeInputOverrides(recipe, node);
-  const handled = applyMachineHandlerToRecipe(contextual, node);
+function worksheetRecipe(recipe: Recipe, node: FactoryNode, gameVersion: GameVersion): Recipe {
+  const contextual = applyRecipeInputOverrides(recipe, node, gameVersion);
+  const handled = applyMachineHandlerToRecipe(contextual, node, gameVersion);
   const toolAdjusted = applyTreeGrowthSimulatorToolInputs(
     handled,
-    getRecipeMachineConfigTierControls(handled, node).filter(isTreeGrowthSimulatorToolControl),
+    getRecipeMachineConfigTierControls(handled, node, gameVersion).filter(isTreeGrowthSimulatorToolControl),
   );
   const effective = isBeeProductionRecipe(toolAdjusted) ? stripBeeFrameSlotInputs(toolAdjusted) : toolAdjusted;
-  const stats = getOverclockedRecipeStats(contextual, node);
-  return { ...effective, ...applyMachineOutputMultipliers(effective, node, stats.tier), ...stats };
+  const stats = getOverclockedRecipeStats(contextual, node, gameVersion);
+  return { ...effective, ...applyMachineOutputMultipliers(effective, node, stats.tier, gameVersion), ...stats };
 }
 
 export type WorksheetGroup = ReturnType<typeof buildWorksheetGroups>[number];

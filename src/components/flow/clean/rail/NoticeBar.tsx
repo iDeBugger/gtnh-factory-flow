@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { useFactoryStore } from "@/store/factory-store";
+import { unservedPlanVersion } from "@/lib/datasets/dataset-cache";
 import { startPromptClock } from "../../virtual/prompt-phase";
 import {
   buildNotices,
@@ -77,7 +78,8 @@ export function useBoardNotices(): BoardNotice[] {
     () => undefined,
   );
   const solved = useMemo(() => buildNotices(project, result), [project, result]);
-  const unconverted = useMemo(() => unconvertedNotice(project), [project]);
+  const unservedVersion = useFactoryStore(unservedPlanVersion);
+  const unconverted = useMemo(() => unconvertedNotice(project, unservedVersion), [project, unservedVersion]);
   return useMemo(() => {
     // What a conversion did to an older plan, on one line, until it is dismissed.
     const converted: BoardNotice[] = conversion

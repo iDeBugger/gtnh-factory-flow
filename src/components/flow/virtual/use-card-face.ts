@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useFactoryStore } from "@/store/factory-store";
 import type { FactoryNode } from "@/lib/model/types";
+import { planGameVersion } from "@/lib/model/game-version";
 import { pinRuleOf } from "@/lib/model/pin-rule";
 import { isUnconvertedCard } from "@/lib/model/unconverted-card";
 import {
@@ -136,9 +137,10 @@ export function useCardFace(
   const { problemOutlines } = useDeviceSettings();
   const layoutKey = useCardLayoutKey(data);
   const nodeKey = stableNodeKey(projectNode);
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
   // Keyed on the node's own data, not its identity: an Arrange gives every card a new position and no new machine.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const derived = useMemo(() => deriveCardFace(recipe, projectNode), [recipe, nodeKey]);
+  const derived = useMemo(() => deriveCardFace(recipe, projectNode, gameVersion), [recipe, nodeKey, gameVersion]);
   const plan = useFactoryStore.getState().lastResult?.plan;
   // What runs: an Up to card's reached count, as the card's own glance face prints it.
   const count = cardCountState(result, projectNode, plan, recipe);

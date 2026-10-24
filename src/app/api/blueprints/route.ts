@@ -34,17 +34,18 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const shelf = url.searchParams.get("scope") === "public";
+  // The public shelf is the community library, absent with the setting off
+  // whatever the server's storage; an account's own blueprints below stay
+  // whatever the setting.
+  if (shelf && !isModAndCommunityOn()) {
+    return modAndCommunityOffResponse();
+  }
   if (!isCommunityConfigured()) {
     return NextResponse.json({ error: "Cloud storage is not configured." }, { status: 503 });
   }
-
-  const url = new URL(request.url);
-  if (url.searchParams.get("scope") === "public") {
-    // The public shelf is the community library; an account's own
-    // blueprints below stay whatever the setting.
-    if (!isModAndCommunityOn()) {
-      return modAndCommunityOffResponse();
-    }
+  if (shelf) {
     return listPublicBlueprints(request, url);
   }
 

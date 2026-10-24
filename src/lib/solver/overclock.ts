@@ -29,6 +29,7 @@ import {
 
 import { getCropsNhStats, isIndustrialApiaryMachineType } from "@/lib/model/passive-production";
 import type { FactoryNode, MachineTier, Recipe } from "@/lib/model/types";
+import type { GameVersion } from "@/lib/model/game-version";
 import {
   resolveRuntimeTier,
   runtimeOverclockSteps,
@@ -66,7 +67,14 @@ export interface OverclockedRecipeStats {
   /** A perfect step's EU/t multiplier. A normal step always pays 4×. */
   perfectEuFactor: number;
   durationTicks: number;
+  /** One recipe's share of the machine's bill. */
   eut: number;
+  /**
+   * The whole bill for every parallel, a whole EU/t as the game ceils it. Set
+   * on the overclock-calculator path; read it rather than `eut x parallels`,
+   * which can land a hair off the whole number.
+   */
+  machineEuT?: number;
 }
 
 /** The step shape every non-curated branch reports: plain ×4/÷2 counting. */
@@ -88,6 +96,7 @@ export function getOverclockedRecipeStats(
         "energyHatches" | "energyHatchType" | "powerEuT" | "hatchVoltageTier" | "hatchAmps" | "powerInputMode"
       >
     >,
+  gameVersion: GameVersion,
 ): OverclockedRecipeStats {
   // A power card's rates are the model's own (src/lib/power): no handler
   // stats, no overclock ladder, no steam rebilling - the recipe as written.
@@ -102,7 +111,7 @@ export function getOverclockedRecipeStats(
     };
   }
   const effectiveRecipe = recipe.machineType
-    ? applyMachineHandlerToRecipe(recipe as Recipe, node)
+    ? applyMachineHandlerToRecipe(recipe as Recipe, node, gameVersion)
     : recipe;
   const minimumTier = getRecipeMinimumVoltageTier(effectiveRecipe);
   const fusion = getFusionStats(effectiveRecipe);
@@ -118,7 +127,7 @@ export function getOverclockedRecipeStats(
   // underpowered build is shown as one (power-report.ts names the state),
   // never silently promoted. A singleblock is floored at the minimum, because
   // a lower machine does not exist to be built.
-  const tier = getNodeRunTier(effectiveRecipe, node);
+  const tier = getNodeRunTier(effectiveRecipe, node, gameVersion);
   const eec = getEecMetadata(effectiveRecipe);
   if (eec) {
     // kubatech's own overclock, infernals and ritual; the duration returned
@@ -126,7 +135,7 @@ export function getOverclockedRecipeStats(
     const stats = getEecStats(
       eec,
       getEecSettings(node.machineConfigTiers),
-      getVoltageTierMaxEuT(tier) * getNodePowerAmps(effectiveRecipe, node),
+      getVoltageTierMaxEuT(tier) * getNodePowerAmps(effectiveRecipe, node, gameVersion),
     );
     return {
       tier,
@@ -142,7 +151,7 @@ export function getOverclockedRecipeStats(
   if (isTgsRecipe(effectiveRecipe)) {
     // MTETreeFarm: 100 ticks at any voltage, VP[t] EU/t, t the tier of the hatches' V x A rounded up. The tier
     // reported is t, which the output multiplier reads.
-    const tgs = getTgsStats(getVoltageTierMaxEuT(tier) * getNodePowerAmps(effectiveRecipe, node));
+    const tgs = getTgsStats(getVoltageTierMaxEuT(tier) * getNodePowerAmps(effectiveRecipe, node, gameVersion));
     return {
       tier: GT_VOLTAGE_TIERS[tgs.t]?.tier ?? tier,
       minimumTier,
@@ -153,7 +162,7 @@ export function getOverclockedRecipeStats(
     };
   }
   const overclockSteps = Math.max(0, getVoltageTierIndex(tier) - getVoltageTierIndex(minimumTier));
-  const runtimeVariant = selectRuntimeCalculationVariant(effectiveRecipe, node);
+  const runtimeVariant = selectRuntimeCalculationVariant(effectiveRecipe, node, gameVersion);
   if (runtimeVariant) {
     const runtimeTier = resolveRuntimeTier(runtimeVariant, tier);
     return {
@@ -178,14 +187,14 @@ export function getOverclockedRecipeStats(
       durationTicks: Math.max(
         1,
         effectiveRecipe.durationTicks *
-          getMachineDurationMultiplier(effectiveRecipe as Recipe, node),
+          getMachineDurationMultiplier(effectiveRecipe as Recipe, node, gameVersion),
       ),
       eut: effectiveRecipe.eut,
     };
   }
   if (effectiveRecipe.machineType && isIndustrialApiaryMachineType(effectiveRecipe.machineType)) {
-    const durationMultiplier = getMachineDurationMultiplier(effectiveRecipe as Recipe, node);
-    const eutMultiplier = getMachineEutMultiplier(effectiveRecipe as Recipe, node);
+    const durationMultiplier = getMachineDurationMultiplier(effectiveRecipe as Recipe, node, gameVersion);
+    const eutMultiplier = getMachineEutMultiplier(effectiveRecipe as Recipe, node, gameVersion);
     return {
       tier: minimumTier,
       minimumTier,
@@ -197,7 +206,7 @@ export function getOverclockedRecipeStats(
   }
   if (effectiveRecipe.machineType && isMegaApiaryMachineType(effectiveRecipe.machineType)) {
     const eutMultiplier =
-      getMachineEutMultiplier(effectiveRecipe as Recipe, node) *
+      getMachineEutMultiplier(effectiveRecipe as Recipe, node, gameVersion) *
       getBeeMegaApiaryTierEutMultiplier(tier);
     return {
       tier,
@@ -210,20 +219,21 @@ export function getOverclockedRecipeStats(
   }
 
   const durationMultiplier = effectiveRecipe.machineType
-    ? getMachineDurationMultiplier(effectiveRecipe as Recipe, node)
+    ? getMachineDurationMultiplier(effectiveRecipe as Recipe, node, gameVersion)
     : 1;
   const eutMultiplier = effectiveRecipe.machineType
-    ? getMachineEutMultiplier(effectiveRecipe as Recipe, node)
+    ? getMachineEutMultiplier(effectiveRecipe as Recipe, node, gameVersion)
     : 1;
 
   // The heat discount is independent of how many steps end up taken, and the
   // parallel budget needs it first: ParallelHelper folds it into the draw.
-  const effectiveVoltageOrdinal = getEffectiveVoltageOrdinal(effectiveRecipe, node, tier);
+  const effectiveVoltageOrdinal = getEffectiveVoltageOrdinal(effectiveRecipe, node, tier, gameVersion);
   const heatDiscountMultiplier = getHeatOverclockStats(
     effectiveRecipe,
     node,
     tier,
     0,
+    gameVersion,
     effectiveVoltageOrdinal,
   ).heatDiscountMultiplier;
 
@@ -233,10 +243,14 @@ export function getOverclockedRecipeStats(
   // draws 2880 EU/t, which already fills an IV hatch - no overclock, however
   // far above the recipe's HV minimum the machine is powered.
   const parallels = effectiveRecipe.machineType
-    ? getMachineParallelMultiplier(effectiveRecipe as Recipe, node)
+    ? getMachineParallelMultiplier(effectiveRecipe as Recipe, node, gameVersion)
     : 1;
+  // Multiplied in OverclockCalculator's order (recipeEUt x parallel x
+  // eutModifier x heat, GT5U@5.09.54.205 OverclockCalculator.java:382,
+  // GT5U@5.09.51.476 :341): the step count truncates or rounds this draw, so
+  // the last bit can decide a step (9 EU/t x 60 at 0.95 is 513, not 512.99...).
   const parallelEuT =
-    Math.abs(effectiveRecipe.eut) * eutMultiplier * heatDiscountMultiplier * parallels;
+    Math.abs(effectiveRecipe.eut) * parallels * eutMultiplier * heatDiscountMultiplier;
 
   // Overclocks counted the way OverclockCalculator counts them: whole
   // power-of-four steps of the machine's power over the recipe's draw, and
@@ -245,12 +259,15 @@ export function getOverclockedRecipeStats(
   // voltage times its working amps (hatch count for a multiblock, the
   // machine's own amperage for a singleblock - the arc furnaces work with 3),
   // and a recipe drawing under 32 EU/t is billed as 32: "Treat ULV as LV for
-  // overclocking".
-  const subTickCapable = canSubTick(effectiveRecipe);
-  const machinePower = getVoltageTierMaxEuT(tier) * getNodePowerAmps(effectiveRecipe, node);
-  const recipePower = Math.max(Math.ceil(parallelEuT), 32);
+  // overclocking". How each side is rounded first depends on the version:
+  // see overclockTiersAbove.
+  const subTickCapable = canSubTick(effectiveRecipe, gameVersion);
+  const machinePower = getVoltageTierMaxEuT(tier) * getNodePowerAmps(effectiveRecipe, node, gameVersion);
+  const quantise =
+    getMachineBehaviour(effectiveRecipe.machineType, gameVersion)?.quantiseDuration ?? quantiseDurationToTicks;
+
   let affordableSteps = Number.isFinite(machinePower)
-    ? floorLog4(Math.floor(machinePower / recipePower))
+    ? overclockTiersAbove(machinePower, parallelEuT, gameVersion)
     : Number.POSITIVE_INFINITY;
 
   // A singleblock is additionally capped by voltage tier, measured against the
@@ -259,7 +276,7 @@ export function getOverclockedRecipeStats(
   // so this only bites machines like the arc furnace whose amps outrun their
   // voltage tier.
   if (
-    (!subTickCapable || !hasAmperageOverclock(effectiveRecipe.machineType)) &&
+    (!subTickCapable || !hasAmperageOverclock(effectiveRecipe.machineType, gameVersion)) &&
     Number.isFinite(machinePower)
   ) {
     const machineVoltageTier = Math.max(
@@ -278,9 +295,10 @@ export function getOverclockedRecipeStats(
     node,
     tier,
     affordable,
+    gameVersion,
     effectiveVoltageOrdinal,
   );
-  const rule = resolveOverclockRule(effectiveRecipe, node, heatOverclock.heatOverclockSteps);
+  const rule = resolveOverclockRule(effectiveRecipe, node, heatOverclock.heatOverclockSteps, gameVersion);
 
   // Perfect steps are taken first, then normal ones. A perfect step divides
   // duration by the rule's multiplier and usually raises EU/t by the same,
@@ -289,7 +307,17 @@ export function getOverclockedRecipeStats(
   // duration for 4x EU/t.
   const perfectSteps = Math.min(rule.maxPerfect, affordable);
   const normalSteps = Math.min(rule.maxNormal, affordable - perfectSteps);
+  const rawDuration =
+    (effectiveRecipe.durationTicks / rule.multiplier ** perfectSteps / 2 ** normalSteps) * durationMultiplier;
   const steps = perfectSteps + normalSteps;
+  const stepEuFactor = (rule.euMultiplier ?? rule.multiplier) ** perfectSteps * 4 ** normalSteps;
+  const machineEuT = billedMachineEuT(
+    effectiveRecipe.eut,
+    parallels,
+    eutMultiplier,
+    heatOverclock.heatDiscountMultiplier,
+    stepEuFactor,
+  );
 
   return {
     tier,
@@ -298,18 +326,67 @@ export function getOverclockedRecipeStats(
     perfectOverclockSteps: perfectSteps,
     perfectSpeedFactor: rule.multiplier,
     perfectEuFactor: rule.euMultiplier ?? rule.multiplier,
-    durationTicks: (getMachineBehaviour(effectiveRecipe.machineType)?.quantiseDuration ?? quantiseDurationToTicks)(
-      (effectiveRecipe.durationTicks / rule.multiplier ** perfectSteps / 2 ** normalSteps) *
-        durationMultiplier,
-      subTickCapable,
-    ),
-    eut:
-      effectiveRecipe.eut *
-      heatOverclock.heatDiscountMultiplier *
-      eutMultiplier *
-      (rule.euMultiplier ?? rule.multiplier) ** perfectSteps *
-      4 ** normalSteps,
+    durationTicks: quantise(rawDuration, subTickCapable),
+    eut: Number.isFinite(parallels) && parallels > 0 ? machineEuT / parallels : machineEuT,
+    machineEuT,
   };
+}
+
+/**
+ * What the game bills the machine: the draw of every parallel together,
+ * overclocked, rounded up to a whole EU/t, so a 143 EU/t recipe at a 0.9
+ * discount bills 129 and 30 EU/t at 2.8.1's 0.8F bills 25. The product runs in
+ * Java's order. GT5U@5.09.54.205 OverclockCalculator.java:382 recipePower,
+ * ceiled at :421 (:388 without overclocks); GT5U@5.09.51.476 :341, ceiled at
+ * :406 (:347). The parallel is the machine's own, not the sub-tick multiplied
+ * count: setCurrentParallel keeps the smaller (.205 :285, .476 :275).
+ */
+function billedMachineEuT(
+  eut: number,
+  parallels: number,
+  eutMultiplier: number,
+  heatDiscount: number,
+  stepEuFactor: number,
+): number {
+  if (!(parallels > 0) || !Number.isFinite(parallels)) {
+    return eut * heatDiscount * eutMultiplier * stepEuFactor;
+  }
+  return Math.ceil(eut * parallels * eutMultiplier * heatDiscount * stepEuFactor);
+}
+
+/** Java's `Long.MAX_VALUE / 100`: past it `getTiersAbove` stops scaling. */
+const UNSCALED_POWER = 9223372036854775807 / 100;
+
+/**
+ * Whole power-of-four steps the machine's power buys over the recipe's draw
+ * (discounted and times its parallels), a draw under 32 EU/t billed as 32. One
+ * count serves both the time per recipe and the parallels a recipe faster than
+ * a tick turns into, as in the game.
+ *
+ * 2.8.1 truncates both sides to longs (GT5U@5.09.51.476
+ * OverclockCalculator.java:343 for the time, :433 for the sub-tick parallels,
+ * clamped at :466): a discounted 128.7 EU/t draw counts as 128 and fits one
+ * step in 512.
+ *
+ * 2.9 rounds both sides to 0.01 EU/t and divides (GT5U@5.09.54.205
+ * OverclockCalculator.java:513 getTiersAbove, called at :384 and :446): 128.7
+ * fits no step in 512, while 128.004 or 128 plus float noise does.
+ */
+export function overclockTiersAbove(machinePower: number, parallelEuT: number, gameVersion: GameVersion): number {
+  if (gameVersion === "2.8.1") {
+    // A whole divisor floors the same whether the dividend is truncated first or not.
+    return floorLog4(Math.floor(machinePower / Math.max(Math.floor(parallelEuT), 32)));
+  }
+  if (machinePower < parallelEuT) return -1;
+  if (machinePower >= UNSCALED_POWER) return floorLog4(Math.floor(machinePower / Math.max(parallelEuT, 32)));
+  return floorLog4(Math.floor(Math.round(machinePower * 100) / Math.max(Math.round(parallelEuT * 100), 3200)));
+}
+
+/** The draw `overclockTiersAbove` divides by, as the game rounds it, for the card's working lines. */
+export function overclockDrawEuT(parallelEuT: number, gameVersion: GameVersion): number {
+  return gameVersion === "2.8.1"
+    ? Math.max(Math.floor(parallelEuT), 32)
+    : Math.max(Math.round(parallelEuT * 100), 3200) / 100;
 }
 
 /** Whole power-of-four steps that fit in `ratio`: 0 for anything under 4. */
@@ -368,8 +445,8 @@ export function quantiseDurationToTicks(durationTicks: number, subTickCapable: b
  * `kind: "single"` (the arc furnace family). Anything unrecognised stays at
  * the one-tick floor rather than suddenly claiming more output.
  */
-function canSubTick(effectiveRecipe: OverclockRecipeInput): boolean {
-  return isMultiblockRecipe(effectiveRecipe);
+function canSubTick(effectiveRecipe: OverclockRecipeInput, gameVersion: GameVersion): boolean {
+  return isMultiblockRecipe(effectiveRecipe, gameVersion);
 }
 
 /**
@@ -381,10 +458,11 @@ function resolveOverclockRule(
   recipe: OverclockRecipeInput,
   node: Pick<FactoryNode, "machineConfigTiers" | "coilTier" | "overclockTier">,
   heatOverclockSteps: number,
+  gameVersion: GameVersion,
 ): OverclockRule {
-  const behaviour = getMachineBehaviour(recipe.machineType);
+  const behaviour = getMachineBehaviour(recipe.machineType, gameVersion);
   const spec = behaviour
-    ? resolveOverclockSpec(behaviour, buildMachineContext(recipe as Recipe, node))
+    ? resolveOverclockSpec(behaviour, buildMachineContext(recipe as Recipe, node, gameVersion))
     : undefined;
 
   if (spec === HEAT_OVERCLOCK) {

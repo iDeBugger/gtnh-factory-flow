@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { getPowerSource } from "@/lib/power/registry";
+import { planGameVersion } from "@/lib/model/game-version";
 import {
-  selectValue,
+  storedSelectValue,
   type PowerNumberSetting,
   type PowerSettingCondition,
   type PowerSourceDefinition,
@@ -34,7 +35,9 @@ export function PowerConfigPanel({
   warnings?: string[];
 }) {
   const setPowerSetting = useFactoryStore((state) => state.setPowerSetting);
-  const source = getPowerSource(sourceId);
+  // The plan's version's definition, so the tiles list the options its recipe was built from.
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
+  const source = getPowerSource(sourceId, gameVersion);
   if (!source) {
     return null;
   }
@@ -54,7 +57,7 @@ export function PowerConfigPanel({
           }
           const enabled = isEnabled(setting.enabledWhen);
           if (setting.type === "select") {
-            const value = selectValue(setting, values?.[setting.id] || undefined);
+            const value = storedSelectValue(setting, values);
             return (
               <PowerSelectTile
                 key={setting.id}
@@ -176,10 +179,10 @@ function settingValue(
   if (!setting) {
     return undefined;
   }
-  const raw = values?.[settingId];
   if (setting.type === "select") {
-    return selectValue(setting, raw);
+    return storedSelectValue(setting, values);
   }
+  const raw = values?.[settingId];
   if (setting.type === "toggle") {
     return raw === undefined ? (setting.defaultOn ? "1" : "0") : raw;
   }

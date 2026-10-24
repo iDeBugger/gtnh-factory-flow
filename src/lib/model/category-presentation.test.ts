@@ -14,7 +14,7 @@ describe("unresolved ingredients in the saved wooden axe plan", () => {
     const original = structuredClone(saved) as FactoryProject;
     const loaded = normalizeLoadedProject(original);
     const node = loaded.nodes[0];
-    const recipe = applyRecipeInputOverrides(loaded.recipes[0], node);
+    const recipe = applyRecipeInputOverrides(loaded.recipes[0], node, "2.9");
     expect(recipe.inputs.map((input) => input.amount)).toEqual([1, 1, 1, 1, 1]);
     expect(recipe.inputs.every((input) => getAlternativeCycleFaces(input).length > 1)).toBe(true);
     expect(loaded.edges).toEqual(original.edges);
@@ -48,7 +48,7 @@ describe("unresolved ingredients in the saved wooden axe plan", () => {
     const edge = plan.edges.find((entry) => entry.resourceId === "oredict:plankWood")!;
     const member = plan.recipes[0].inputs[0].alternatives![1];
     const wired = applyEdgeInputOverride(plan, { ...edge, resourceId: member.id }, member);
-    const recipe = applyRecipeInputOverrides(wired.recipes[0], wired.nodes[0]);
+    const recipe = applyRecipeInputOverrides(wired.recipes[0], wired.nodes[0], "2.9");
     expect(recipe.inputs.slice(0, 3).map((input) => input.id)).toEqual([member.id, member.id, member.id]);
     expect(recipe.inputs.slice(0, 3).every((input) => !input.alternatives)).toBe(true);
     expect(recipe.inputs[3].alternatives).toBeDefined();

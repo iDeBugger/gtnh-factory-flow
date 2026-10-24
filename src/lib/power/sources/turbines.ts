@@ -14,15 +14,24 @@ import {
   findFuel,
   findRotor,
   fuelOptions,
-  powerPlannerData,
   resolvePowerResource,
   ROTOR_SIZE_NAMES,
   rotorDurability,
   type RotorClassData,
+  type PowerTables,
   type RotorEntry,
 } from "../planner-data";
+import type { GameVersion } from "@/lib/model/game-version";
+import { GT_VOLTAGE_TIERS } from "@/lib/model/tiers";
 import type { PowerFlowLine, PowerModel, PowerSourceDefinition, PowerSetting } from "../types";
-import { formatAmount, lifespanHours, liters, percent, stat } from "./helpers";
+import {
+  formatAmount,
+  lifespanHours,
+  liters,
+  percent,
+  stat,
+  type PowerSourceBuilder,
+} from "./helpers";
 
 type TurbineClass = "steam" | "gas" | "plasma";
 
@@ -54,8 +63,8 @@ const STEAM_EXHAUST: Record<string, string | undefined> = {
  * column wins where it exists (same rule, already spelled out); the rest
  * mirror the registry fallback against our own resource map.
  */
-function plasmaExhaust(plasmaName: string): string | undefined {
-  const recipe = powerPlannerData.fusionRecipes.find((entry) => entry.name === plasmaName);
+function plasmaExhaust(plasmaName: string, tables: PowerTables, gameVersion: GameVersion): string | undefined {
+  const recipe = tables.fusionRecipes.find((entry) => entry.name === plasmaName);
   if (recipe?.decayOutput) {
     return recipe.decayOutput !== "None" ? recipe.decayOutput : undefined;
   }
@@ -63,11 +72,11 @@ function plasmaExhaust(plasmaName: string): string | undefined {
   if (base === plasmaName) {
     return undefined;
   }
-  if (resolvePowerResource(base)) {
+  if (resolvePowerResource(base, gameVersion)) {
     return base;
   }
   const molten = `Molten ${base}`;
-  if (resolvePowerResource(molten)) {
+  if (resolvePowerResource(molten, gameVersion)) {
     return molten;
   }
   // Neither form is a registered fluid: the game consumes the plasma and
@@ -110,15 +119,39 @@ function scale(amount: number, factor: number): number {
 }
 
 /**
+ * How the Java subtracts the optimum from the flow, which decides the loss's rounding once
+ * flows pass 2^24 L/t, where a float no longer holds every integer:
+ * - "int": two ints (getOverflowEfficiency(int, int, int), the XL gas and plasma), an exact
+ *   difference then cast to float;
+ * - "float": `totalFlow - (float) realOptFlow`, both cast to float first (2.9's Large SC,
+ *   every XL steam turbine);
+ * - "double": `totalFlow - realOptFlow` on the double field (2.8.1's Large SC), exact.
+ */
+type FlowDifference = "int" | "float" | "double";
+
+function flowDifference(flow: number, optimal: number, difference: FlowDifference): number {
+  if (difference === "float") {
+    return f32(f32(flow) - f32(optimal));
+  }
+  return difference === "int" ? f32(flow - optimal) : flow - optimal;
+}
+
+/**
  * getOverflowEfficiency: the linear loss off optimal. Below optimal every
  * class loses 1:1; above it the loss divides by the class's overflow divisor
  * (1 for SC steam and every XL, so both sides cost the same).
  */
-function flowEfficiency(flow: number, optimal: number, overDivisor: number): number {
+function flowEfficiency(
+  flow: number,
+  optimal: number,
+  overDivisor: number,
+  difference: FlowDifference,
+): number {
+  const delta = flowDifference(flow, optimal, difference);
   if (flow > optimal) {
-    return f32(1 - f32((flow - optimal) / f32(f32(optimal) * overDivisor)));
+    return f32(1 - f32(Math.abs(delta) / f32(f32(optimal) * overDivisor)));
   }
-  return f32(1 - Math.abs(f32(f32(f32(flow) - f32(optimal)) / f32(optimal))));
+  return f32(1 - Math.abs(f32(delta / f32(optimal))));
 }
 
 /**
@@ -167,8 +200,12 @@ interface TurbineRun {
   euPerTick: number;
   /** XL dense steam: the steam-equivalent litres per tick actually used. */
   steamPerTick?: number;
+  /** XL dense steam: the steam litres per tick the water return divides, when not steamPerTick. */
+  waterSteamPerTick?: number;
   efficiency: number;
   warning?: string;
+  /** The gas turbine's weak-rotor branch returns before the dynamo clamp. */
+  skipsDynamoClamp?: boolean;
 }
 
 const idle = (optimal: number, efficiency: number, warning: string): TurbineRun => ({
@@ -191,6 +228,7 @@ function largeSteamRun(
   eff: number,
   baseEfficiency: number,
   wanted: number | undefined,
+  gameVersion: GameVersion,
 ): TurbineRun {
   const opt = f32(realOpt);
   if (grade === "SC Steam") {
@@ -206,10 +244,15 @@ function largeSteamRun(
     const maxFlow = Math.min(INT_CAP, Math.floor(opt * 1.25));
     const optimal = Math.min(Math.floor(opt), maxFlow);
     const flow = Math.min(wanted ?? optimal, maxFlow);
-    const euPerTick =
-      flow === opt
-        ? scale(flow, eff)
-        : Math.max(1, scale(f32(f32(flow) * flowEfficiency(flow, opt, 1)), eff));
+    // Off optimal, 2.8.1's MTESupercriticalFluidTurbine (5.09.51.476 :76-82) subtracts on the
+    // double realOptFlow and runs `tEU *= efficiency` on its int tEU, truncating before the
+    // rotor efficiency; 2.9's MTELargeTurbineSCSteam (5.09.54.205 :108-109) subtracts in float,
+    // multiplies both in float and truncates once.
+    const old = gameVersion === "2.8.1";
+    const offOptimal = (loss: number) =>
+      old ? scale(scale(flow, loss), eff) : scale(f32(f32(flow) * loss), eff);
+    const loss = flowEfficiency(flow, opt, 1, old ? "double" : "float");
+    const euPerTick = flow === opt ? scale(flow, eff) : Math.max(1, offOptimal(loss));
     return { optimal, flow, maxFlow, euPerTick, efficiency: eff };
   }
   const sh = grade === "SH Steam";
@@ -223,7 +266,7 @@ function largeSteamRun(
       ? euFrom(flow)
       : Math.max(
           1,
-          euFrom(scale(flow, flowEfficiency(flow, optimal, overflowTier + (sh ? 2 : 1)))),
+          euFrom(scale(flow, flowEfficiency(flow, optimal, overflowTier + (sh ? 2 : 1), "int"))),
         );
   return { optimal, flow, maxFlow, euPerTick, efficiency: eff };
 }
@@ -231,15 +274,18 @@ function largeSteamRun(
 /**
  * MTEXLTurbineSteam / HPSteam / SCSteam: sixteen rotors' flow, a 1.25x cap
  * and the same loss either side of optimal, measured on the unrounded
- * optimum. Dense steam is 1000 steam-equivalent litres per litre: the turbine
- * takes whole dense litres (up to ceil(cap / 1000)) but uses only up to the
- * cap.
+ * optimum. Dense steam is 1000 steam-equivalent litres per litre. On 2.9 the
+ * turbine takes whole dense litres (up to ceil(cap / 1000)) but uses only up
+ * to the cap. On 2.8.1 (GT++ MTELargeTurbineSteam / SHSteam / SCSteam at
+ * 5.09.51.476) it takes the float share min(offered, cap / 1000), drains only
+ * its whole litres and credits the share x 1000 truncated, fraction included.
  */
 function xlSteamRun(
   grade: string,
   rotorFlow: number,
   eff: number,
   wanted: number | undefined,
+  gameVersion: GameVersion,
 ): TurbineRun {
   const dense = grade.startsWith("Dense");
   const plain = grade === "Steam" || grade === "Dense Steam";
@@ -250,16 +296,38 @@ function xlSteamRun(
     if (steam === steamOpt) {
       return scale(raw, eff);
     }
-    return Math.max(1, scale(scale(raw, flowEfficiency(steam, steamOpt, 1)), eff));
+    return Math.max(1, scale(scale(raw, flowEfficiency(steam, steamOpt, 1, "float")), eff));
   };
   if (!dense) {
     const optimal = Math.min(Math.floor(steamOpt), steamCap);
     const flow = Math.min(wanted ?? optimal, steamCap);
     return { optimal, flow, maxFlow: steamCap, euPerTick: euFor(flow), efficiency: eff };
   }
-  const steamFor = (litres: number) => Math.min(litres * 1000, steamCap);
   const below = Math.floor(steamOpt / 1000);
   const above = Math.ceil(steamOpt / 1000);
+  if (gameVersion === "2.8.1") {
+    // MTELargeTurbineSteam.java:124-131: remainingDenseFlow = (float) remainingFlow / 1000,
+    // denseFlow = min(hatch, it) in float, (int) denseFlow drained, and totalFlow +=
+    // denseFlow * 1000 on the int total; the water return reads the float sum.
+    const denseCap = f32(f32(steamCap) / 1000);
+    const share = (offered: number) => Math.min(f32(offered), denseCap);
+    const credit = (offered: number) => Math.min(INT_CAP, Math.trunc(f32(share(offered) * 1000)));
+    // The feed that makes the most EU, scored on what it credits.
+    const optimal = below >= 1 && euFor(credit(below)) >= euFor(credit(above)) ? below : above;
+    // Offering more than ceil(cap / 1000) changes nothing.
+    const offered = Math.min(wanted ?? optimal, Math.ceil(denseCap));
+    const steamPerTick = credit(offered);
+    return {
+      optimal,
+      flow: Math.trunc(share(offered)),
+      maxFlow: Math.trunc(denseCap),
+      euPerTick: euFor(steamPerTick),
+      steamPerTick,
+      waterSteamPerTick: f32(share(offered) * 1000),
+      efficiency: eff,
+    };
+  }
+  const steamFor = (litres: number) => Math.min(litres * 1000, steamCap);
   // The whole-litre feed that makes the most EU: usually the one above, since
   // overshooting the optimum costs far less than falling short.
   const optimal = below >= 1 && euFor(steamFor(below)) >= euFor(steamFor(above)) ? below : above;
@@ -294,6 +362,7 @@ function gasRun(
       maxFlow: 1,
       euPerTick,
       efficiency: baseEfficiency,
+      skipsDynamoClamp: true,
       warning: `Rotor too weak for this fuel: it burns 1 L/t for ${xl ? "one rotor's " : ""}${formatAmount(euPerTick)} EU/t.`,
     };
   }
@@ -313,7 +382,7 @@ function gasRun(
   const flow = Math.min(wanted ?? optimal, maxFlow);
   let raw = Math.min(INT_CAP, flow * fuelEu);
   if (flow !== optimal) {
-    raw = scale(raw, flowEfficiency(flow, optimal, xl ? 1 : overflowTier * 3 - 1));
+    raw = scale(raw, flowEfficiency(flow, optimal, xl ? 1 : overflowTier * 3 - 1, "int"));
   }
   return { optimal, flow, maxFlow, euPerTick: scale(raw, eff), efficiency: eff };
 }
@@ -361,13 +430,71 @@ function plasmaRun(
   let raw = Math.min(INT_CAP, Math.trunc((fuelEu / 20) * flow));
   if (flow !== optimal) {
     raw = xl
-      ? Math.trunc(raw * (1 - Math.abs(f32((flow - optimal) / f32(optimal)))))
-      : scale(raw, flowEfficiency(flow, optimal, overflowTier * 3 + 1));
+      ? Math.trunc(raw * (1 - Math.abs(f32(f32(flow - optimal) / f32(optimal)))))
+      : scale(raw, flowEfficiency(flow, optimal, overflowTier * 3 + 1, "int"));
   }
   // The derate multiplies in float even at 1, so large outputs round like the Java's.
   const euPerTick = derated ? scale(scale(raw, eff), derate) : scale(raw, eff);
   return { optimal, flow, maxFlow, euPerTick, efficiency: eff * derate };
 }
+
+/**
+ * The dynamo hatch a Large turbine clamps fluidIntoPower at: `tEU > getMaximumOutput()`, or
+ * `tEU > maxPower` cached from it (GT5U@5.09.54.205 turbines/MTELargeTurbineSteam.java:167,
+ * HPSteam :161, SCSteam :112, Gas :188, Plasma :182; GT5U@5.09.51.476 MTELargeTurbineSteam.java:175,
+ * HPSteam :166, Gas :197, Plasma :195, goodgenerator MTESupercriticalFluidTurbine.java:84).
+ * getMaximumOutput is one hatch's V x amps (MTELargeTurbineBase.java:263-270). The fuel is drained
+ * before the clamp, so a small hatch wastes EU, not fuel. The XL turbines have no clamp. Rotor wear
+ * reads the clamped output: lEUt on 2.9 (GT5U@5.09.54.205 MTEExtendedPowerMultiBlockBase.java:67),
+ * mEUt on 2.8.1 (GT5U@5.09.51.476 MTEMultiBlockBase.java:1344).
+ *
+ * addDynamoToMachineList takes any MTEHatchDynamo (GT5U@5.09.51.476 MTEMultiBlockBase.java:2038-2046),
+ * of up to 4A on 2.9 (GT5U@5.09.54.205 MTEMultiBlockBase.java:2284). The hatches that fit:
+ * - GT's dynamo hatches, ULV to UXV at 1A (Hatch_Dynamo_ULV..UXV, LoaderMetaTileEntities registerDynamoHatch;
+ *   MetaTileEntity.maxAmperesOut is 1), on both versions. No 1A MAX dynamo exists.
+ * - GT++'s buffered dynamos, ULV to UHV at 4A (MTEHatchDynamoBuffer.maxAmperesOut, GregtechBufferDynamos
+ *   tiers 00-09), on both versions.
+ * - 2.8.1's wireless dynamos, ULV to MAX at 2A (GT5U@5.09.51.476 MTEWirelessDynamo.java:24, :75-77;
+ *   LoaderMetaTileEntities wireless transmitter tiers 00-14).
+ * - 2.9's TecTech 4A dynamos, HV to UXV (GT5U@5.09.54.205 MTEHatchDynamoMulti.java:32 extends
+ *   MTEHatchDynamo; MachineLoader.java:1049-1148). In 2.8.1 MTEHatchDynamoMulti extends MTEHatch
+ *   (GT5U@5.09.51.476 MTEHatchDynamoMulti.java:29) and does not fit.
+ * A 4A hatch's cap equals the 1A hatch one tier up; each is listed as the hatch the player builds.
+ */
+interface DynamoOption {
+  key: string;
+  label: string;
+  maxEuT: number;
+}
+
+const DYNAMO_TIERS = GT_VOLTAGE_TIERS.filter(({ tier }) => tier !== "MAX");
+
+function dynamoRange(first: string, last: string): typeof GT_VOLTAGE_TIERS {
+  const from = GT_VOLTAGE_TIERS.findIndex(({ tier }) => tier === first);
+  const to = GT_VOLTAGE_TIERS.findIndex(({ tier }) => tier === last);
+  return GT_VOLTAGE_TIERS.slice(from, to + 1);
+}
+
+function dynamoOptions(gameVersion: GameVersion): DynamoOption[] {
+  const at = (amps: number) => (tiers: typeof GT_VOLTAGE_TIERS) =>
+    tiers.map(({ tier, maxEuT }) => ({
+      key: amps === 1 ? tier : `${tier} ${amps}A`,
+      label: `${tier}${amps === 1 ? "" : ` ${amps}A`}, ${formatAmount(maxEuT * amps)} EU/t`,
+      maxEuT: maxEuT * amps,
+    }));
+  if (gameVersion === "2.8.1") {
+    return [
+      ...at(1)(DYNAMO_TIERS),
+      ...at(2)(GT_VOLTAGE_TIERS),
+      ...at(4)(dynamoRange("ULV", "UHV")),
+    ];
+  }
+  // Buffered 4A (ULV to UHV) and TecTech 4A (HV to UXV) together cover ULV to UXV.
+  return [...at(1)(DYNAMO_TIERS), ...at(4)(DYNAMO_TIERS)];
+}
+
+/** The default: a hatch that holds whatever the rotor makes. */
+const DYNAMO_LARGE_ENOUGH = "auto";
 
 const SPECS: TurbineSpec[] = [
   {
@@ -464,13 +591,17 @@ const SPECS: TurbineSpec[] = [
   },
 ];
 
-function buildTurbine(spec: TurbineSpec): PowerSourceDefinition {
+function buildTurbine(
+  tables: PowerTables,
+  spec: TurbineSpec,
+  gameVersion: GameVersion,
+): PowerSourceDefinition {
   const settings: PowerSetting[] = [
     {
       type: "select",
       id: "rotor",
       label: "Rotor",
-      options: powerPlannerData.rotors.map((rotor) => ({
+      options: tables.rotors.map((rotor) => ({
         key: rotor.name,
         label: `${rotor.name} (${rotor.unlock})`,
       })),
@@ -495,7 +626,7 @@ function buildTurbine(spec: TurbineSpec): PowerSourceDefinition {
     },
   ];
   if (spec.steamGrade === "select") {
-    const grades = fuelOptions(powerPlannerData.steamGrades).filter(
+    const grades = fuelOptions(tables.steamGrades).filter(
       (option) => spec.steamGradeOptions?.includes(option.key) ?? true,
     );
     settings.push({
@@ -510,7 +641,7 @@ function buildTurbine(spec: TurbineSpec): PowerSourceDefinition {
       type: "select",
       id: "fuel",
       label: "Fuel",
-      options: fuelOptions(spec.xl ? powerPlannerData.gasFuelsXl : powerPlannerData.gasFuels),
+      options: fuelOptions(spec.xl ? tables.gasFuelsXl : tables.gasFuels),
       // The XL hard-refuses benzene in the game (and Fox's XL fuel table
       // matches), so its default is the sheet's own pick.
       defaultKey: spec.xl ? "Nitrobenzene" : "Benzene",
@@ -520,8 +651,21 @@ function buildTurbine(spec: TurbineSpec): PowerSourceDefinition {
       type: "select",
       id: "fuel",
       label: "Plasma",
-      options: fuelOptions(powerPlannerData.plasmas),
+      options: fuelOptions(tables.plasmas),
       defaultKey: "Helium Plasma",
+    });
+  }
+  const dynamos = spec.xl ? [] : dynamoOptions(gameVersion);
+  if (!spec.xl) {
+    settings.push({
+      type: "select",
+      id: "dynamo",
+      label: "Dynamo hatch",
+      options: [
+        { key: DYNAMO_LARGE_ENOUGH, label: "Large enough" },
+        ...dynamos.map(({ key, label }) => ({ key, label })),
+      ],
+      defaultKey: DYNAMO_LARGE_ENOUGH,
     });
   }
   settings.push(
@@ -556,7 +700,7 @@ function buildTurbine(spec: TurbineSpec): PowerSourceDefinition {
     blurb: spec.blurb,
     settings,
     compute(read): PowerModel {
-      const rotor = findRotor(read.select("rotor"));
+      const rotor = findRotor(read.select("rotor"), tables);
       const sizeIndex = Math.max(0, ROTOR_SIZE_NAMES.indexOf(read.select("size") as never));
       const tight = read.select("fitting") !== "loose";
       const data = classData(rotor, spec.turbineClass);
@@ -567,15 +711,15 @@ function buildTurbine(spec: TurbineSpec): PowerSourceDefinition {
       if (spec.turbineClass === "steam") {
         fuelName =
           spec.steamGrade === "select" ? read.select("grade") : (spec.steamGrade as string);
-        fuelEu = findFuel(powerPlannerData.steamGrades, fuelName).euPerLiter ?? 0.5;
+        fuelEu = findFuel(tables.steamGrades, fuelName).euPerLiter ?? 0.5;
       } else {
         fuelName = read.select("fuel");
         const table =
           spec.turbineClass === "gas"
             ? spec.xl
-              ? powerPlannerData.gasFuelsXl
-              : powerPlannerData.gasFuels
-            : powerPlannerData.plasmas;
+              ? tables.gasFuelsXl
+              : tables.gasFuels
+            : tables.plasmas;
         fuelEu = findFuel(table, fuelName).euPerLiter ?? 0;
       }
 
@@ -594,8 +738,16 @@ function buildTurbine(spec: TurbineSpec): PowerSourceDefinition {
         // Every steam grade runs the rotor's steam flow (SC included: MTELargeTurbineSCSteam
         // uses getOptimalSteamFlow like HP); the XL is x16.
         run = spec.xl
-          ? xlSteamRun(fuelName, rotorFlow, efficiency, wanted)
-          : largeSteamRun(fuelName, rotorFlow, overflowTier, efficiency, baseEfficiency, wanted);
+          ? xlSteamRun(fuelName, rotorFlow, efficiency, wanted, gameVersion)
+          : largeSteamRun(
+              fuelName,
+              rotorFlow,
+              overflowTier,
+              efficiency,
+              baseEfficiency,
+              wanted,
+              gameVersion,
+            );
       } else if (spec.turbineClass === "gas") {
         run = gasRun(
           spec.xl,
@@ -618,19 +770,27 @@ function buildTurbine(spec: TurbineSpec): PowerSourceDefinition {
           wanted,
         );
       }
+      const dynamo = dynamos.find((option) => option.key === read.select("dynamo"));
+      let dynamoWarning: string | undefined;
+      if (dynamo && !run.skipsDynamoClamp && run.euPerTick > dynamo.maxEuT) {
+        dynamoWarning = `The ${dynamo.key} dynamo hatch caps output at ${formatAmount(dynamo.maxEuT)} EU/t; the rotor makes ${formatAmount(run.euPerTick)} EU/t.`;
+        run = { ...run, euPerTick: dynamo.maxEuT };
+      }
       const { euPerTick, flow, maxFlow } = run;
 
       const lifespanSeconds = rotorLifespanSeconds(
         spec.xl,
         euPerTick,
-        rotorDurability(rotor, sizeIndex),
+        rotorDurability(rotor, sizeIndex, tables),
         damagePerRoll(spec, fuelName, tight),
       );
 
       const flowPerSecond = spec.turbineClass === "plasma" ? flow : flow * 20;
       const inputs: PowerFlowLine[] = [liters(fuelName, flowPerSecond)];
       const outputs: PowerFlowLine[] = [];
-      if (flow > 0 && spec.turbineClass === "steam") {
+      // 2.8.1's XL can credit dense steam while draining none (a cap under 1,000 L/t).
+      const ran = flow > 0 || (run.steamPerTick ?? 0) > 0;
+      if (ran && spec.turbineClass === "steam") {
         const exhaust = STEAM_EXHAUST[fuelName];
         if (exhaust) {
           // HP and SC return one litre of the next grade down per litre taken
@@ -641,17 +801,19 @@ function buildTurbine(spec: TurbineSpec): PowerSourceDefinition {
           // water at 1 L per 160 L of steam. The XL's dense-steam path uses
           // its own 160.1 divisor on the steam-equivalent litres it used -
           // the game's constant, not a typo.
-          const steamEquivalent = dense ? (run.steamPerTick ?? 0) * 20 : flowPerSecond;
+          const steamEquivalent = dense
+            ? (run.waterSteamPerTick ?? run.steamPerTick ?? 0) * 20
+            : flowPerSecond;
           outputs.push(liters("Distilled Water", steamEquivalent / (dense ? 160.1 : 160)));
         }
       } else if (flow > 0 && spec.turbineClass === "plasma") {
-        const exhaust = plasmaExhaust(fuelName);
+        const exhaust = plasmaExhaust(fuelName, tables, gameVersion);
         if (exhaust) {
           outputs.push(liters(exhaust, flowPerSecond));
         }
       }
 
-      const warnings: string[] = [];
+      const warnings: string[] = dynamoWarning ? [dynamoWarning] : [];
       if (run.warning) {
         warnings.push(run.warning);
       } else if (wanted !== undefined && wanted > maxFlow) {
@@ -678,4 +840,6 @@ function buildTurbine(spec: TurbineSpec): PowerSourceDefinition {
   };
 }
 
-export const turbineSources: PowerSourceDefinition[] = SPECS.map(buildTurbine);
+export const buildTurbineSources: PowerSourceBuilder = (tables, gameVersion) => {
+  return SPECS.map((spec) => buildTurbine(tables, spec, gameVersion));
+};

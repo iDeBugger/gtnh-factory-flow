@@ -101,6 +101,7 @@ describe("GT overclocking", () => {
       {
         overclockTier: "MAX",
       },
+      "2.9",
     );
 
     expect(stats.tier).toBe("MAX");
@@ -114,8 +115,8 @@ describe("GT overclocking", () => {
       coilTier: "tpv",
       machineConfigTiers: { pipeCasing: "titanium" },
     };
-    const stats = getOverclockedRecipeStats(NITROBENZENE, node);
-    const parallels = getMachineParallelMultiplier(NITROBENZENE, node);
+    const stats = getOverclockedRecipeStats(NITROBENZENE, node, "2.9");
+    const parallels = getMachineParallelMultiplier(NITROBENZENE, node, "2.9");
 
     // Six parallels of a 480 EU/t recipe already draw 2880 EU/t, which fills an
     // IV hatch. No headroom is left, so the recipe never overclocks.
@@ -134,7 +135,7 @@ describe("GT overclocking", () => {
       overclockTier: "LuV",
       coilTier: "tpv",
       machineConfigTiers: { pipeCasing: "titanium" },
-    });
+    }, "2.9");
 
     // 2880 EU/t of parallels leaves room for one 4x step inside LuV's 32768.
     expect(stats.overclockSteps).toBe(1);
@@ -151,8 +152,8 @@ describe("GT overclocking", () => {
 
     // An HV hatch carries 512 EU/t, so it can only power one 480 EU/t parallel
     // of the six the titanium pipe casings offer.
-    expect(getMachineParallelMultiplier(NITROBENZENE, node)).toBe(1);
-    expect(getOverclockedRecipeStats(NITROBENZENE, node).overclockSteps).toBe(0);
+    expect(getMachineParallelMultiplier(NITROBENZENE, node, "2.9")).toBe(1);
+    expect(getOverclockedRecipeStats(NITROBENZENE, node, "2.9").overclockSteps).toBe(0);
   });
 
   it("does not grant heat overclocks to coils that buy speed instead of heat", () => {
@@ -166,6 +167,7 @@ describe("GT overclocking", () => {
         machineConfigControls: [speedCoilControl()],
       },
       { overclockTier: "EV", coilTier: "nichrome" },
+      "2.9",
     );
 
     // Two imperfect overclocks halve the duration twice; nichrome coils then
@@ -190,6 +192,7 @@ describe("GT overclocking", () => {
         machineConfigControls: [heatCoilControl()],
       },
       { overclockTier: "EV", coilTier: "naquadah" },
+      "2.9",
     );
 
     // Graphite electrodes: no machine speed, 4 parallels, and each overclock
@@ -210,7 +213,7 @@ describe("GT overclocking", () => {
       overclockTier: "UV",
       coilTier: "tpv",
       machineConfigTiers: { pipeCasing: "titanium" },
-    });
+    }, "2.9");
 
     expect(Number.isInteger(stats.durationTicks)).toBe(true);
     expect(stats.durationTicks).toBe(Math.floor(300 / 2 ** stats.overclockSteps));
@@ -232,7 +235,7 @@ describe("GT overclocking", () => {
       eut: 120,
     };
 
-    const stats = getOverclockedRecipeStats(oneTick, { overclockTier: "EV" });
+    const stats = getOverclockedRecipeStats(oneTick, { overclockTier: "EV" }, "2.9");
 
     // Two perfect steps: 1 tick becomes a sixteenth of one.
     expect(stats.overclockSteps).toBe(2);
@@ -249,7 +252,7 @@ describe("GT overclocking", () => {
       eut: 120,
     };
 
-    const stats = getOverclockedRecipeStats(oneTick, { overclockTier: "EV" });
+    const stats = getOverclockedRecipeStats(oneTick, { overclockTier: "EV" }, "2.9");
 
     // The power is still drawn: a singleblock overclocks and wastes the speed.
     expect(stats.durationTicks).toBe(1);
@@ -260,6 +263,7 @@ describe("GT overclocking", () => {
     const stats = getOverclockedRecipeStats(
       { machineType: "Some Unknown Machine", minimumTier: "MV", durationTicks: 1, eut: 120 },
       { overclockTier: "EV" },
+      "2.9",
     );
 
     expect(stats.durationTicks).toBe(1);
@@ -279,7 +283,7 @@ describe("GT overclocking", () => {
     const stats = getOverclockedRecipeStats(dehydrator, {
       overclockTier: "LuV",
       coilTier: "nichrome",
-    });
+    }, "2.9");
 
     // The discounted, halved draw times four parallels leaves room for one
     // step inside the LuV hatch - counted from POWER, the way the game
@@ -290,8 +294,9 @@ describe("GT overclocking", () => {
     // The Utupu-Tanuri reads its coils raw - no 100 K per voltage tier, that
     // bonus belongs to the blast furnaces. Nichrome's 3601 K over the 0 K
     // requirement is floor(3601/900) = 4 discounts on top of the flat half,
-    // and the perfect step pays its 4x EU/t.
-    expect(stats.eut).toBeCloseTo(1920 * 0.5 * 0.95 ** 4 * 4, 6);
+    // and the perfect step pays its 4x EU/t. The four parallels' bill is ceiled to a
+    // whole EU/t (GT5U@5.09.54.205 OverclockCalculator.java:421); eut is one's share.
+    expect(stats.eut).toBeCloseTo(Math.ceil(1920 * 4 * 0.5 * 0.95 ** 4 * 4) / 4, 6);
   });
 
   it("clamps a sub-LV recipe to 32 EU/t when counting overclocks", () => {
@@ -301,6 +306,7 @@ describe("GT overclocking", () => {
     const stats = getOverclockedRecipeStats(
       { minimumTier: "ULV", durationTicks: 300, eut: 2 },
       { overclockTier: "MV" },
+      "2.9",
     );
 
     expect(stats.overclockSteps).toBe(1);
@@ -329,7 +335,7 @@ describe("GT overclocking", () => {
       ["IV", 1, 2048],
       ["UV", 1, 2048],
     ] as const) {
-      const stats = getOverclockedRecipeStats(crafting, { overclockTier: tier });
+      const stats = getOverclockedRecipeStats(crafting, { overclockTier: tier }, "2.9");
 
       expect([tier, stats.durationTicks, stats.eut]).toEqual([tier, ticks, eut]);
     }
@@ -346,13 +352,13 @@ describe("GT overclocking", () => {
     };
 
     // On an LV machine: 3 amps carry the 90 EU/t draw, but 96/90 buys no step.
-    const atLv = getOverclockedRecipeStats(recipe, { overclockTier: "LV" });
+    const atLv = getOverclockedRecipeStats(recipe, { overclockTier: "LV" }, "2.9");
     expect(atLv.overclockSteps).toBe(0);
     expect(atLv.durationTicks).toBe(122);
     expect(atLv.eut).toBe(90);
 
     // On MV: one step fits both the power ratio and the voltage-tier cap.
-    const atMv = getOverclockedRecipeStats(recipe, { overclockTier: "MV" });
+    const atMv = getOverclockedRecipeStats(recipe, { overclockTier: "MV" }, "2.9");
     expect(atMv.overclockSteps).toBe(1);
     expect(atMv.durationTicks).toBe(61);
     expect(atMv.eut).toBe(360);
@@ -372,6 +378,7 @@ describe("GT overclocking", () => {
         machineConfigControls: [heatCoilControl()],
       },
       { overclockTier: "MV", coilTier: "cupronickel" },
+      "2.9",
     );
 
     // Two parallels of 16 EU/t leave one MV step, taken as a perfect one on
@@ -394,6 +401,7 @@ describe("GT overclocking", () => {
         machineConfigControls: [heatCoilControl()],
       },
       { overclockTier: "LuV", coilTier: "naquadah" },
+      "2.9",
     );
 
     // Eight parallels at 432 EU/t leave one normal step at LuV; the EU/t
@@ -416,6 +424,7 @@ describe("GT overclocking", () => {
         machineConfigControls: [heatCoilControl()],
       },
       { overclockTier: "HV", coilTier: "naquadah", machineConfigTiers: {} },
+      "2.9",
     );
 
     expect(parallels).toBe(2);
@@ -432,6 +441,7 @@ describe("GT overclocking", () => {
         machineConfigControls: [heatCoilControl()],
       },
       { overclockTier: "EV", coilTier: "naquadah" },
+      "2.9",
     );
 
     // Naquadah coils sit 5901 K over the recipe's 1500 K, which is worth two
@@ -439,7 +449,8 @@ describe("GT overclocking", () => {
     expect(stats.overclockSteps).toBe(2);
     // 62.5 ticks truncates to 62.
     expect(stats.durationTicks).toBe(62);
-    expect(stats.eut).toBeCloseTo(120 * 0.95 ** 6 * 16, 6);
+    // The bill is ceiled to a whole EU/t (GT5U@5.09.54.205 OverclockCalculator.java:421).
+    expect(stats.eut).toBe(Math.ceil(120 * 0.95 ** 6 * 16));
   });
   it("rounds a sub-tick multiblock duration down to a natural fraction, like ParallelHelper", () => {
     // Oil Berry -> Heavy Oil: 10 ticks, 30 EU/t, in a Large Chemical Reactor
@@ -457,7 +468,7 @@ describe("GT overclocking", () => {
       },
     };
     const perTick = (tier: "LV" | "MV" | "HV" | "EV" | "IV") =>
-      1 / getOverclockedRecipeStats(recipe, { overclockTier: tier }).durationTicks;
+      1 / getOverclockedRecipeStats(recipe, { overclockTier: tier }, "2.9").durationTicks;
 
     expect(perTick("LV")).toBeCloseTo(0.1, 9);
     // 2.5 ticks truncates to 2.
@@ -488,7 +499,7 @@ describe("GT overclocking", () => {
       ],
     };
     const ticks = (tier: "HV" | "EV" | "IV") =>
-      getOverclockedRecipeStats(recipe, { overclockTier: tier, machineHandlerId: "chemical-reactor" })
+      getOverclockedRecipeStats(recipe, { overclockTier: tier, machineHandlerId: "chemical-reactor" }, "2.9")
         .durationTicks;
     expect(ticks("HV")).toBe(2);
     expect(ticks("EV")).toBe(1);

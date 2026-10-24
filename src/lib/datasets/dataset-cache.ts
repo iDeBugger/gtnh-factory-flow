@@ -1,7 +1,7 @@
 import { gameVersionOfDataset, planGameVersion, type GameVersion } from "@/lib/model/game-version";
 import type { FactoryProject, Recipe } from "@/lib/model/types";
 import { initRecipeDatasetVersion } from "./browser-loader";
-import { pickDatasetVersionFor } from "./remote";
+import { HIDDEN_DATASET_VERSION_IDS, pickDatasetVersionFor } from "./remote";
 import type { DatasetManifest, DatasetVersion, RecipeDataset } from "./types";
 
 /**
@@ -58,8 +58,8 @@ export const OTHER_VERSION_RECIPE_MESSAGE = "This recipe is from another GTNH ve
  * came from (`source.datasetVersionId`); when the manifest lists that dataset, the body
  * lands only on a plan of the same game version, whatever dataset is active (a pick fetched
  * on one tab can resolve after a switch to the other). A dataset id the manifest does not
- * list (an older build's body already on a board) lands only while the selected version
- * serves the plan. Recipes the plan makes itself (power, tanks, notes) name no dataset and
+ * list, or lists but never serves (a hidden one: an older build's body already on a board),
+ * lands only while the selected version serves the plan. Recipes the plan makes itself (power, tanks, notes) name no dataset and
  * always land.
  */
 export function refusesRecipeOnPlan(state: DatasetSelection, recipe: Pick<Recipe, "source">): boolean {
@@ -67,7 +67,9 @@ export function refusesRecipeOnPlan(state: DatasetSelection, recipe: Pick<Recipe
   if (!datasetVersionId) {
     return false;
   }
-  const own = state.datasetManifest?.versions.find((version) => version.id === datasetVersionId);
+  const own = HIDDEN_DATASET_VERSION_IDS.has(datasetVersionId)
+    ? undefined
+    : state.datasetManifest?.versions.find((version) => version.id === datasetVersionId);
   return own ? !datasetServesPlan(own, state.project) : !activeVersionServesPlan(state);
 }
 

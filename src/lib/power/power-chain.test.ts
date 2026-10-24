@@ -36,9 +36,9 @@ describe("power chain against the workbook", () => {
       flowMode: "optimal",
     };
     const recipes = [
-      buildPowerRecipe("ic2-fluid-reactor", reactorSettings, "r-reactor")!,
-      buildPowerRecipe("large-heat-exchanger", lheSettings, "r-lhe")!,
-      buildPowerRecipe("large-hp-steam-turbine", turbineSettings, "r-turbine")!,
+      buildPowerRecipe("ic2-fluid-reactor", reactorSettings, "r-reactor", "2.9")!,
+      buildPowerRecipe("large-heat-exchanger", lheSettings, "r-lhe", "2.9")!,
+      buildPowerRecipe("large-hp-steam-turbine", turbineSettings, "r-turbine", "2.9")!,
     ];
 
     // The synthesized recipes alone must already speak the sheet's numbers.

@@ -24,9 +24,10 @@ import { isModAndCommunityOn } from "@/lib/deployment-features";
 /**
  * Who the open plan is shared with. The owner adds people by name and
  * removes them; someone it is shared with sees who else is in it and can
- * leave. Everyone in it edits it live together. Posting a copy to Community is
- * a separate thing (the Share menu's Publish to library): it posts a copy,
- * never this plan. In the mod's panel skin, as the other boxes of its bar.
+ * leave. Everyone in it edits it live together. Where the community library is
+ * on, posting a copy to Community is a separate thing (the Share menu's Publish
+ * to library): it posts a copy, never this plan. In the mod's panel skin, as the
+ * other boxes of its bar.
  */
 export function PlanShareDialog({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDivElement>(null);

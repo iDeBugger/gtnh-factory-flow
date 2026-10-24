@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, test } from "vitest";
+import type { GameVersion } from "@/lib/model/game-version";
+import { powerTablesFor } from "../planner-data";
+import { buildPowerRecipe } from "../power-recipe";
 import { getPowerSource } from "../registry";
-import { buildPowerSettingsReader, type PowerModel } from "../types";
+import { buildPowerSettingsReader, type PowerModel, type PowerSetting } from "../types";
 import { htgrOperation } from "./reactors";
 
 /**
@@ -8,11 +11,11 @@ import { htgrOperation } from "./reactors";
  * workbook disagree; each expectation names the class it follows.
  */
 function compute(sourceId: string, settings: Record<string, string> = {}): PowerModel {
-  const source = getPowerSource(sourceId);
+  const source = getPowerSource(sourceId, "2.9");
   if (!source) {
     throw new Error(`No power source ${sourceId}`);
   }
-  return source.compute(buildPowerSettingsReader(source, settings));
+  return source.compute(buildPowerSettingsReader(source, settings, "2.9"), "2.9");
 }
 
 const flow = (lines: PowerModel["inputs"], name: string) => lines.find((line) => line.name === name)?.perSecond;
@@ -82,7 +85,7 @@ describe("Antimatter", () => {
 describe("HTGR", () => {
   it("will not run below 100 balls", () => {
     // MTEHighTempGasCooledReactor.MIN_CAPACITY is 1% of 10,000.
-    const fill = getPowerSource("htgr")?.settings.find((setting) => setting.id === "fill");
+    const fill = getPowerSource("htgr", "2.9")?.settings.find((setting) => setting.id === "fill");
     expect(fill?.type === "number" && fill.min).toBe(100);
   });
 
@@ -112,6 +115,112 @@ describe("unlock chips", () => {
     // The Antimatter Forge's assembly line recipe runs at RECIPE_UMV.
     ["antimatter", "UMV"],
   ])("puts %s at %s, the tier of its controller recipe", (id, tier) => {
-    expect(getPowerSource(id)?.unlock).toBe(tier);
+    expect(getPowerSource(id, "2.9")?.unlock).toBe(tier);
+  });
+});
+
+/**
+ * GTNH 2.8.1 runs bartworks' HTGR (GT5U 5.09.51.476
+ * bartworks/common/tileentities/multis/MTEHighTempGasCooledReactor.java) and registers no ULV
+ * solar panel; 2.9 (5.09.54.205) runs kubatech's HTGR and has the ULV panel.
+ */
+function model(sourceId: string, settings: Record<string, string>, gameVersion: GameVersion): PowerModel {
+  const source = getPowerSource(sourceId, gameVersion);
+  if (!source) {
+    throw new Error(`No power source ${sourceId}`);
+  }
+  return source.compute(buildPowerSettingsReader(source, settings, gameVersion), gameVersion);
+}
+
+const perSecond = flow;
+
+function warningsFor(sourceId: string, settings: Record<string, string>, gameVersion: GameVersion): string[] {
+  return buildPowerRecipe(sourceId, settings, "probe", gameVersion)?.power?.warnings ?? [];
+}
+
+const panelSetting = (gameVersion: GameVersion): PowerSetting | undefined =>
+  getPowerSource("solar-panel", gameVersion)?.settings.find((setting) => setting.id === "panel");
+
+const optionKeys = (setting: PowerSetting | undefined): string[] =>
+  setting?.type === "select" ? setting.options.map((option) => option.key) : [];
+
+/** What a 2.9 plan stores on a kubatech HTGR card. */
+const KUBATECH_HTGR_SETTINGS = { pebble: "Uranium-235", fill: "10000" };
+
+describe("bartworks HTGR and solar panels by version", () => {
+  test("htgr 2.8.1 at a full 720,000 pebbles burns 18,000 per 36,000-tick operation", () => {
+    const m = model("htgr", { fuel: "Thorium", pebbles: "720000" }, "2.8.1");
+    // TierEU.RECIPE_LuV (:131).
+    expect(m.euPerTick).toBe(-30720);
+    expect(perSecond(m.inputs, "Coolant")).toBe(4000);
+    expect(perSecond(m.outputs, "Hot Coolant")).toBe(4000);
+    // floor(720,000 x 0.025 x 1) = 18,000 = 281 balls of 64 and 16 loose, over 1,800 s.
+    expect(perSecond(m.inputs, "TRISO pebble (Thorium)")).toBe(18_000 / 1800);
+    expect(perSecond(m.outputs, "Burned out TRISO Ball (Thorium)")).toBeCloseTo(281 / 1800, 12);
+    expect(perSecond(m.outputs, "Burned out TRISO Pebble (Thorium)")).toBeCloseTo(16 / 1800, 12);
+    expect(m.stats.find((line) => line.label === "Helium charge")?.value).toBe("730,000 L, kept");
+  });
+
+  test("htgr 2.9 matches kubatech's 5.09.54.205 reactor", () => {
+    const m = model("htgr", KUBATECH_HTGR_SETTINGS, "2.9");
+    // (long) (TierEU.RECIPE_IV x 0.2) with a full helium charge.
+    expect(m.euPerTick).toBe(-1536);
+    expect(perSecond(m.inputs, "TRISO Fuel (Uranium 235)")).toBeGreaterThan(0);
+    expect(perSecond(m.inputs, "Distilled Water")).toBeGreaterThan(0);
+    expect(m.stats.find((line) => line.label === "Helium charge")?.value).toBe("512,000 L");
+    expect(getPowerSource("htgr", "2.9")?.settings.map((setting) => setting.id)).toEqual(["pebble", "fill"]);
+  });
+
+  test("htgr 2.8.1 Plutonium doubles the coolant", () => {
+    const m = model("htgr", { fuel: "Plutonium", pebbles: "720000" }, "2.8.1");
+    expect(perSecond(m.inputs, "Coolant")).toBe(8000);
+    expect(perSecond(m.outputs, "Hot Coolant")).toBe(8000);
+    expect(perSecond(model("htgr", { fuel: "Uranium" }, "2.8.1").inputs, "Coolant")).toBe(6000);
+    expect(perSecond(m.outputs, "Burned out TRISO Ball (Plutonium)")).toBeCloseTo(281 / 1800, 12);
+  });
+
+  test("htgr 2.8.1 at the 72,000 minimum runs at 1%", () => {
+    const m = model("htgr", { fuel: "Thorium", pebbles: "72000" }, "2.8.1");
+    // eff = min(1, 100) / 100: 18 pebbles per trunc(72,000 x 0.995) = 71,640 ticks.
+    expect(perSecond(m.inputs, "TRISO pebble (Thorium)")).toBeCloseTo(18 / (71_640 / 20), 12);
+    expect(perSecond(m.outputs, "Burned out TRISO Ball (Thorium)")).toBe(0);
+    expect(perSecond(m.outputs, "Burned out TRISO Pebble (Thorium)")).toBeCloseTo(18 / (71_640 / 20), 12);
+    expect(perSecond(m.inputs, "Coolant")).toBe(40);
+    // A fill under the minimum reads as the minimum: the reactor will not start below it.
+    expect(model("htgr", { pebbles: "1000" }, "2.8.1").stats[0]?.value).toBe("1%");
+  });
+
+  test("power-planner-data.json: htgrPebbles 2.8.1 is empty", () => {
+    expect(powerTablesFor("2.8.1").htgrPebbles).toEqual([]);
+    expect(powerTablesFor("2.9").htgrPebbles).toHaveLength(9);
+  });
+
+  test("htgr 2.8.1 names the kubatech settings it drops", () => {
+    const warnings = warningsFor("htgr", KUBATECH_HTGR_SETTINGS, "2.8.1");
+    // A stored pebble the card reads no fuel from is named with the fuel it burns (a conversion carries the
+    // material; this card was never converted).
+    expect(warnings).toEqual(["Not in GTNH 2.8.1: Uranium-235. Using Thorium.", "Not in GTNH 2.8.1: Pebble fill."]);
+    // The kubatech ball count is not read as a pebble count: the card runs its own default.
+    const m = model("htgr", KUBATECH_HTGR_SETTINGS, "2.8.1");
+    expect(perSecond(m.inputs, "TRISO pebble (Thorium)")).toBe(10);
+    expect(warningsFor("htgr", KUBATECH_HTGR_SETTINGS, "2.9")).toEqual([]);
+  });
+
+  test("solar-panel 2.8.1 starts at LV", () => {
+    expect(optionKeys(panelSetting("2.8.1"))[0]).toBe("LV");
+    expect(optionKeys(panelSetting("2.8.1"))).toHaveLength(8);
+    expect(optionKeys(panelSetting("2.9"))[0]).toBe("ULV");
+    const panel = panelSetting("2.8.1");
+    expect(panel?.type === "select" && panel.defaultKey).toBe("LV");
+  });
+
+  test("solar-panel 2.8.1 names a stored ULV panel and runs LV", () => {
+    expect(model("solar-panel", { panel: "ULV" }, "2.8.1").euPerTick).toBe(32);
+    expect(warningsFor("solar-panel", { panel: "ULV" }, "2.8.1")).toContain(
+      "Not in GTNH 2.8.1: ULV. Using LV Solar Panel (32 EU/t).",
+    );
+    // MTESolarGenerator.maxEUOutput at 5.09.54.205: the tier 0 panel makes 1 EU/t.
+    expect(model("solar-panel", { panel: "ULV" }, "2.9").euPerTick).toBe(1);
+    expect(warningsFor("solar-panel", { panel: "ULV" }, "2.9")).toEqual([]);
   });
 });

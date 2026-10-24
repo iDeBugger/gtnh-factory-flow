@@ -986,8 +986,8 @@ function Cross() {
 /** A machine's picture, 16 pixels: its machine's icon, or a tile with a card on it. */
 function MachinePicture({ state }: { state: LinkState | undefined }) {
   const icons = useMachineHandlerIcons();
-  const icon = state?.powerSourceId
-    ? getPowerMachineIcon(state.powerSourceId)
+  const icon = state?.power
+    ? getPowerMachineIcon(state.power.sourceId, state.power.gameVersion)
     : state?.handlerId
       ? icons.get(state.handlerId)
       : undefined;

@@ -8,7 +8,7 @@ import { loopSentence, loopTag, loopTone, type LoopTone } from "../loops";
 import type { Note, NoteArg, PlanNote, PlanShortfall } from "@/lib/solver/plan/types";
 import { splitResultNodeId } from "./rail-model";
 import type { GameVersion } from "@/lib/model/game-version";
-import { CONVERT_TO_DEFAULT_LABEL, unservedPlanText } from "@/lib/datasets/new-plan-version";
+import { CONVERT_TO_DEFAULT_LABEL, recipesNotOnSiteText, unservedPlanText } from "@/lib/datasets/new-plan-version";
 import {
   isUnconvertedCard,
   unconvertedWiresRule,
@@ -124,18 +124,24 @@ export function planVersionNotice(
 /**
  * The cards whose recipe was not converted to the plan's game version (lib/model/unconverted-card.ts): how many, the
  * rule for their wires, and each card listed under it. It reads the plan alone, so it shows whatever the solve says.
+ * `unservedVersion` is the plan's version when this site has no recipes for it (`unservedPlanVersion`): the recipe
+ * may well exist in that version, so the notice says this site lacks it, not the game.
  */
 export function unconvertedNotice(
   project: Pick<FactoryProject, "nodes" | "gameVersion">,
+  unservedVersion?: GameVersion,
 ): BoardNotice | undefined {
   const marked = project.nodes.filter(isUnconvertedCard);
   if (marked.length === 0) return undefined;
   const version = unconvertedVersionOf(project);
   const count = marked.length === 1 ? "1 card has" : `${marked.length} cards have`;
+  const wires = unconvertedWiresRule(marked.length);
   return {
     id: "unconverted",
     severity: "warn",
-    text: `${count} no recipe in GTNH ${version}. ${unconvertedWiresRule(marked.length)}`,
+    text: unservedVersion
+      ? `${recipesNotOnSiteText(unservedVersion)} ${count} no recipe. ${wires}`
+      : `${count} no recipe in GTNH ${version}. ${wires}`,
     focus: marked.map((node) => node.id),
     wrap: true,
     cards: marked.map((node) => ({ id: node.id, label: unconvertedCardLabel(node) })),

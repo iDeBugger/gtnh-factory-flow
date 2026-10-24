@@ -1,4 +1,5 @@
 import { getEnergyHatchType } from "@/lib/machines/energy-hatches";
+import { hatchPowerRule } from "@/lib/machines/hatch-power";
 import { getMachineBehaviour } from "@/lib/machines/machine-table";
 import { getFusionMachine, getFusionStats } from "@/lib/machines/fusion";
 import {
@@ -12,6 +13,7 @@ import {
   resolveVoltageTier,
 } from "@/lib/model/tiers";
 import type { FactoryNode, MachineTier, Recipe } from "@/lib/model/types";
+import type { GameVersion } from "@/lib/model/game-version";
 
 type VoltageTier = Exclude<MachineTier, "DEMO">;
 type PowerRecipeInput = Partial<
@@ -34,10 +36,11 @@ type PowerNodeInput = Partial<
 export function getNodePowerBudget(
   recipe: PowerRecipeInput,
   node: PowerNodeInput,
+  gameVersion: GameVersion,
 ): number | undefined {
   const fusion = getFusionStats(recipe);
   if (fusion) return fusion.poolEuT;
-  if (!isMultiblockRecipe(recipe)) {
+  if (!isMultiblockRecipe(recipe, gameVersion)) {
     return undefined;
   }
   // Zero is a real answer - no supply at all, which the report calls
@@ -63,21 +66,21 @@ export function getNodePowerBudget(
  * `single` as a placeholder - not evidence - so the curated table answers
  * instead, whose entries are multiblocks unless marked `kind: "single"`.
  */
-export function isMultiblockRecipe(recipe: PowerRecipeInput): boolean {
+export function isMultiblockRecipe(recipe: PowerRecipeInput, gameVersion: GameVersion): boolean {
   if (getFusionMachine(recipe.machineType)) return true;
   if (recipe.machineProfile?.kind === "multiblock") return true;
   if ((recipe.machineHandlers?.length ?? 0) > 0) return false;
-  const behaviour = getMachineBehaviour(recipe.machineType);
+  const behaviour = getMachineBehaviour(recipe.machineType, gameVersion);
   return behaviour !== undefined && behaviour.kind !== "single";
 }
 
 /** Raw EU/t assumes a suitable voltage, but never adds energy to the pool. */
-function rawInputTier(recipe: PowerRecipeInput, node: PowerNodeInput): VoltageTier {
+function rawInputTier(recipe: PowerRecipeInput, node: PowerNodeInput, gameVersion: GameVersion): VoltageTier {
   const minimum = getRecipeMinimumVoltageTier({
     eut: recipe.eut ?? 0,
     minimumTier: recipe.minimumTier ?? "ULV",
   });
-  const supplied = getVoltageTierWithinEuT(getNodePowerBudget(recipe, node) ?? 0);
+  const supplied = getVoltageTierWithinEuT(getNodePowerBudget(recipe, node, gameVersion) ?? 0);
   return getVoltageTierIndex(minimum) > getVoltageTierIndex(supplied) ? minimum : supplied;
 }
 
@@ -91,21 +94,22 @@ function rawInputTier(recipe: PowerRecipeInput, node: PowerNodeInput): VoltageTi
 export function getNodeRunTier(
   recipe: PowerRecipeInput & Pick<Recipe, "eut" | "minimumTier">,
   node: PowerNodeInput & Partial<Pick<FactoryNode, "overclockTier">>,
+  gameVersion: GameVersion,
 ): VoltageTier {
   const fusion = getFusionMachine(recipe.machineType);
   if (fusion) return fusion.tier;
-  if (!isMultiblockRecipe(recipe)) {
+  if (!isMultiblockRecipe(recipe, gameVersion)) {
     return getRunVoltageTier(recipe, node.overclockTier);
   }
-  const limit = getMachineBehaviour(recipe.machineType)?.inputVoltageTierLimit?.(node.machineConfigTiers ?? {}) ?? Infinity;
+  const limit = getMachineBehaviour(recipe.machineType, gameVersion)?.inputVoltageTierLimit?.(node.machineConfigTiers ?? {}) ?? Infinity;
   const limited = (tier: VoltageTier): VoltageTier =>
     GT_VOLTAGE_TIERS[Math.min(getVoltageTierIndex(tier), limit)]?.tier ?? tier;
-  if (node.powerInputMode === "eut") return limited(rawInputTier(recipe, node));
+  if (node.powerInputMode === "eut") return limited(rawInputTier(recipe, node, gameVersion));
   if (node.hatchVoltageTier !== undefined) return limited(node.hatchVoltageTier);
   // Legacy nodes outside the load funnel retain their historical interpretation.
   // A typed budget names its own hatch tier: the highest voltage that fits
   // inside it. The tier-skip rule and the parallel ordinal read that tier.
-  const budget = getNodePowerBudget(recipe, node);
+  const budget = getNodePowerBudget(recipe, node, gameVersion);
   if (budget !== undefined) {
     return limited(getVoltageTierWithinEuT(budget));
   }
@@ -117,8 +121,8 @@ export function getNodeRunTier(
  * An exotic hatch family (multi-amp, laser) is game-limited to exactly ONE
  * hatch, so a count stored while regular hatches were selected clamps away.
  */
-export function getNodeEnergyHatches(recipe: PowerRecipeInput, node: PowerNodeInput): number {
-  if (!isMultiblockRecipe(recipe)) {
+export function getNodeEnergyHatches(recipe: PowerRecipeInput, node: PowerNodeInput, gameVersion: GameVersion): number {
+  if (!isMultiblockRecipe(recipe, gameVersion)) {
     return 1;
   }
   if (getEnergyHatchType(node.energyHatchType).exotic) {
@@ -138,24 +142,59 @@ export function getHatchAmps(hatches: number): number {
 }
 
 /**
- * The amps the machine's power maths run on: hatch amps for a multiblock, the
+ * Whether a typed supply of `amps` at one tier is a lone regular hatch the game clamps to 1 A:
+ * setProcessingLogicPower passes 1 A when there is exactly one regular energy hatch and no exotic
+ * one (GT5U@5.09.54.205 MTEMultiBlockBase.java:1150-1155, GT5U@5.09.51.476 MTEMultiBlockBase.java:1020-1025).
+ * A supply over 1 A and up to 2 A is one regular hatch (two work at 4 A). Mega-style machines read
+ * getMaxInputEu() and keep the hatch's whole 2 A; an exotic hatch carries its rating unclamped.
+ */
+export function isClampedLoneHatchSupply(
+  recipe: PowerRecipeInput,
+  node: PowerNodeInput,
+  amps: number,
+  gameVersion: GameVersion,
+): boolean {
+  if (!(amps > 1 && amps <= 2)) return false;
+  // A legacy card that names two or more hatches is not a lone hatch.
+  if ((node.energyHatches ?? 1) > 1) return false;
+  if (getEnergyHatchType(node.energyHatchType).exotic) return false;
+  return machineHatchPower(recipe, gameVersion) === "base";
+}
+
+/**
+ * Which setProcessingLogicPower the machine runs: the base class's, the whole-hatch pool
+ * (`fullPowerPool` in the machine table, or `hatchPowerRule` for a machine the table does not
+ * curate), or getMaxInputAmps with no lone-hatch clause.
+ */
+export function machineHatchPower(
+  recipe: Pick<PowerRecipeInput, "machineType">,
+  gameVersion: GameVersion,
+): "base" | "full-pool" | "no-single-amp-clamp" {
+  if (getMachineBehaviour(recipe.machineType, gameVersion)?.fullPowerPool) return "full-pool";
+  return hatchPowerRule(recipe.machineType, gameVersion) ?? "base";
+}
+
+/**
+ * The supply the card names, in amps: hatch amps for a multiblock, the
  * machine's own amperage for a singleblock (1 for nearly everything, 3 for
  * the arc furnaces). An exotic hatch carries its whole rating - one 64 A
  * hatch is 64 amps, no clamp - which is `getMaxWorkingInputAmpsMulti`.
+ * The power maths run on `getNodePowerAmps`.
  */
-export function getNodePowerAmps(recipe: PowerRecipeInput, node: PowerNodeInput): number {
+export function getNodeSupplyAmps(recipe: PowerRecipeInput, node: PowerNodeInput, gameVersion: GameVersion): number {
   const fusion = getFusionMachine(recipe.machineType);
   if (fusion) return fusion.compact ? 64 * fusion.mark : 1;
-  if (isMultiblockRecipe(recipe)) {
+  if (isMultiblockRecipe(recipe, gameVersion)) {
+    // Raw EU/t is an explicit power budget, not a hatch build: it runs on exactly what it names.
     if (node.powerInputMode === "eut")
       return (
-        (getNodePowerBudget(recipe, node) ?? 0) / getVoltageTierMaxEuT(rawInputTier(recipe, node))
+        (getNodePowerBudget(recipe, node, gameVersion) ?? 0) / getVoltageTierMaxEuT(rawInputTier(recipe, node, gameVersion))
       );
     if (node.hatchVoltageTier !== undefined && node.hatchAmps !== undefined) return node.hatchAmps;
     // A typed budget is the whole supply: whatever is left over the tier's
     // voltage is amps, fractional or not - the game multiplies the two back
     // together before it counts a single overclock.
-    const budget = getNodePowerBudget(recipe, node);
+    const budget = getNodePowerBudget(recipe, node, gameVersion);
     if (budget !== undefined) {
       return budget / getVoltageTierMaxEuT(getVoltageTierWithinEuT(budget));
     }
@@ -163,15 +202,30 @@ export function getNodePowerAmps(recipe: PowerRecipeInput, node: PowerNodeInput)
     if (hatchType.exotic) {
       return hatchType.amps;
     }
-    const hatches = getNodeEnergyHatches(recipe, node);
+    const hatches = getNodeEnergyHatches(recipe, node, gameVersion);
     // Mega-style power draws every hatch's whole 2 amps - a lone hatch
-    // included, where the base rule clamps it to 1.
-    if (getMachineBehaviour(recipe.machineType)?.fullPowerPool) {
+    // included, where the base rule clamps it to 1 - and so does a machine
+    // that reads getMaxInputAmps with no lone-hatch clause.
+    if (machineHatchPower(recipe, gameVersion) !== "base") {
       return 2 * hatches;
     }
     return getHatchAmps(hatches);
   }
-  return getMachineBehaviour(recipe.machineType)?.amperage ?? 1;
+  return getMachineBehaviour(recipe.machineType, gameVersion)?.amperage ?? 1;
+}
+
+/**
+ * The amps the machine's power maths run on: the supply's amps, except that a typed supply on a
+ * lone regular hatch works at 1 A (`isClampedLoneHatchSupply`). Raw EU/t keeps what it names.
+ */
+export function getNodePowerAmps(recipe: PowerRecipeInput, node: PowerNodeInput, gameVersion: GameVersion): number {
+  const amps = getNodeSupplyAmps(recipe, node, gameVersion);
+  if (!isMultiblockRecipe(recipe, gameVersion) || node.powerInputMode === "eut") return amps;
+  if (getFusionMachine(recipe.machineType)) return amps;
+  const typed =
+    (node.hatchVoltageTier !== undefined && node.hatchAmps !== undefined) ||
+    getNodePowerBudget(recipe, node, gameVersion) !== undefined;
+  return typed && isClampedLoneHatchSupply(recipe, node, amps, gameVersion) ? 1 : amps;
 }
 
 /** Total EU/t the build can drink: tier voltage times its working amps. */
@@ -179,8 +233,9 @@ export function getPowerPoolEuT(
   recipe: PowerRecipeInput,
   node: PowerNodeInput,
   tier: VoltageTier,
+  gameVersion: GameVersion,
 ): number {
-  return getVoltageTierMaxEuT(tier) * getNodePowerAmps(recipe, node);
+  return getVoltageTierMaxEuT(tier) * getNodePowerAmps(recipe, node, gameVersion);
 }
 
 /**
@@ -194,9 +249,10 @@ export function getEffectiveVoltageOrdinal(
   recipe: PowerRecipeInput,
   node: PowerNodeInput,
   tier: VoltageTier,
+  gameVersion: GameVersion,
 ): number {
-  const fullPowerPool = getMachineBehaviour(recipe.machineType)?.fullPowerPool === true;
-  const budget = getNodePowerBudget(recipe, node);
+  const fullPowerPool = machineHatchPower(recipe, gameVersion) === "full-pool";
+  const budget = getNodePowerBudget(recipe, node, gameVersion);
   if (budget !== undefined) {
     // A typed budget is read as REGULAR hatches of its tier: two amps each
     // once there is more than one, so the summed voltage is half the
@@ -205,7 +261,7 @@ export function getEffectiveVoltageOrdinal(
     const summedVoltage = fullPowerPool ? budget : Math.max(getVoltageTierMaxEuT(tier), budget / 2);
     return getVoltageTierIndex(getVoltageTierForEuT(summedVoltage));
   }
-  const hatches = getNodeEnergyHatches(recipe, node);
+  const hatches = getNodeEnergyHatches(recipe, node, gameVersion);
   // Mega-style machines read `getMaxInputEu()`, which counts each regular
   // hatch's full 2 amps; everything else sums hatch voltages alone.
   const perHatch = fullPowerPool ? 2 : 1;

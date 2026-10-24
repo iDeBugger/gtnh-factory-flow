@@ -2,6 +2,7 @@ import type { FactoryNode, Recipe } from "@/lib/model/types";
 import { getVoltageTierMaxEuT } from "@/lib/model/tiers";
 import { getOverclockedRecipeStats } from "@/lib/solver/overclock";
 import { getNodePowerReport } from "@/lib/solver/power-report";
+import type { GameVersion } from "@/lib/model/game-version";
 
 /** The most amps the chip takes (laser hatches go that far). */
 export const MAX_AMPS = 1 << 24;
@@ -17,6 +18,8 @@ export interface PowerRun {
 /** What the power input panel shows (the mod's `PowerPanel.Facts`), worked out once per card state. */
 export interface PowerFacts {
   amps: number;
+  /** The amps the machine works at: 1 on a lone regular hatch whatever its supply. */
+  workingAmps: number;
   tier: string;
   volt: number;
   now: PowerRun;
@@ -28,10 +31,17 @@ export interface PowerFacts {
   shared: boolean;
 }
 
-function runAt(recipe: Recipe, node: FactoryNode, tier: FactoryNode["hatchVoltageTier"], volt: number, amps: number): PowerRun {
+function runAt(
+  recipe: Recipe,
+  node: FactoryNode,
+  tier: FactoryNode["hatchVoltageTier"],
+  volt: number,
+  amps: number,
+  gameVersion: GameVersion,
+): PowerRun {
   const at: FactoryNode = { ...node, hatchVoltageTier: tier, hatchAmps: amps, powerInputMode: "amps", powerEuT: amps * volt };
-  const report = getNodePowerReport(recipe, at);
-  const stats = getOverclockedRecipeStats(recipe, at);
+  const report = getNodePowerReport(recipe, at, gameVersion);
+  const stats = getOverclockedRecipeStats(recipe, at, gameVersion);
   const parallels = Math.max(1, report.parallels);
   const duration = Math.max(1e-9, stats.durationTicks);
   return { duration, eut: report.state === "ok" ? report.drawEuT : Math.abs(stats.eut) * parallels, parallels, runsPerSecond: (parallels * 20) / duration };
@@ -62,16 +72,23 @@ export function nextFasterAmps(runAtAmps: (amps: number) => PowerRun, amps: numb
 }
 
 /** For a card; `recipe` is the node's recipe with its input overrides; `demand` its whole draw. */
-export function powerFacts(recipe: Recipe, node: FactoryNode, demand: number, shared: boolean): PowerFacts {
-  const report = getNodePowerReport(recipe, node);
-  const stats = getOverclockedRecipeStats(recipe, node);
+export function powerFacts(
+  recipe: Recipe,
+  node: FactoryNode,
+  demand: number,
+  shared: boolean,
+  gameVersion: GameVersion,
+): PowerFacts {
+  const report = getNodePowerReport(recipe, node, gameVersion);
+  const stats = getOverclockedRecipeStats(recipe, node, gameVersion);
   const tier = report.tier;
   const volt = getVoltageTierMaxEuT(tier);
-  const run = (amps: number) => runAt(recipe, node, tier as FactoryNode["hatchVoltageTier"], volt, amps);
+  const run = (amps: number) => runAt(recipe, node, tier as FactoryNode["hatchVoltageTier"], volt, amps, gameVersion);
   const now = run(report.amps);
   const next = nextFasterAmps(run, report.amps);
   return {
     amps: report.amps,
+    workingAmps: report.workingAmps,
     tier,
     volt,
     now,

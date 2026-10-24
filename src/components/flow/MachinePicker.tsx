@@ -12,6 +12,8 @@ import { applyMachineHandlerToRecipe, formatRate, isSteamMachineHandler } from "
 import { ResourceIcon } from "@/components/nei/ResourceIcon";
 import type { MachineHandlerIcon } from "./machine-icons";
 import type { RecipeTwin } from "@/lib/datasets/recipe-twins";
+import { planGameVersion, type GameVersion } from "@/lib/model/game-version";
+import { useFactoryStore } from "@/store/factory-store";
 
 /**
  * The machine switcher: one list under the card's name bar, opened by the
@@ -46,10 +48,14 @@ export interface HandlerRecipeStats {
   exactOverclocks: boolean;
 }
 
-export function getHandlerRecipeStats(recipe: Recipe, handler: MachineHandler): HandlerRecipeStats {
-  const applied = applyMachineHandlerToRecipe(recipe, { machineHandlerId: handler.id });
+export function getHandlerRecipeStats(
+  recipe: Recipe,
+  handler: MachineHandler,
+  gameVersion: GameVersion,
+): HandlerRecipeStats {
+  const applied = applyMachineHandlerToRecipe(recipe, { machineHandlerId: handler.id }, gameVersion);
   const fusion = getFusionStats(applied);
-  const fusionStats = fusion ? getOverclockedRecipeStats(recipe, { machineHandlerId: handler.id, overclockTier: fusion.tier }) : undefined;
+  const fusionStats = fusion ? getOverclockedRecipeStats(recipe, { machineHandlerId: handler.id, overclockTier: fusion.tier }, gameVersion) : undefined;
   const scalingParallels: { label: string; max: number }[] = [];
   let fixedParallels: number | undefined;
   const controlSummaries: { label: string; detail: string }[] = [];
@@ -220,6 +226,7 @@ export function MachineMenu({
   title?: string;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
   // The menu PORTALS to the body, like the crop and hatch menus: inside the
   // card it would sit in the node layer, under the marching-dash canvas and
   // every higher card. Fixed and in screen pixels, so it reads the same at
@@ -271,9 +278,9 @@ export function MachineMenu({
       twins
         ? twins.map((twin) => {
             const twinRecipe = twin.recipe as unknown as Recipe;
-            const stats = getHandlerRecipeStats(twinRecipe, twin.handler);
+            const stats = getHandlerRecipeStats(twinRecipe, twin.handler, gameVersion);
             const steam = stats.steam
-              ? getNodeSteamReport(twinRecipe, { ...node, machineHandlerId: twin.handler.id })
+              ? getNodeSteamReport(twinRecipe, { ...node, machineHandlerId: twin.handler.id }, gameVersion)
               : undefined;
             const power: { value: string; unit: string } = steam
               ? { value: formatCompact(steam.drawSteamPerTick * 20).replace(/\.0$/, ""), unit: "L/s" }
@@ -283,15 +290,15 @@ export function MachineMenu({
             return { twin, stats, power };
           })
         : [],
-    [node, twins],
+    [node, twins, gameVersion],
   );
   const rows = useMemo(
     () =>
       orderMachineHandlers(handlers).map((handler) => {
-        const stats = getHandlerRecipeStats(recipe, handler);
+        const stats = getHandlerRecipeStats(recipe, handler, gameVersion);
         // A steam machine's cost is litres, read the way the card bills it.
         const steam = stats.steam
-          ? getNodeSteamReport(recipe, { ...node, machineHandlerId: handler.id })
+          ? getNodeSteamReport(recipe, { ...node, machineHandlerId: handler.id }, gameVersion)
           : undefined;
         // Figure and unit apart, so the unit can be set the card's way:
         // small, muted, no space.
@@ -302,7 +309,7 @@ export function MachineMenu({
             : { value: "none", unit: "" };
         return { handler, stats, power };
       }),
-    [handlers, node, recipe],
+    [handlers, node, recipe, gameVersion],
   );
 
   // Closes the way every dropdown does (use-dropdown-dismiss.ts): a press

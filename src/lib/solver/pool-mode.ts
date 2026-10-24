@@ -20,6 +20,7 @@ import type {
   ThroughputResult,
 } from "../model/types";
 import { getRuntimeCalculationOutputs } from "./runtime-calculation";
+import { planGameVersion } from "@/lib/model/game-version";
 
 /**
  * Pool mode builds hidden storage and wires for each resource scope.
@@ -71,6 +72,7 @@ interface PoolExpansion {
 export function listPoolCellPairs(
   project: FactoryProject,
 ): Array<{ cellId: string; fluidId: string }> {
+  const gameVersion = planGameVersion(project);
   const recipesById = new Map(project.recipes.map((recipe) => [recipe.id, recipe]));
   const cells = new Map<string, ResourceAmount>();
   const fluids = new Map<string, ResourceAmount>();
@@ -82,11 +84,11 @@ export function listPoolCellPairs(
     if (!recipe) {
       continue;
     }
-    const nodeRecipe = applyRecipeInputOverrides(recipe, node);
-    const effectiveRecipe = applyMachineHandlerToRecipe(nodeRecipe, node);
+    const nodeRecipe = applyRecipeInputOverrides(recipe, node, gameVersion);
+    const effectiveRecipe = applyMachineHandlerToRecipe(nodeRecipe, node, gameVersion);
     const slots = [
       ...nodeRecipe.inputs.filter((input) => isRecipeInputConsumed(input)),
-      ...(getRuntimeCalculationOutputs(effectiveRecipe, node) ?? effectiveRecipe.outputs),
+      ...(getRuntimeCalculationOutputs(effectiveRecipe, node, gameVersion) ?? effectiveRecipe.outputs),
     ];
     for (const slot of slots) {
       if (slot.kind === "fluid") {
@@ -125,6 +127,7 @@ export function getPoolProject(project: FactoryProject): FactoryProject {
 }
 
 export function expandPool(project: FactoryProject): PoolExpansion {
+  const gameVersion = planGameVersion(project);
   if (!project.poolMode) {
     return {
       project,
@@ -172,9 +175,9 @@ export function expandPool(project: FactoryProject): PoolExpansion {
     if (node.enabled === false) continue;
     const recipe = recipesById.get(node.recipeId);
     if (!recipe) continue;
-    const contextual = applyRecipeInputOverrides(recipe, node);
-    const effective = applyMachineHandlerToRecipe(contextual, node);
-    const outputs = getRuntimeCalculationOutputs(effective, node) ?? effective.outputs;
+    const contextual = applyRecipeInputOverrides(recipe, node, gameVersion);
+    const effective = applyMachineHandlerToRecipe(contextual, node, gameVersion);
+    const outputs = getRuntimeCalculationOutputs(effective, node, gameVersion) ?? effective.outputs;
     const seenIn = new Set<ResourceKey>();
     for (const input of contextual.inputs) {
       if (!isRecipeInputConsumed(input) || input.amount <= 0) continue;

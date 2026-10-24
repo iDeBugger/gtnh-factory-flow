@@ -19,6 +19,7 @@ import {
 } from "@/lib/model/machine-list";
 import type { NodePowerState } from "@/lib/solver/power-report";
 import { getPowerMachineIcon } from "@/lib/power/planner-data";
+import { planGameVersion, type GameVersion } from "@/lib/model/game-version";
 import { useFactoryStore, useRateDisplayUnits } from "@/store/factory-store";
 import { getEnergyHatchType } from "@/lib/machines/energy-hatches";
 import { getHatchAmps } from "@/lib/solver/power";
@@ -26,11 +27,12 @@ import { MinecraftTooltip } from "@/components/nei/MinecraftTooltip";
 
 /** A generator group's face in the list: the machine item the picker shows. */
 const powerIconCache = new Map<string, MachineHandlerIcon | undefined>();
-function powerMachineListIcon(sourceId: string): MachineHandlerIcon | undefined {
-  if (!powerIconCache.has(sourceId)) {
-    const icon = getPowerMachineIcon(sourceId);
+function powerMachineListIcon(sourceId: string, gameVersion: GameVersion): MachineHandlerIcon | undefined {
+  const key = `${gameVersion}:${sourceId}`;
+  if (!powerIconCache.has(key)) {
+    const icon = getPowerMachineIcon(sourceId, gameVersion);
     powerIconCache.set(
-      sourceId,
+      key,
       icon
         ? ({
             kind: "item",
@@ -42,7 +44,7 @@ function powerMachineListIcon(sourceId: string): MachineHandlerIcon | undefined 
         : undefined,
     );
   }
-  return powerIconCache.get(sourceId);
+  return powerIconCache.get(key);
 }
 
 const NEUTRAL_CHIP = {
@@ -174,7 +176,7 @@ export function MachineShoppingList() {
             <ListLine
               icon={
                 cards[0]!.powerSourceId
-                  ? powerMachineListIcon(cards[0]!.powerSourceId)
+                  ? powerMachineListIcon(cards[0]!.powerSourceId, planGameVersion(project))
                   : machineIcons.get(cards[0]!.handlerId)
               }
               label={label}

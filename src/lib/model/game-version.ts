@@ -34,3 +34,4 @@ export function gameVersionOfDataset(dataset: { gtnhVersion: string }): GameVers
 export function gameVersionLabel(v: GameVersion): string {
   return `GTNH ${v}`;
 }
+

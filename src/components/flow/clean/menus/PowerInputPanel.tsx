@@ -8,6 +8,7 @@ import { applyRecipeInputOverrides } from "@/lib/model";
 import { useFactoryStore } from "@/store/factory-store";
 import { tierChipColors } from "../tokens";
 import { powerFacts, type PowerFacts } from "./power-facts";
+import { planGameVersion } from "@/lib/model/game-version";
 
 const compact = (value: number) => formatCompact(value);
 const amps = (value: number) => `${compact(value)}A`;
@@ -93,13 +94,15 @@ export function PowerFactsPanel({ facts }: { facts: PowerFacts }) {
       <div className="pw-title">Power input</div>
       <div className="pw-line">
         <span>
-          {compact(facts.amps)}A ×<Tag tier={facts.tier} />= {compact(facts.volt * facts.amps)} EU/t
+          {compact(facts.workingAmps)}A ×<Tag tier={facts.tier} />= {compact(facts.volt * facts.workingAmps)} EU/t
         </span>
         <span>
           {compact(hatches)}
           <Tag tier={facts.tier} />
           {facts.amps <= hatchAmps ? "hatch" : "hatches"}
-          <span className="pw-subtle">({hatchAmps}A each)</span>
+          <span className="pw-subtle">
+            {facts.workingAmps !== facts.amps ? "(one hatch works at 1A)" : `(${hatchAmps}A each)`}
+          </span>
         </span>
       </div>
       <div className="pw-rule" />
@@ -184,11 +187,18 @@ export const PowerInputPanel = forwardRef<HTMLDivElement, { nodeId: string; part
     const node = project.nodes.find((entry) => entry.id === nodeId);
     const recipe = project.recipes.find((entry) => entry.id === node?.recipeId);
     const result = lastResult?.nodes[nodeId];
+    const gameVersion = planGameVersion(project);
     const facts = useMemo(() => {
       if (!node || !recipe) return undefined;
       const demand = node.enabled && result?.theoreticalMachinesRequired ? (result.euT ?? 0) : 0;
-      return powerFacts(applyRecipeInputOverrides(recipe, node), node, demand, Boolean(node.extraRecipes?.length));
-    }, [node, recipe, result]);
+      return powerFacts(
+        applyRecipeInputOverrides(recipe, node, gameVersion),
+        node,
+        demand,
+        Boolean(node.extraRecipes?.length),
+        gameVersion,
+      );
+    }, [node, recipe, result, gameVersion]);
     if (!facts) return null;
     return (
       <div ref={ref} className="pw-wrap ui-zoom" data-clean-tip="" data-tip-panel="power" style={style}>

@@ -137,7 +137,11 @@ import { wikiStatsForMachine } from "./machine-wiki-stats.mjs";
 // Recipe-level machine config controls
 // ---------------------------------------------------------------------------
 
-export function machineConfigControlsForOracleRecipe(machineType, specialValue, extraControls = []) {
+/**
+ * `gtnhVersion` is the export's pack label; a rule that differs by pack keys on it, and an unknown or
+ * missing label reads as 2.9.
+ */
+export function machineConfigControlsForOracleRecipe(machineType, specialValue, extraControls = [], gtnhVersion) {
   const controls = [...(extraControls ?? [])];
   const normalized = normalizeLabel(machineType);
 
@@ -181,7 +185,12 @@ export function machineConfigControlsForOracleRecipe(machineType, specialValue, 
   // Only the Industrial Coke Oven's map (gtpp.recipe.cokeoven, renamed by the
   // normalizer): the Railcraft brick Coke Oven's map (gt.recipe.cokeoven) is
   // also localized "Coke Oven" but has no coils, casings or slices.
-  if (normalized === "industrial coke oven") {
+  // 2.9: EU x 0.98^(coil + 1), 16/32 parallels plus 8/16 per extra slice, up to
+  // 16 slices (GT5U 5.09.54.205 gregtech/common/tileentities/machines/multi/
+  // MTEIndustrialCokeOven.java:72-77, 360-368, 380).
+  if (normalized === "industrial coke oven" && gtnhVersion === "2.8.1") {
+    controls.push(cokeOvenCasingControl281());
+  } else if (normalized === "industrial coke oven") {
     controls.push(
       heatingCoilControl({
         tooltip: (_tier, index) => [`EU usage: ${formatTooltipPercent(Math.pow(0.98, index + 1))}`],
@@ -247,6 +256,38 @@ export function machineConfigControlsForOracleRecipe(machineType, specialValue, 
   return mergeMachineConfigControls(controls);
 }
 
+/**
+ * The 2.8.1 Industrial Coke Oven: no coils and no slices, 6 + 12 x casing tier
+ * parallels, so 18 with Heat Resistant and 30 with Heat Proof casings (GT5U
+ * 5.09.51.476 gtPlusPlus/xmod/gregtech/common/tileentities/machines/multi/
+ * processing/MTEIndustrialCokeOven.java:148-149, 208-209). Its EU discount
+ * follows the voltage tier (line 204), which the app's machine table applies.
+ * Each casing is keyed by its parallel count: the app reads the key as the
+ * count (src/lib/machines/overrides-2.8.1/gtpp-knobs.ts).
+ */
+function cokeOvenCasingControl281() {
+  const casing = (parallels, label, resourceId) => ({
+    key: String(parallels),
+    label,
+    parallelMultiplier: parallels,
+    resource: machineConfigResource(
+      `factoryflow:machine_config/${resourceId}`,
+      `${label} Coke Oven Casing`,
+      ["Coke Oven casing tier", `Parallels: ${parallels}`],
+    ),
+  });
+  return {
+    id: "cokeOvenCasing",
+    label: "Coke Oven Casing",
+    minimumKey: "18",
+    defaultKey: "18",
+    tiers: [
+      casing(18, "Heat Resistant", "heat_resistant_coke_oven_casing"),
+      casing(30, "Heat Proof", "heat_proof_coke_oven_casing"),
+    ],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Machine handler templates from recipe map catalysts
 // ---------------------------------------------------------------------------
@@ -257,7 +298,8 @@ const GRADE_PREFIX_PATTERN =
   /^(?:Basic|Advanced|Elite|Ultimate|Epic|MAX|Turbo|Quick|Instant|Universal)\s+/i;
 const PER_TIER_LINE_PATTERN = /\bper\s+.+?\s+tier\b/i;
 
-export function buildMachineHandlerTemplates(machineType, catalysts, singleblockFamilyIds = new Set()) {
+/** `gtnhVersion` is the export's pack label, as machineConfigControlsForOracleRecipe reads it. */
+export function buildMachineHandlerTemplates(machineType, catalysts, singleblockFamilyIds = new Set(), gtnhVersion) {
   const families = new Map();
 
   for (const catalyst of catalysts ?? []) {
@@ -331,7 +373,7 @@ export function buildMachineHandlerTemplates(machineType, catalysts, singleblock
     const stats = multiblock ? parseMultiblockCatalystStats(tooltip, machineType) : {};
     // Wiki entries exist only for multiblocks; a match also corrects
     // machines the class-name heuristic misjudged (Precise Auto-Assembler).
-    const hasWikiStats = applyWikiStats(stats, label, machineType);
+    const hasWikiStats = applyWikiStats(stats, label, machineType, gtnhVersion);
     families.set(familyKey, {
       id: slug(label),
       label,
@@ -829,8 +871,8 @@ function parseStatLines(lines, { allLines }) {
  * Fill tooltip gaps with wiki-sourced stats and append the machine's item or
  * casing selector control. Tooltip-parsed values always win.
  */
-function applyWikiStats(stats, label, machineType) {
-  const wiki = wikiStatsForMachine(label, machineType);
+function applyWikiStats(stats, label, machineType, gtnhVersion) {
+  const wiki = wikiStatsForMachine(label, machineType, gtnhVersion);
   if (!wiki) {
     return false;
   }
@@ -1066,8 +1108,13 @@ export function instantiateRecipeMachineHandlers(templates, recipe) {
     return undefined;
   }
 
-  const recipeTierIndex = voltageTierIndex(recipe.minimumTier);
+  // `minimumTier` is where the recipe is found (voltage x the map's amps);
+  // `drawTier`, when given, is the tier of its whole EU/t, which a multiblock's
+  // hatches must carry.
   return templates.map((template) => {
+    const recipeTierIndex = voltageTierIndex(
+      template.kind === "multiblock" ? (recipe.drawTier ?? recipe.minimumTier) : recipe.minimumTier,
+    );
     const templateTierIndex = voltageTierIndex(template.minimumTier);
     const tierIndex = Math.max(
       Number.isFinite(templateTierIndex) ? templateTierIndex : -1,

@@ -42,7 +42,13 @@ beforeEach(() => {
   window.localStorage.clear();
   resetNewPlanVersionForTests();
 });
-afterEach(() => vi.restoreAllMocks());
+// A refused write leaves the page's own choice in module state: clear it after each test as well as before, so
+// no test hands its pick to the next one.
+afterEach(() => {
+  vi.restoreAllMocks();
+  resetNewPlanVersionForTests();
+  window.localStorage.clear();
+});
 
 describe("the version new plans are made for", () => {
   it("is 2.9 with nothing remembered, and the choice once written", () => {
@@ -84,6 +90,16 @@ describe("the version new plans are made for", () => {
     expect(window.localStorage.getItem(NEW_PLAN_VERSION_STORAGE_KEY)).toBeNull();
     expect(readNewPlanVersion(both)).toBe("2.8.1");
     expect(readNewPlanVersion(only29)).toBe("2.9");
+  });
+
+  it("a refused pick wins over an older stored choice", () => {
+    window.localStorage.setItem(NEW_PLAN_VERSION_STORAGE_KEY, "2.8.1");
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("full");
+    });
+    writeNewPlanVersion("2.9");
+    expect(window.localStorage.getItem(NEW_PLAN_VERSION_STORAGE_KEY)).toBe("2.8.1");
+    expect(readNewPlanVersion(both)).toBe("2.9");
   });
 });
 

@@ -6,6 +6,9 @@ import { convertProjectToVersion, isPlanOwnRecipe } from "./convert-plan-version
 import { DEFAULT_DATASET_MANIFEST_URL, pickDatasetVersionFor } from "./remote";
 import type { DatasetManifest } from "./types";
 
+/** A paste from another version before the dataset manifest has loaded. */
+export const MANIFEST_PENDING_TEXT = "Recipes are still loading. Try again.";
+
 /** Where the plan's recipes are served from: the manifest the page loaded, and its address. */
 export interface PayloadDatasetSource {
   manifest?: DatasetManifest;
@@ -67,8 +70,8 @@ function markEveryDatasetRecipe(payload: BoardClipboardPayload, fromGameVersion:
  * (`convertProjectToVersion`): matched recipes take the plan's version's body, unmatched cards are marked
  * `unconverted` and lose their body, and the payload is stamped with the plan's version. When this site serves no
  * dataset for the plan's version, every dataset recipe card is marked: nothing can be matched, and no body from
- * the payload's version may land. Throws when the match service cannot be reached, so a dropped network never
- * pastes marked cards.
+ * the payload's version may land. Throws when the match service cannot be reached or the manifest has not landed,
+ * so a dropped network or an early paste never pastes marked cards.
  */
 export async function preparePayloadForPlan(
   payload: BoardClipboardPayload,
@@ -80,7 +83,12 @@ export async function preparePayloadForPlan(
   if (fromGameVersion === toGameVersion) {
     return payload;
   }
-  const version = source.manifest && pickDatasetVersionFor(source.manifest, toGameVersion);
+  // Before the manifest lands nothing is known to be unserved: refuse, so the paste says "Try again" rather than
+  // land every card marked on a plan whose version this site does serve.
+  if (!source.manifest) {
+    throw new Error(MANIFEST_PENDING_TEXT);
+  }
+  const version = pickDatasetVersionFor(source.manifest, toGameVersion);
   if (!version) {
     return { ...markEveryDatasetRecipe(payload, fromGameVersion), gameVersion: toGameVersion };
   }

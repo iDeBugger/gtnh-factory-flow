@@ -584,3 +584,11 @@ export function virtualizationEnabled(): boolean {
   }
 }
 
+/**
+ * What the board's geometry publish runs on: the cards' places and the plan on the board. `useBoard` forgets every
+ * box when another plan lands, and a plan with the same cards in the same places (a converted copy, the same file
+ * opened twice) has the same fingerprint, so the plan's id must be part of the key or no box comes back.
+ */
+export function geometryPublishKey(planId: string | undefined, fingerprint: string): string {
+  return `${planId ?? ""}\u0000${fingerprint}`;
+}

@@ -17,6 +17,7 @@ import {
   type SettingControl,
 } from "./settings-model";
 import { workingLines } from "./working-lines";
+import { planGameVersion } from "@/lib/model/game-version";
 
 /** Each setting's number in a colour of its own, as on the mod's sheet. */
 const KNOB_COLORS: Record<string, string> = {
@@ -92,10 +93,17 @@ export function SettingsSheet({ nodeId, anchor, onClose }: { nodeId: string; anc
   const setSettingPins = useFactoryStore((state) => state.setSettingPins);
   const node = project.nodes.find((entry) => entry.id === nodeId);
   const recipe = project.recipes.find((entry) => entry.id === node?.recipeId);
+  const gameVersion = planGameVersion(project);
   const [open, setOpen] = useState<{ id: string; anchor: MenuAnchor }>();
   const sheetRef = useRef<HTMLDivElement>(null);
-  const controls = useMemo(() => (node && recipe ? settingControls(recipe, node) : []), [recipe, node]);
-  const formulas = useMemo(() => (node && recipe ? workingLines(recipe, node) : []), [recipe, node]);
+  const controls = useMemo(
+    () => (node && recipe ? settingControls(recipe, node, gameVersion) : []),
+    [recipe, node, gameVersion],
+  );
+  const formulas = useMemo(
+    () => (node && recipe ? workingLines(recipe, node, gameVersion) : []),
+    [recipe, node, gameVersion],
+  );
   if (!node || !recipe) return null;
   const machine = pinMachineKey(recipe, node);
 

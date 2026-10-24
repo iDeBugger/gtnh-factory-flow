@@ -10,6 +10,7 @@ import {
 import { applyMachineHandlerToRecipe } from "./recipe-rules";
 import { applyMachineOutputMultipliers } from "../solver/machine-effects";
 import { getOverclockedRecipeStats } from "../solver/overclock";
+import type { GameVersion } from "@/lib/model/game-version";
 
 /**
  * Helpers over board (pocket) membership, plus the effective recipe a card
@@ -24,14 +25,15 @@ import { getOverclockedRecipeStats } from "../solver/overclock";
  * compatibility checks must all read THIS recipe, never the raw one
  * (see src/lib/model/CLAUDE.md, oredict and concrete items).
  */
-export function getEffectiveNodeRecipe(recipe: Recipe, node: FactoryNode): Recipe {
-  const nodeRecipe = applyRecipeInputOverrides(recipe, node);
-  const effectiveRecipe = applyMachineHandlerToRecipe(nodeRecipe, node);
-  const overclockedStats = getOverclockedRecipeStats(nodeRecipe, node);
+export function getEffectiveNodeRecipe(recipe: Recipe, node: FactoryNode, gameVersion: GameVersion): Recipe {
+  const nodeRecipe = applyRecipeInputOverrides(recipe, node, gameVersion);
+  const effectiveRecipe = applyMachineHandlerToRecipe(nodeRecipe, node, gameVersion);
+  const overclockedStats = getOverclockedRecipeStats(nodeRecipe, node, gameVersion);
   const adjustedRecipe = applyMachineOutputMultipliers(
     effectiveRecipe,
     node,
     overclockedStats.tier,
+    gameVersion,
   );
   return {
     ...effectiveRecipe,

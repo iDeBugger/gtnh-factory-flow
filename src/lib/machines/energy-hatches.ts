@@ -37,6 +37,17 @@ export interface EnergyHatchType {
 
 export const STANDARD_ENERGY_HATCH_ID = "standard";
 
+/**
+ * Each family's `minTier` is the lowest tier a player can craft it at, the same
+ * on 2.9 and 2.8.1. 2.9 registers each laser rating from its own tier up
+ * (GT5U@5.09.54.205 tectech/loader/thing/MachineLoader.java:889-1023). 2.8.1
+ * also registers the 1,024 A to 1,048,576 A ratings at IV and the ones below
+ * each rating's own tier, but every one of those is `.hidden()` from NEI and
+ * no recipe makes it (GT5U@5.09.51.476 tectech/loader/thing/MachineLoader.java:1088-1141,
+ * tectech/thing/CustomItemList.java:457), so the ladder a player can build is
+ * the same and this table is not version-keyed.
+ */
+
 export const ENERGY_HATCH_TYPES: EnergyHatchType[] = [
   {
     id: STANDARD_ENERGY_HATCH_ID,

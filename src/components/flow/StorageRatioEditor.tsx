@@ -8,6 +8,7 @@ import type { ResourceAmount } from "@/lib/model/types";
 import { getSelectedMachineHandler } from "@/lib/model/recipe-rules";
 import { getStorageRoles, type StorageRole } from "@/lib/model/storage-role";
 import { getPowerMachineIcon } from "@/lib/power/planner-data";
+import { planGameVersion } from "@/lib/model/game-version";
 import {
   machineIconAtTier,
   useMachineHandlerIconEntries,
@@ -116,7 +117,7 @@ function RatioPanel({ request, onClose }: { request: RatioEditorRequest; onClose
     return new Map<string, { name: string; icon?: ResourceAmount; drawerRole?: StorageRole }>([
       ...project.nodes.map((node) => {
         const recipe = recipes.get(node.recipeId);
-        const powerIcon = recipe?.power ? getPowerMachineIcon(recipe.power.sourceId) : undefined;
+        const powerIcon = recipe?.power ? getPowerMachineIcon(recipe.power.sourceId, planGameVersion(project)) : undefined;
         const icon = powerIcon
           ? { ...powerIcon, kind: "item" as const }
           : recipe

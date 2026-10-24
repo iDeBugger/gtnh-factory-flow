@@ -29,12 +29,14 @@ import {
   getEffectiveVoltageOrdinal,
   getNodeEnergyHatches,
   getNodePowerAmps,
+  getNodeSupplyAmps,
   getNodePowerBudget,
   getNodeRunTier,
   isMultiblockRecipe,
 } from "./power";
 import { getCropsNhStats, isIndustrialApiaryMachineType } from "@/lib/model/passive-production";
 import { selectRuntimeCalculationVariant } from "./runtime-calculation";
+import type { GameVersion } from "@/lib/model/game-version";
 
 type VoltageTier = Exclude<MachineTier, "DEMO">;
 type PowerReportNode = Pick<
@@ -74,9 +76,11 @@ export interface NodePowerReport {
    */
   typedBudget: boolean;
   isMultiblock: boolean;
-  /** Working amps: hatch amps on a multiblock, machine amperage otherwise. */
+  /** The supply in amps: hatch amps on a multiblock, machine amperage otherwise. */
   amps: number;
-  /** Total EU/t the build can drink: tier voltage x amps. */
+  /** The amps the machine works at: `amps`, but 1 on a lone regular hatch (getNodePowerAmps). */
+  workingAmps: number;
+  /** Total EU/t the build can drink: tier voltage x working amps. */
   poolEuT: number;
   /** One parallel's modified draw, what ParallelHelper checks the pool against. */
   singleDrawEuT: number;
@@ -108,32 +112,37 @@ export function hasPowerReport(recipe: Recipe): boolean {
   return true;
 }
 
-export function getNodePowerReport(recipe: Recipe, node: PowerReportNode): NodePowerReport {
-  const effectiveRecipe = recipe.machineType ? applyMachineHandlerToRecipe(recipe, node) : recipe;
+export function getNodePowerReport(recipe: Recipe, node: PowerReportNode, gameVersion: GameVersion): NodePowerReport {
+  const effectiveRecipe = recipe.machineType ? applyMachineHandlerToRecipe(recipe, node, gameVersion) : recipe;
   const minimumTier = getRecipeMinimumVoltageTier(effectiveRecipe);
-  const tier = getNodeRunTier(effectiveRecipe, node);
-  const isMultiblock = isMultiblockRecipe(effectiveRecipe);
-  const hatches = getNodeEnergyHatches(effectiveRecipe, node);
+  const tier = getNodeRunTier(effectiveRecipe, node, gameVersion);
+  const isMultiblock = isMultiblockRecipe(effectiveRecipe, gameVersion);
+  const hatches = getNodeEnergyHatches(effectiveRecipe, node, gameVersion);
   const hatchType = getEnergyHatchType(node.energyHatchType);
-  const typedBudget = getNodePowerBudget(effectiveRecipe, node) !== undefined;
-  const amps = getNodePowerAmps(effectiveRecipe, node);
-  const poolEuT = getVoltageTierMaxEuT(tier) * amps;
+  const typedBudget = getNodePowerBudget(effectiveRecipe, node, gameVersion) !== undefined;
+  const amps = getNodeSupplyAmps(effectiveRecipe, node, gameVersion);
+  const workingAmps = getNodePowerAmps(effectiveRecipe, node, gameVersion);
+  const poolEuT = getVoltageTierMaxEuT(tier) * workingAmps;
 
   const rawEuT = Math.abs(effectiveRecipe.eut);
-  const eutMultiplier = getMachineEutMultiplier(effectiveRecipe, node);
+  const eutMultiplier = getMachineEutMultiplier(effectiveRecipe, node, gameVersion);
   const heatDiscount = getHeatDiscountMultiplier(
     effectiveRecipe,
     node,
     tier,
-    getEffectiveVoltageOrdinal(effectiveRecipe, node, tier),
+    gameVersion,
+    getEffectiveVoltageOrdinal(effectiveRecipe, node, tier, gameVersion),
   );
   const singleDrawEuT = Math.ceil(rawEuT * eutMultiplier * heatDiscount);
 
-  const stats = getOverclockedRecipeStats(recipe, node);
-  const runtimeVariant = selectRuntimeCalculationVariant(effectiveRecipe, node);
-  const parallels = runtimeVariant?.parallel ?? getMachineParallelMultiplier(effectiveRecipe, node);
-  const drawEuT = Math.abs(stats.eut) * parallels;
-  const behaviour = getMachineBehaviour(effectiveRecipe.machineType);
+  const stats = getOverclockedRecipeStats(recipe, node, gameVersion);
+  const runtimeVariant = selectRuntimeCalculationVariant(effectiveRecipe, node, gameVersion);
+  const parallels = runtimeVariant?.parallel ?? getMachineParallelMultiplier(effectiveRecipe, node, gameVersion);
+  // The calculator's whole bill when it has one: multiplying the per-recipe
+  // share back by the parallels can land a hair over a full hatch.
+  const drawEuT =
+    !runtimeVariant && stats.machineEuT !== undefined ? Math.abs(stats.machineEuT) : Math.abs(stats.eut) * parallels;
+  const behaviour = getMachineBehaviour(effectiveRecipe.machineType, gameVersion);
   const voltageLimit = behaviour?.inputVoltageTierLimit?.(node.machineConfigTiers ?? {});
   const casingGateReason = voltageLimit !== undefined && getVoltageTierIndex(getVoltageTierForEuT(rawEuT)) > voltageLimit
     ? "Machine casing voltage is too low for this recipe. Select a higher machine casing; UHV casings remove the limit."
@@ -144,11 +153,11 @@ export function getNodePowerReport(recipe: Recipe, node: PowerReportNode): NodeP
       : `This recipe requires a Mk-${fusion.recipeMark} fusion reactor or higher.`
     : undefined;
   const recipeGateReason = fusionGateReason ?? behaviour?.recipeGate?.(
-    buildMachineContext(effectiveRecipe, node),
+    buildMachineContext(effectiveRecipe, node, gameVersion),
   ) ?? casingGateReason;
 
   return {
-    state: recipeGateReason ? "over-tier" : getPowerState(effectiveRecipe, tier, minimumTier, isMultiblock, poolEuT, singleDrawEuT),
+    state: recipeGateReason ? "over-tier" : getPowerState(effectiveRecipe, tier, minimumTier, isMultiblock, poolEuT, singleDrawEuT, gameVersion),
     recipeGateReason,
     tier,
     minimumTier,
@@ -158,6 +167,7 @@ export function getNodePowerReport(recipe: Recipe, node: PowerReportNode): NodeP
     typedBudget,
     isMultiblock,
     amps,
+    workingAmps,
     poolEuT,
     singleDrawEuT,
     parallels,
@@ -177,6 +187,7 @@ function getPowerState(
   isMultiblock: boolean,
   poolEuT: number,
   singleDrawEuT: number,
+  gameVersion: GameVersion,
 ): NodePowerState {
   const rawEuT = Math.abs(effectiveRecipe.eut);
   if (!(rawEuT > 0) || !Number.isFinite(poolEuT)) {
@@ -202,7 +213,7 @@ function getPowerState(
     }
     // `OverclockCalculator.getAllowedTierSkip`: a recipe more than one tier
     // above the hatch voltage never runs, however many amps are stacked.
-    if (rawEuT > getVoltageTierMaxEuT(tier) * 4 ** maxInputTierSkips(effectiveRecipe.machineType)) {
+    if (rawEuT > getVoltageTierMaxEuT(tier) * 4 ** maxInputTierSkips(effectiveRecipe.machineType, gameVersion)) {
       return "over-tier";
     }
     // `ParallelHelper.determineParallel`: the pool must carry one whole
@@ -250,6 +261,7 @@ export interface NodeSteamReport {
 export function getNodeSteamReport(
   recipe: Recipe,
   node: PowerReportNode,
+  gameVersion: GameVersion,
 ): NodeSteamReport | undefined {
   if (!recipe.machineType) {
     return undefined;
@@ -268,10 +280,10 @@ export function getNodeSteamReport(
     return undefined;
   }
 
-  const effectiveRecipe = applyMachineHandlerToRecipe(recipe, node);
+  const effectiveRecipe = applyMachineHandlerToRecipe(recipe, node, gameVersion);
   if (effectiveRecipe.machineProfile?.kind === "multiblock") {
-    const pressureTier = buildMachineContext(effectiveRecipe, node).tier(STEAM_PRESSURE) + 1;
-    const parallels = getMachineParallelMultiplier(effectiveRecipe, node);
+    const pressureTier = buildMachineContext(effectiveRecipe, node, gameVersion).tier(STEAM_PRESSURE) + 1;
+    const parallels = getMachineParallelMultiplier(effectiveRecipe, node, gameVersion);
     const single = baseEut * 1.25 * pressureTier;
     return {
       drawSteamPerTick: Math.ceil(single * parallels),

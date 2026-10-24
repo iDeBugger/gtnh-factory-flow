@@ -24,6 +24,7 @@ import {
   type NodePowerState,
 } from "@/lib/solver/power-report";
 import { getEnergyHatchType } from "@/lib/machines/energy-hatches";
+import { planGameVersion } from "@/lib/model/game-version";
 
 type VoltageTier = Exclude<MachineTier, "DEMO">;
 
@@ -58,6 +59,7 @@ export function buildMachineList(
   project: FactoryProject,
   result: ThroughputResult,
 ): MachineListEntry[] {
+  const gameVersion = planGameVersion(project);
   const recipes = new Map(project.recipes.map((recipe) => [recipe.id, recipe]));
   const solving = project.solveMode === true || project.poolMode === true;
   const entries: MachineListEntry[] = [];
@@ -78,13 +80,13 @@ export function buildMachineList(
 
     const sections = listNodeSections(node).map(({ node: view }) => {
       const raw = recipes.get(view.recipeId);
-      const effective = raw ? applyRecipeInputOverrides(raw, view) : undefined;
-      const steam = effective ? getNodeSteamReport(effective, view) : undefined;
+      const effective = raw ? applyRecipeInputOverrides(raw, view, gameVersion) : undefined;
+      const steam = effective ? getNodeSteamReport(effective, view, gameVersion) : undefined;
       return {
         steam,
         report:
           effective && !steam && hasPowerReport(effective)
-            ? getNodePowerReport(effective, view)
+            ? getNodePowerReport(effective, view, gameVersion)
             : undefined,
         required: nonnegative(result.nodes[view.id]?.theoreticalMachinesRequired ?? 0),
         usage: Math.min(1, nonnegative(result.nodes[view.id]?.utilization ?? 1)),

@@ -136,7 +136,7 @@ describe("actual exported singleblock tier families", () => {
     expect(templates[0].availableTiers).toEqual(["IV", "ZPM"]);
     const base = { ...recipe, machineType: name, minimumTier: "IV", eut: 7680,
       machineHandlers: instantiateRecipeMachineHandlers(templates, {minimumTier: "IV", durationTicks: 100000, eut: 7680}) };
-    const at = (input, tier) => getOverclockedRecipeStats(input, {overclockTier: tier, machineHandlerId: templates[0].id});
+    const at = (input, tier) => getOverclockedRecipeStats(input, {overclockTier: tier, machineHandlerId: templates[0].id}, "2.9");
     expect(at(base, "LuV")).toEqual(at(base, "IV"));
     const runtime = { ...base, runtimeCalculation: {status: "computed", variants: [
       {id: "iv", overclockTier: "IV", durationTicks: 100000, eut: 7680},
@@ -148,7 +148,7 @@ describe("actual exported singleblock tier families", () => {
   });
 
   it("caps both calculated and runtime-exported overclocks for saved MAX cards", () => {
-    const at = (input, tier) => getOverclockedRecipeStats(input, { overclockTier: tier, machineHandlerId: "chemical-reactor" });
+    const at = (input, tier) => getOverclockedRecipeStats(input, { overclockTier: tier, machineHandlerId: "chemical-reactor" }, "2.9");
     expect(at(recipe, "MAX")).toEqual(at(recipe, "UMV"));
     const runtime = { ...recipe, runtimeCalculation: { status: "computed", variants: [
       { id: "umv", overclockTier: "UMV", durationTicks: 48, eut: 125829120 },

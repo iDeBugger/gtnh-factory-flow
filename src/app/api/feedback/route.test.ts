@@ -141,6 +141,37 @@ describe("the feedback route with the setting unset", () => {
     expect(openIssue).not.toHaveBeenCalled();
   });
 
+  it("answers a game report as absent ahead of the server's readiness", async () => {
+    vi.stubEnv("GITHUB_FEEDBACK_TOKEN", "");
+    const response = await send(report);
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Not found" });
+  });
+
+  it("stops reading a body with no length at the cap", async () => {
+    vi.stubEnv("GITHUB_FEEDBACK_TOKEN", "token");
+    vi.mocked(claimIssue).mockClear();
+    const chunk = new Uint8Array(1024 * 1024).fill(0x20);
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        sent += 1;
+        if (sent > 64) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(chunk);
+      },
+    });
+    const response = await POST(
+      new Request("http://localhost/api/feedback", { method: "POST", body, duplex: "half" } as RequestInit),
+    );
+    expect(response.status).toBe(413);
+    // Four megabytes and one chunk past it, not the whole 64.
+    expect(sent).toBeLessThan(10);
+    expect(claimIssue).not.toHaveBeenCalled();
+  });
+
   it("opens the web planner's reports as before", async () => {
     vi.stubEnv("GITHUB_FEEDBACK_TOKEN", "token");
     vi.mocked(openIssue).mockClear();

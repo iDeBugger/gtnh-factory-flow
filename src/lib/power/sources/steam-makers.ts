@@ -5,10 +5,12 @@
  * Exchangers convert hot fluids to steam by threshold: below it the Under
  * ratio and lower grade, at/above it the Over ratio and higher grade.
  */
-import { findFuel, powerPlannerData, type PowerFuelEntry } from "../planner-data";
+import type { GameVersion } from "@/lib/model/game-version";
+import { LARGE_BOILERS_2_8_1, type LargeBoilerTier } from "../overrides-2.8.1/boilers";
+import { findFuel, type PowerFuelEntry, type PowerTables } from "../planner-data";
 import type { PowerModel, PowerSourceDefinition, PowerSetting } from "../types";
-import { formatAmount, items, liters, stat } from "./helpers";
-import { railcraftSteamSources } from "./railcraft";
+import { formatAmount, items, liters, stat, type PowerSourceBuilder } from "./helpers";
+import { buildRailcraftSteamSources } from "./railcraft";
 
 interface BoilerSpec {
   id: string;
@@ -17,8 +19,11 @@ interface BoilerSpec {
   steamPerTick: number;
   singleFuelSteamPerTick: number;
   steamGrade: "Steam" | "SH Steam";
-  liquidTable: PowerFuelEntry[];
-  solidTable: PowerFuelEntry[];
+  /** The subclass whose 2.8.1 numbers LARGE_BOILERS_2_8_1 holds. */
+  tier: LargeBoilerTier;
+  /** Keys of the workbook's boilerFuels. */
+  liquidTable: string;
+  solidTable: string;
 }
 
 const BOILER_SPECS: BoilerSpec[] = [
@@ -29,8 +34,9 @@ const BOILER_SPECS: BoilerSpec[] = [
     steamPerTick: 1200,
     singleFuelSteamPerTick: 960,
     steamGrade: "Steam",
-    liquidTable: powerPlannerData.boilerFuels.bronzeLiquid,
-    solidTable: powerPlannerData.boilerFuels.bronzeSolid,
+    tier: "bronze",
+    liquidTable: "bronzeLiquid",
+    solidTable: "bronzeSolid",
   },
   {
     id: "large-steel-boiler",
@@ -39,8 +45,9 @@ const BOILER_SPECS: BoilerSpec[] = [
     steamPerTick: 3000,
     singleFuelSteamPerTick: 2400,
     steamGrade: "Steam",
-    liquidTable: powerPlannerData.boilerFuels.steelLiquid,
-    solidTable: powerPlannerData.boilerFuels.steelSolid,
+    tier: "steel",
+    liquidTable: "steelLiquid",
+    solidTable: "steelSolid",
   },
   {
     id: "large-titanium-boiler",
@@ -49,8 +56,9 @@ const BOILER_SPECS: BoilerSpec[] = [
     steamPerTick: 4000,
     singleFuelSteamPerTick: 3200,
     steamGrade: "SH Steam",
-    liquidTable: powerPlannerData.boilerFuels.titaniumLiquid,
-    solidTable: powerPlannerData.boilerFuels.titaniumSolid,
+    tier: "titanium",
+    liquidTable: "titaniumLiquid",
+    solidTable: "titaniumSolid",
   },
   {
     id: "large-tungstensteel-boiler",
@@ -59,8 +67,9 @@ const BOILER_SPECS: BoilerSpec[] = [
     steamPerTick: 16000,
     singleFuelSteamPerTick: 12800,
     steamGrade: "SH Steam",
-    liquidTable: powerPlannerData.boilerFuels.tungstensteelLiquid,
-    solidTable: powerPlannerData.boilerFuels.tungstensteelSolid,
+    tier: "tungstensteel",
+    liquidTable: "tungstensteelLiquid",
+    solidTable: "tungstensteelSolid",
   },
 ];
 
@@ -75,45 +84,59 @@ function fuelChoices(table: PowerFuelEntry[]): Array<{ key: string; label: strin
   return [{ key: NO_FUEL, label: "None" }, ...table.map((entry) => ({ key: entry.name, label: entry.name }))];
 }
 
-function buildBoiler(spec: BoilerSpec): PowerSourceDefinition {
+// MTELargeBoilerBase.consumeWater tries plain water first and falls
+// back to distilled; either works, same amount, no difference. 2.8.1's
+// MTELargeBoiler.onRunningTick does the same (MTELargeBoiler.java:396-408).
+const BOILER_WATER_SETTING: PowerSetting = {
+  type: "select",
+  id: "waterKind",
+  label: "Water supply",
+  options: WATER_KINDS,
+  defaultKey: "Water",
+};
+
+function steamLabel(grade: BoilerSpec["steamGrade"]): string {
+  return grade === "SH Steam" ? "SH steam" : "steam";
+}
+
+function buildBoiler(
+  tables: PowerTables,
+  spec: BoilerSpec,
+  gameVersion: GameVersion,
+): PowerSourceDefinition {
+  if (gameVersion === "2.8.1") {
+    return buildOneFuelBoiler(tables, spec);
+  }
+  const liquidTable = tables.boilerFuels[spec.liquidTable];
+  const solidTable = tables.boilerFuels[spec.solidTable];
   return {
     id: spec.id,
     name: spec.name,
     group: "steam",
     unlock: spec.unlock,
-    blurb: `${formatAmount(spec.steamPerTick)} L/t of ${
-      spec.steamGrade === "SH Steam" ? "SH steam" : "steam"
-    } on dual fuel.`,
+    blurb: `${formatAmount(spec.steamPerTick)} L/t of ${steamLabel(spec.steamGrade)} on dual fuel.`,
     settings: [
       {
         type: "select",
         id: "liquidFuel",
         label: "Liquid fuel",
-        options: fuelChoices(spec.liquidTable),
-        defaultKey: spec.liquidTable[0]?.name ?? NO_FUEL,
+        options: fuelChoices(liquidTable),
+        defaultKey: liquidTable[0]?.name ?? NO_FUEL,
       },
       {
         type: "select",
         id: "solidFuel",
         label: "Solid fuel",
-        options: fuelChoices(spec.solidTable),
+        options: fuelChoices(solidTable),
         defaultKey: NO_FUEL,
       },
-      // MTELargeBoilerBase.consumeWater tries plain water first and falls
-      // back to distilled; either works, same amount, no difference.
-      {
-        type: "select",
-        id: "waterKind",
-        label: "Water supply",
-        options: WATER_KINDS,
-        defaultKey: "Water",
-      },
+      BOILER_WATER_SETTING,
     ],
     compute(read): PowerModel {
       const liquidName = read.select("liquidFuel");
       const solidName = read.select("solidFuel");
-      const liquid = liquidName === NO_FUEL ? undefined : findFuel(spec.liquidTable, liquidName);
-      const solid = solidName === NO_FUEL ? undefined : findFuel(spec.solidTable, solidName);
+      const liquid = liquidName === NO_FUEL ? undefined : findFuel(liquidTable, liquidName);
+      const solid = solidName === NO_FUEL ? undefined : findFuel(solidTable, solidName);
       const dual = Boolean(liquid && solid);
       const steamPerTick = !liquid && !solid ? 0 : dual ? spec.steamPerTick : spec.singleFuelSteamPerTick;
 
@@ -138,6 +161,71 @@ function buildBoiler(spec: BoilerSpec): PowerSourceDefinition {
           stat("Firebox", dual ? "Dual fuel: 100%" : "Single fuel: 80%"),
         ],
         warnings: !liquid && !solid ? ["Pick a fuel to make steam."] : undefined,
+      };
+    },
+  };
+}
+
+/**
+ * 2.8.1's MTELargeBoiler burns one fuel at a time, liquids before solids, and a superheated
+ * boiler burns no liquid (MTELargeBoiler.java:260-366), so the card has one fuel select. A plan
+ * saved with 2.9's two selects reads its liquid first, then its solid, as checkProcessing would.
+ * At full efficiency onRunningTick makes 2 x EUt steam a tick, a third of that (int) as
+ * superheated steam, and takes 1 L of water per 160 L of steam; a superheated boiler takes a
+ * third of that water, divided as an int each tick (MTELargeBoiler.java:386-401).
+ */
+function buildOneFuelBoiler(tables: PowerTables, spec: BoilerSpec): PowerSourceDefinition {
+  const { eut, superheated } = LARGE_BOILERS_2_8_1[spec.tier];
+  const liquidTable = tables.boilerFuels[spec.liquidTable];
+  const solidTable = tables.boilerFuels[spec.solidTable];
+  const steamEquivalent = eut * 2;
+  const steamPerTick = superheated ? Math.trunc(steamEquivalent / 3) : steamEquivalent;
+  // steamEquivalent / 160 is a whole number for both superheated boilers (50 and 200).
+  const waterPerTick = superheated ? Math.trunc(steamEquivalent / 160 / 3) : steamEquivalent / 160;
+  const firstFuel = liquidTable[0]?.name ?? solidTable[0]?.name ?? NO_FUEL;
+  return {
+    id: spec.id,
+    name: spec.name,
+    group: "steam",
+    unlock: spec.unlock,
+    blurb: `${formatAmount(steamPerTick)} L/t of ${steamLabel(spec.steamGrade)} on one fuel.`,
+    settings: [
+      {
+        type: "select",
+        id: "fuel",
+        label: "Fuel",
+        options: fuelChoices([...liquidTable, ...solidTable]),
+        defaultKey: firstFuel,
+        legacyIds: ["liquidFuel", "solidFuel"],
+        legacyUnsetKeys: [NO_FUEL],
+      },
+      BOILER_WATER_SETTING,
+    ],
+    compute(read): PowerModel {
+      const name = read.select("fuel");
+      const liquid = liquidTable.find((entry) => entry.name === name);
+      const solid = liquid ? undefined : solidTable.find((entry) => entry.name === name);
+      const fuel = liquid ?? solid;
+      if (!fuel?.burnTime) {
+        return {
+          euPerTick: 0,
+          inputs: [],
+          outputs: [],
+          stats: [stat("Steam", "0 L/t")],
+          warnings: ["Pick a fuel to make steam."],
+        };
+      }
+      return {
+        euPerTick: 0,
+        inputs: [
+          liquid ? liters(fuel.name, 1000 / fuel.burnTime) : items(fuel.name, 1 / fuel.burnTime),
+          liters(read.select("waterKind"), waterPerTick * 20),
+        ],
+        outputs: [liters(spec.steamGrade, steamPerTick * 20)],
+        stats: [
+          stat("Steam", `${formatAmount(steamPerTick)} L/t`),
+          stat(liquid ? "1,000 L burns" : "One item burns", `${formatAmount(fuel.burnTime)}s`),
+        ],
       };
     },
   };
@@ -192,8 +280,8 @@ function smallBoilerTakes(entry: PowerFuelEntry): boolean {
   return (entry.euPerItem ?? 0) >= 2000 || /coal|lignite|charcoal|coke|diamond/i.test(entry.name);
 }
 
-function buildSmallBoiler(spec: SmallBoilerSpec): PowerSourceDefinition {
-  const solidTable = powerPlannerData.boilerFuels.bronzeSolid.filter(smallBoilerTakes);
+function buildSmallBoiler(tables: PowerTables, spec: SmallBoilerSpec): PowerSourceDefinition {
+  const solidTable = tables.boilerFuels.bronzeSolid.filter(smallBoilerTakes);
   return {
     id: spec.id,
     name: spec.name,
@@ -260,7 +348,7 @@ const ADVANCED_BOILER_TIERS = [
   { key: "HV", label: "Advanced Boiler [HV] (2,250 L/s)", tier: 3 },
 ];
 
-const advancedBoiler: PowerSourceDefinition = {
+const advancedBoiler = (tables: PowerTables): PowerSourceDefinition => ({
   id: "advanced-boiler",
   name: "Advanced Boiler",
   group: "steam",
@@ -278,7 +366,7 @@ const advancedBoiler: PowerSourceDefinition = {
       type: "select",
       id: "solidFuel",
       label: "Fuel",
-      options: powerPlannerData.boilerFuels.bronzeSolid.map((entry) => ({
+      options: tables.boilerFuels.bronzeSolid.map((entry) => ({
         key: entry.name,
         label: entry.name,
       })),
@@ -296,7 +384,7 @@ const advancedBoiler: PowerSourceDefinition = {
     const entry =
       ADVANCED_BOILER_TIERS.find((row) => row.key === read.select("tier")) ?? ADVANCED_BOILER_TIERS[0];
     const steamPerSecond = 750 * entry.tier;
-    const fuel = findFuel(powerPlannerData.boilerFuels.bronzeSolid, read.select("solidFuel"));
+    const fuel = findFuel(tables.boilerFuels.bronzeSolid, read.select("solidFuel"));
     const secondsPerItem = advancedBoilerSecondsPerItem(fuel.euPerItem ?? 0);
     return {
       euPerTick: 0,
@@ -311,7 +399,7 @@ const advancedBoiler: PowerSourceDefinition = {
       ],
     };
   },
-};
+});
 
 /**
  * MTEBoilerLava: 600 L/s, 1 boiler energy per L of lava, 3 energy per degree
@@ -439,7 +527,7 @@ const EXCHANGER_UNLOCK: Record<string, string> = {
 /** RecipesGregTech.thermalBoilerRecipes: lava makes plain Steam, the rest superheated. */
 const THERMAL_BOILER_PLAIN_STEAM = new Set(["Lava", "Pahoehoe Lava"]);
 
-function buildExchanger(entry: (typeof powerPlannerData.heatExchangers)[number]): PowerSourceDefinition {
+function buildExchanger(entry: PowerTables["heatExchangers"][number]): PowerSourceDefinition {
   const isThermalBoiler = entry.name === "Thermal Boiler";
   const isExtreme = entry.name === "Extreme Heat Exchanger";
   const capAtMax = isThermalBoiler || isExtreme;
@@ -556,14 +644,15 @@ function buildExchanger(entry: (typeof powerPlannerData.heatExchangers)[number])
   };
 }
 
-export const steamMakerSources: PowerSourceDefinition[] = [
-  ...SMALL_BOILER_SPECS.map(buildSmallBoiler),
-  solarBoiler,
-  lavaBoiler,
-  advancedBoiler,
-  ...BOILER_SPECS.map(buildBoiler),
-  // Railcraft's multiblock boiler, beside the GT boilers (sources/railcraft.ts).
-  ...railcraftSteamSources,
-  ...powerPlannerData.heatExchangers.map(buildExchanger),
-];
-
+export const buildSteamMakerSources: PowerSourceBuilder = (tables, gameVersion) => {
+  return [
+    ...SMALL_BOILER_SPECS.map((spec) => buildSmallBoiler(tables, spec)),
+    solarBoiler,
+    lavaBoiler,
+    advancedBoiler(tables),
+    ...BOILER_SPECS.map((spec) => buildBoiler(tables, spec, gameVersion)),
+    // Railcraft's multiblock boiler, beside the GT boilers (sources/railcraft.ts).
+    ...buildRailcraftSteamSources(tables, gameVersion),
+    ...tables.heatExchangers.map(buildExchanger),
+  ];
+};

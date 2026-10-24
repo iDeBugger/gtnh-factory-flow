@@ -1,5 +1,9 @@
 import vatData from "./data/bio-vat.json";
 import radioData from "./data/radio-hatch.json";
+import vatData281 from "./data/2.8.1/bio-vat.json";
+import radioData281 from "./data/2.8.1/radio-hatch.json";
+import { forVersion, type VersionOverrides } from "./version-overrides";
+import type { GameVersion } from "@/lib/model/game-version";
 import { formulaNumber, knob, type FormulaLine } from "./formula-lines";
 import type { MachineConfigControl, Recipe, RecipeInput, RecipeOutput } from "@/lib/model/types";
 import { GT_VOLTAGE_TIERS } from "@/lib/model/tiers";
@@ -51,14 +55,16 @@ export interface RadioMaterial {
   mass: number;
 }
 
-const VAT_RECIPES = (vatData as { recipes: VatRecipeData[] }).recipes;
-/** By sieverts, then mass; GregTech's own sticks first among equals (Uranium 238 before bartworks' isotopes). */
-export const RADIO_MATERIALS = [...(radioData as { materials: RadioMaterial[] }).materials].sort(
-  (a, b) =>
-    a.sievert - b.sievert ||
-    a.mass - b.mass ||
-    Number(!a.id.startsWith("gregtech:")) - Number(!b.id.startsWith("gregtech:")),
-);
+interface VatData {
+  recipes: VatRecipeData[];
+}
+interface RadioData {
+  materials: RadioMaterial[];
+}
+
+/** The pack's files for each version whose recipes or materials differ from 2.9's. */
+const VAT_DATA_OVERRIDES: VersionOverrides<VatData> = { "2.8.1": { "bio-vat": vatData281 as VatData } };
+const RADIO_DATA_OVERRIDES: VersionOverrides<RadioData> = { "2.8.1": { "radio-hatch": radioData281 as RadioData } };
 
 // -- Matching a dataset recipe to the pack's ------------------------------
 
@@ -80,10 +86,45 @@ function vatKey(fluidIn?: { id: string }, fluidOut?: { id: string; amount: numbe
   return `${fluidIn?.id}|${fluidOut?.id}x${fluidOut?.amount}|${ticks}|${eut}`;
 }
 
-const vatIndex = new Map<string, VatRecipeData[]>();
-for (const recipe of VAT_RECIPES) {
-  const key = vatKey(recipe.fluidIn, recipe.fluidOut, recipe.durationTicks, recipe.eut);
-  vatIndex.set(key, [...(vatIndex.get(key) ?? []), recipe]);
+interface VatTables {
+  index: Map<string, VatRecipeData[]>;
+  /** By sieverts, then mass; GregTech's own sticks first among equals (Uranium 238 before bartworks' isotopes). */
+  radioMaterials: RadioMaterial[];
+  requirements: Map<string, VatRequirements>;
+  controls: Map<string, MachineConfigControl[]>;
+}
+
+const tablesByVersion = new Map<GameVersion, VatTables>();
+
+/** One version's recipes, materials and caches, built once: a 2.8.1 answer never serves a 2.9 card. */
+function vatTables(gameVersion: GameVersion): VatTables {
+  const cached = tablesByVersion.get(gameVersion);
+  if (cached) return cached;
+  const recipes = forVersion("bio-vat", vatData as VatData, VAT_DATA_OVERRIDES, gameVersion)?.recipes ?? [];
+  const materials = forVersion("radio-hatch", radioData as RadioData, RADIO_DATA_OVERRIDES, gameVersion)?.materials ?? [];
+  const index = new Map<string, VatRecipeData[]>();
+  for (const recipe of recipes) {
+    const key = vatKey(recipe.fluidIn, recipe.fluidOut, recipe.durationTicks, recipe.eut);
+    index.set(key, [...(index.get(key) ?? []), recipe]);
+  }
+  const tables: VatTables = {
+    index,
+    radioMaterials: [...materials].sort(
+      (a, b) =>
+        a.sievert - b.sievert ||
+        a.mass - b.mass ||
+        Number(!a.id.startsWith("gregtech:")) - Number(!b.id.startsWith("gregtech:")),
+    ),
+    requirements: new Map(),
+    controls: new Map(),
+  };
+  tablesByVersion.set(gameVersion, tables);
+  return tables;
+}
+
+/** The radio hatch's materials in this version, by sieverts, then mass. */
+export function radioMaterials(gameVersion: GameVersion): RadioMaterial[] {
+  return vatTables(gameVersion).radioMaterials;
 }
 
 /** The culture a dataset input names in its NBT tooltip line. */
@@ -113,17 +154,17 @@ function recipeKey(recipe: Partial<Pick<Recipe, "inputs" | "outputs" | "duration
   return `${vatKey(fluidIn, fluidOut, recipe.durationTicks, recipe.eut)}|${cultureOf(recipe)}`;
 }
 
-const requirementCache = new Map<string, VatRequirements>();
-
 export function getVatRequirements(
   recipe: Partial<Pick<Recipe, "inputs" | "outputs" | "durationTicks" | "eut" | "machineType">>,
+  gameVersion: GameVersion,
 ): VatRequirements {
+  const tables = vatTables(gameVersion);
   const key = recipeKey(recipe);
-  const cached = requirementCache.get(key);
+  const cached = tables.requirements.get(key);
   if (cached) return cached;
   const fluidIn = recipe.inputs?.find((input) => input.kind === "fluid");
   const fluidOut = recipe.outputs?.find((output) => output.kind === "fluid");
-  const candidates = vatIndex.get(vatKey(fluidIn, fluidOut, recipe.durationTicks, recipe.eut)) ?? [];
+  const candidates = tables.index.get(vatKey(fluidIn, fluidOut, recipe.durationTicks, recipe.eut)) ?? [];
   const culture = cultureOf(recipe);
   const found = candidates.find((entry) => entry.culture === culture) ?? candidates[0];
   const result: VatRequirements = found
@@ -136,7 +177,7 @@ export function getVatRequirements(
       known: true,
     }
     : { glass: 3, sievert: 0, exact: false, cleanroom: false, culture, known: false };
-  requirementCache.set(key, result);
+  tables.requirements.set(key, result);
   return result;
 }
 
@@ -182,9 +223,9 @@ export function effectiveSievert(sievert: number, shutter: number): number {
 }
 
 /** The material and shutter a recipe's radiation is met with by default: the least that does it. */
-function defaultRadio(need: VatRequirements): { radio?: RadioMaterial; shutter: number } {
+function defaultRadio(need: VatRequirements, gameVersion: GameVersion): { radio?: RadioMaterial; shutter: number } {
   if (need.sievert <= 0) return { shutter: 0 };
-  for (const material of RADIO_MATERIALS) {
+  for (const material of radioMaterials(gameVersion)) {
     if (material.sievert < need.sievert) continue;
     if (!need.exact) return { radio: material, shutter: 0 };
     for (let shutter = 0; shutter <= 100; shutter++) {
@@ -197,20 +238,21 @@ function defaultRadio(need: VatRequirements): { radio?: RadioMaterial; shutter: 
 export function getVatSettings(
   settings: Record<string, string> | undefined,
   recipe: Partial<Pick<Recipe, "inputs" | "outputs" | "durationTicks" | "eut" | "machineType">>,
+  gameVersion: GameVersion,
 ): VatSettings {
-  const need = getVatRequirements(recipe);
+  const need = getVatRequirements(recipe, gameVersion);
   const fluidOut = recipe.outputs?.find((output) => output.kind === "fluid")?.amount ?? 0;
   const glass = Number(settings?.[VAT_GLASS]);
   const fill = Number(settings?.[VAT_FILL]);
   const shutter = Number(settings?.[VAT_SHUTTER]);
-  const fallback = defaultRadio(need);
+  const fallback = defaultRadio(need, gameVersion);
   const radioKey = settings?.[VAT_RADIO];
   return {
     glass: Number.isFinite(glass) && glass > 0 ? glass : Math.max(3, need.glass),
     hatch: OUTPUT_HATCHES.find((hatch) => hatch.key === settings?.[VAT_OUTPUT_HATCH]) ?? defaultHatch(fluidOut),
     fill: Number.isFinite(fill) ? Math.min(100, Math.max(0, fill)) : 50,
     voidExcess: settings?.[VAT_VOID] === "void",
-    radio: radioKey === "none" ? undefined : (RADIO_MATERIALS.find((material) => material.id === radioKey) ?? fallback.radio),
+    radio: radioKey === "none" ? undefined : (radioMaterials(gameVersion).find((material) => material.id === radioKey) ?? fallback.radio),
     shutter: Number.isFinite(shutter) && settings?.[VAT_SHUTTER] !== undefined
       ? Math.min(100, Math.max(0, Math.trunc(shutter)))
       : fallback.shutter,
@@ -265,9 +307,10 @@ export function radioBurnPerSecond(material: RadioMaterial): number {
 export function getVatGateReason(
   recipe: Partial<Pick<Recipe, "inputs" | "outputs" | "durationTicks" | "eut" | "machineType">>,
   settings: Record<string, string> | undefined,
+  gameVersion: GameVersion,
 ): string | undefined {
-  const need = getVatRequirements(recipe);
-  const parsed = getVatSettings(settings, recipe);
+  const need = getVatRequirements(recipe, gameVersion);
+  const parsed = getVatSettings(settings, recipe, gameVersion);
   if (parsed.glass < need.glass) {
     return `Needs ${GT_VOLTAGE_TIERS[need.glass]?.tier ?? need.glass} glass or better.`;
   }
@@ -293,11 +336,12 @@ export function getVatOutputMultiplier(
   recipe: Partial<Pick<Recipe, "inputs" | "outputs" | "durationTicks" | "eut" | "machineType">>,
   output: RecipeOutput,
   settings: Record<string, string> | undefined,
+  gameVersion: GameVersion,
 ): number {
   if (output.kind !== "fluid") return 1;
   const first = recipe.outputs?.find((entry) => entry.kind === "fluid");
   if (!first || first.id !== output.id || !(first.amount > 0)) return 1;
-  return getVatMultiplier(getVatSettings(settings, recipe), first.amount).keptOut / first.amount;
+  return getVatMultiplier(getVatSettings(settings, recipe, gameVersion), first.amount).keptOut / first.amount;
 }
 
 /**
@@ -307,9 +351,14 @@ export function getVatOutputMultiplier(
 /** Recipes already scaled here, so a second pass leaves them alone. */
 const scaled = new WeakSet<Recipe>();
 
-export function applyVatInputs(recipe: Recipe, settings: Record<string, string> | undefined, craftSeconds: number): Recipe {
+export function applyVatInputs(
+  recipe: Recipe,
+  settings: Record<string, string> | undefined,
+  craftSeconds: number,
+  gameVersion: GameVersion,
+): Recipe {
   if (scaled.has(recipe)) return recipe;
-  const parsed = getVatSettings(settings, recipe);
+  const parsed = getVatSettings(settings, recipe, gameVersion);
   const fluidOut = recipe.outputs.find((output) => output.kind === "fluid")?.amount ?? 0;
   const { multiplier, fits } = getVatMultiplier(parsed, fluidOut);
   const runs = fits || parsed.voidExcess;
@@ -317,7 +366,7 @@ export function applyVatInputs(recipe: Recipe, settings: Record<string, string> 
   const inputs: RecipeInput[] = recipe.inputs.map((input, index) =>
     index === firstFluid && runs && multiplier !== 1 ? { ...input, amount: input.amount * multiplier } : input,
   );
-  const need = getVatRequirements(recipe);
+  const need = getVatRequirements(recipe, gameVersion);
   if (need.sievert > 0 && parsed.radio && craftSeconds > 0) {
     inputs.push({
       kind: "item",
@@ -349,25 +398,26 @@ function option(id: string, key: string, label: string, detail: string, itemId?:
   };
 }
 
-const controlsCache = new Map<string, MachineConfigControl[]>();
-
 /** The knobs a vat recipe's card offers; radiation only on recipes that need it. Built once per recipe. */
 export function getVatControls(
   recipe: Partial<Pick<Recipe, "inputs" | "outputs" | "durationTicks" | "eut" | "machineType">>,
+  gameVersion: GameVersion,
 ): MachineConfigControl[] {
+  const cache = vatTables(gameVersion).controls;
   const key = recipeKey(recipe);
-  const cached = controlsCache.get(key);
+  const cached = cache.get(key);
   if (cached) return cached;
-  const controls = buildVatControls(recipe);
-  controlsCache.set(key, controls);
+  const controls = buildVatControls(recipe, gameVersion);
+  cache.set(key, controls);
   return controls;
 }
 
 function buildVatControls(
   recipe: Partial<Pick<Recipe, "inputs" | "outputs" | "durationTicks" | "eut" | "machineType">>,
+  gameVersion: GameVersion,
 ): MachineConfigControl[] {
-  const need = getVatRequirements(recipe);
-  const defaults = getVatSettings(undefined, recipe);
+  const need = getVatRequirements(recipe, gameVersion);
+  const defaults = getVatSettings(undefined, recipe, gameVersion);
   const controls: MachineConfigControl[] = [
     {
       id: VAT_GLASS,
@@ -422,7 +472,7 @@ function buildVatControls(
         defaultKey: defaults.radio?.id ?? "none",
         tiers: [
           option(VAT_RADIO, "none", "Empty", "Nothing in the radio hatch: 0 Sv."),
-          ...RADIO_MATERIALS.map((material) =>
+          ...radioMaterials(gameVersion).map((material) =>
             option(
               VAT_RADIO,
               material.id,
@@ -460,9 +510,10 @@ export function getVatFormulas(
   recipe: Partial<Pick<Recipe, "inputs" | "outputs" | "durationTicks" | "eut" | "machineType">>,
   settings: Record<string, string> | undefined,
   stats: VatRunStats,
+  gameVersion: GameVersion,
 ): FormulaLine[] {
-  const need = getVatRequirements(recipe);
-  const parsed = getVatSettings(settings, recipe);
+  const need = getVatRequirements(recipe, gameVersion);
+  const parsed = getVatSettings(settings, recipe, gameVersion);
   const fluidIn = recipe.inputs?.find((input) => input.kind === "fluid")?.amount ?? 0;
   const fluidOut = recipe.outputs?.find((output) => output.kind === "fluid")?.amount ?? 0;
   const vat = getVatMultiplier(parsed, fluidOut);

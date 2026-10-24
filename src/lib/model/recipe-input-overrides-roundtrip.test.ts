@@ -111,7 +111,7 @@ describe("recipeInputOverrides round trip", () => {
 
   it("applies a pick to its slot and keeps the slot's amount (an ore-name member carries the slot's own)", () => {
     const loaded = parseFactoryProjectJson(serializeFactoryProject(project()));
-    const effective = applyRecipeInputOverrides(loaded.recipes[0]!, loaded.nodes[0]!);
+    const effective = applyRecipeInputOverrides(loaded.recipes[0]!, loaded.nodes[0]!, "2.9");
     expect(effective.inputs[0]).toMatchObject({ id: "minecraft:planks@1", amount: 3 });
     expect(effective.inputs[1]).toMatchObject({ id: "gregtech:gt.metaitem.01@2201" });
     // The legacy group-as-choice override applies nothing.

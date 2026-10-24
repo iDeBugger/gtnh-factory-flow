@@ -5,6 +5,32 @@ import { useFactoryStore } from "@/store/factory-store";
 import { ModPowerPicker } from "./ModPowerPicker";
 
 vi.mock("@/lib/compact-view", () => ({ isCompactViewport: () => false }));
+// The crop list as each dataset serves it: 2.9 carries CropsNH crops, 2.8.1 none.
+const cropLoads = vi.hoisted(() => [] as string[]);
+vi.mock("@/lib/datasets/browser-loader", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/datasets/browser-loader")>()),
+  listRecipeDatasetCrops: async (_manifestUrl: string, version: { id: string }) => {
+    cropLoads.push(version.id);
+    return { crops: version.id === "local-2.8.1" ? [] : [{ category: "cropsnh-crop", recipeMap: "Crop Farm" }] };
+  },
+}));
+
+function datasetVersion(id: string, gtnhVersion: string) {
+  return { id, gtnhVersion, channel: "experimental", publishedAt: "", manifestPath: "", recipeDatasetPath: "" };
+}
+const MANIFEST = {
+  schemaVersion: 1,
+  latestStableVersion: "local-2.9.0-rc-2",
+  versions: [datasetVersion("local-2.9.0-rc-2", "2.9.0-RC-2"), datasetVersion("local-2.8.1", "2.8.1")],
+};
+/** Points the store at one dataset with an open plan of its version. */
+function onDataset(versionId: string, gameVersion: string) {
+  useFactoryStore.setState((state) => ({
+    datasetManifest: MANIFEST,
+    selectedDatasetVersionId: versionId,
+    project: { ...state.project, gameVersion },
+  }) as never);
+}
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -25,6 +51,7 @@ beforeEach(() => {
     addFluidTankNode: added.tank,
     addCropFarmNode: added.crop,
   } as never);
+  onDataset("local-2.9.0-rc-2", "2.9");
 });
 afterEach(() => {
   cleanup();
@@ -42,8 +69,9 @@ describe("the non-recipe machines picker", () => {
     expect([...document.querySelectorAll(".mp-head .ml-drop")].map((key) => key.textContent)).toEqual(["All types", "All tiers"]);
   });
 
-  it("lists the planning cards first in an Other column, then the power groups in the mod's columns", () => {
+  it("lists the planning cards first in an Other column, then the power groups in the mod's columns", async () => {
     render(<ModPowerPicker />);
+    await act(async () => {});
     const columns = [...document.querySelectorAll(".mp-col")].map((column) => [...column.querySelectorAll(".mp-brass span")].map((title) => title.textContent));
     expect(columns[0]).toEqual(["OTHER", "GENERATORS"]);
     expect(columns[1]).toEqual(["TURBINES"]);
@@ -70,8 +98,29 @@ describe("the non-recipe machines picker", () => {
     expect(added.tank).toHaveBeenCalledTimes(1);
   });
 
-  it("picking Crop Farm asks the store for a crop farm and closes the picker", () => {
+  it("crop placeholder absent in 2.8.1 is not listed on a dataset with no CropsNH crops", async () => {
+    onDataset("local-2.8.1", "2.8.1");
     render(<ModPowerPicker />);
+    await act(async () => {});
+    const other = document.querySelector(".mp-col")!.querySelectorAll(".mp-group")[0];
+    expect([...other.querySelectorAll(".mp-tile")].map((tile) => tile.getAttribute("data-source"))).toEqual(["custom-rate", "fluid-tank", "railcraft-water-tank"]);
+    expect(cropLoads).toContain("local-2.8.1");
+  });
+
+  it("crop placeholder absent in 2.8.1 stays out of the 2.9 list until the crop list arrives", async () => {
+    useFactoryStore.setState({
+      datasetManifest: { ...MANIFEST, versions: [...MANIFEST.versions, datasetVersion("local-2.9.1", "2.9.1")] },
+      selectedDatasetVersionId: "local-2.9.1",
+    } as never);
+    render(<ModPowerPicker />);
+    expect(document.querySelector('[data-source="crop-farm"]')).toBeNull();
+    await act(async () => {});
+    expect(document.querySelector('[data-source="crop-farm"]')).toBeTruthy();
+  });
+
+  it("picking Crop Farm asks the store for a crop farm and closes the picker", async () => {
+    render(<ModPowerPicker />);
+    await act(async () => {});
     fireEvent.click(document.querySelector('[data-source="crop-farm"]')!);
     expect(added.crop).toHaveBeenCalledTimes(1);
     expect(useFactoryStore.getState().powerMenuOpen).toBe(false);

@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { CardVirtualizer, grow, meets, type VRect } from "./card-virtualizer";
+import { CardVirtualizer, geometryPublishKey, grow, meets, type VRect } from "./card-virtualizer";
 
 /** A grid of 320 x 240 cards, `cols` x `rows`, one every 640 x 440. */
 function grid(cols: number, rows: number): Array<readonly [string, VRect]> {
@@ -218,5 +219,27 @@ describe("CardVirtualizer", () => {
     v.useBoard("b");
     expect(v.boxOf("n0_0")).toBeUndefined();
     expect(v.mountedCount()).toBe(0);
+  });
+
+  it("holds no box for a plan that landed until its geometry is published, even with the last plan's card ids", () => {
+    const v = board(3, 3);
+    v.useBoard("plan-a");
+    v.setGeometry(grid(3, 3));
+    // A converted copy keeps its card ids and places: the same fingerprint, a different plan.
+    v.useBoard("plan-b");
+    expect(v.boxOf("n0_0")).toBeUndefined();
+    expect(geometryPublishKey("plan-b", "f")).not.toBe(geometryPublishKey("plan-a", "f"));
+    v.setGeometry(grid(3, 3));
+    expect(v.boxOf("n0_0")).toBeDefined();
+  });
+
+  it("is the key FactoryFlow.tsx publishes the board's geometry on", () => {
+    // A source pin, not a render: the board publishes in a layout effect, and the key only helps if that effect
+    // re-runs on it rather than on the fingerprint alone.
+    const source = readFileSync(new URL("../FactoryFlow.tsx", import.meta.url), "utf8");
+    const key = /const (\w+) = geometryPublishKey\(project\.id, obstacleGeometryFingerprint\);/.exec(source)?.[1];
+    expect(key).toBeDefined();
+    const publish = /useLayoutEffect\(\(\) => \{(?:(?!useLayoutEffect)[\s\S])*?\n    publishBoardGeometry\(\);(?:(?!useLayoutEffect)[\s\S])*?\n  \}, \[([^\]]*)\]\);/.exec(source);
+    expect(publish?.[1].split(",").map((dep) => dep.trim())).toContain(key);
   });
 });

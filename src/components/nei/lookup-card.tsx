@@ -52,6 +52,7 @@ import {
 } from "../recipe-preview";
 import { itemTipLines, McFloatingTip, type McTipLine } from "./McTip";
 import { getFallbackFluidColor, ResourceIcon } from "./ResourceIcon";
+import { planGameVersion, type GameVersion } from "@/lib/model/game-version";
 
 /*
  * A recipe in the recipe search drawn as the card it becomes on the board (flow/clean, the mod's flat card), with its
@@ -119,10 +120,10 @@ export function recipeCardRows(recipe: RecipeSummary): CardRows {
   };
 }
 
-export function powerCardRows(hit: PowerStencilHit): CardRows {
+export function powerCardRows(hit: PowerStencilHit, gameVersion: GameVersion): CardRows {
   let model: ReturnType<PowerSourceDefinition["compute"]> | undefined;
   try {
-    model = hit.source.compute(buildPowerSettingsReader(hit.source, hit.settings));
+    model = hit.source.compute(buildPowerSettingsReader(hit.source, hit.settings, gameVersion), gameVersion);
   } catch {
     model = undefined;
   }
@@ -186,6 +187,7 @@ export const LookupRecipeCard = memo(function LookupRecipeCard({
     [contextResource, recipe],
   );
   const isReadOnly = useFactoryStore((state) => state.isReadOnly);
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
   const machineHandlers = useMemo(() => getRecipeMachineHandlers(preview), [preview]);
   const primary = machineHandlers[0];
   // A dataset recipe is written in its primary machine's numbers already; the synthesized Auto Workbench is the one
@@ -195,7 +197,7 @@ export const LookupRecipeCard = memo(function LookupRecipeCard({
   // A machine on its own fixed cycle (the Extreme Heat Exchanger) states its amounts per cycle, whatever duration the
   // recipe was exported with.
   const durationTicks =
-    machineCycleTicks(primary?.machineType) ??
+    machineCycleTicks(primary?.machineType, gameVersion) ??
     (isAutoWorkbench && primary.durationTicks !== undefined
       ? primary.durationTicks
       : recipe.durationTicks);
@@ -435,16 +437,17 @@ export function LookupPowerCard({
   handlers: LookupHandlers;
 }) {
   const headPress = useLongPress(onCardMenu);
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
   const model = useMemo(() => {
     try {
-      return hit.source.compute(buildPowerSettingsReader(hit.source, hit.settings));
+      return hit.source.compute(buildPowerSettingsReader(hit.source, hit.settings, gameVersion), gameVersion);
     } catch {
       return undefined;
     }
-  }, [hit]);
+  }, [hit, gameVersion]);
   const name = headName(hit.source.name, hit.source.unlock !== undefined);
   const flowRow = (direction: "takes" | "makes", flow: { name: string; perSecond: number }) => {
-    const resolved = resolvePowerResource(flow.name);
+    const resolved = resolvePowerResource(flow.name, gameVersion);
     const resource = resolved
       ? ({ ...resolved, amount: flow.perSecond } as ResourceAmount)
       : undefined;

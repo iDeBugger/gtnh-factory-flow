@@ -81,7 +81,7 @@ describe("applyRecipeInputOverrides", () => {
       recipeInputOverrides: {
         "0": { kind: "fluid", id: "molten.lead", amount: 288, displayName: "Molten Lead" },
       },
-    });
+    }, "2.9");
 
     expect(effective.inputs[0]).toEqual(
       expect.objectContaining({ kind: "fluid", id: "molten.lead", amount: 288 }),

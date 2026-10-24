@@ -46,7 +46,7 @@ describe("crop card outputs", () => {
       "minecraft:dye@4",
       "gregtech:gt.metaitem.01@2503",
     ]);
-    const applied = applyMachineOutputMultipliers(recipe, { machineConfigTiers: {} }, "LV");
+    const applied = applyMachineOutputMultipliers(recipe, { machineConfigTiers: {} }, "LV", "2.9");
     expect(applied.outputs).toHaveLength(2);
     expect(applied.outputs.every((output) => output.amount > 0)).toBe(true);
   });

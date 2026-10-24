@@ -310,6 +310,17 @@ describe("the unconverted cards' notice", () => {
     });
   });
 
+  it("on a plan this site has no recipes for, says the site lacks them, not the game", () => {
+    const notice = unconvertedNotice(
+      { gameVersion: "2.10", nodes: [card("b", { unconverted: marker("Raw Silicon Ingot", "Electric Blast Furnace") })] },
+      "2.10",
+    );
+    expect(notice?.text).toBe(
+      "Recipes for GTNH 2.10 are not on this site. 1 card has no recipe. Its wires count as outside inputs and outputs.",
+    );
+    expect(notice?.cards).toEqual([{ id: "b", label: "Electric Blast Furnace: Raw Silicon Ingot" }]);
+  });
+
   it("a recipe name carrying its map (as dataset names do) is listed once after the machine", () => {
     const notice = unconvertedNotice({
       nodes: [card("a", { unconverted: marker("Blast Furnace: Raw Silicon Ingot", "Blast Furnace") })],

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { powerPlannerData } from "../planner-data";
 import { getPowerSource } from "../registry";
+import { lneDecayBoost, lneEuPerTick } from "./engines";
 import { buildPowerSettingsReader } from "../types";
 
 /**
@@ -8,11 +9,11 @@ import { buildPowerSettingsReader } from "../types";
  * of this code; where the workbook differs, the Java wins.
  */
 function compute(sourceId: string, settings: Record<string, string> = {}) {
-  const source = getPowerSource(sourceId);
+  const source = getPowerSource(sourceId, "2.9");
   if (!source) {
     throw new Error(`No power source ${sourceId}`);
   }
-  return source.compute(buildPowerSettingsReader(source, settings));
+  return source.compute(buildPowerSettingsReader(source, settings, "2.9"), "2.9");
 }
 
 function input(model: ReturnType<typeof compute>, name: string) {
@@ -84,7 +85,7 @@ describe("large neutralization engine", () => {
   });
 
   it("offers LV robot arms", () => {
-    const source = getPowerSource("large-neutralization-engine")!;
+    const source = getPowerSource("large-neutralization-engine", "2.9")!;
     const armTier = source.settings.find((setting) => setting.id === "armTier");
     expect(armTier?.type === "select" && armTier.options[0]?.key).toBe("Amount (LV)");
     expect(armTier?.type === "select" && armTier.defaultKey).toBe("Amount (HV)");
@@ -98,7 +99,37 @@ describe("large neutralization engine", () => {
 
 describe("unlock chips follow the controller recipe", () => {
   it("puts the SOFCs at HV and LuV", () => {
-    expect(getPowerSource("solid-oxide-fuel-cell-1")?.unlock).toBe("HV");
-    expect(getPowerSource("solid-oxide-fuel-cell-2")?.unlock).toBe("LuV");
+    expect(getPowerSource("solid-oxide-fuel-cell-1", "2.9")?.unlock).toBe("HV");
+    expect(getPowerSource("solid-oxide-fuel-cell-2", "2.9")?.unlock).toBe("LuV");
   });
+});
+
+// The engine is 2.9's only: 5.09.51.476 registers no MTELargeNeutralizationEngine.
+it("power-planner-data.json: lneRobotArms 2.9 boosts decay by (float) Math.pow(1.2F, tier) x sqrt(arms), and 2.8.1 has no engine", () => {
+  const f32 = Math.fround;
+  // MTELargeNeutralizationEngine.java:191-193, :615 at 5.09.54.205.
+  expect(lneDecayBoost(4, 16)).toBe(f32(f32(Math.pow(f32(1.2), 4)) * 4));
+  expect(lneDecayBoost(4, 16)).not.toBe(1.2 ** 4 * 4);
+  expect(lneDecayBoost(6, 9)).toBe(f32(f32(Math.pow(f32(1.4), 6)) * 3));
+  // The base switches at the tier 4/5 boundary: IV (4) is the last 1.2F tier, LuV (5) the first 1.4F.
+  expect(lneDecayBoost(4, 1)).toBe(f32(Math.pow(f32(1.2), 4)));
+  expect(lneDecayBoost(5, 1)).toBe(f32(Math.pow(f32(1.4), 5)));
+  expect(lneDecayBoost(2, 0)).toBe(1);
+  expect(lneDecayBoost(2, 40)).toBe(lneDecayBoost(2, 16));
+  expect(getPowerSource("large-neutralization-engine", "2.8.1")).toBeUndefined();
+});
+
+it("power-planner-data.json: lneBases 2.9 truncates the boosted output of the float multiply, and 2.8.1 has no engine", () => {
+  // MTELargeNeutralizationEngine.java:559-566 at 5.09.54.205: (int) (fuel x litres x 1.9F).
+  expect(lneEuPerTick(1, 14, 1.9)).toBe(26);
+  expect(lneEuPerTick(50, 10, 1.9)).toBe(950);
+  expect(lneEuPerTick(7, 10, 5)).toBe(350);
+  // Sodium 1.5F and caesium 2.5F are exact floats: only the truncation acts.
+  expect(lneEuPerTick(3, 9, 1.5)).toBe(40);
+  expect(lneEuPerTick(3, 9, 2.5)).toBe(67);
+  const acid = powerPlannerData.chemFuels.find((fuel) => fuel.name === "Molten Redstone")!;
+  const model = compute("large-neutralization-engine", { fuel: "Molten Redstone", rate: "3", base: "Potassium Hydroxide" });
+  expect(model.euPerTick).toBe(Math.trunc(Math.fround(Math.fround(3 * acid.euPerLiter!) * Math.fround(1.9))));
+  expect(Number.isInteger(model.euPerTick)).toBe(true);
+  expect(getPowerSource("large-neutralization-engine", "2.8.1")).toBeUndefined();
 });

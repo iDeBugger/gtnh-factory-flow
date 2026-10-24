@@ -13,10 +13,11 @@
 import {
   findFuel,
   fuelOptions,
-  powerPlannerData,
   resolvePowerResource,
-  type PowerFuelEntry,
+  type PowerFuelTableName,
+  type PowerTables,
 } from "../planner-data";
+import type { GameVersion } from "@/lib/model/game-version";
 import type { PowerFlowLine, PowerModel, PowerSourceDefinition, PowerStatLine } from "../types";
 import {
   familyTierOptions,
@@ -26,6 +27,7 @@ import {
   percent,
   stat,
   tierPower,
+  type PowerSourceBuilder,
 } from "./helpers";
 
 interface SingleblockSpec {
@@ -34,7 +36,7 @@ interface SingleblockSpec {
   family: string;
   unlock: string;
   blurb: string;
-  fuels: PowerFuelEntry[] | "steam" | "naquadah";
+  fuels: PowerFuelTableName | "steam" | "naquadah";
   /** Solid fuels burn whole items; the sheet prices them per hour. */
   solid?: boolean;
   /** The fuel players actually run, so a fresh card starts sane. */
@@ -88,7 +90,7 @@ const SPECS: SingleblockSpec[] = [
     family: "gasTurbine",
     unlock: "LV",
     blurb: "Burns benzene and the other gas fuels.",
-    fuels: powerPlannerData.gasFuels,
+    fuels: "gasFuels",
     defaultFuel: "Benzene",
   },
   {
@@ -97,7 +99,7 @@ const SPECS: SingleblockSpec[] = [
     family: "combustion",
     unlock: "LV",
     blurb: "Burns the diesel-line fuels.",
-    fuels: powerPlannerData.combustionFuels,
+    fuels: "combustionFuels",
     defaultFuel: "Diesel",
   },
   {
@@ -106,7 +108,7 @@ const SPECS: SingleblockSpec[] = [
     family: "semifluid",
     unlock: "LV",
     blurb: "Burns heavy oils and semifluids.",
-    fuels: powerPlannerData.semifluidFuels,
+    fuels: "semifluidFuels",
     defaultFuel: "Creosote Oil",
   },
   {
@@ -115,7 +117,7 @@ const SPECS: SingleblockSpec[] = [
     family: "chem",
     unlock: "LV",
     blurb: "Burns the acid-line fluids.",
-    fuels: powerPlannerData.chemFuels,
+    fuels: "chemFuels",
     defaultFuel: "Sulfuric Acid",
   },
   {
@@ -124,7 +126,7 @@ const SPECS: SingleblockSpec[] = [
     family: "frost",
     unlock: "EV",
     blurb: "Burns lava, cryotheum and pyrotheum.",
-    fuels: powerPlannerData.frostFuels,
+    fuels: "frostFuels",
     defaultFuel: "Lava",
     // MTEGeothermalGenerator.getCapacity()
     capacity: (gtTier) => 5_000 * gtTier,
@@ -135,7 +137,7 @@ const SPECS: SingleblockSpec[] = [
     family: "rocket",
     unlock: "EV",
     blurb: "Burns mixed rocket fuels.",
-    fuels: powerPlannerData.rocketFuels,
+    fuels: "rocketFuels",
     // MTERocketFuelGeneratorBase.getCapacity()
     capacity: () => 32_000,
     // The table carries the Large Rocket Engine's figures, which triple the
@@ -150,7 +152,7 @@ const SPECS: SingleblockSpec[] = [
     // Mark I's crafting recipe takes a LuV hull (MTERecipeLoader).
     unlock: "LuV",
     blurb: "Burns plasma from fusion.",
-    fuels: powerPlannerData.plasmas,
+    fuels: "plasmas",
     defaultFuel: "Helium Plasma",
   },
   {
@@ -168,7 +170,7 @@ const SPECS: SingleblockSpec[] = [
     family: "magicConverter",
     unlock: "LV",
     blurb: "Consumes magical items for power.",
-    fuels: powerPlannerData.magicSolids,
+    fuels: "magicSolids",
     solid: true,
     defaultFuel: "Quicksilver",
     byproducts: MAGIC_BYPRODUCTS,
@@ -179,7 +181,7 @@ const SPECS: SingleblockSpec[] = [
     family: "magicAbsorber",
     unlock: "LV",
     blurb: "Consumes magical items for power.",
-    fuels: powerPlannerData.magicSolids,
+    fuels: "magicSolids",
     solid: true,
     sheetModel: true,
   },
@@ -290,6 +292,7 @@ function itemModel(
   euPerItem: number,
   efficiencyStat: PowerStatLine,
   byproduct: { name: string; count: number } | undefined,
+  gameVersion: GameVersion,
 ): PowerModel {
   const packet = voltage + ampLoss;
   const needed = euPerItem > 0 ? (packet * 20) / euPerItem : 0;
@@ -297,7 +300,7 @@ function itemModel(
   const perSecond = capped ? BURNS_PER_SECOND : needed;
   const euPerTick = capped ? ((BURNS_PER_SECOND * euPerItem) / 20) * (voltage / packet) : voltage;
   const outputs: PowerFlowLine[] =
-    byproduct && resolvePowerResource(byproduct.name) && perSecond > 0
+    byproduct && resolvePowerResource(byproduct.name, gameVersion) && perSecond > 0
       ? [items(byproduct.name, perSecond * byproduct.count)]
       : [];
   return {
@@ -317,8 +320,10 @@ function itemModel(
   };
 }
 
-function buildSingleblock(spec: SingleblockSpec): PowerSourceDefinition {
-  const tiers = familyTierOptions(spec.family);
+function buildSingleblock(tables: PowerTables, spec: SingleblockSpec): PowerSourceDefinition {
+  const tiers = familyTierOptions(spec.family, tables);
+  const fuels =
+    spec.fuels === "steam" || spec.fuels === "naquadah" ? spec.fuels : tables[spec.fuels];
   const settings: PowerSourceDefinition["settings"] = [
     {
       type: "select",
@@ -328,7 +333,7 @@ function buildSingleblock(spec: SingleblockSpec): PowerSourceDefinition {
       defaultKey: tiers.options[0]?.key ?? "LV",
     },
   ];
-  if (spec.fuels === "naquadah") {
+  if (fuels === "naquadah") {
     // The mark (tier) picks the rod; this knob picks its naquadah or tiberium form.
     settings.push({
       type: "select",
@@ -338,13 +343,13 @@ function buildSingleblock(spec: SingleblockSpec): PowerSourceDefinition {
       defaultKey: "naquadah",
       legacyKeys: NAQUADAH_LEGACY_KEYS,
     });
-  } else if (spec.fuels !== "steam") {
+  } else if (fuels !== "steam") {
     settings.push({
       type: "select",
       id: "fuel",
       label: "Fuel",
-      options: fuelOptions(spec.fuels),
-      defaultKey: spec.defaultFuel ?? spec.fuels[0]?.name ?? "",
+      options: fuelOptions(fuels),
+      defaultKey: spec.defaultFuel ?? fuels[0]?.name ?? "",
     });
   }
 
@@ -355,13 +360,13 @@ function buildSingleblock(spec: SingleblockSpec): PowerSourceDefinition {
     unlock: spec.unlock,
     blurb: spec.blurb,
     settings,
-    compute(read): PowerModel {
+    compute(read, gameVersion): PowerModel {
       const tier = read.select("tier");
-      const { voltage, ampLoss } = tierPower(tier);
+      const { voltage, ampLoss } = tierPower(tier, tables);
       const gtTier = gtTierOf(voltage);
       const tankLiters = spec.capacity?.(gtTier) ?? BASE_TANK_LITERS;
 
-      if (spec.fuels === "steam") {
+      if (fuels === "steam") {
         // MTESteamTurbine: 3 EU from every (6 + tier) L of steam.
         const litersPerOperation = 6 + gtTier;
         const euPerLiter = 3 / litersPerOperation;
@@ -375,13 +380,10 @@ function buildSingleblock(spec: SingleblockSpec): PowerSourceDefinition {
       const efficiencyPercent = Math.round(tiers.efficiencyFor(tier) * 100);
       const efficiencyStat = stat("Efficiency", percent(efficiencyPercent / 100));
 
-      if (spec.fuels === "naquadah") {
+      if (fuels === "naquadah") {
         const mark = NAQUADAH_MARKS[tier] ?? NAQUADAH_MARKS.EV;
         const tiberium = read.select("fuel") === "tiberium";
-        const rod = findFuel(
-          powerPlannerData.naquadahRods,
-          tiberium ? mark.tiberium : mark.naquadah,
-        );
+        const rod = findFuel(tables.naquadahRods, tiberium ? mark.tiberium : mark.naquadah);
         const euPerItem = ((rod.euPerItem ?? 0) * efficiencyPercent) / 100;
         return itemModel(
           rod.name,
@@ -390,10 +392,11 @@ function buildSingleblock(spec: SingleblockSpec): PowerSourceDefinition {
           euPerItem,
           efficiencyStat,
           tiberium ? undefined : { name: mark.spent, count: 1 },
+          gameVersion,
         );
       }
 
-      const fuel = findFuel(spec.fuels, read.select("fuel"));
+      const fuel = findFuel(fuels, read.select("fuel"));
       // The geothermal engine mixes forms: the lavas are fluids, the theum
       // dusts items - decided per fuel, not per machine.
       const solidFuel =
@@ -427,6 +430,7 @@ function buildSingleblock(spec: SingleblockSpec): PowerSourceDefinition {
           euPerItem,
           efficiencyStat,
           spec.byproducts?.[fuel.name],
+          gameVersion,
         );
       }
 
@@ -503,4 +507,6 @@ const rtg: PowerSourceDefinition = {
   },
 };
 
-export const singleblockSources: PowerSourceDefinition[] = [...SPECS.map(buildSingleblock), rtg];
+export const buildSingleblockSources: PowerSourceBuilder = (tables) => {
+  return [...SPECS.map((spec) => buildSingleblock(tables, spec)), rtg];
+};

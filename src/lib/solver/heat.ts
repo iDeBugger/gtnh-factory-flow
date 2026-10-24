@@ -3,8 +3,10 @@ import {
   getRecipeSpecialValue,
 } from "@/lib/model/recipe-rules";
 import { getMachineBehaviour } from "@/lib/machines/machine-table";
+import { powInt } from "@/lib/machines/java-float";
 import { getVoltageTierIndex } from "@/lib/model/tiers";
 import type { FactoryNode, MachineTier, Recipe } from "@/lib/model/types";
+import type { GameVersion } from "@/lib/model/game-version";
 
 const VOLTAGE_TIER_INDEX_MV = 2;
 
@@ -41,10 +43,10 @@ export interface HeatOverclockStats {
  * heat capacity whether or not the machine reads it, and every recipe carries
  * a "Special value" line whose meaning depends on the recipe map.
  */
-export function isHeatOverclockMachine(machineType: string | undefined): boolean {
+export function isHeatOverclockMachine(machineType: string | undefined, gameVersion: GameVersion): boolean {
   // Match the machine, never the recipe map: an Industrial Arc Furnace running
   // a blast furnace recipe overclocks on its electrodes, not on heat.
-  return getMachineBehaviour(machineType)?.overclock === "heat";
+  return getMachineBehaviour(machineType, gameVersion)?.overclock === "heat";
 }
 
 export function getHeatOverclockStats(
@@ -52,6 +54,7 @@ export function getHeatOverclockStats(
   node: Pick<FactoryNode, "coilTier" | "machineConfigTiers" | "machineHandlerId">,
   tier: VoltageTier,
   overclockSteps: number,
+  gameVersion: GameVersion,
   /**
    * The voltage-tier ordinal the +100 K bonus reads, which stacked hatches
    * can push above the hatch tier (`getTier` of the SUMMED hatch voltage).
@@ -69,6 +72,7 @@ export function getHeatOverclockStats(
           machineConfigControls: recipe.machineConfigControls,
         },
         node,
+        gameVersion,
       )
     : undefined;
   // A requirement of zero is a real number, not a gap: dehydrator recipes are
@@ -79,7 +83,7 @@ export function getHeatOverclockStats(
     specialValue === undefined ||
     specialValue < 0 ||
     !coilControl?.current.heat ||
-    !isHeatOverclockMachine(recipe.machineType)
+    !isHeatOverclockMachine(recipe.machineType, gameVersion)
   ) {
     return {
       heatOverclockSteps: 0,
@@ -88,7 +92,7 @@ export function getHeatOverclockStats(
     };
   }
 
-  const heatConfig = getMachineBehaviour(recipe.machineType)?.heat;
+  const heatConfig = getMachineBehaviour(recipe.machineType, gameVersion)?.heat;
   const coilHeat = coilControl.current.heat * (heatConfig?.coilHeatMultiplier ?? 1);
   // Only the blast furnaces and the Exothermic Hearth add 100 K per voltage
   // tier above MV; Volcanus and the Utupu-Tanuri read their coils raw.
@@ -103,7 +107,9 @@ export function getHeatOverclockStats(
     heatOverclockSteps,
     regularOverclockSteps: overclockSteps - heatOverclockSteps,
     heatDiscountMultiplier:
-      heatConfig?.discount === false ? 1 : 0.95 ** Math.floor(heatExcess / 900),
+      // OverclockCalculator.calculateHeatDiscountMultiplier: GTUtility.powInt(0.95, excess / 900)
+      // (GT5U@5.09.54.205 OverclockCalculator.java:346-349, GT5U@5.09.51.476 :327-330).
+      heatConfig?.discount === false ? 1 : powInt(0.95, Math.floor(heatExcess / 900)),
   };
 }
 
@@ -117,7 +123,8 @@ export function getHeatDiscountMultiplier(
   recipe: HeatRecipeInput,
   node: Pick<FactoryNode, "coilTier" | "machineConfigTiers" | "machineHandlerId">,
   tier: VoltageTier,
+  gameVersion: GameVersion,
   voltageOrdinal?: number,
 ): number {
-  return getHeatOverclockStats(recipe, node, tier, 0, voltageOrdinal).heatDiscountMultiplier;
+  return getHeatOverclockStats(recipe, node, tier, 0, gameVersion, voltageOrdinal).heatDiscountMultiplier;
 }

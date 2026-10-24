@@ -107,6 +107,11 @@ published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such 
   so Chemical Plant catalysts export `wearingInputs` on both. Nothing reads `wearingInputs` yet.
 - Machine names are the version's own (Primitive Blast Furnace, Naquadah Reactor MkI, Zhuhai -
   Fishing Port); `machineType` keeps them, so tables keyed by name need the 2.8.1 spelling too.
+- Machine knobs follow the pack (`gtnhVersion` threads into `buildMachineHandlerTemplates` and
+  `machineConfigControlsForOracleRecipe`): the 2.8.1 Industrial Coke Oven has no coils or slices and
+  its casing control is keyed `"18"`/`"30"` (the app reads the key as the parallels); the 2.8.1
+  Industrial Cutting Factory takes no sawblade (`ABSENT_BY_PACK` in `machine-wiki-stats.mjs`). Exam:
+  `machine-configs-2-8-1.test.mjs`.
 - Generators named Mark I to IV fold into one tiered family (Plasma Generator Mark, EV to ZPM);
   2.9's Mk-I names keep one family per mark.
 - 2.8.1 registers one arcane wand or sceptre recipe per rod and cap pair, all with the same
@@ -194,6 +199,9 @@ on a case-sensitive Docker volume: the pack has file names that differ only in c
   before the grid (RC-2 and older) carry aspects only: plans find them again by output and
   exact aspect cost (`isGridlessArcaneMatch` in `src/lib/import-export/recipe-ref-match.ts`,
   kept on for good).
+- A recipe's `minimumTier` and its singleblock handlers' divide the EU/t by the map's amperage
+  (`recipe-map-amperage.mjs`, keyed by `gtnhVersion`, pinned to the app's table by its test);
+  multiblock handlers keep the tier of the whole EU/t.
 - Concrete items carry their oredict membership.
 - NEI layout: keep exported slot positions and progress bars; empty slots stay visible;
   non-consumed slots stay visible except TGS tool placeholders; never replace a real slot

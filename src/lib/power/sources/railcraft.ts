@@ -4,9 +4,9 @@
  * research/railcraft-water-tank-and-boilers.md has the links). Both are
  * modelled at steady state: the tank as it fills, the boiler at full heat.
  */
-import { powerPlannerData, type PowerFuelEntry } from "../planner-data";
+import type { PowerFuelEntry, PowerTables } from "../planner-data";
 import type { PowerModel, PowerSourceDefinition } from "../types";
-import { formatAmount, items, liters, stat } from "./helpers";
+import { formatAmount, items, liters, stat, type PowerSourceBuilder } from "./helpers";
 
 /** Seconds as "45 s", "12 min" or "2 h 15 min". */
 function duration(seconds: number): string {
@@ -112,11 +112,12 @@ const BOILER_PRESSURES = [
  * a blaze rod. Lava containers (1000 a bucket, worse than coal, leaving the
  * container) and wood are left out.
  */
-const BOILER_SOLIDS: Array<{ name: string; burnTicks: number }> =
-  powerPlannerData.boilerFuels.bronzeSolid.map((entry: PowerFuelEntry) => ({
+function boilerSolids(tables: PowerTables): Array<{ name: string; burnTicks: number }> {
+  return tables.boilerFuels.bronzeSolid.map((entry: PowerFuelEntry) => ({
     name: entry.name,
     burnTicks: entry.name === "Blaze Rod" ? 1000 : (entry.euPerItem ?? 0),
   }));
+}
 
 /**
  * FuelManager's boiler fuels in the pack, heat per 1000 L: Railcraft's own
@@ -144,7 +145,7 @@ export function boilerWarmUpTicks(tanks: number, maxHeat: number): number {
   return ((maxHeat * tanks) / 0.15) * Math.log((ceiling - 20) / (ceiling - maxHeat));
 }
 
-const railcraftBoiler: PowerSourceDefinition = {
+const railcraftBoiler = (solids: ReturnType<typeof boilerSolids>): PowerSourceDefinition => ({
   id: "railcraft-boiler",
   name: "Railcraft Boiler",
   group: "steam",
@@ -171,7 +172,7 @@ const railcraftBoiler: PowerSourceDefinition = {
       id: "fuel",
       label: "Fuel",
       options: [
-        ...BOILER_SOLIDS.map(({ name }) => ({ key: name, label: name })),
+        ...solids.map(({ name }) => ({ key: name, label: name })),
         ...BOILER_LIQUIDS.map(({ name, label }) => ({ key: name, label })),
       ],
       defaultKey: "Coal",
@@ -192,9 +193,7 @@ const railcraftBoiler: PowerSourceDefinition = {
 
     const fuelName = read.select("fuel");
     const liquid = BOILER_LIQUIDS.find((row) => row.name === fuelName);
-    const solid = liquid
-      ? undefined
-      : (BOILER_SOLIDS.find((row) => row.name === fuelName) ?? BOILER_SOLIDS[0]);
+    const solid = liquid ? undefined : (solids.find((row) => row.name === fuelName) ?? solids[0]);
     const inputs: PowerModel["inputs"] = [];
     if (liquid) {
       inputs.push(liters(liquid.name, (fuelPerSecond * 1000) / liquid.heat));
@@ -222,7 +221,12 @@ const railcraftBoiler: PowerSourceDefinition = {
       stats,
     };
   },
+});
+
+export const buildRailcraftOtherSources: PowerSourceBuilder = () => {
+  return [waterTank];
 };
 
-export const railcraftOtherSources: PowerSourceDefinition[] = [waterTank];
-export const railcraftSteamSources: PowerSourceDefinition[] = [railcraftBoiler];
+export const buildRailcraftSteamSources: PowerSourceBuilder = (tables) => {
+  return [railcraftBoiler(boilerSolids(tables))];
+};

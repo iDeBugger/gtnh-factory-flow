@@ -14,11 +14,15 @@ const listeners = new Set<() => void>();
 /** A choice storage refused, kept for this page so the picker does not jump back to the default. */
 let sessionChoice: string | undefined;
 
+/** The refused pick first: storage that reads but will not write still holds the older choice. */
 function readStored(): string | undefined {
-  try {
-    return window.localStorage.getItem(NEW_PLAN_VERSION_STORAGE_KEY) ?? sessionChoice;
-  } catch {
+  if (sessionChoice !== undefined) {
     return sessionChoice;
+  }
+  try {
+    return window.localStorage.getItem(NEW_PLAN_VERSION_STORAGE_KEY) ?? undefined;
+  } catch {
+    return undefined;
   }
 }
 

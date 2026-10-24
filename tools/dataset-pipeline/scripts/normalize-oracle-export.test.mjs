@@ -1435,6 +1435,15 @@ describe("a GTNH 2.8.1 export", () => {
     expect(tank.outputs.map((slot) => slot.id)).toEqual(canner.outputs.map((slot) => slot.id));
   });
 
+  it("a 2.8.1 Industrial Coke Oven recipe offers its two casings and no coils or slices", () => {
+    const ovens = mapsOf(dataset, "gtpp.recipe.cokeoven");
+    expect(ovens.length).toBeGreaterThan(0);
+    for (const oven of ovens) {
+      expect(oven.machineConfigControls.map((control) => control.id)).toEqual(["cokeOvenCasing"]);
+      expect(oven.machineConfigControls[0].tiers.map((tier) => tier.key)).toEqual(["18", "30"]);
+    }
+  });
+
   it("2.8.1 ore veins and small ores normalize without dimension tiers", () => {
     const vein = dataset.recipes.find((recipe) => recipe.kind === "ore_vein");
     const smallOre = dataset.recipes.find((recipe) => recipe.kind === "small_ore");
@@ -1464,5 +1473,41 @@ describe("a GTNH 2.8.1 export", () => {
     }
     const crucible = dataset.recipes.find((recipe) => recipe.category === "thaumcraft");
     expect(crucible.inputs[0].id).toBe("oredict:dustGlowstone");
+  });
+});
+
+describe("a recipe's minimum tier counts its map's amperage", () => {
+  const MAPS = ["gt.recipe.thermalcentrifuge", "gt.recipe.arcfurnace", "gt.recipe.massfab"];
+  const rawExport = () => ({ domains: [{ id: "gregtech", recipeMaps: singleblockCatalysts
+    .filter((map) => MAPS.includes(map.id))
+    .map((map) => ({ ...map, recipes: [
+      { id: `${map.id}-low`, durationTicks: 500, eut: 30,
+        itemInputs: [item("minecraft:stone", 1, "Stone")], itemOutputs: [item("minecraft:sand", 1, "Sand")] },
+      { id: `${map.id}-high`, durationTicks: 500, eut: { "gt.recipe.thermalcentrifuge": 48, "gt.recipe.arcfurnace": 90, "gt.recipe.massfab": 256 }[map.id],
+        itemInputs: [item("minecraft:dirt", 1, "Dirt")], itemOutputs: [item("minecraft:gravel", 1, "Gravel")] },
+    ] })) }] });
+  const tiers = (dataset, mapId, eut) => {
+    const recipe = dataset.recipes.find((entry) => entry.metadata?.recipeMapId === mapId && entry.eut === eut);
+    return {
+      recipe: recipe.minimumTier,
+      handlers: Object.fromEntries((recipe.machineHandlers ?? []).map((handler) => [handler.kind, handler.minimumTier])),
+    };
+  };
+
+  it("2.9: thermal centrifuge (2 A) and mass fab (8 A) start on LV; the arc map is 1 A", () => {
+    const dataset = normalize(rawExport(), { id: "local-2.9.0", label: "2.9.0" });
+    // A singleblock queries at V x map amps (FindRecipeQuery.java:91); the Large Thermal Refinery's hatches carry the draw.
+    expect(tiers(dataset, "gt.recipe.thermalcentrifuge", 48)).toEqual({ recipe: "LV", handlers: { single: "LV", multiblock: "MV" } });
+    expect(tiers(dataset, "gt.recipe.thermalcentrifuge", 30).recipe).toBe("LV");
+    expect(tiers(dataset, "gt.recipe.massfab", 256).recipe).toBe("LV");
+    expect(tiers(dataset, "gt.recipe.arcfurnace", 90).recipe).toBe("MV");
+  });
+
+  it("2.8.1: the arc furnace map is 3 A as well", () => {
+    const dataset = normalize(rawExport(), { id: "local-2.8.1", label: "2.8.1" });
+    expect(tiers(dataset, "gt.recipe.arcfurnace", 90).recipe).toBe("LV");
+    expect(tiers(dataset, "gt.recipe.arcfurnace", 90).handlers.single).toBe("LV");
+    expect(tiers(dataset, "gt.recipe.thermalcentrifuge", 48)).toEqual({ recipe: "LV", handlers: { single: "LV", multiblock: "MV" } });
+    expect(tiers(dataset, "gt.recipe.massfab", 256).recipe).toBe("LV");
   });
 });

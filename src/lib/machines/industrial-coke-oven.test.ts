@@ -47,37 +47,40 @@ const node: FactoryNode = {
 
 describe("Industrial Coke Oven issue #58 verification", () => {
   it("keeps a lone EV hatch at one working amp through legacy migration", () => {
-    const migrated = normalizeHatchInput(industrial, node, true);
+    const migrated = normalizeHatchInput(industrial, node, "2.9", true);
     expect(migrated.hatchVoltageTier).toBe("EV");
     expect(migrated.hatchAmps).toBe(1);
     expect(migrated.powerEuT).toBe(2048);
-    expect(getNodePowerReport(industrial, migrated).amps).toBe(1);
+    expect(getNodePowerReport(industrial, migrated, "2.9").amps).toBe(1);
   });
 
   it("preserves the linked plan's explicit 4096 EU/t budget as 2A at EV", () => {
     const saved = { ...node, energyHatches: 2, powerEuT: 4096 };
-    const migrated = normalizeHatchInput(industrial, saved, true);
+    const migrated = normalizeHatchInput(industrial, saved, "2.9", true);
     expect(migrated.hatchAmps).toBe(2);
     expect(migrated.powerEuT).toBe(4096);
-    expect(getNodePowerReport(industrial, migrated).typedBudget).toBe(true);
+    expect(getNodePowerReport(industrial, migrated, "2.9").typedBudget).toBe(true);
   });
 
   it.each([
     [1, 512, 0, 12.5, 937.5],
-    [2, 256, 1, 25, 1875],
+    // Two hatches: one alone works at 1A, so a second hatch is what buys the overclock.
+    [4, 256, 1, 25, 1875],
   ])(
     "verifies %i EV amp(s) against the game's parallel-first calculation",
     (amps, ticks, overclocks, charcoal, tar) => {
       const configured = { ...node, hatchVoltageTier: "EV" as const, hatchAmps: amps };
-      const stats = getOverclockedRecipeStats(industrial, configured);
-      const power = getNodePowerReport(industrial, configured);
+      const stats = getOverclockedRecipeStats(industrial, configured, "2.9");
+      const power = getNodePowerReport(industrial, configured, "2.9");
       // MTEIndustrialCokeOven: 16 base parallels, Kanthal modifier 0.98^2.
       // A batch costs 922.0 EU/t before overclocking. One 4x-EU normal OC
-      // fits into 4096 EU/t but not 2048; duration halves only in that case.
+      // fits into 8192 EU/t but not 2048; duration halves only in that case.
+      // The batch's bill is ceiled to a whole EU/t after the steps
+      // (GT5U@5.09.54.205 OverclockCalculator.java:421).
       expect(power.parallels).toBe(16);
       expect(stats.durationTicks).toBe(ticks);
       expect(stats.overclockSteps).toBe(overclocks);
-      expect(power.drawEuT).toBeCloseTo(60 * 0.98 ** 2 * 16 * 4 ** overclocks, 6);
+      expect(power.drawEuT).toBe(Math.ceil(60 * 16 * 0.98 ** 2 * 4 ** overclocks));
       const operationsPerSecond = (power.parallels * 20) / stats.durationTicks;
       expect(operationsPerSecond * 20).toBe(charcoal);
       expect(operationsPerSecond * 1500).toBe(tar);
@@ -86,8 +89,8 @@ describe("Industrial Coke Oven issue #58 verification", () => {
 
   it("keeps the old industrial map label equivalent without giving brick ovens industrial settings", () => {
     const oldLabel = { ...industrial, machineType: "Coke Oven" };
-    expect(getOverclockedRecipeStats(oldLabel, node)).toEqual(
-      getOverclockedRecipeStats(industrial, node),
+    expect(getOverclockedRecipeStats(oldLabel, node, "2.9")).toEqual(
+      getOverclockedRecipeStats(industrial, node, "2.9"),
     );
     const brick: Recipe = {
       id: "brick-charcoal",
@@ -102,11 +105,11 @@ describe("Industrial Coke Oven issue #58 verification", () => {
         { kind: "fluid", id: "creosote", amount: 250 },
       ],
     };
-    expect(getRecipeCoilTierControl(brick, {})).toBeUndefined();
-    expect(getOverclockedRecipeStats(brick, node).durationTicks).toBe(1800);
-    expect(getNodePowerReport(brick, node).parallels).toBe(1);
+    expect(getRecipeCoilTierControl(brick, {}, "2.9")).toBeUndefined();
+    expect(getOverclockedRecipeStats(brick, node, "2.9").durationTicks).toBe(1800);
+    expect(getNodePowerReport(brick, node, "2.9").parallels).toBe(1);
     expect(
-      normalizeHatchInput(brick, { ...node, recipeId: brick.id }, true).hatchAmps,
+      normalizeHatchInput(brick, { ...node, recipeId: brick.id }, "2.9", true).hatchAmps,
     ).toBeUndefined();
   });
 });

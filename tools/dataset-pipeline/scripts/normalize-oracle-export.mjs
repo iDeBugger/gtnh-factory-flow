@@ -3,6 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { existsSync } from "node:fs";
 import { writeDatasetJson } from "./dataset-json-writer.mjs";
+import { recipeMapAmperage } from "./recipe-map-amperage.mjs";
 import { spargeRolledOutputs } from "./sparge-byproducts.mjs";
 import { stageRenderedIcons as stageIconsOnWorkers } from "./stage-rendered-icons.mjs";
 import {
@@ -45,7 +46,7 @@ const oracleStrict = envFlag("GTNH_ORACLE_STRICT", false);
 
 const raw = JSON.parse(stripBom(await fs.readFile(inputPath, "utf8")));
 const singleblockFamilyIds = new Set((findDomain("gregtech")?.recipeMaps ?? []).flatMap(map =>
-  buildMachineHandlerTemplates(map.name, map.catalysts).filter(handler => handler.kind === "single").map(handler => handler.id)));
+  buildMachineHandlerTemplates(map.name, map.catalysts, undefined, gtnhVersion).filter(handler => handler.kind === "single").map(handler => handler.id)));
 const renderedIcons = await stageRenderedIcons(renderedIconDir, outDir);
 
 const resources = new Map();
@@ -215,7 +216,7 @@ function normalizeGregtech(domain) {
     // machines become selectable handlers with their own stats, so one
     // machine's bonuses no longer leak onto another (the Dangote Distillus
     // used to force 12 parallels onto the plain Distillation Tower).
-    const handlerTemplates = buildMachineHandlerTemplates(machineType, recipeMap.catalysts, singleblockFamilyIds);
+    const handlerTemplates = buildMachineHandlerTemplates(machineType, recipeMap.catalysts, singleblockFamilyIds, gtnhVersion);
     registerMachineHandlerIcons(handlerTemplates);
     const catalystControls = primaryMachineHandlerControls(handlerTemplates);
     for (const rawRecipe of recipeMap.recipes ?? []) {
@@ -246,12 +247,18 @@ function normalizeGregtech(domain) {
         machineType,
         rawRecipe.specialValue,
         catalystControls,
+        gtnhVersion,
       );
-      const minimumTier = voltageTierForEu(rawRecipe.eut ?? 0);
+      // A singleblock finds the recipe at its voltage times the map's amps; a
+      // multiblock's hatches must carry the whole draw (drawTier).
+      const drawTier = voltageTierForEu(rawRecipe.eut ?? 0);
+      const mapAmps = recipeMapAmperage(recipeMap.id, gtnhVersion);
+      const minimumTier = mapAmps > 1 ? voltageTierForEu((Number(rawRecipe.eut) || 0) / mapAmps) : drawTier;
       const durationTicks = positiveInt(rawRecipe.durationTicks, 1);
       const eut = Math.max(0, Number(rawRecipe.eut) || 0);
       const machineHandlers = instantiateRecipeMachineHandlers(handlerTemplates, {
         minimumTier,
+        drawTier,
         durationTicks,
         eut,
         machineConfigControls,
@@ -513,7 +520,7 @@ function normalizeSmelting(domain) {
  * Smelter's parallels arrive through its parsed tooltip controls.
  */
 function furnaceHandlerTemplates() {
-  const templates = buildMachineHandlerTemplates("Furnace", furnaceCatalysts, singleblockFamilyIds);
+  const templates = buildMachineHandlerTemplates("Furnace", furnaceCatalysts, singleblockFamilyIds, gtnhVersion);
   registerMachineHandlerIcons(templates);
   if (templates.length === 0) {
     return [];

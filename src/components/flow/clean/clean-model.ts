@@ -66,12 +66,16 @@ import { mcTextWidth, measureClean, measureRowFigure, measureRowName, useFontEpo
 import type { TipSpec } from "./interaction/tip-spec";
 import {
   firstUnconvertedTarget,
+  isUnconvertedCard,
   markedSections,
   sectionMarker,
   unconvertedWiresRule,
   unconvertedCardLine,
   unconvertedVersionOf,
 } from "@/lib/model/unconverted-card";
+import { planGameVersion, type GameVersion } from "@/lib/model/game-version";
+import { unservedPlanVersion } from "@/lib/datasets/dataset-cache";
+import { recipesNotOnSiteText } from "@/lib/datasets/new-plan-version";
 
 type VoltageTier = Parameters<typeof getVoltageTierIndex>[0];
 
@@ -254,19 +258,35 @@ export interface CleanUnconvertedView {
 export function unconvertedView(
   project: Pick<FactoryProject, "gameVersion">,
   node: FactoryNode,
+  unservedVersion?: GameVersion,
 ): CleanUnconvertedView | undefined {
   const target = firstUnconvertedTarget(node);
   if (!target) return undefined;
   const version = unconvertedVersionOf(project);
   const markers = markedSections(node).map((section) => sectionMarker(node, section)!);
   const first = markers[0]!;
+  const tip = {
+    id: `${node.id}|unconverted`,
+    title: markers.map((marker) => marker.recipeName).join(", "),
+    sub: first.machineType,
+  };
+  // On a plan this site has no recipes for (`unservedPlanVersion`) the recipe may exist in that version: the card
+  // says this site lacks it, and offers no pick, since the search has nothing to offer there.
+  if (unservedVersion) {
+    return {
+      line: recipesNotOnSiteText(unservedVersion),
+      target,
+      tip: {
+        ...tip,
+        notes: [{ text: "The card is left out of the solve." }, { text: unconvertedWiresRule(1) }],
+      },
+    };
+  }
   return {
     line: unconvertedCardLine(version),
     target,
     tip: {
-      id: `${node.id}|unconverted`,
-      title: markers.map((marker) => marker.recipeName).join(", "),
-      sub: first.machineType,
+      ...tip,
       notes: [
         { text: `Not in GTNH ${version}, so the card is left out of the solve.` },
         { text: unconvertedWiresRule(1) },
@@ -299,10 +319,12 @@ export interface CleanCardContext {
   settings: Array<{ id: string; label: string; value: string; steps: boolean }>;
   /** Port keys of every rail port, in render order, for React Flow's handle bookkeeping. */
   handleIds: string[];
+  /** The plan's game version: the card's tips, settings and menus read their machine rules for it. */
+  gameVersion: GameVersion;
 }
 
 /** The card's tier ladder, with the classic card's rules. */
-function getNodeTierControl(recipe: Recipe, node: FactoryNode) {
+function getNodeTierControl(recipe: Recipe, node: FactoryNode, gameVersion: GameVersion) {
   const fusion = getFusionMachine(recipe.machineType);
   if (fusion) {
     return {
@@ -322,8 +344,8 @@ function getNodeTierControl(recipe: Recipe, node: FactoryNode) {
   ) {
     return undefined;
   }
-  const minimum = getOverclockedRecipeStats(recipe, node).minimumTier as VoltageTier;
-  const allowBelowMinimum = isMultiblockRecipe(recipe);
+  const minimum = getOverclockedRecipeStats(recipe, node, gameVersion).minimumTier as VoltageTier;
+  const allowBelowMinimum = isMultiblockRecipe(recipe, gameVersion);
   const maximum = allowBelowMinimum
     ? undefined
     : (getRecipeMaximumVoltageTier(recipe) as VoltageTier | undefined);
@@ -490,15 +512,15 @@ export function layoutStrip(chips: Array<Omit<CleanChipView, "x" | "y" | "width"
  * What a card needs to be drawn as a shell (virtual/): which machine it is, its tier ladder and whether it can run
  * (the red ring). The first steps of the card's derived state, so the card and its shell cannot disagree.
  */
-export function deriveCardFace(recipe: Recipe, projectNode: FactoryNode) {
+export function deriveCardFace(recipe: Recipe, projectNode: FactoryNode, gameVersion: GameVersion) {
   const selectedMachineHandler = getSelectedMachineHandler(recipe, projectNode);
-  const nodeRecipe = applyRecipeInputOverrides(recipe, projectNode);
-  const effectiveRecipe = applyMachineHandlerToRecipe(nodeRecipe, projectNode);
+  const nodeRecipe = applyRecipeInputOverrides(recipe, projectNode, gameVersion);
+  const effectiveRecipe = applyMachineHandlerToRecipe(nodeRecipe, projectNode, gameVersion);
   const machineDrawsEu = effectiveRecipe.eut > 0 && !isSteamMachineHandler(selectedMachineHandler);
-  const tierControl = machineDrawsEu ? getNodeTierControl(effectiveRecipe, projectNode) : undefined;
+  const tierControl = machineDrawsEu ? getNodeTierControl(effectiveRecipe, projectNode, gameVersion) : undefined;
   const powerReport =
     machineDrawsEu && tierControl && hasPowerReport(nodeRecipe)
-      ? getNodePowerReport(nodeRecipe, projectNode)
+      ? getNodePowerReport(nodeRecipe, projectNode, gameVersion)
       : undefined;
   return {
     selectedMachineHandler,
@@ -975,6 +997,11 @@ export function useCleanCardModel(
   useRateDisplayUnits();
   // Pins live on the project, not the node: re-render when they move.
   useFactoryStore((state) => state.project.settingPins);
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
+  // One string, asked only by a marked card: what its line says on a plan this site has no recipes for.
+  const unservedVersion = useFactoryStore((state) =>
+    isUnconvertedCard(projectNode) ? unservedPlanVersion(state) : undefined,
+  );
   const machineIcons = useMachineHandlerIconEntries();
   const mapIcons = useRecipeMapIcons();
   // The solve is read lazily like the classic card does: this component
@@ -990,21 +1017,22 @@ export function useCleanCardModel(
       machineDrawsEu,
       tierControl,
       powerReport,
-    } = deriveCardFace(recipe, projectNode);
-    const steamReport = !machineDrawsEu ? getNodeSteamReport(nodeRecipe, projectNode) : undefined;
+    } = deriveCardFace(recipe, projectNode, gameVersion);
+    const steamReport = !machineDrawsEu ? getNodeSteamReport(nodeRecipe, projectNode, gameVersion) : undefined;
     const showHatchControl = Boolean(
       powerReport?.isMultiblock &&
-      prefersCuratedMachineMath(effectiveRecipe) &&
+      prefersCuratedMachineMath(effectiveRecipe, gameVersion) &&
       !getFusionMachine(effectiveRecipe.machineType),
     );
-    const coilControl = getRecipeCoilTierControl(effectiveRecipe, projectNode);
-    const controls = getRecipeMachineConfigTierControls(effectiveRecipe, projectNode);
-    const overclockedStats = getOverclockedRecipeStats(nodeRecipe, projectNode);
+    const coilControl = getRecipeCoilTierControl(effectiveRecipe, projectNode, gameVersion);
+    const controls = getRecipeMachineConfigTierControls(effectiveRecipe, projectNode, gameVersion);
+    const overclockedStats = getOverclockedRecipeStats(nodeRecipe, projectNode, gameVersion);
     const displayRecipe = stripBeeFrameSlotInputs(effectiveRecipe);
     const adjusted = applyMachineOutputMultipliers(
       displayRecipe,
       projectNode,
       overclockedStats.tier,
+      gameVersion,
     );
     const overclockedRecipe = { ...displayRecipe, ...adjusted, ...overclockedStats };
     return {
@@ -1018,12 +1046,15 @@ export function useCleanCardModel(
       coilControl,
       controls,
       overclockedRecipe,
-      parallel: getMachineParallelMultiplier(effectiveRecipe, projectNode),
+      parallel: getMachineParallelMultiplier(effectiveRecipe, projectNode, gameVersion),
       circuit: getRecipeProgrammedCircuit(effectiveRecipe) as RecipeProgrammedCircuit | undefined,
     };
-  }, [recipe, projectNode]);
+  }, [recipe, projectNode, gameVersion]);
 
-  const pinControls = useMemo(() => settingControls(recipe, projectNode), [recipe, projectNode]);
+  const pinControls = useMemo(
+    () => settingControls(recipe, projectNode, gameVersion),
+    [recipe, projectNode, gameVersion],
+  );
   const verdict = deriveNodeVerdict(liveProject, lastResult, projectNode.id);
   const rails = buildRailPorts(
     liveProject,
@@ -1047,7 +1078,7 @@ export function useCleanCardModel(
   const { selectedMachineHandler, machineHandlers, tierControl, powerReport, steamReport } =
     derived;
   const { machineIcon, art } = cardPicture(recipe, projectNode, derived, machineIcons, mapIcons);
-  const unconverted = unconvertedView(liveProject, projectNode);
+  const unconverted = unconvertedView(liveProject, projectNode, unservedVersion);
   // A marked card is named by its marker: the machine it ran in the version it came from.
   const name = projectNode.unconverted?.machineType ?? machineIcon?.displayName ?? selectedMachineHandler.label;
 
@@ -1244,6 +1275,7 @@ export function useCleanCardModel(
         ...carryMachineVoltage(
           { recipe: derived.nodeRecipe, node: projectNode },
           { recipe: derived.nodeRecipe, machineHandlerId: next.id },
+          gameVersion,
         ),
       });
     },
@@ -1289,6 +1321,7 @@ export function useCleanCardModel(
       ...inputs.filter((p) => !p.port.free).map((p) => p.handleId),
       ...outputs.map((p) => p.handleId),
     ],
+    gameVersion,
   };
 
   return { view, actions, context };

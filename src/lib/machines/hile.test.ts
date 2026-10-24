@@ -56,7 +56,7 @@ const node: FactoryNode = {
 
 describe("HILE issue #50", () => {
   it("offers one source selector with all 46 registered hatch combinations", () => {
-    const controls = getRecipeMachineConfigTierControls(recipe, node);
+    const controls = getRecipeMachineConfigTierControls(recipe, node, "2.9");
     expect(controls.map((control) => control.id)).toEqual(["laserSource"]);
     expect(controls[0].tiers).toHaveLength(46);
     expect(controls[0].current.label).toBe("UHV · 65,536A");
@@ -84,23 +84,23 @@ describe("HILE issue #50", () => {
         getMachineStructuralParallels(recipe, {
           ...node,
           machineConfigTiers: { laserSource: source.key },
-        }),
+        }, "2.9"),
       ).toBe(parallels);
     }
   });
 
   it("pays 40 parallels and overclocks from the energy hatches, not laser amps", () => {
-    const stats = getOverclockedRecipeStats(recipe, node);
-    const power = getNodePowerReport(recipe, node);
+    const stats = getOverclockedRecipeStats(recipe, node, "2.9");
+    const power = getNodePowerReport(recipe, node, "2.9");
     expect(power.poolEuT).toBe(8192);
     expect(power.parallels).toBe(40);
     expect(stats.overclockSteps).toBe(1);
     expect(stats.durationTicks).toBe(50); // 350 / 3.5 / 2
     expect(power.drawEuT).toBe(30 * 0.8 * 40 * 4);
-    const low = getNodePowerReport(recipe, { ...node, hatchVoltageTier: "LV" });
+    const low = getNodePowerReport(recipe, { ...node, hatchVoltageTier: "LV" }, "2.9");
     expect(low.poolEuT).toBe(32);
     expect(low.parallels).toBe(1);
-    const off = getNodePowerReport(recipe, { ...node, hatchAmps: 0 });
+    const off = getNodePowerReport(recipe, { ...node, hatchAmps: 0 }, "2.9");
     expect(off.state).toBe("under-powered");
   });
 
@@ -110,7 +110,7 @@ describe("HILE issue #50", () => {
       getOverclockedRecipeStats(recipe, {
         ...highPower,
         machineConfigTiers: { laserSource },
-      });
+      }, "2.9");
     expect(withSource("iv-256").overclockSteps).toBe(5); // LuV ceiling - LV recipe
     expect(withSource("luv-256").overclockSteps).toBe(6);
     expect(withSource("uv-256").overclockSteps).toBe(8);
@@ -118,18 +118,18 @@ describe("HILE issue #50", () => {
 
   it("preserves the named legacy hatch instead of the conflicting dummy count", () => {
     const legacy = { ...node, machineConfigTiers: { laserSource: "a65536", laserAmperage: "64" } };
-    expect(getRecipeMachineConfigTierControls(recipe, legacy)[0].current.key).toBe("uhv-65536");
-    expect(getMachineStructuralParallels(recipe, legacy)).toBe(40);
-    expect(getOverclockedRecipeStats(recipe, legacy)).toEqual(
-      getOverclockedRecipeStats(recipe, node),
+    expect(getRecipeMachineConfigTierControls(recipe, legacy, "2.9")[0].current.key).toBe("uhv-65536");
+    expect(getMachineStructuralParallels(recipe, legacy, "2.9")).toBe(40);
+    expect(getOverclockedRecipeStats(recipe, legacy, "2.9")).toEqual(
+      getOverclockedRecipeStats(recipe, node, "2.9"),
     );
     expect(
       getRecipeMachineConfigTierControls(recipe, {
         machineConfigTiers: { laserAmperage: "4096" },
-      })[0].current.key,
+      }, "2.9")[0].current.key,
     ).toBe("zpm-4096");
     expect(
-      getRecipeMachineConfigTierControls(recipe, { machineConfigTiers: {} })[0].current.key,
+      getRecipeMachineConfigTierControls(recipe, { machineConfigTiers: {} }, "2.9")[0].current.key,
     ).toBe("iv-256");
   });
 
@@ -159,15 +159,16 @@ describe("HILE issue #50", () => {
       ],
     };
     const selected = { ...node, machineHandlerId: "hile" };
-    const effective = applyMachineHandlerToRecipe(family, selected);
-    expect(getRecipeMachineConfigTierControls(effective, selected)).toHaveLength(1);
-    expect(getOverclockedRecipeStats(family, selected)).toEqual(
-      getOverclockedRecipeStats(recipe, node),
+    const effective = applyMachineHandlerToRecipe(family, selected, "2.9");
+    expect(getRecipeMachineConfigTierControls(effective, selected, "2.9")).toHaveLength(1);
+    expect(getOverclockedRecipeStats(family, selected, "2.9")).toEqual(
+      getOverclockedRecipeStats(recipe, node, "2.9"),
     );
     expect(
       getRecipeMachineConfigTierControls(
-        applyMachineHandlerToRecipe(family, { machineHandlerId: "single" }),
+        applyMachineHandlerToRecipe(family, { machineHandlerId: "single" }, "2.9"),
         node,
+        "2.9",
       ),
     ).toHaveLength(0);
   });
@@ -179,7 +180,7 @@ describe("HILE issue #50", () => {
       hatchVoltageTier: "UXV" as const,
       machineConfigTiers: { laserSource: "iv-256" },
     };
-    const report = getNodePowerReport(highRecipe, lowSource);
+    const report = getNodePowerReport(highRecipe, lowSource, "2.9");
     expect(report.state).toBe("over-tier");
     expect(describePowerStall(report)).toContain("Laser source tier too low");
     const project: FactoryProject = {

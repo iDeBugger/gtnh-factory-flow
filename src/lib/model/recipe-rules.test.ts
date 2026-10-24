@@ -202,7 +202,7 @@ describe("recipe machine handlers", () => {
     };
     const effective = applyMachineHandlerToRecipe(recipe, {
       machineHandlerId: "autoworkbench",
-    });
+    }, "2.9");
 
     expect(getSelectedMachineHandler(recipe, { machineHandlerId: "autoworkbench" })).toMatchObject({
       label: "Autoworkbench",
@@ -258,7 +258,7 @@ describe("recipe machine handlers", () => {
 
     const effective = applyMachineHandlerToRecipe(recipe, {
       machineHandlerId: "large-fluid-extractor",
-    });
+    }, "2.9");
 
     expect(effective.machineConfigControls?.map((control) => control.id)).toEqual(["solenoidCoil"]);
   });
@@ -331,10 +331,10 @@ describe("multiblock machine config controls", () => {
     };
     const coilControl = getRecipeCoilTierControl(recipe, {
       coilTier: "kanthal",
-    });
+    }, "2.9");
     const [pipeControl] = getRecipeMachineConfigTierControls(recipe, {
       machineConfigTiers: { pipeCasing: "tungstensteel" },
-    });
+    }, "2.9");
 
     expect(coilControl?.current.key).toBe("kanthal");
     expect(pipeControl).toMatchObject({
@@ -385,7 +385,7 @@ describe("multiblock machine config controls", () => {
 
     const [control] = getRecipeMachineConfigTierControls(recipe, {
       machineConfigTiers: { pipeCasing: "tungstensteel" },
-    });
+    }, "2.9");
 
     expect(control).toMatchObject({
       id: "pipeCasing",
@@ -395,12 +395,12 @@ describe("multiblock machine config controls", () => {
   });
 
   it("does not add pipe casing controls to unrelated machines", () => {
-    expect(getRecipeMachineConfigTierControls(testRecipe("Macerator"), {})).toEqual([]);
+    expect(getRecipeMachineConfigTierControls(testRecipe("Macerator"), {}, "2.9")).toEqual([]);
   });
 
   it("does not synthesize coil controls without imported machine config controls", () => {
     expect(
-      getRecipeCoilTierControl(testRecipe("Chemical Plant"), { coilTier: "kanthal" }),
+      getRecipeCoilTierControl(testRecipe("Chemical Plant"), { coilTier: "kanthal" }, "2.9"),
     ).toBeUndefined();
   });
 
@@ -422,11 +422,11 @@ describe("multiblock machine config controls", () => {
     };
     for (const machineType of ["Large Chemical Reactor", "Mega Chemical Reactor"]) {
       const recipe = { ...testRecipe(machineType), machineConfigControls: [coilControl] };
-      expect(getRecipeCoilTierControl(recipe, { coilTier: "cupronickel" })).toBeUndefined();
+      expect(getRecipeCoilTierControl(recipe, { coilTier: "cupronickel" }, "2.9")).toBeUndefined();
     }
     // A machine the table does not hide it on still shows the knob.
     const shown = { ...testRecipe("Imported Machine"), machineConfigControls: [coilControl] };
-    expect(getRecipeCoilTierControl(shown, { coilTier: "cupronickel" })?.current.key).toBe(
+    expect(getRecipeCoilTierControl(shown, { coilTier: "cupronickel" }, "2.9")?.current.key).toBe(
       "cupronickel",
     );
   });
@@ -464,9 +464,9 @@ describe("machine handlers and runtime calculations", () => {
   };
 
   it("keeps runtime variants for the default machine", () => {
-    expect(applyMachineHandlerToRecipe(recipe, {}).runtimeCalculation).toEqual(runtimeCalculation);
+    expect(applyMachineHandlerToRecipe(recipe, {}, "2.9").runtimeCalculation).toEqual(runtimeCalculation);
     expect(
-      applyMachineHandlerToRecipe(recipe, { machineHandlerId: "distillation-tower" })
+      applyMachineHandlerToRecipe(recipe, { machineHandlerId: "distillation-tower" }, "2.9")
         .runtimeCalculation,
     ).toEqual(runtimeCalculation);
   });
@@ -474,7 +474,7 @@ describe("machine handlers and runtime calculations", () => {
   it("drops runtime variants when a different machine is selected", () => {
     const applied = applyMachineHandlerToRecipe(recipe, {
       machineHandlerId: "dangote-distillus",
-    });
+    }, "2.9");
     expect(applied.runtimeCalculation).toBeUndefined();
     expect(applied.durationTicks).toBe(recipe.durationTicks);
     expect(applied.eut).toBe(recipe.eut);

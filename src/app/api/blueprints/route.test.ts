@@ -27,12 +27,13 @@ function query(): unknown {
 }
 
 const sessionUser = vi.fn<() => { id: string; username: string } | undefined>(() => undefined);
+const storage = { configured: true };
 
 vi.mock("@/lib/server/community", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/server/community")>();
   return {
     ...actual,
-    isCommunityConfigured: () => true,
+    isCommunityConfigured: () => storage.configured,
     getCommunityDb: () => query(),
     getSessionUser: vi.fn(async () => sessionUser()),
     checkRateLimit: vi.fn(async () => true),
@@ -79,6 +80,18 @@ describe("blueprints with the setting unset", () => {
       expect(await answer.json()).toEqual({ error: "Not found" });
     }
     expect(calls).toEqual([]);
+  });
+
+  it("answers the public shelf as absent on a server with no storage, not 503", async () => {
+    storage.configured = false;
+    try {
+      const shelf = await list.GET(get("/api/blueprints?scope=public"));
+      expect(shelf.status).toBe(404);
+      expect(await shelf.json()).toEqual({ error: "Not found" });
+      expect((await list.GET(get("/api/blueprints"))).status).toBe(503);
+    } finally {
+      storage.configured = true;
+    }
   });
 
   it("still lists the account's own blueprints", async () => {

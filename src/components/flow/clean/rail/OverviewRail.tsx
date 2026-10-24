@@ -33,6 +33,7 @@ import {
   rateUnitSuffix,
 } from "@/lib/model/rate-unit";
 import { getPowerMachineIcon } from "@/lib/power/planner-data";
+import { planGameVersion, type GameVersion } from "@/lib/model/game-version";
 import { useFactoryStore, useRateDisplayUnits } from "@/store/factory-store";
 import { useWorkspaceView, writeWorkspaceView } from "@/lib/workspace-view";
 import { formatAmountWithSuffix, RULE_MARK, RULE_NAME, RULE_STEPS } from "../../rate-rule";
@@ -126,12 +127,14 @@ export function machinesText(count: number): string {
   return String(Number(count.toFixed(decimals)));
 }
 
+/** Keyed by version and source: each pack draws a source with its own item. */
 const powerIcons = new Map<string, unknown>();
-function powerIcon(sourceId: string) {
-  if (!powerIcons.has(sourceId)) {
-    const icon = getPowerMachineIcon(sourceId);
+function powerIcon(sourceId: string, gameVersion: GameVersion) {
+  const key = `${gameVersion}:${sourceId}`;
+  if (!powerIcons.has(key)) {
+    const icon = getPowerMachineIcon(sourceId, gameVersion);
     powerIcons.set(
-      sourceId,
+      key,
       icon
         ? {
             kind: "item",
@@ -143,7 +146,7 @@ function powerIcon(sourceId: string) {
         : undefined,
     );
   }
-  return powerIcons.get(sourceId) as Parameters<typeof ResourceIcon>[0]["resource"];
+  return powerIcons.get(key) as Parameters<typeof ResourceIcon>[0]["resource"];
 }
 
 export function ResourceGlyph({ line }: { line: Pick<RailLine, "resource" | "energy"> }) {
@@ -981,7 +984,8 @@ function RuleMenu({
 
 function MachineGlyph({ entry }: { entry: RailMachine }) {
   const icons = useMachineHandlerIcons();
-  const icon = entry.powerSourceId ? powerIcon(entry.powerSourceId) : icons.get(entry.handlerId);
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
+  const icon = entry.powerSourceId ? powerIcon(entry.powerSourceId, gameVersion) : icons.get(entry.handlerId);
   if (!icon) return <span className="rail-icon" />;
   return (
     <span className="rail-icon">

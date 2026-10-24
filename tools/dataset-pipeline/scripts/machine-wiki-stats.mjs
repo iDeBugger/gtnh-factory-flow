@@ -265,13 +265,28 @@ function normalizeKey(value) {
 }
 
 /**
+ * Entries a pack's machine does not have, by the export's `gtnhVersion`.
+ * 2.8.1's Industrial Cutting Factory takes no sawblade: a flat 3x speed, 75% EU
+ * and 4 parallels per voltage tier, which its tooltip states (GT5U 5.09.51.476
+ * gtPlusPlus/xmod/gregtech/common/tileentities/machines/multi/processing/
+ * MTEIndustrialCuttingMachine.java:182-191). The sawblade tiers above are 2.9's
+ * (GT5U 5.09.54.205 gregtech/common/tileentities/machines/multi/
+ * MTEIndustrialCuttingMachine.java:106-111, 312-338).
+ */
+const ABSENT_BY_PACK = Object.freeze({
+  "2.8.1": new Set(["industrial cutting factory"]),
+});
+
+/**
  * Wiki-sourced augmentation for a machine, optionally specific to the recipe
  * map it appears on. Tooltip-parsed stats take precedence; callers should
- * only fill gaps and append the selector control.
+ * only fill gaps and append the selector control. `gtnhVersion` is the
+ * export's pack label; a missing or unknown one reads as 2.9.
  */
-export function wikiStatsForMachine(label, machineType) {
-  return (
-    ENTRIES.get(`${normalizeKey(label)}@@${normalizeKey(machineType)}`) ??
-    ENTRIES.get(normalizeKey(label))
-  );
+export function wikiStatsForMachine(label, machineType, gtnhVersion) {
+  const key = normalizeKey(label);
+  if (ABSENT_BY_PACK[gtnhVersion]?.has(key)) {
+    return undefined;
+  }
+  return ENTRIES.get(`${key}@@${normalizeKey(machineType)}`) ?? ENTRIES.get(key);
 }

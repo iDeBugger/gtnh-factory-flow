@@ -169,6 +169,13 @@
    "iconPath": "/datasets/gtnh/local-2.9.0-beta-2/textures/rendered/amber_dust-0a0d840d6fa3.png",
    "dominantColor": "#e27609"
   },
+  "Amber Gem": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@8514",
+   "displayName": "Amber",
+   "iconPath": "/datasets/gtnh/local-2.9.0-beta-2/textures/rendered/amber-94e614086c8c.png",
+   "dominantColor": "#a85500"
+  },
   "Amber Plate": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@17514",
@@ -1939,6 +1946,13 @@
    "displayName": "Lithium Tetrafluoroberyllate (LFTB)",
    "iconPath": "/datasets/gtnh/local-2.9.0-beta-2/textures/rendered/lithium_tetrafluoroberyllate_lftb-f136149d4d94.png",
    "dominantColor": "#9aaea2"
+  },
+  "Life Essence Cell": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@30694",
+   "displayName": "Life Cell",
+   "iconPath": "/datasets/gtnh/local-2.9.0-beta-2/textures/rendered/life_cell-b81bc16ebf07.png",
+   "dominantColor": "#763434"
   },
   "Light Fuel": {
    "kind": "fluid",
@@ -4221,6 +4235,13 @@
    "displayName": "Vinteum Dust",
    "iconPath": "/datasets/gtnh/local-2.9.0-beta-2/textures/rendered/vinteum_dust-848d75957166.png",
    "dominantColor": "#4c97c1"
+  },
+  "Vinteum Gem": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@8529",
+   "displayName": "Vinteum",
+   "iconPath": "/datasets/gtnh/local-2.9.0-beta-2/textures/rendered/vinteum-9a16a857b181.png",
+   "dominantColor": "#55aad8"
   },
   "Vinteum Ingot": {
    "kind": "item",

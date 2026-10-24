@@ -7,11 +7,45 @@ Source beats the wiki, the workbook and the reference. Engine truth is
 `createProcessingLogic`; GT++ `*Legacy` classes are fossils. Java `int *= float`
 computes in float: replicate it.
 
+## Game version
+
+- Every machine, solver and recipe-rule function that reads a machine takes the plan's version as a
+  required argument (`getMachineBehaviour(name, gameVersion)`, `getOverclockedRecipeStats(recipe, node,
+  gameVersion)`), with no default: a forgotten argument is a type error, not a silent 2.9 number on a
+  2.8.1 plan. A function holding the plan reads `planGameVersion(project)` once and passes it down.
+  UI components read it once with `useFactoryStore((s) => planGameVersion(s.project))` (one string
+  selector, never a per-node pick) and hand it to pure models as a parameter; a card's children get
+  it from the card model's `context.gameVersion` or a prop.
+- What differs in a version is an entry in `MACHINE_OVERRIDES` (`version-overrides.ts`), keyed by the
+  table's canonical names: a partial merges over the entry, `null` means the machine does not exist.
+  An override's `aliases` also answer in that version only (the 2.8.1 Multiblock Centrifuge map has no
+  handlers, so its cards carry the map name); a base name or alias always wins over one. An override
+  needs a base entry: `forVersion` answers undefined for a partial with nothing under it.
+- A version with no overrides and no data files (an unserved one, such as a "2.10" plan from another
+  site) reads 2.9's rules and data unchanged. That is deliberate: such a plan keeps its stored bodies
+  and is never refreshed, and the unserved-version notice is its warning.
+- Data files that differ live in `data/<version>/` under the same name (`data/2.8.1/bio-vat.json`,
+  `radio-hatch.json`, `tgs-trees.json`) and are read through `forVersion(name, base, overrides,
+  gameVersion)`: no entry for a version returns the base by identity. They come from that pack's oracle
+  export (`import-machine-side-data.mjs ... --out src/lib/machines/data/2.8.1`), never by hand.
+
 ## The machine table
 
 - `machine-table.ts` holds curated behaviour (speed, EU discount, parallels, overclock
   style, extra `controls`), transcribed from the reference's `src/machines.ts`. It wins
   over scraped data; machines absent from it fall back to the dataset.
+- Every lookup takes the plan's game version; see "Game version" below.
+- 2.8.1 overrides live in `overrides-2.8.1/`, one group file per kind, merged in `index.ts` (a
+  machine in two groups throws). Group files import only TYPES from `../machine-table`: it loads
+  them through `version-overrides.ts`, so any value from it is uninitialised there. `OVERCLOCK` and the
+  control builders live in `table-builders.ts` for them. Other shared values
+  go in a separate module that imports neither. `load-order.test.ts` catches a break. Java float
+  maths uses `java-float.ts` (`f32`, `fmul`, `fdiv`, `floatBonus`, `speedFromBonus`, `powInt` for
+  GTUtility.powInt, which is not Math.pow, and `rampCeiling` for momentum ramps). A float literal
+  bonus is stated as `speed: speedFromBonus(...)`; a float a formula computes is stated as
+  `durationMultiplier` (it wins over `speed`), since `1 / speed` cannot give back every float.
+  An override that states one of the two replaces the base's other (`getMachineBehaviour`), and
+  `overrides-2.8.1/index.test.ts` checks no merged entry carries both.
 - Never add an entry by guessing. Their voltage tiers start at LV = 0 (ours at ULV = 0, so
   their `voltageTier + 1` is our ordinal), and their `speed` is throughput (ours is a
   duration multiplier, `1 / speed`). `machine-table.test.ts` checks every entry against
@@ -41,6 +75,10 @@ computes in float: replicate it.
   `GTParallelHelper`), so it is not authoritative for multiblocks: `prefersCuratedMachineMath`.
 - Singleblock tiers come from real catalysts (`availableTiers`). Never interpolate a
   machine that doesn't exist (Cold Trap has IV and ZPM, no LuV).
+- A singleblock's minimum tier is the lowest whose voltage x the recipe map's amperage covers
+  the EU/t (`recipe-map-amperage.ts`, per version: thermal centrifuge 2 A, mass fab 8 A, and
+  2.8.1's arc furnace 3 A). `applyMachineHandlerToRecipe` sets `recipeMapAmperage`; multiblocks
+  keep the draw tier. The machine's own amps (`amperage` in the table) are a separate fact.
 
 ## Hatch power (src/lib/solver/hatch-input.ts)
 

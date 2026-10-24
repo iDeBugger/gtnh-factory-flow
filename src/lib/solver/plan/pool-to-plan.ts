@@ -14,6 +14,7 @@ import type {
   ResourceAmount,
   ResourceKey,
 } from "../../model/types";
+import { planGameVersion } from "@/lib/model/game-version";
 
 /** What turning a Pool plan into wires did, as counts and ids. */
 export interface PoolConversionReport {
@@ -61,6 +62,7 @@ const handleOf = (side: "input" | "output", section: number, resource: Pick<Reso
  * replaced) for the Solve conversion to finish.
  */
 export function wirePoolProject(project: FactoryProject): { project: FactoryProject; report: PoolConversionReport } {
+  const gameVersion = planGameVersion(project);
   const report: PoolConversionReport = {
     wires: 0,
     bridgeWires: 0,
@@ -84,9 +86,9 @@ export function wirePoolProject(project: FactoryProject): { project: FactoryProj
     for (const { section, node: view } of listNodeSections(node)) {
       const recipe = recipesById.get(view.recipeId);
       if (!recipe) continue;
-      const contextual = applyRecipeInputOverrides(recipe, view);
-      const effective = applyMachineHandlerToRecipe(contextual, view);
-      const outputs = getRuntimeCalculationOutputs(effective, view) ?? effective.outputs;
+      const contextual = applyRecipeInputOverrides(recipe, view, gameVersion);
+      const effective = applyMachineHandlerToRecipe(contextual, view, gameVersion);
+      const outputs = getRuntimeCalculationOutputs(effective, view, gameVersion) ?? effective.outputs;
       const seenIn = new Set<ResourceKey>();
       for (const input of contextual.inputs) {
         if (!isRecipeInputConsumed(input) || input.amount <= 0) continue;

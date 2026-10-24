@@ -198,11 +198,11 @@ describe("machine tooltip counts and effective statistics", () => {
         minimumTier: "LV",
         kind: "single" as const,
       };
-      const view = buildMachineTooltip(recipe, handler, node, mode, result.nodes.n);
+      const view = buildMachineTooltip(recipe, handler, node, mode, "2.9", { result: result.nodes.n });
       expect(view.rows[0]?.label).toBe(
         mode === "build" ? "Installed machines" : "Required machines",
       );
-      const stats = getOverclockedRecipeStats(recipe, { ...node, machineHandlerId: handler.id });
+      const stats = getOverclockedRecipeStats(recipe, { ...node, machineHandlerId: handler.id }, "2.9");
       expect(view.rows).toContainEqual({
         label: "Time per operation",
         value: `${stats.durationTicks / 20} s`,
@@ -224,9 +224,8 @@ describe("machine tooltip counts and effective statistics", () => {
       handler,
       { ...node, solvePin: 2 },
       "solve",
-      result.nodes.n,
-      undefined,
-      upTo,
+      "2.9",
+      { result: result.nodes.n, upTo },
     );
     expect(view.rows[0]).toEqual({ label: "Machines running", value: "1.5" });
     expect(view.rows[1]).toEqual({ label: "Up to", value: "2" });
@@ -235,7 +234,8 @@ describe("machine tooltip counts and effective statistics", () => {
       handler,
       { ...node, solvePin: 2, solvePinExact: true },
       "solve",
-      result.nodes.n,
+      "2.9",
+      { result: result.nodes.n },
     );
     expect(exact.rows[0]).toEqual({ label: "Exact machines", value: "2" });
   });
@@ -263,12 +263,60 @@ describe("machine tooltip counts and effective statistics", () => {
       handler,
       { ...node, machineHandlerId: handler.id },
       "build",
+      "2.9",
     );
-    const power = getNodePowerReport(multi, { ...node, machineHandlerId: handler.id });
+    const power = getNodePowerReport(multi, { ...node, machineHandlerId: handler.id }, "2.9");
     expect(view.subtitle).toBe("Multiblock");
     expect(view.rows.find((r) => r.label === "Draw per machine")?.value).toContain(
       String(power.drawEuT),
     );
     expect(JSON.stringify(view)).not.toMatch(/Exact|Estimated|9999/);
+  });
+});
+
+describe("the machine tooltip reads the plan's version", () => {
+  it("says on a 2.8.1 plan that a 2.9 coke oven casing key is counted as Heat Resistant", () => {
+    const casing = ["heat_resistant", "heat_proof"];
+    const oven = {
+      id: "coke",
+      name: "Coke",
+      machineType: "Industrial Coke Oven",
+      source: { recipeMap: "Industrial Coke Oven" },
+      minimumTier: "LV",
+      durationTicks: 200,
+      eut: 30,
+      inputs: [],
+      outputs: [],
+      machineConfigControls: [
+        {
+          id: "cokeOvenCasing",
+          label: "Casing",
+          minimumKey: casing[0]!,
+          defaultKey: casing[0]!,
+          tiers: casing.map((key) => ({ key, label: key, resource: { kind: "item", id: key, amount: 1 } })),
+        },
+      ],
+    } as unknown as Recipe;
+    const handler = {
+      id: "coke-oven",
+      label: "Industrial Coke Oven",
+      machineType: "Industrial Coke Oven",
+      minimumTier: "LV",
+      kind: "multiblock" as const,
+    };
+    const ovenNode = {
+      id: "oven",
+      recipeId: "coke",
+      machineCount: 1,
+      parallel: 1,
+      overclockTier: "IV",
+      enabled: true,
+      position: { x: 0, y: 0 },
+      machineConfigTiers: { cokeOvenCasing: "heat_proof" },
+    } as FactoryNode;
+    expect(buildMachineTooltip(oven, handler, ovenNode, "build", "2.8.1").requirement).toContain(
+      "The casing setting could not be read, so this counts Heat Resistant casings: 18 parallels.",
+    );
+    expect(buildMachineTooltip(oven, handler, ovenNode, "build", "2.9").requirement ?? "").not.toContain("casing setting");
   });
 });

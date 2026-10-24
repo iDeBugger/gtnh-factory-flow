@@ -1600,6 +1600,51 @@ describe("calculateThroughput", () => {
     expect(node.outputs["item:minecraft:sapling"].amountPerSecond).toBeCloseTo(5);
   });
 
+  // GT5U@5.09.51.476 MTETreeFarm.java:637: 2.8.1 fruit has no floor, so NEI shows the default Apple Oak 0 apples,
+  // but each run recomputes from the real sapling's genes (process, :318-344).
+  const appleOakProject = (gameVersion: "2.8.1" | "2.9", fruitAmount: number, machineConfigTiers: Record<string, string>): FactoryProject => ({
+    schemaVersion: PROJECT_SCHEMA_VERSION,
+    gameVersion,
+    id: "tgs-apple-oak",
+    name: "TGS Apple Oak",
+    recipes: [
+      {
+        id: "tgs-apple-oak",
+        name: "Tree Growth Simulator: Apple Oak",
+        machineType: "Tree Growth Simulator",
+        minimumTier: "ULV",
+        durationTicks: 100,
+        eut: 0,
+        inputs: [],
+        outputs: [
+          { kind: "item", id: "minecraft:log", amount: 5 },
+          { kind: "item", id: "forestry:sapling", amount: 5 },
+          { kind: "item", id: "forestry:leaves", amount: 2 },
+          { kind: "item", id: "minecraft:apple", amount: fruitAmount },
+        ],
+        source: { recipeMap: "Tree Growth Simulator" },
+      },
+    ],
+    nodes: [
+      { id: "node", recipeId: "tgs-apple-oak", machineCount: 1, parallel: 1, overclockTier: "IV", machineConfigTiers, enabled: true, position: { x: 0, y: 0 } },
+    ],
+    edges: [],
+    fuelProfiles: [],
+  });
+
+  it("tree-growth-simulator.ts 2.8.1 Apple Oak makes fruit from the sapling's yield gene", () => {
+    const apples = (project: FactoryProject) => solveClosed(project).nodes.node.outputs["item:minecraft:apple"]?.amountPerSecond ?? 0;
+    // Default yield 0.025: 1 x 0.25 truncates to 0.
+    expect(apples(appleOakProject("2.8.1", 0, {}))).toBe(0);
+    // Yield 0.4 at IV: 4 x 45 x 1 / 5 s = 36 a second, as the card's fruit line says.
+    expect(apples(appleOakProject("2.8.1", 0, { tgsYield: "highest" }))).toBeCloseTo(36);
+    // Logs are unchanged by the reference amount: 5 x 45 / 5 s at the basic axe.
+    expect(solveClosed(appleOakProject("2.8.1", 0, {})).nodes.node.outputs["item:minecraft:log"].amountPerSecond).toBeCloseTo(45);
+    // 2.9 twin (NEI 1 apple, floored): 9 a second at default yield, 36 at 0.4; today's values.
+    expect(apples(appleOakProject("2.9", 1, {}))).toBeCloseTo(9);
+    expect(apples(appleOakProject("2.9", 1, { tgsYield: "highest" }))).toBeCloseTo(36);
+  });
+
   it("reports a starved consumer as supply-capped against its nameplate demand", () => {
     const project: FactoryProject = {
       schemaVersion: PROJECT_SCHEMA_VERSION,

@@ -71,23 +71,24 @@ describe("fusion reactor rules from GT5U and the 2.9 workbook", () => {
     [9, 12800000, 157286400, 320, 4],
   ])("helium on controller %i: %s L/s, %s EU/t", (i, output, draw, parallels, steps) => {
     const n = node(i);
-    const applied = applyMachineHandlerToRecipe(helium, n);
-    const stats = getOverclockedRecipeStats(helium, n);
+    const applied = applyMachineHandlerToRecipe(helium, n, "2.9");
+    const stats = getOverclockedRecipeStats(helium, n, "2.9");
     expect(applied.machineProfile?.kind).toBe("multiblock");
-    expect(getMachineParallelMultiplier(applied, n)).toBe(parallels);
+    expect(getMachineParallelMultiplier(applied, n, "2.9")).toBe(parallels);
     expect((125 * 20 * parallels) / stats.durationTicks).toBe(output);
-    expect(getNodePowerReport(helium, n)).toMatchObject({
+    expect(getNodePowerReport(helium, n, "2.9")).toMatchObject({
       state: "ok",
       drawEuT: draw,
       parallels,
       overclockSteps: steps,
       perfectOverclockSteps: steps,
     });
-    expect(selectRuntimeCalculationVariant(applied, n)).toBeUndefined();
+    expect(selectRuntimeCalculationVariant(applied, n, "2.9")).toBeUndefined();
     expect(
       getHandlerRecipeStats(
         helium,
         getRecipeMachineHandlers(helium).find((h) => h.id === n.machineHandlerId)!,
+        "2.9",
       ),
     ).toMatchObject({ eut: draw });
     expect(
@@ -97,10 +98,10 @@ describe("fusion reactor rules from GT5U and the 2.9 workbook", () => {
         hatchVoltageTier: "ULV",
         hatchAmps: 0,
         powerEuT: 0,
-      }),
+      }, "2.9"),
     ).toEqual(stats);
     expect(
-      getNodePowerReport(helium, { ...n, hatchVoltageTier: "ULV", hatchAmps: 0, powerEuT: 0 })
+      getNodePowerReport(helium, { ...n, hatchVoltageTier: "ULV", hatchAmps: 0, powerEuT: 0 }, "2.9")
         .drawEuT,
     ).toBe(draw);
   });
@@ -111,7 +112,7 @@ describe("fusion reactor rules from GT5U and the 2.9 workbook", () => {
     expect(handlers.map((h) => h.label)).toEqual(
       FUSION_MACHINES.filter((m) => m.mark >= 4).map((m) => m.name),
     );
-    expect(applyMachineHandlerToRecipe(recipe, node(0)).machineType).toBe("FusionTech MK IV");
+    expect(applyMachineHandlerToRecipe(recipe, node(0), "2.9").machineType).toBe("FusionTech MK IV");
     expect(getFusionRecipeMark({ ...recipe, eut: 7_864_320 })).toBe(5);
   });
 
@@ -143,7 +144,7 @@ describe("fusion reactor rules from GT5U and the 2.9 workbook", () => {
       getFusionRecipeMark({ machineType: "Draconic Evolution Fusion Crafter" }),
     ).toBeUndefined();
     const power = { ...helium, power: { sourceId: "fusion-reactor", euPerTick: -1920, stats: [] } };
-    expect(getOverclockedRecipeStats(power, node(4)).eut).toBe(1920);
+    expect(getOverclockedRecipeStats(power, node(4), "2.9").eut).toBe(1920);
   });
 
   it("keeps compact production and consumption through the real solver and saved-plan load", () => {

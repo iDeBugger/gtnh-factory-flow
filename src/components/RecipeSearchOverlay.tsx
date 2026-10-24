@@ -60,6 +60,7 @@ import {
 } from "@/lib/power/power-search";
 import { useFactoryStore } from "@/store/factory-store";
 import { overlayInsets } from "@/lib/workspace-columns";
+import { planGameVersion } from "@/lib/model/game-version";
 
 /**
  * One condition on the stencil: a resource and the side of the recipe it must
@@ -613,9 +614,10 @@ export function RecipeSearchOverlay({
   const isReadOnly = useFactoryStore((state) => state.isReadOnly);
   const addPowerSourceNode = useFactoryStore((state) => state.addPowerSourceNode);
   const refactorNodeToPowerSource = useFactoryStore((state) => state.refactorNodeToPowerSource);
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
   const allPowerHits = useMemo(
-    () => searchPowerSourcesForStencil(clauses, takesOp, makesOp, query),
-    [clauses, takesOp, makesOp, query],
+    () => searchPowerSourcesForStencil(clauses, takesOp, makesOp, query, gameVersion),
+    [clauses, takesOp, makesOp, query, gameVersion],
   );
   // The tier filter reads the generators too: a source's unlock chip is its
   // tier, and one above the ceiling is out exactly as a recipe would be. A
@@ -738,10 +740,10 @@ export function RecipeSearchOverlay({
     () => ({
       width: CARD_WIDTH,
       height: onGenerators
-        ? cardCellHeight(powerHits.map(powerCardRows))
+        ? cardCellHeight(powerHits.map((hit) => powerCardRows(hit, gameVersion)))
         : cardCellHeight(tabRecipes.map(recipeCardRows)),
     }),
-    [onGenerators, powerHits, tabRecipes],
+    [onGenerators, powerHits, tabRecipes, gameVersion],
   );
   const [pageEl, setPageEl] = useState<HTMLDivElement | null>(null);
   const area = useElementSize(pageEl);

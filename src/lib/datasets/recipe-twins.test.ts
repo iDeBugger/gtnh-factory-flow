@@ -51,7 +51,7 @@ describe("recipe twins", () => {
       amount: 1,
       alternatives: [ingot, { ...ingot, id: "item:wrought_iron_ingot" }],
     };
-    const clauses = buildRecipeTwinClauses({ ...bender, inputs: [oredict, circuit] }, {});
+    const clauses = buildRecipeTwinClauses({ ...bender, inputs: [oredict, circuit] }, {}, "2.9");
     expect(clauses).toEqual([
       { role: "takes", kind: "item", id: "item:iron_ingot" },
       { role: "makes", kind: "item", id: "item:iron_plate" },
@@ -59,8 +59,8 @@ describe("recipe twins", () => {
   });
 
   it("has no twins to ask about without a consumed input or an output", () => {
-    expect(buildRecipeTwinClauses({ ...bender, inputs: [circuit] }, {})).toBeUndefined();
-    expect(buildRecipeTwinClauses({ ...bender, outputs: [] }, {})).toBeUndefined();
+    expect(buildRecipeTwinClauses({ ...bender, inputs: [circuit] }, {}, "2.9")).toBeUndefined();
+    expect(buildRecipeTwinClauses({ ...bender, outputs: [] }, {}, "2.9")).toBeUndefined();
   });
 
   it("knows the card's own recipe by content, not only by id", () => {

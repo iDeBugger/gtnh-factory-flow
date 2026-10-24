@@ -35,10 +35,10 @@ describe("Neutron Activator height", () => {
   it.each(["4", "12", "13", "32", "77", "256", "10000"])(
     "resolves arbitrary height %s without a ladder cap",
     (height) => {
-      const control = getRecipeMachineConfigTierControls(recipe, node(height))[0]!;
+      const control = getRecipeMachineConfigTierControls(recipe, node(height), "2.9")[0]!;
       expect(control.current.key).toBe(height);
       expect(control.numeric).toEqual({ min: 4 });
-      expect(buildMachineContext(recipe, node(height)).value("speedingPipeCasing")).toBe(
+      expect(buildMachineContext(recipe, node(height), "2.9").value("speedingPipeCasing")).toBe(
         Number(height),
       );
       expect(getAdjacentMachineConfigTier(control, 1)).toBe(String(Number(height) + 1));
@@ -48,7 +48,7 @@ describe("Neutron Activator height", () => {
   it.each(["", "-5", "NaN", "Infinity"])(
     "keeps invalid height %s at the structural minimum",
     (height) => {
-      expect(getRecipeMachineConfigTierControls(recipe, node(height))[0]!.current.key).toBe("4");
+      expect(getRecipeMachineConfigTierControls(recipe, node(height), "2.9")[0]!.current.key).toBe("4");
     },
   );
 
@@ -63,12 +63,12 @@ describe("Neutron Activator height", () => {
     [64, 1],
     [100, 1 / 61],
   ])("runs height %i at %s equivalent ticks", (height, durationTicks) => {
-    const result = getOverclockedRecipeStats(recipe, node(String(height)));
+    const result = getOverclockedRecipeStats(recipe, node(String(height)), "2.9");
     expect(result.durationTicks).toBe(durationTicks);
     expect(result.eut).toBe(0);
     expect(result.overclockSteps).toBe(0);
     expect(
-      getOverclockedRecipeStats(recipe, { ...node(String(height)), overclockTier: "MAX" })
+      getOverclockedRecipeStats(recipe, { ...node(String(height)), overclockTier: "MAX" }, "2.9")
         .durationTicks,
     ).toBe(durationTicks);
   });
@@ -77,12 +77,12 @@ describe("Neutron Activator height", () => {
     // 100 * 0.9f^2 is just below 81, not the 81.00000000000001 obtained
     // from repeated decimal JS operations that could ceil to 82.
     expect(
-      getOverclockedRecipeStats({ ...recipe, durationTicks: 100 }, node("6")).durationTicks,
+      getOverclockedRecipeStats({ ...recipe, durationTicks: 100 }, node("6"), "2.9").durationTicks,
     ).toBe(81);
   });
 
   it("saturates at the game's parallel integer limit instead of becoming slow on overflow", () => {
-    expect(getOverclockedRecipeStats(recipe, node("10000")).durationTicks).toBe(1 / 2_147_483_647);
+    expect(getOverclockedRecipeStats(recipe, node("10000"), "2.9").durationTicks).toBe(1 / 2_147_483_647);
   });
 
   it("keeps custom height through JSON import and load normalization, with matching material rates", () => {

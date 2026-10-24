@@ -4,6 +4,7 @@ import { applyRecipeInputOverrides } from "../model/recipe-input-overrides";
 import { isRecipeInputConsumed } from "../model/resources";
 import { inheritSharedMachineExpansion } from "../model/shared-machine";
 import { parseResourceHandleId } from "@/components/flow/resource-handles";
+import { planGameVersion } from "@/lib/model/game-version";
 
 export const HATCH_SUPPLY_PREFIX = "hatch-supply:";
 export const isHatchSupplyId = (id: string) => id.startsWith(HATCH_SUPPLY_PREFIX);
@@ -16,6 +17,7 @@ const cache = new WeakMap<FactoryProject, FactoryProject>();
  * it is switched off. No supply leaks into a pool.
  */
 export function expandHatchSupplies(project: FactoryProject): FactoryProject {
+  const gameVersion = planGameVersion(project);
   const cached = cache.get(project);
   if (cached) return cached;
   if (!project.nodes.some((node) => node.hatchSupplies?.length)) return project;
@@ -25,7 +27,7 @@ export function expandHatchSupplies(project: FactoryProject): FactoryProject {
   for (const node of project.nodes) {
     const recipe = recipes.get(node.recipeId);
     if (!recipe || node.enabled === false || !node.hatchSupplies?.length) continue;
-    const inputs = applyRecipeInputOverrides(recipe, node).inputs;
+    const inputs = applyRecipeInputOverrides(recipe, node, gameVersion).inputs;
     for (const resourceId of new Set(node.hatchSupplies)) {
       const input = inputs.find((input) => input.id === resourceId && input.amount > 0
         && isRecipeInputConsumed(input) && isHatchSuppliedInput(recipe, node, input));

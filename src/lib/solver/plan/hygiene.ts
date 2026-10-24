@@ -14,6 +14,7 @@ import {
 import type { FactoryEdge, FactoryNode, FactoryProject, Recipe } from "../../model/types";
 import { getRuntimeCalculationOutputs } from "../runtime-calculation";
 import { makeLeftoverKey, makePortKey, parsePortKey, splitLeftoverKey } from "./port-key";
+import { type GameVersion, planGameVersion } from "@/lib/model/game-version";
 
 /**
  * Keeping `portRates` (on a card, keyed by handle with a `r<n>:` section
@@ -29,18 +30,18 @@ const handleOf = (side: "input" | "output", kind: string, id: string) =>
   `${side}:${kind}:${encodeURIComponent(id)}`;
 
 /** The port rows a section of a card has, as canonical handles. */
-function sectionRows(view: FactoryNode, recipe: Recipe | undefined): Rows | undefined {
+function sectionRows(view: FactoryNode, recipe: Recipe | undefined, gameVersion: GameVersion): Rows | undefined {
   if (!recipe) {
     return undefined;
   }
-  const effective = applyMachineHandlerToRecipe(applyRecipeInputOverrides(recipe, view), view);
+  const effective = applyMachineHandlerToRecipe(applyRecipeInputOverrides(recipe, view, gameVersion), view, gameVersion);
   const rows: Rows = { input: new Set(), output: new Set() };
   for (const input of effective.inputs) {
     if (isRecipeInputConsumed(input)) {
       rows.input.add(handleOf("input", input.kind, input.id));
     }
   }
-  for (const output of getRuntimeCalculationOutputs(effective, view) ?? effective.outputs) {
+  for (const output of getRuntimeCalculationOutputs(effective, view, gameVersion) ?? effective.outputs) {
     rows.output.add(handleOf("output", output.kind, output.id));
   }
   return rows;
@@ -140,6 +141,7 @@ function withSpare(project: FactoryProject, spare: FactoryProject["spareShares"]
  * bearers. Cheap: only cards with port rates and bearers are looked at.
  */
 export function prunePlanFields(project: FactoryProject): FactoryProject {
+  const gameVersion = planGameVersion(project);
   const hasRates = project.nodes.some((node) => node.portRates);
   if (!hasRates && !project.spareShares) {
     return project;
@@ -158,7 +160,7 @@ export function prunePlanFields(project: FactoryProject): FactoryProject {
     const { nodeId, section } = parseSectionNodeId(solveId);
     const card = nodesById.get(nodeId);
     const view = card ? listNodeSections(card).find((s) => s.section === section)?.node : undefined;
-    const rows = view ? (sectionRows(view, recipesById.get(view.recipeId)) ?? "unknown") : "gone";
+    const rows = view ? (sectionRows(view, recipesById.get(view.recipeId), gameVersion) ?? "unknown") : "gone";
     rowsCache.set(solveId, rows);
     return rows;
   };

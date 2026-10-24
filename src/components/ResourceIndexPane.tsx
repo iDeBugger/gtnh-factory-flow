@@ -35,6 +35,7 @@ import "./nei/nei.css";
 import { isEditableKeyboardTarget } from "./flow/keyboard";
 import { itemTipLines, McFloatingTip, type McTipLine } from "./nei/McTip";
 import { isSwatchFluid, ResourceIcon, spriteArtPixels } from "./nei/ResourceIcon";
+import { planGameVersion } from "@/lib/model/game-version";
 
 /**
  * THE ITEM PANEL, drawn as NEI's item list: page keys and the page count at the
@@ -572,6 +573,7 @@ function useBoardResources(enabled: boolean): IndexedResource[] {
   const nodes = useFactoryStore((state) => state.project.nodes);
   const recipes = useFactoryStore((state) => state.project.recipes);
   const storages = useFactoryStore((state) => state.project.storages);
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
 
   return useMemo(() => {
     if (!enabled) {
@@ -598,7 +600,7 @@ function useBoardResources(enabled: boolean): IndexedResource[] {
       if (!recipe) {
         continue;
       }
-      const effectiveRecipe = applyRecipeInputOverrides(recipe, node);
+      const effectiveRecipe = applyRecipeInputOverrides(recipe, node, gameVersion);
       for (const resource of [...effectiveRecipe.inputs, ...effectiveRecipe.outputs]) {
         add(resource);
       }
@@ -615,7 +617,7 @@ function useBoardResources(enabled: boolean): IndexedResource[] {
     }
 
     return [...byKey.values()];
-  }, [enabled, nodes, recipes, storages]);
+  }, [enabled, nodes, recipes, storages, gameVersion]);
 }
 
 /**

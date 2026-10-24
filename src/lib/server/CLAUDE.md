@@ -54,8 +54,8 @@ The instance is small and has gone down under load. Rules:
 
 ## Feedback from the game (feedback.ts, app/api/feedback)
 
-- Off (above), a report whose `origin` is absent or `game` answers 404 before the gate counts it; `web` is unchanged.
-
+- Off (above), a report whose `origin` is absent or `game` answers 404 before the 503 and before the gate counts
+  it; that early read stops at `FEEDBACK_MAX_BYTES` even with no `content-length`. `web` is unchanged.
 - The in-game planner's Feedback box posts to `/api/feedback`; each report becomes an issue on
   `jackwrichards/gtnh-planner-mod` through `GITHUB_FEEDBACK_TOKEN` (in `/opt/shared/env.local`; without it the route
   answers 503). The web planner's reports (`origin: "web"`) open on the website's repo,

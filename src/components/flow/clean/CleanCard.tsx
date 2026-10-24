@@ -924,9 +924,10 @@ export function CleanCard({ view, actions, context, recipe, node }: CleanCardPro
   const [sheetAnchor, setSheetAnchor] = useState<MenuAnchor>();
   const [chipList, setChipList] = useState<{ id: string; anchor: MenuAnchor }>();
   const updateNode = useFactoryStore((state) => state.updateNode);
-  const tipFacts = useCardTipFacts(recipe, node);
-  const controls = useMemo(() => settingControls(recipe, node), [recipe, node]);
-  const heatNeed = useMemo(() => recipeHeatNeed(recipe, node), [recipe, node]);
+  const { gameVersion } = context;
+  const tipFacts = useCardTipFacts(recipe, node, gameVersion);
+  const controls = useMemo(() => settingControls(recipe, node, gameVersion), [recipe, node, gameVersion]);
+  const heatNeed = useMemo(() => recipeHeatNeed(recipe, node, gameVersion), [recipe, node, gameVersion]);
   const stepChip = (id: string, direction: -1 | 1) => {
     const control = controls.find((entry) => entry.id === id);
     const next = control ? steppedOption(control, direction) : undefined;

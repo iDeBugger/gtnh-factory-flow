@@ -5,6 +5,7 @@ import {
   GT_VOLTAGE_TIERS,
 } from "@/lib/model/tiers";
 import { getMachineBehaviour } from "@/lib/machines/machine-table";
+import type { GameVersion } from "@/lib/model/game-version";
 import { isFusionRecipe } from "@/lib/machines/fusion";
 import type {
   FactoryNode,
@@ -29,8 +30,8 @@ type VoltageTier = Exclude<MachineTier, "DEMO">;
  * them before overclocking, and banks sub-tick speed the way the machine
  * does. Everything else still uses the runtime data.
  */
-export function prefersCuratedMachineMath(recipe: { machineType?: string }): boolean {
-  return isFusionRecipe(recipe) || getMachineBehaviour(recipe.machineType) !== undefined;
+export function prefersCuratedMachineMath(recipe: { machineType?: string }, gameVersion: GameVersion): boolean {
+  return isFusionRecipe(recipe) || getMachineBehaviour(recipe.machineType, gameVersion) !== undefined;
 }
 
 export function selectRuntimeCalculationVariant(
@@ -41,6 +42,7 @@ export function selectRuntimeCalculationVariant(
     "machineHandlerId" | "overclockTier" | "coilTier" | "machineConfigTiers"
   > &
     Partial<Pick<FactoryNode, "hatchVoltageTier" | "hatchAmps">>,
+    gameVersion: GameVersion,
 ): RuntimeCalculationVariant | undefined {
   // The oracle's generic ladder never called FusionOverclockDescriber.
   if (isFusionRecipe(recipe)) return undefined;
@@ -66,7 +68,7 @@ export function selectRuntimeCalculationVariant(
   if (recipe.runtimeCalculation?.status !== "computed" || variants.length === 0) {
     return undefined;
   }
-  if (prefersCuratedMachineMath(recipe)) {
+  if (prefersCuratedMachineMath(recipe, gameVersion)) {
     return undefined;
   }
 
@@ -81,8 +83,9 @@ export function selectRuntimeCalculationVariant(
 export function getRuntimeCalculationOutputs(
   recipe: Pick<Recipe, "runtimeCalculation" | "outputs"> & { machineType?: string },
   node: Pick<FactoryNode, "machineHandlerId" | "overclockTier" | "coilTier" | "machineConfigTiers">,
+  gameVersion: GameVersion,
 ): RecipeOutput[] | undefined {
-  const variant = selectRuntimeCalculationVariant(recipe, node);
+  const variant = selectRuntimeCalculationVariant(recipe, node, gameVersion);
   if (!variant?.outputs?.length) {
     return undefined;
   }
@@ -113,13 +116,14 @@ export function getRuntimeCalculationOutputs(
 export function runtimeCalculationWarning(
   recipe: Pick<Recipe, "runtimeCalculation" | "name"> & { machineType?: string },
   node: Pick<FactoryNode, "machineHandlerId" | "overclockTier" | "coilTier" | "machineConfigTiers">,
+  gameVersion: GameVersion,
 ): string | undefined {
   if (isFusionRecipe(recipe)) return undefined;
   const runtimeCalculation = recipe.runtimeCalculation;
   if (!runtimeCalculation?.oracleEligible || !runtimeCalculation.strict) {
     return undefined;
   }
-  if (selectRuntimeCalculationVariant(recipe, node)) {
+  if (selectRuntimeCalculationVariant(recipe, node, gameVersion)) {
     return undefined;
   }
   return `${recipe.name} has no matching GTNH runtime calculation for this machine configuration.`;

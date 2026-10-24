@@ -568,20 +568,10 @@ function correctSteamMakers() {
     data.boilerFuels.tungstensteelLiquid,
     refusedBySuperheated,
   );
-  // MTELargeBoilerBase burns a solid for fuel value / 80 ticks, then the tier's
-  // runtimeBoost. The log bonus in LargeBoilerFuelBackend only feeds the NEI page.
-  const runtimeBoost = {
-    bronzeSolid: (ticks) => ticks * 2,
-    steelSolid: (ticks) => ticks,
-    titaniumSolid: (ticks) => Math.trunc((ticks * 3) / 10),
-    tungstensteelSolid: (ticks) => Math.trunc((ticks * 15) / 100),
-  };
-  for (const [table, boost] of Object.entries(runtimeBoost)) {
-    data.boilerFuels[table] = data.boilerFuels[table].map((row) => ({
-      ...row,
-      burnTime: boost(Math.trunc(row.euPerItem / 80)) / 20,
-    }));
-  }
+  // The large boilers' solid burn times are not corrected here: src/lib/power/overrides-2.9/boilers.ts
+  // computes them from the Java (MTELargeBoilerBase runs fuel value / 80 ticks through
+  // LargeBoilerFuelBackend.getBurntimeRatioTicks, a log bonus above 10 s, then runtimeBoost),
+  // and overrides-2.8.1/boilers.ts computes 2.8.1's.
 }
 
 function correctReactors() {

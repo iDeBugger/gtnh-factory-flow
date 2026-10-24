@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { DatasetCache, datasetServesPlan } from "./dataset-cache";
-import type { DatasetVersion, RecipeDataset } from "./types";
+import { DatasetCache, datasetServesPlan, refusesRecipeOnPlan } from "./dataset-cache";
+import type { DatasetManifest, DatasetVersion, RecipeDataset } from "./types";
 
 const version = (id: string) => ({ id }) as DatasetVersion;
 const dataset = (id: string, gtnhVersion: string) =>
@@ -18,6 +18,27 @@ describe("datasetServesPlan", () => {
     expect(datasetServesPlan(v281, {})).toBe(false);
     expect(datasetServesPlan(rc2, { gameVersion: "2.10" })).toBe(false);
     expect(datasetServesPlan(undefined, {})).toBe(false);
+  });
+});
+
+describe("refusesRecipeOnPlan", () => {
+  const manifest = {
+    schemaVersion: 1,
+    versions: [
+      { id: "gtnh-2.9.0", gtnhVersion: "2.9.0" },
+      { id: "gtnh-2.8.1", gtnhVersion: "2.8.1" },
+      { id: "local-2.8.4", gtnhVersion: "2.8.4" },
+    ],
+  } as DatasetManifest;
+  const from = (datasetVersionId: string) => ({ source: { datasetVersionId } }) as Parameters<typeof refusesRecipeOnPlan>[1];
+
+  it("reads a hidden dataset's body as unlisted, whatever the manifest says", () => {
+    const on29 = { datasetManifest: manifest, selectedDatasetVersionId: "gtnh-2.9.0", project: {} };
+    expect(refusesRecipeOnPlan(on29, from("local-2.8.4"))).toBe(false);
+    expect(refusesRecipeOnPlan(on29, from("gtnh-2.8.1"))).toBe(true);
+    // Unlisted lands only while the selected version serves the plan.
+    const waiting = { ...on29, selectedDatasetVersionId: "gtnh-2.8.1" };
+    expect(refusesRecipeOnPlan(waiting, from("local-2.8.4"))).toBe(true);
   });
 });
 

@@ -68,10 +68,10 @@ const node: FactoryNode = {
 describe("Precise Auto-Assembler power and casing support", () => {
   it("recognizes both modes as curated multiblocks, enabling hatch controls", () => {
     for (const recipe of [precise, normal]) {
-      const effective = applyMachineHandlerToRecipe(recipe, node);
-      expect(isMultiblockRecipe(effective)).toBe(true);
-      expect(prefersCuratedMachineMath(effective)).toBe(true);
-      expect(getRecipeMachineConfigTierControls(effective, node).map((c) => c.id)).toEqual([
+      const effective = applyMachineHandlerToRecipe(recipe, node, "2.9");
+      expect(isMultiblockRecipe(effective, "2.9")).toBe(true);
+      expect(prefersCuratedMachineMath(effective, "2.9")).toBe(true);
+      expect(getRecipeMachineConfigTierControls(effective, node, "2.9").map((c) => c.id)).toEqual([
         "preciseCasing",
         "prassMachineCasing",
       ]);
@@ -91,11 +91,11 @@ describe("Precise Auto-Assembler power and casing support", () => {
       hatchAmps: parallels,
       machineConfigTiers: { preciseCasing: casing },
     };
-    expect(getMachineStructuralParallels(normal, configured)).toBe(parallels);
-    const power = getNodePowerReport(normal, configured);
+    expect(getMachineStructuralParallels(normal, configured, "2.9")).toBe(parallels);
+    const power = getNodePowerReport(normal, configured, "2.9");
     expect(power.parallels).toBe(parallels);
     expect(power.drawEuT).toBe(30 * parallels);
-    expect(getOverclockedRecipeStats(normal, configured).durationTicks).toBe(200);
+    expect(getOverclockedRecipeStats(normal, configured, "2.9").durationTicks).toBe(200);
   });
 
   it("limits normal-mode parallels by actual power", () => {
@@ -104,8 +104,8 @@ describe("Precise Auto-Assembler power and casing support", () => {
       hatchVoltageTier: "LV" as const,
       machineConfigTiers: { preciseCasing: "mk4" },
     };
-    expect(getMachineStructuralParallels(normal, configured)).toBe(256);
-    expect(getNodePowerReport(normal, configured).parallels).toBe(1);
+    expect(getMachineStructuralParallels(normal, configured, "2.9")).toBe(256);
+    expect(getNodePowerReport(normal, configured, "2.9").parallels).toBe(1);
   });
 
   it("uses recipe casing requirements in precise mode without adding parallels or speed", () => {
@@ -113,21 +113,21 @@ describe("Precise Auto-Assembler power and casing support", () => {
     const controls = getRecipeMachineConfigTierControls(recipe, {
       ...node,
       machineConfigTiers: { preciseCasing: "mk0" },
-    });
+    }, "2.9");
     expect(controls[0].current.key).toBe("mk3");
     expect(controls[0].tiers.map((c) => c.key)).toEqual(["mk3", "mk4"]);
     for (const casing of ["mk3", "mk4"]) {
       const configured = { ...node, machineConfigTiers: { preciseCasing: casing } };
-      expect(getNodePowerReport(recipe, configured).parallels).toBe(1);
-      expect(getOverclockedRecipeStats(recipe, configured).durationTicks).toBe(1200);
+      expect(getNodePowerReport(recipe, configured, "2.9").parallels).toBe(1);
+      expect(getOverclockedRecipeStats(recipe, configured, "2.9").durationTicks).toBe(1200);
     }
   });
 
   it("spends multi-amp and laser-sized supplies on precise-mode overclocks", () => {
-    expect(getOverclockedRecipeStats(precise, node).durationTicks).toBe(1200);
-    expect(getOverclockedRecipeStats(precise, { ...node, hatchAmps: 4 }).durationTicks).toBe(600);
-    expect(getOverclockedRecipeStats(precise, { ...node, hatchAmps: 256 }).durationTicks).toBe(75);
-    const low = getNodePowerReport(precise, { ...node, hatchVoltageTier: "IV", hatchAmps: 256 });
+    expect(getOverclockedRecipeStats(precise, node, "2.9").durationTicks).toBe(1200);
+    expect(getOverclockedRecipeStats(precise, { ...node, hatchAmps: 4 }, "2.9").durationTicks).toBe(600);
+    expect(getOverclockedRecipeStats(precise, { ...node, hatchAmps: 256 }, "2.9").durationTicks).toBe(75);
+    const low = getNodePowerReport(precise, { ...node, hatchVoltageTier: "IV", hatchAmps: 256 }, "2.9");
     expect(low.state).toBe("over-tier"); // No input tier skips, even with ample amps.
   });
 
@@ -138,20 +138,20 @@ describe("Precise Auto-Assembler power and casing support", () => {
       hatchAmps: 4,
       machineConfigTiers: { prassMachineCasing: "luv" },
     };
-    const limited = getNodePowerReport(precise, configured);
+    const limited = getNodePowerReport(precise, configured, "2.9");
     expect(limited.tier).toBe("LuV");
     expect(limited.poolEuT).toBe(32768 * 4);
-    expect(getOverclockedRecipeStats(precise, configured).durationTicks).toBe(600);
+    expect(getOverclockedRecipeStats(precise, configured, "2.9").durationTicks).toBe(600);
     const uncapped = getNodePowerReport(precise, {
       ...configured,
       machineConfigTiers: { prassMachineCasing: "uhv" },
-    });
+    }, "2.9");
     expect(uncapped.tier).toBe("UV");
     expect(uncapped.poolEuT).toBe(524288 * 4);
     const low = getNodePowerReport(precise, {
       ...configured,
       machineConfigTiers: { prassMachineCasing: "iv" },
-    });
+    }, "2.9");
     expect(low.state).toBe("over-tier");
     expect(describePowerStall(low)).toContain("Machine casing voltage");
   });
@@ -166,11 +166,12 @@ describe("Precise Auto-Assembler power and casing support", () => {
         overclockTier: "UV",
         energyHatches: 2,
       },
+      "2.9",
       true,
     );
     expect(migrated.hatchVoltageTier).toBe("UV");
     expect(migrated.hatchAmps).toBe(4);
-    expect(getRecipeMachineConfigTierControls(precise, migrated)[1].current.key).toBe("uhv");
+    expect(getRecipeMachineConfigTierControls(precise, migrated, "2.9")[1].current.key).toBe("uhv");
   });
 
   it("uses the normal handler's base recipe once and leaves singleblocks alone", () => {
@@ -198,15 +199,16 @@ describe("Precise Auto-Assembler power and casing support", () => {
     };
     const selected = { ...node, machineHandlerId: "prass" };
     expect(
-      getNodePowerReport(family, { ...selected, hatchVoltageTier: "LV", hatchAmps: 16 }).state,
+      getNodePowerReport(family, { ...selected, hatchVoltageTier: "LV", hatchAmps: 16 }, "2.9").state,
     ).toBe("ok");
-    expect(getOverclockedRecipeStats(family, selected)).toEqual(
-      getOverclockedRecipeStats(normal, node),
+    expect(getOverclockedRecipeStats(family, selected, "2.9")).toEqual(
+      getOverclockedRecipeStats(normal, node, "2.9"),
     );
     expect(
       getRecipeMachineConfigTierControls(
-        applyMachineHandlerToRecipe(family, { machineHandlerId: "single" }),
+        applyMachineHandlerToRecipe(family, { machineHandlerId: "single" }, "2.9"),
         node,
+        "2.9",
       ),
     ).toHaveLength(0);
   });

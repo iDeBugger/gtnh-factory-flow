@@ -18,7 +18,7 @@ const TURBINE_SETTINGS = {
 };
 
 function turbineProject(extra: Partial<FactoryProject>): FactoryProject {
-  const recipe = buildPowerRecipe("large-gas-turbine", TURBINE_SETTINGS, "r-gt")!;
+  const recipe = buildPowerRecipe("large-gas-turbine", TURBINE_SETTINGS, "r-gt", "2.9")!;
   return {
     schemaVersion: PROJECT_SCHEMA_VERSION,
     id: "p",
@@ -71,7 +71,7 @@ describe("fuel switches with wires attached", () => {
 
   it("only drops the wire when the drawer serves anything else", () => {
     const base = turbineProject({});
-    const recipe2 = buildPowerRecipe("large-gas-turbine", TURBINE_SETTINGS, "r-gt2")!;
+    const recipe2 = buildPowerRecipe("large-gas-turbine", TURBINE_SETTINGS, "r-gt2", "2.9")!;
     useFactoryStore.getState().setProject({
       ...base,
       recipes: [...base.recipes, recipe2],
@@ -219,7 +219,7 @@ describe("fuel switches with wires attached", () => {
           ? { ...node, machineConfigTiers: { ...TURBINE_SETTINGS, fuel: "Nitrobenzene" } }
           : node,
       ),
-    });
+    }, "2.9");
     const healedFirst = healed.nodes.find((entry) => entry.id === "n-gt")!;
     const healedSecond = healed.nodes.find((entry) => entry.id === "n-gt2")!;
     expect(healedSecond.recipeId).not.toBe(healedFirst.recipeId);

@@ -7,21 +7,31 @@
  * stats instead of wired ports until an alias is added below.
  *
  *   node tools/power-resource-map.mjs [--base https://gtnhplanner.com] [--version local-2.9.0-beta-2]
+ *     [--data scratch/power-tables-2.8.1.json] [--out src/lib/power/data/2.8.1/resource-map.json]
+ *
+ * --data takes tools/power-tables-dump.ts output: its tables replace the workbook extract, and
+ * every flow name its sources produce is resolved too, so a version's own fuels and products
+ * are found even where no table lists them. Without it the workbook extract is read as before.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const dataPath = path.join(repoRoot, "src", "lib", "power", "data", "power-planner-data.json");
-const outPath = path.join(repoRoot, "src", "lib", "power", "data", "resource-map.json");
 const args = process.argv.slice(2);
+const argValue = (flag) => (args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined);
+const dump = argValue("--data") ? JSON.parse(fs.readFileSync(argValue("--data"), "utf8")) : undefined;
+const outPath = argValue("--out")
+  ? path.resolve(argValue("--out"))
+  : path.join(repoRoot, "src", "lib", "power", "data", "resource-map.json");
 const base = args[args.indexOf("--base") + 1] && args.includes("--base")
   ? args[args.indexOf("--base") + 1]
   : "https://gtnhplanner.com";
 const version = args.includes("--version") ? args[args.indexOf("--version") + 1] : "local-2.9.0-beta-2";
 
-const data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+const data =
+  dump?.tables ??
+  JSON.parse(fs.readFileSync(path.join(repoRoot, "src", "lib", "power", "data", "power-planner-data.json"), "utf8"));
 
 /**
  * Spreadsheet name -> the dataset display name (or [name, kind]) when they
@@ -82,6 +92,8 @@ const ALIASES = {
   "TB-Salt": "Thorium-Beryllium Depleted Molten Salt (TB Salt)",
   UF6: "Uranium Hexafluoride",
   "Molten Tengam": "Molten Purified Tengam",
+  // GT++'s agrichem registers Poop Juice as the fluid "raw.waste", shown as Raw Animal Waste.
+  "Poop Juice": "Raw Animal Waste",
 };
 
 /** Names whose match is a specific id (display-name collisions). */
@@ -96,6 +108,30 @@ const ID_OVERRIDES = {
   "Po Pellet": { kind: "item", id: "miscutils:mu-metaitem.01@32043" },
   "Am Pellet": { kind: "item", id: "miscutils:mu-metaitem.01@32044" },
 };
+
+/**
+ * Per game version (the --data dump's gameVersion; 2.9 without one): workbook names that pack
+ * shows under another name, pinned to the item's id because the display name collides with other
+ * mods' items ("Amber" is also biomesoplenty:gems@7 and thaumcraft:itemresource@6). Both packs
+ * name GT gems by the bare material ("Amber") and the life essence cell "Life Cell"; 2.8.1 also
+ * names GT's Void material "Void". Each is a magic fuel (5.09.51.476 ProcessingGem.java:62,
+ * ProcessingDust.java:57-62, ProcessingPlate.java:107-112, ProcessingCell.java:52-60; at 5.09.54.205
+ * Amber and Vinteum are magic fuel 32, MaterialsInit.java:2855, :11770).
+ */
+const GEM_AND_CELL_ALIASES = {
+  "Amber Gem": { query: "Amber", kind: "item", id: "gregtech:gt.metaitem.01@8514" },
+  "Vinteum Gem": { query: "Vinteum", kind: "item", id: "gregtech:gt.metaitem.01@8529" },
+  "Life Essence Cell": { query: "Life Cell", kind: "item", id: "gregtech:gt.metaitem.01@30694" },
+};
+const VERSION_ID_ALIASES = {
+  "2.9": GEM_AND_CELL_ALIASES,
+  "2.8.1": {
+    ...GEM_AND_CELL_ALIASES,
+    "Void Metal Dust": { query: "Void Dust", kind: "item", id: "gregtech:gt.metaitem.01@2970" },
+    "Void Metal Plate": { query: "Void Plate", kind: "item", id: "gregtech:gt.metaitem.01@17970" },
+  },
+};
+const versionIdAliases = VERSION_ID_ALIASES[dump?.gameVersion ?? "2.9"] ?? {};
 
 /** Flows that are settings/aux, not from the fuel tables. */
 const AUX_NAMES = [
@@ -305,6 +341,9 @@ function collectNames() {
   for (const [name, kind] of AUX_NAMES) {
     add(name, kind);
   }
+  for (const { name, kind } of dump?.flows ?? []) {
+    add(name, kind);
+  }
   // kubatech's HTGR fuel and its burned form, one item per pebble material
   // (the dataset writes "Uranium 235" where the workbook says "Uranium-235").
   for (const entry of data.htgrPebbles) {
@@ -361,11 +400,33 @@ await Promise.all(
       const [name, kind] = queue.shift();
       const target = ALIASES[name] ?? name;
       try {
+        const pinned = versionIdAliases[name];
+        if (pinned) {
+          const results = await search(pinned.query);
+          const found = results.find((entry) => entry.kind === pinned.kind && entry.id === pinned.id);
+          if (found) {
+            map[name] = {
+              kind: found.kind,
+              id: found.id,
+              displayName: found.displayName ?? name,
+              iconPath: found.iconPath,
+              dominantColor: found.dominantColor,
+            };
+          } else {
+            unresolved.push(name);
+          }
+          continue;
+        }
         const override = ID_OVERRIDES[name];
         const results = await search(override ? name.replace("Ench. ", "").replace("Block of ", "") : target);
         let found = override
           ? results.find((entry) => entry.kind === override.kind && entry.id === override.id)
           : pick(results, target, kind);
+        // An alias names one pack's display name; another pack may show the resource under the
+        // workbook's own name (2.8.1's bioethanol is "Ethanol", 2.9's "Bio Ethanol").
+        if (!found && !override && target !== name) {
+          found = pick(await search(name), name, kind);
+        }
         if (found && STRICT_FLUID.has(name) && found.kind !== "fluid") {
           found = undefined;
         }
@@ -389,6 +450,7 @@ await Promise.all(
 );
 
 const sorted = Object.fromEntries(Object.entries(map).sort(([a], [b]) => a.localeCompare(b)));
+fs.mkdirSync(path.dirname(outPath), { recursive: true });
 fs.writeFileSync(outPath, JSON.stringify({ datasetVersionId: version, resources: sorted }, null, 1) + "\n");
 console.log(`Wrote ${outPath}: ${Object.keys(sorted).length} resolved.`);
 if (unresolved.length > 0) {

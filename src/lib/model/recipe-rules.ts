@@ -1,6 +1,6 @@
 import { CROP_FARM_PLACEHOLDER_RECIPE_ID, createCropFarmPlaceholderRecipe } from "./passive-production";
 import { getFusionMachine, getFusionRecipeMark, isFusionRecipe, normalizeFusionHandler } from "@/lib/machines/fusion";
-import { TGS_MACHINE_TYPE, tgsEuPerTick } from "@/lib/machines/tree-growth-simulator";
+import { TGS_MACHINE_TYPE, tgsEuPerTick, withTgsReferenceAmounts } from "@/lib/machines/tree-growth-simulator";
 import type {
   FactoryNode,
   MachineConfigControl,
@@ -14,6 +14,14 @@ import {
   getMachineTableControls,
   machineTableSeedsFromBase,
 } from "@/lib/machines/machine-table";
+import { getRecipeMapAmperage } from "@/lib/machines/recipe-map-amperage";
+import type { GameVersion } from "./game-version";
+import {
+  getRecipeAvailableVoltageTiers,
+  getVoltageTierForEuT,
+  getVoltageTierIndex,
+  isVoltageTierName,
+} from "./tiers";
 
 export interface MachineConfigTierControl {
   id: string;
@@ -166,8 +174,8 @@ function steamSingleblockDurationTicks(
  * Extreme Heat Exchanger's 20 ticks). Its recipe amounts are per cycle, so
  * this replaces every duration the recipe or a handler states.
  */
-export function machineCycleTicks(machineType: string | undefined): number | undefined {
-  return getMachineBehaviour(machineType)?.cycleTicks;
+export function machineCycleTicks(machineType: string | undefined, gameVersion: GameVersion): number | undefined {
+  return getMachineBehaviour(machineType, gameVersion)?.cycleTicks;
 }
 
 export function getSelectedMachineHandler(
@@ -178,9 +186,32 @@ export function getSelectedMachineHandler(
   return handlers.find((handler) => handler.id === node.machineHandlerId) ?? handlers[0];
 }
 
+/**
+ * A singleblock's minimum on a map with more than one amp: its lowest real
+ * machine, or the tier whose voltage times the map's amps covers the EU/t if
+ * that is higher. A declared minimum above the EU/t's own tier is a real gate
+ * and stands. One at or below it is the pipeline's stamp of the draw: datasets
+ * normalized before the pipeline counted map amperage stamp the 1 A tier.
+ */
+function singleblockMinimumOnAmpMap(
+  declared: string,
+  eut: number,
+  mapAmps: number,
+  availableTiers: string[] | undefined,
+): string {
+  const drawTier = getVoltageTierForEuT(eut);
+  if (isVoltageTierName(declared) && getVoltageTierIndex(declared) > getVoltageTierIndex(drawTier)) {
+    return declared;
+  }
+  const ampTier = getVoltageTierForEuT(eut / mapAmps);
+  const lowestMachine = getRecipeAvailableVoltageTiers({ availableTiers })?.[0];
+  return lowestMachine && getVoltageTierIndex(lowestMachine) > getVoltageTierIndex(ampTier) ? lowestMachine : ampTier;
+}
+
 export function applyMachineHandlerToRecipe(
   recipe: Recipe,
   node: Pick<FactoryNode, "machineHandlerId">,
+  gameVersion: GameVersion,
 ): Recipe {
   // Power cards (src/lib/power) bake their whole model into the synthesized
   // recipe; no handler math may touch them. Without this, a generator named
@@ -202,10 +233,10 @@ export function applyMachineHandlerToRecipe(
   // recipe pre-multiplied by x0.8 duration and x0.9 EU). Keeping both applies
   // the bonus twice, so a handler whose machine the table covers seeds from
   // the base recipe instead.
-  const seedsFromBase = machineTableSeedsFromBase(handler.machineType);
-  const minimumTier = getMachineBehaviour(handler.machineType)?.recipeTierFromBase
+  const seedsFromBase = machineTableSeedsFromBase(handler.machineType, gameVersion);
+  const minimumTier = getMachineBehaviour(handler.machineType, gameVersion)?.recipeTierFromBase
     ? recipe.minimumTier : handler.minimumTier;
-  const handlerDurationTicks = machineCycleTicks(handler.machineType) ?? (seedsFromBase
+  const handlerDurationTicks = machineCycleTicks(handler.machineType, gameVersion) ?? (seedsFromBase
     ? steamSingleblockDurationTicks(recipe, handler)
     : (handler.durationTicks ?? steamSingleblockDurationTicks(recipe, handler)));
   const handlerEut = seedsFromBase ? undefined : handler.eut;
@@ -217,11 +248,18 @@ export function applyMachineHandlerToRecipe(
   // (tree-growth-simulator.ts): its card offers voltage and power like any electric machine.
   const tgs = handler.machineType === TGS_MACHINE_TYPE;
   const eut = tgs ? tgsEuPerTick(1) : isSteamMachineHandler(handler) ? 0 : (handlerEut ?? recipe.eut);
-  return {
+  // A singleblock finds its recipe at its voltage times the map's amperage
+  // (recipe-map-amperage.ts); a multiblock's hatches must carry the draw.
+  const mapAmps = handler.kind === "multiblock" ? 1 : getRecipeMapAmperage(recipe.metadata?.recipeMapId, gameVersion);
+  const runMinimumTier = mapAmps > 1
+    ? singleblockMinimumOnAmpMap(minimumTier, eut, mapAmps, handler.availableTiers)
+    : minimumTier;
+  const applied: Recipe = {
     ...recipe,
     runtimeCalculation,
     machineType: handler.machineType,
-    minimumTier: tgs ? "LV" : minimumTier,
+    minimumTier: tgs ? "LV" : runMinimumTier,
+    recipeMapAmperage: mapAmps > 1 ? mapAmps : undefined,
     maximumTier: handler.maximumTier,
     availableTiers: handler.availableTiers,
     durationTicks: handlerDurationTicks ?? recipe.durationTicks,
@@ -230,7 +268,7 @@ export function applyMachineHandlerToRecipe(
     machineProfile: {
       ...recipe.machineProfile,
       machineType: handler.machineType,
-      minimumTier,
+      minimumTier: runMinimumTier,
       maximumTier: handler.maximumTier,
       availableTiers: handler.availableTiers,
       durationTicks: handlerDurationTicks ?? recipe.machineProfile?.durationTicks,
@@ -242,20 +280,23 @@ export function applyMachineHandlerToRecipe(
       notes: handler.notes ?? recipe.machineProfile?.notes,
     },
   };
+  // A 2.8.1 TGS output NEI shows as 0 still runs from the real sapling's genes; it needs an amount to scale.
+  return tgs ? withTgsReferenceAmounts(applied, gameVersion) : applied;
 }
 
 export function getRecipeCoilTierControl(
   recipe: Pick<Recipe, "machineType" | "source" | "nei" | "machineConfigControls">,
   node: { coilTier?: string },
+  gameVersion: GameVersion,
 ) {
   // The coil rides its own legacy path around dropHiddenControls, so the
   // table's hidesControls must be honoured here too - the Large Chemical
   // Reactor's structural coil is any tier and does nothing at runtime.
-  if (getMachineHiddenControlIds(recipe.machineType).includes("heatingCoil")) {
+  if (getMachineHiddenControlIds(recipe.machineType, gameVersion).includes("heatingCoil")) {
     return undefined;
   }
   const control =
-    getMachineTableControls(recipe.machineType).find((entry) => entry.id === "heatingCoil") ??
+    getMachineTableControls(recipe.machineType, undefined, gameVersion).find((entry) => entry.id === "heatingCoil") ??
     findMachineConfigControl(recipe, "heatingCoil");
   return control ? resolveMachineConfigTierControl(applyControlRecipeMinimum(control, recipe), node.coilTier) : undefined;
 }
@@ -263,15 +304,17 @@ export function getRecipeCoilTierControl(
 export function getRecipeMachineConfigTierControls(
   recipe: Pick<Recipe, "machineType" | "source" | "nei" | "machineConfigControls">,
   node: Pick<FactoryNode, "machineConfigTiers">,
+  gameVersion: GameVersion,
 ): MachineConfigTierControl[] {
-  const settings = getMachineBehaviour(recipe.machineType)?.normalizeConfig?.(node.machineConfigTiers ?? {})
+  const settings = getMachineBehaviour(recipe.machineType, gameVersion)?.normalizeConfig?.(node.machineConfigTiers ?? {})
     ?? node.machineConfigTiers;
   const controls = dropHiddenControls(
     mergeMachineConfigControls(
       recipe.machineConfigControls ?? [],
-      getMachineTableControls(recipe.machineType, recipe as Partial<Recipe>),
+      getMachineTableControls(recipe.machineType, recipe as Partial<Recipe>, gameVersion),
     ),
     recipe.machineType,
+    gameVersion,
   );
 
   return controls
@@ -305,8 +348,9 @@ function mergeMachineConfigControls(
 function dropHiddenControls(
   controls: MachineConfigControl[],
   machineType: string | undefined,
+  gameVersion: GameVersion,
 ): MachineConfigControl[] {
-  const hidden = getMachineHiddenControlIds(machineType);
+  const hidden = getMachineHiddenControlIds(machineType, gameVersion);
   return hidden.length === 0
     ? controls
     : controls.filter((control) => !hidden.includes(control.id));

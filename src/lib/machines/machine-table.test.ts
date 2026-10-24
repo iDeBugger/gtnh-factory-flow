@@ -102,11 +102,11 @@ const chemPlant = {
 
 describe("curated machine table", () => {
   it("is keyed by our names and by the reference's names", () => {
-    expect(getMachineBehaviour("Chemical Plant")?.overclock).toEqual(OVERCLOCK.normal());
-    expect(getMachineBehaviour("ExxonMobil Chemical Plant")?.overclock).toEqual(OVERCLOCK.normal());
-    expect(getMachineBehaviour("Blast Furnace")?.overclock).toBe(HEAT_OVERCLOCK);
-    expect(getMachineBehaviour("Electric Blast Furnace")?.overclock).toBe(HEAT_OVERCLOCK);
-    expect(getMachineBehaviour("Large Chemical Reactor")?.overclock).toEqual(OVERCLOCK.perfect());
+    expect(getMachineBehaviour("Chemical Plant", "2.9")?.overclock).toEqual(OVERCLOCK.normal());
+    expect(getMachineBehaviour("ExxonMobil Chemical Plant", "2.9")?.overclock).toEqual(OVERCLOCK.normal());
+    expect(getMachineBehaviour("Blast Furnace", "2.9")?.overclock).toBe(HEAT_OVERCLOCK);
+    expect(getMachineBehaviour("Electric Blast Furnace", "2.9")?.overclock).toBe(HEAT_OVERCLOCK);
+    expect(getMachineBehaviour("Large Chemical Reactor", "2.9")?.overclock).toEqual(OVERCLOCK.perfect());
   });
 
   it("overrides the effects the dataset scraped off tooltips", () => {
@@ -119,9 +119,9 @@ describe("curated machine table", () => {
     // The controls above claim a 99x duration and 99 parallels. The table's
     // numbers are the ones that count: TPV coils are 200% speed, titanium pipe
     // casings are six parallels.
-    expect(getMachineDurationMultiplier(chemPlant, node)).toBeCloseTo(0.5, 10);
-    expect(getMachineParallelMultiplier(chemPlant, node)).toBe(6);
-    expect(getMachineEutMultiplier(chemPlant, node)).toBe(1);
+    expect(getMachineDurationMultiplier(chemPlant, node, "2.9")).toBeCloseTo(0.5, 10);
+    expect(getMachineParallelMultiplier(chemPlant, node, "2.9")).toBe(6);
+    expect(getMachineEutMultiplier(chemPlant, node, "2.9")).toBe(1);
   });
 
   it("reads coil and pipe casing tiers as zero-based indices", () => {
@@ -132,23 +132,33 @@ describe("curated machine table", () => {
     };
 
     // Cupronickel is 50% speed, so the recipe takes twice as long.
-    expect(getMachineDurationMultiplier(chemPlant, bronzeCupronickel)).toBeCloseTo(2, 10);
-    expect(getMachineParallelMultiplier(chemPlant, bronzeCupronickel)).toBe(2);
+    expect(getMachineDurationMultiplier(chemPlant, bronzeCupronickel, "2.9")).toBeCloseTo(2, 10);
+    expect(getMachineParallelMultiplier(chemPlant, bronzeCupronickel, "2.9")).toBe(2);
+  });
+
+  it("finds the Zhuhai under each version's spelling", () => {
+    // The 2.9 dataset's machine is "Zhuhai Fishing Port", 2.8.1's "Zhuhai - Fishing Port": names match with
+    // punctuation dropped, so the one key serves both.
+    const entry = getMachineBehaviour("Zhuhai - Fishing Port", "2.9");
+    expect(entry).toBeDefined();
+    expect(getMachineBehaviour("Zhuhai Fishing Port", "2.9")).toBe(entry);
+    expect(getMachineBehaviour("Zhuhai Fishing Port", "2.8.1")).toBe(getMachineBehaviour("Zhuhai - Fishing Port", "2.8.1"));
+    expect(getMachineBehaviour("Zhuhai Fishing Port", "2.8.1")).toBeDefined();
   });
 
   it("scales voltage-driven parallels off our ULV-based tier ordinal", () => {
     // The reference counts LV as 0, we count it as 1. Zhuhai is
     // ((theirTier + 1) + 1) * 2, which is (ourTier + 1) * 2.
-    const zhuhai = getMachineBehaviour("Zhuhai - Fishing Port");
+    const zhuhai = getMachineBehaviour("Zhuhai - Fishing Port", "2.9");
     expect(
-      resolveCoefficient(zhuhai?.parallels, { tier: () => 0, value: () => 0, voltageTier: 1 }, 1),
+      resolveCoefficient(zhuhai?.parallels, { tier: () => 0, value: () => 0, voltageTier: 1, gameVersion: "2.9" }, 1),
     ).toBe(4);
     expect(
-      resolveCoefficient(zhuhai?.parallels, { tier: () => 0, value: () => 0, voltageTier: 8 }, 1),
+      resolveCoefficient(zhuhai?.parallels, { tier: () => 0, value: () => 0, voltageTier: 8, gameVersion: "2.9" }, 1),
     ).toBe(18);
 
     // Density^2 is floor((theirTier + 1) / 2) + 1 = floor(ourTier / 2) + 1.
-    const density = getMachineBehaviour("Density^2");
+    const density = getMachineBehaviour("Density^2", "2.9");
     for (const [ordinal, expected] of [
       [1, 1],
       [2, 2],
@@ -158,7 +168,7 @@ describe("curated machine table", () => {
       expect(
         resolveCoefficient(
           density?.parallels,
-          { tier: () => 0, value: () => 0, voltageTier: ordinal },
+          { tier: () => 0, value: () => 0, voltageTier: ordinal, gameVersion: "2.9" },
           1,
         ),
       ).toBe(expected);
@@ -218,6 +228,14 @@ describe("curated machine table", () => {
       "Spinmatron-2737",
       "Source Chamber",
       "Target Chamber",
+      // The momentum ramp checks before it adds, so it stops at 3.025, not the
+      // reference's 3 (MTEFluidShaper.java:314-316, MTEMassSolidifier.java:199-201).
+      "Fluid Shaper",
+      "Mass Solidifier",
+      // Java floats in both versions (1F / 3F; 1.0F - min(0.1F x n, 0.5F)), where the
+      // reference has the decimal. Covered in overrides-2.8.1/float-coefficients.test.ts.
+      "Large Scale Auto-Assembler v1.01",
+      "Oil Cracking Unit",
       // The steam multiblocks were rewritten (single controller, casing-tier
       // pressure, flat 1.6 / tierMachine); the reference still models the old
       // upgrade ladder. Transcribed from MTESteamMacerator and siblings.
@@ -232,7 +250,7 @@ describe("curated machine table", () => {
     ]);
 
     for (const [name, entry] of Object.entries(reference)) {
-      const behaviour = getMachineBehaviour(name);
+      const behaviour = getMachineBehaviour(name, "2.9");
       if (!behaviour || DIVERGES_FROM_REFERENCE.has(name)) {
         continue;
       }
@@ -250,6 +268,7 @@ describe("curated machine table", () => {
           tier: () => sample.choiceValue,
           value: () => sample.choiceValue,
           voltageTier: sample.voltageTier + 1,
+          gameVersion: "2.9",
         };
         const at = `${name} @tier${sample.voltageTier} choice${sample.choiceValue}`;
 
@@ -310,6 +329,9 @@ describe("curated machine table", () => {
         "Mega Blast Furnace",
         "Arc Furnace",
         "Short Circuit Heater",
+        // Basic machines on maps with more than one amp (recipe-map-amperage.ts).
+        "Thermal Centrifuge",
+        "Mass Fabricator",
         // The plain parallels-per-voltage-tier batch, from
         // gregtech.common.tileentities.machines.multi (MTEIndustrialChemicalBath
         // and siblings); the reference calculator never covered these.
@@ -342,7 +364,7 @@ describe("curated machine table", () => {
     // Every entry must trace back to a reference definition or a direct source
     // transcription, under its own name or an alias - nothing is invented.
     const untraceable = machineTableNames().filter((name) => {
-      const behaviour = getMachineBehaviour(name);
+      const behaviour = getMachineBehaviour(name, "2.9");
       const candidates = [name, ...(behaviour?.aliases ?? [])].map(normalizeMachineName);
       return !candidates.some(
         (candidate) => referenceNames.has(candidate) || SOURCE_VERIFIED.has(candidate),
@@ -368,13 +390,14 @@ describe("curated machine table", () => {
     const bronze = { machineConfigTiers: {} };
     const highPressure = { machineConfigTiers: { steamPressure: "high" } };
 
-    expect(getMachineDurationMultiplier(grinder, bronze)).toBeCloseTo(1.6, 10);
-    expect(getMachineDurationMultiplier(grinder, highPressure)).toBeCloseTo(0.8, 10);
-    expect(getMachineParallelMultiplier(grinder, bronze)).toBe(8);
-    const spec = resolveOverclockSpec(getMachineBehaviour("Steam Grinder"), {
+    expect(getMachineDurationMultiplier(grinder, bronze, "2.9")).toBeCloseTo(1.6, 10);
+    expect(getMachineDurationMultiplier(grinder, highPressure, "2.9")).toBeCloseTo(0.8, 10);
+    expect(getMachineParallelMultiplier(grinder, bronze, "2.9")).toBe(8);
+    const spec = resolveOverclockSpec(getMachineBehaviour("Steam Grinder", "2.9"), {
       tier: () => 0,
       value: () => 0,
       voltageTier: 1,
+      gameVersion: "2.9",
     });
     expect(spec).toEqual(OVERCLOCK.none());
 
@@ -383,8 +406,8 @@ describe("curated machine table", () => {
     // smelt, so its multiplier lands the shown duration on the game's own 204
     // ticks basic and 102 high pressure.
     const hearth = { ...grinder, machineType: "Steam Hearth" } as Recipe;
-    expect(200 * getMachineDurationMultiplier(hearth, bronze)).toBeCloseTo(204.8, 10);
-    expect(200 * getMachineDurationMultiplier(hearth, highPressure)).toBeCloseTo(102.4, 10);
+    expect(200 * getMachineDurationMultiplier(hearth, bronze, "2.9")).toBeCloseTo(204.8, 10);
+    expect(200 * getMachineDurationMultiplier(hearth, highPressure, "2.9")).toBeCloseTo(102.4, 10);
   });
 
   it("gives the Naquadah Fuel Refinery field restriction coils, not heating coils", () => {
@@ -402,35 +425,35 @@ describe("curated machine table", () => {
 
     // The scraped heating coil is hidden and the real coils take its place,
     // offered from the recipe's own minimum tier upward.
-    const controls = getRecipeMachineConfigTierControls(nfr, { machineConfigTiers: {} });
+    const controls = getRecipeMachineConfigTierControls(nfr, { machineConfigTiers: {} }, "2.9");
     expect(controls.map((control) => control.id)).toEqual(["fieldRestrictionCoil"]);
-    expect(getRecipeCoilTierControl(nfr, {})).toBeUndefined();
+    expect(getRecipeCoilTierControl(nfr, {}, "2.9")).toBeUndefined();
     expect(controls[0].tiers.map((tier) => tier.key)).toEqual(["t2", "t3", "t4"]);
     expect(controls[0].current.key).toBe("t2");
 
     // Parallels count the coil's position on the FULL ladder even though the
     // recipe's minimum hides the rungs below it: T2 default is 8, T4 is 16.
-    expect(getMachineParallelMultiplier(nfr, { machineConfigTiers: {} })).toBe(8);
+    expect(getMachineParallelMultiplier(nfr, { machineConfigTiers: {} }, "2.9")).toBe(8);
     expect(
-      getMachineParallelMultiplier(nfr, { machineConfigTiers: { fieldRestrictionCoil: "t4" } }),
+      getMachineParallelMultiplier(nfr, { machineConfigTiers: { fieldRestrictionCoil: "t4" } }, "2.9"),
     ).toBe(16);
 
     // T4 coils on a T2-minimum recipe are two perfect overclocks; at the
     // minimum there are none, and extra voltage alone buys nothing.
-    const behaviour = getMachineBehaviour("Naquadah Fuel Refinery");
+    const behaviour = getMachineBehaviour("Naquadah Fuel Refinery", "2.9");
     expect(
       resolveOverclockSpec(
         behaviour,
-        buildMachineContext(nfr, { machineConfigTiers: { fieldRestrictionCoil: "t4" } }),
+        buildMachineContext(nfr, { machineConfigTiers: { fieldRestrictionCoil: "t4" } }, "2.9"),
       ),
     ).toEqual(OVERCLOCK.perfect(2));
     expect(
-      resolveOverclockSpec(behaviour, buildMachineContext(nfr, { machineConfigTiers: {} })),
+      resolveOverclockSpec(behaviour, buildMachineContext(nfr, { machineConfigTiers: {} }, "2.9")),
     ).toEqual(OVERCLOCK.perfect(0));
   });
 
   it("leaves machines it does not cover on the dataset's own values", () => {
-    expect(getMachineBehaviour("Some Machine We Have Not Verified")).toBeUndefined();
+    expect(getMachineBehaviour("Some Machine We Have Not Verified", "2.9")).toBeUndefined();
 
     const unlisted = { ...chemPlant, machineType: "Some Machine We Have Not Verified" } as Recipe;
     const node = {
@@ -440,8 +463,8 @@ describe("curated machine table", () => {
     };
 
     // Falls back to the scraped 99s rather than silently reading as 1.
-    expect(getMachineDurationMultiplier(unlisted, node)).toBe(99);
-    expect(getMachineParallelMultiplier(unlisted, node)).toBe(17);
+    expect(getMachineDurationMultiplier(unlisted, node, "2.9")).toBe(99);
+    expect(getMachineParallelMultiplier(unlisted, node, "2.9")).toBe(17);
   });
 });
 
@@ -471,13 +494,13 @@ describe("pipe casings", () => {
       machineConfigControls: [scrapedPipeControl()],
     }) as unknown as Recipe;
   const controlIds = (recipe: Recipe, tiers: Record<string, string> = {}) =>
-    getRecipeMachineConfigTierControls(recipe, { machineConfigTiers: tiers }).map(
+    getRecipeMachineConfigTierControls(recipe, { machineConfigTiers: tiers }, "2.9").map(
       (control) => control.id,
     );
 
   it("gives the lathe item pipe casings, tin to black plutonium (MTEMultiLathe)", () => {
     const lathe = recipeFor("Industrial Precision Lathe");
-    const [control, ...rest] = getRecipeMachineConfigTierControls(lathe, {});
+    const [control, ...rest] = getRecipeMachineConfigTierControls(lathe, {}, "2.9");
 
     expect(rest).toEqual([]);
     expect(control.id).toBe("itemPipeCasing");
@@ -497,7 +520,7 @@ describe("pipe casings", () => {
 
     // getMaxParallelRecipes: pipeTier * 8, tin = 1.
     const parallels = (key: string) =>
-      getMachineStructuralParallels(lathe, { machineConfigTiers: { itemPipeCasing: key } });
+      getMachineStructuralParallels(lathe, { machineConfigTiers: { itemPipeCasing: key } }, "2.9");
     expect(parallels("tin")).toBe(8);
     expect(parallels("black-plutonium")).toBe(64);
   });
@@ -506,10 +529,10 @@ describe("pipe casings", () => {
     const lathe = recipeFor("Industrial Precision Lathe");
     SCRAPED_KEYS.forEach((key, position) => {
       const node = { machineConfigTiers: { pipeCasing: key } };
-      expect(getMachineStructuralParallels(lathe, node)).toBe((position + 1) * 8);
+      expect(getMachineStructuralParallels(lathe, node, "2.9")).toBe((position + 1) * 8);
     });
     expect(
-      getRecipeMachineConfigTierControls(lathe, { machineConfigTiers: { pipeCasing: "pbi" } })[0]
+      getRecipeMachineConfigTierControls(lathe, { machineConfigTiers: { pipeCasing: "pbi" } }, "2.9")[0]
         .current.key,
     ).toBe("quantium");
 
@@ -517,13 +540,13 @@ describe("pipe casings", () => {
     expect(
       getMachineStructuralParallels(lathe, {
         machineConfigTiers: { pipeCasing: "pbi", itemPipeCasing: "tin" },
-      }),
+      }, "2.9"),
     ).toBe(8);
   });
 
   it("never offers PTFE or PBI pipe casings, which no structure accepts", () => {
     for (const machine of ["Chemical Plant", "Industrial Autoclave"]) {
-      const control = getRecipeMachineConfigTierControls(recipeFor(machine), {}).find(
+      const control = getRecipeMachineConfigTierControls(recipeFor(machine), {}, "2.9").find(
         (entry) => entry.id === "pipeCasing",
       );
       expect(control?.tiers.map((tier) => tier.key)).toEqual([
@@ -539,12 +562,12 @@ describe("pipe casings", () => {
     const chemPlantRecipe = recipeFor("Chemical Plant");
     for (const key of ["ptfe", "pbi"]) {
       expect(
-        getMachineStructuralParallels(chemPlantRecipe, { machineConfigTiers: { pipeCasing: key } }),
+        getMachineStructuralParallels(chemPlantRecipe, { machineConfigTiers: { pipeCasing: key } }, "2.9"),
       ).toBe(8);
       expect(
         getMachineEutMultiplier(recipeFor("Industrial Autoclave"), {
           machineConfigTiers: { pipeCasing: key },
-        }),
+        }, "2.9"),
       ).toBeCloseTo(8 / 12, 10);
     }
   });

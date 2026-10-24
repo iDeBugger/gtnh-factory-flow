@@ -26,7 +26,7 @@ describe("energy hatches", () => {
     const report = getNodePowerReport(lcrRecipe(480, "HV"), {
       overclockTier: "MV",
       energyHatches: 2,
-    });
+    }, "2.9");
 
     expect(report.state).toBe("ok");
     expect(report.amps).toBe(4);
@@ -38,7 +38,7 @@ describe("energy hatches", () => {
     const report = getNodePowerReport(lcrRecipe(480, "HV"), {
       overclockTier: "MV",
       energyHatches: 1,
-    });
+    }, "2.9");
 
     expect(report.state).toBe("under-powered");
     expect(report.poolEuT).toBe(128);
@@ -48,7 +48,7 @@ describe("energy hatches", () => {
     const report = getNodePowerReport(lcrRecipe(1920, "EV"), {
       overclockTier: "MV",
       energyHatches: 16,
-    });
+    }, "2.9");
 
     expect(report.state).toBe("over-tier");
   });
@@ -61,7 +61,7 @@ describe("energy hatches", () => {
     const stats = getOverclockedRecipeStats(lcrRecipe(120, "MV"), {
       overclockTier: "HV",
       energyHatches: 2,
-    });
+    }, "2.9");
 
     expect(stats.overclockSteps).toBe(2);
     expect(stats.durationTicks).toBe(400 / 16);
@@ -79,7 +79,7 @@ describe("energy hatches", () => {
       overclockTier: "IV",
       energyHatches: 8,
       energyHatchType: "laser256",
-    });
+    }, "2.9");
 
     expect(report.state).toBe("ok");
     expect(report.hatches).toBe(1);
@@ -95,11 +95,11 @@ describe("energy hatches", () => {
     const regular = getNodePowerReport(lcrRecipe(16384, "IV"), {
       overclockTier: "IV",
       energyHatches: 1,
-    });
+    }, "2.9");
     const multiAmp = getNodePowerReport(lcrRecipe(16384, "IV"), {
       overclockTier: "IV",
       energyHatchType: "amp16",
-    });
+    }, "2.9");
 
     expect(regular.state).toBe("under-powered");
     expect(multiAmp.state).toBe("ok");
@@ -115,18 +115,18 @@ describe("energy hatches", () => {
       ...lcrRecipe(30720, "HV"),
       machineType: "Mega Blast Furnace",
     } as Recipe;
-    const oneHatch = getNodePowerReport(mega, { overclockTier: "MV", energyHatches: 1 });
+    const oneHatch = getNodePowerReport(mega, { overclockTier: "MV", energyHatches: 1 }, "2.9");
     expect(oneHatch.amps).toBe(2);
     expect(oneHatch.state).toBe("under-powered");
 
-    const fourHatches = getNodePowerReport(mega, { overclockTier: "MV", energyHatches: 4 });
+    const fourHatches = getNodePowerReport(mega, { overclockTier: "MV", energyHatches: 4 }, "2.9");
     expect(fourHatches.amps).toBe(8);
 
     // The same draw on a plain multiblock is refused as over-tier.
     const plain = getNodePowerReport(lcrRecipe(30720, "HV"), {
       overclockTier: "MV",
       energyHatches: 2,
-    });
+    }, "2.9");
     expect(plain.state).toBe("over-tier");
   });
 
@@ -135,7 +135,7 @@ describe("energy hatches", () => {
       overclockTier: "MV",
       energyHatches: 2,
       energyHatchType: "not-a-hatch",
-    });
+    }, "2.9");
 
     expect(report.amps).toBe(4);
     expect(report.hatchTypeLabel).toBeUndefined();
@@ -145,10 +145,10 @@ describe("energy hatches", () => {
     const withField = getOverclockedRecipeStats(lcrRecipe(120, "MV"), {
       overclockTier: "HV",
       energyHatches: 1,
-    });
+    }, "2.9");
     const without = getOverclockedRecipeStats(lcrRecipe(120, "MV"), {
       overclockTier: "HV",
-    });
+    }, "2.9");
 
     expect(withField).toEqual(without);
     expect(withField.overclockSteps).toBe(1);
@@ -245,7 +245,7 @@ describe("energy hatches", () => {
     const report = getNodePowerReport(single, {
       overclockTier: "ULV",
       energyHatches: 8,
-    });
+    }, "2.9");
 
     expect(report.isMultiblock).toBe(false);
     expect(report.tier).toBe("LV");
@@ -289,8 +289,8 @@ describe("steam machines", () => {
     const recipe = maceratorRecipe();
     const node = { overclockTier: "LV", machineHandlerId: "steam-grinder", machineConfigTiers: {} };
 
-    expect(getOverclockedRecipeStats(recipe, node).durationTicks).toBe(480);
-    const steam = getNodeSteamReport(recipe, node);
+    expect(getOverclockedRecipeStats(recipe, node, "2.9").durationTicks).toBe(480);
+    const steam = getNodeSteamReport(recipe, node, "2.9");
     expect(steam?.drawSteamPerTick).toBe(20); // 2 EU x 1.25 x 8 parallels
     expect(steam?.parallels).toBe(8);
     expect(steam?.isMultiblock).toBe(true);
@@ -305,8 +305,8 @@ describe("steam machines", () => {
       machineConfigTiers: { steamPressure: "high" },
     };
 
-    expect(getOverclockedRecipeStats(recipe, node).durationTicks).toBe(240);
-    const steam = getNodeSteamReport(recipe, node);
+    expect(getOverclockedRecipeStats(recipe, node, "2.9").durationTicks).toBe(240);
+    const steam = getNodeSteamReport(recipe, node, "2.9");
     expect(steam?.drawSteamPerTick).toBe(40);
     expect(steam?.highPressure).toBe(true);
   });
@@ -319,10 +319,10 @@ describe("steam machines", () => {
     const bronze = { overclockTier: "LV", machineHandlerId: "steam-macerator", machineConfigTiers: {} };
     const high = { overclockTier: "LV", machineHandlerId: "high-pressure-steam-macerator", machineConfigTiers: {} };
 
-    expect(getOverclockedRecipeStats(recipe, bronze).durationTicks).toBe(600);
-    expect(getOverclockedRecipeStats(recipe, high).durationTicks).toBe(300);
-    expect(getNodeSteamReport(recipe, bronze)?.drawSteamPerTick).toBe(4);
-    expect(getNodeSteamReport(recipe, high)?.drawSteamPerTick).toBe(8);
+    expect(getOverclockedRecipeStats(recipe, bronze, "2.9").durationTicks).toBe(600);
+    expect(getOverclockedRecipeStats(recipe, high, "2.9").durationTicks).toBe(300);
+    expect(getNodeSteamReport(recipe, bronze, "2.9")?.drawSteamPerTick).toBe(4);
+    expect(getNodeSteamReport(recipe, high, "2.9")?.drawSteamPerTick).toBe(8);
   });
 
   it("seeds smelting from GT's fixed 128t/4EU furnace recipe", () => {
@@ -346,18 +346,18 @@ describe("steam machines", () => {
 
     // Bronze steam furnace: 128 x 2 = 256 ticks, 4 EU x 2 L = 8 L/t.
     const single = { overclockTier: "LV", machineHandlerId: "steam-furnace", machineConfigTiers: {} };
-    expect(getOverclockedRecipeStats(recipe, single).durationTicks).toBe(256);
-    expect(getNodeSteamReport(recipe, single)?.drawSteamPerTick).toBe(8);
+    expect(getOverclockedRecipeStats(recipe, single, "2.9").durationTicks).toBe(256);
+    expect(getNodeSteamReport(recipe, single, "2.9")?.drawSteamPerTick).toBe(8);
 
     // Steam Hearth: 128 x 1.6 = 204.8 -> 204 whole ticks; 4 EU x 1.25 x 8.
     const hearth = { overclockTier: "LV", machineHandlerId: "steam-hearth", machineConfigTiers: {} };
-    expect(getOverclockedRecipeStats(recipe, hearth).durationTicks).toBe(204);
-    expect(getNodeSteamReport(recipe, hearth)?.drawSteamPerTick).toBe(40);
+    expect(getOverclockedRecipeStats(recipe, hearth, "2.9").durationTicks).toBe(204);
+    expect(getNodeSteamReport(recipe, hearth, "2.9")?.drawSteamPerTick).toBe(40);
   });
 
   it("gives no steam report to the electric handler on the same recipe", () => {
     expect(
-      getNodeSteamReport(maceratorRecipe(), { overclockTier: "LV", machineHandlerId: "macerator", machineConfigTiers: {} }),
+      getNodeSteamReport(maceratorRecipe(), { overclockTier: "LV", machineHandlerId: "macerator", machineConfigTiers: {} }, "2.9"),
     ).toBeUndefined();
   });
 });
@@ -387,7 +387,7 @@ describe("curated table vs baked handler stats", () => {
       overclockTier: "MV",
       machineHandlerId: "volcanus",
       machineConfigTiers: {},
-    });
+    }, "2.9");
 
     // 3000 / 2.2 truncated to whole ticks, once.
     expect(stats.durationTicks).toBe(1363);

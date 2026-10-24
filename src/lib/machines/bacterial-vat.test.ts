@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formulaText } from "./formula-lines";
 import {
-  RADIO_MATERIALS,
+  radioMaterials,
   applyVatInputs,
   effectiveSievert,
   getVatControls,
@@ -77,28 +77,28 @@ describe("Bacterial Vat", () => {
   });
 
   it("needs the run to fit on top of what is stored", () => {
-    const settings = getVatSettings({ bioVatOutputHatch: "hv", bioVatFill: "50" }, biomass);
+    const settings = getVatSettings({ bioVatOutputHatch: "hv", bioVatFill: "50" }, biomass, "2.9");
     // HV: 64,000 L, 32,000 stored; 100,100 L does not fit.
     expect(getVatMultiplier(settings, 100)).toMatchObject({ multiplier: 1001, fits: false, keptOut: 0 });
     expect(getVatMultiplier({ ...settings, voidExcess: true }, 100).keptOut).toBe(32_000);
-    expect(getVatGateReason(biomass, { bioVatOutputHatch: "hv" })).toMatch(/does not fit/);
+    expect(getVatGateReason(biomass, { bioVatOutputHatch: "hv" }, "2.9")).toMatch(/does not fit/);
     // By default the smallest hatch that holds a 1001x run at half full: IV.
-    expect(getVatSettings(undefined, biomass).hatch.key).toBe("iv");
+    expect(getVatSettings(undefined, biomass, "2.9").hatch.key).toBe("iv");
   });
 
   it("finds a recipe's glass and radiation in the pack's data", () => {
-    expect(getVatRequirements(biomass)).toMatchObject({ glass: 3, sievert: 0, known: true });
-    expect(getVatRequirements(exact)).toMatchObject({ glass: 6, sievert: 94, exact: true, known: true });
+    expect(getVatRequirements(biomass, "2.9")).toMatchObject({ glass: 3, sievert: 0, known: true });
+    expect(getVatRequirements(exact, "2.9")).toMatchObject({ glass: 6, sievert: 94, exact: true, known: true });
   });
 
   it("gates glass and radiation", () => {
-    expect(getVatGateReason(exact, { bioVatGlass: "5" })).toMatch(/LuV glass/);
+    expect(getVatGateReason(exact, { bioVatGlass: "5" }, "2.9")).toMatch(/LuV glass/);
     // Plutonium 94 meets 94 exactly; the shutter takes ceil(s x c / 100) off.
-    expect(getVatGateReason(exact, {})).toBeUndefined();
+    expect(getVatGateReason(exact, {}, "2.9")).toBeUndefined();
     expect(effectiveSievert(140, 50)).toBe(70);
     expect(effectiveSievert(94, 1)).toBe(93);
-    const plutonium = RADIO_MATERIALS.find((material) => material.sievert === 94)!;
-    expect(getVatGateReason(exact, { bioVatRadio: plutonium.id, bioVatShutter: "1" })).toMatch(/exactly 94/);
+    const plutonium = radioMaterials("2.9").find((material) => material.sievert === 94)!;
+    expect(getVatGateReason(exact, { bioVatRadio: plutonium.id, bioVatShutter: "1" }, "2.9")).toMatch(/exactly 94/);
   });
 
   it("burns radio hatch material at the decay rate", () => {
@@ -108,20 +108,20 @@ describe("Bacterial Vat", () => {
     expect(radioDecayTicks(130)).toBe(288);
     expect(radioDecayTicks(140)).toBe(213);
     expect(radioDecayTicks(150)).toBe(157);
-    const inputs = applyVatInputs(exact, {}, 10).inputs;
-    const burned = inputs.find((input) => input.id === getVatSettings({}, exact).radio!.id)!;
+    const inputs = applyVatInputs(exact, {}, 10, "2.9").inputs;
+    const burned = inputs.find((input) => input.id === getVatSettings({}, exact, "2.9").radio!.id)!;
     // A 94 Sv stick (mass 1) lasts 1324 ticks: 20/1324 a second, over a 10 s run.
     expect(burned.amount).toBeCloseTo((20 / 1324) * 10);
   });
 
   it("offers radiation only where the recipe needs it", () => {
-    expect(getVatControls(biomass).map((control) => control.id)).toEqual([
+    expect(getVatControls(biomass, "2.9").map((control) => control.id)).toEqual([
       "bioVatGlass",
       "bioVatOutputHatch",
       "bioVatFill",
       "bioVatVoid",
     ]);
-    expect(getVatControls(exact).map((control) => control.id)).toContain("bioVatRadio");
+    expect(getVatControls(exact, "2.9").map((control) => control.id)).toContain("bioVatRadio");
   });
 
   it("runs the Biomass recipe at 54,108 L/s with one HV hatch kept half full in an IV output hatch", () => {
@@ -155,12 +155,12 @@ describe("Bacterial Vat", () => {
   it("builds a recipe's settings once, however often the solver copies the recipe", () => {
     // A card's every power check reads them, on a fresh copy of the recipe each time: rebuilding the radio hatch's
     // hundred materials per check froze the page when the power panel walked every budget.
-    expect(getVatControls({ ...exact })).toBe(getVatControls({ ...exact, inputs: [...exact.inputs] }));
-    expect(getVatControls({ ...biomass })).not.toBe(getVatControls({ ...exact }));
+    expect(getVatControls({ ...exact }, "2.9")).toBe(getVatControls({ ...exact, inputs: [...exact.inputs] }, "2.9"));
+    expect(getVatControls({ ...biomass }, "2.9")).not.toBe(getVatControls({ ...exact }, "2.9"));
   });
 
   it("shows its working", () => {
-    const lines = getVatFormulas(biomass, { bioVatOutputHatch: "iv" }, { durationTicks: 37, eut: 32, overclockSteps: 2 });
+    const lines = getVatFormulas(biomass, { bioVatOutputHatch: "iv" }, { durationTicks: 37, eut: 32, overclockSteps: 2 }, "2.9");
     const text = Object.fromEntries(lines.map((line) => [line.label, `${formulaText(line.math)} = ${line.result}`]));
     expect(text.fill).toBe("⌈1000·(1−(2·0.5−1)^2)⌉+1 = 1,001x");
     expect(text.out).toBe("100 L·1,001 = 100,100 L");

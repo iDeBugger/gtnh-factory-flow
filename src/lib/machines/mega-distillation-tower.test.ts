@@ -31,7 +31,7 @@ const node: FactoryNode = {
 describe("Mega Distillation Tower modes", () => {
   it("offers its own Tower Height in distillery mode only, never the dataset's", () => {
     const ids = (map: string) =>
-      getRecipeMachineConfigTierControls(applyMachineHandlerToRecipe(recipe(map), node), node).map((c) => c.id);
+      getRecipeMachineConfigTierControls(applyMachineHandlerToRecipe(recipe(map), node, "2.9"), node, "2.9").map((c) => c.id);
     expect(ids("Distillery")).toEqual(["megaDtHeight"]);
     expect(ids("Distillation Tower")).toEqual([]);
   });
@@ -44,22 +44,22 @@ describe("Mega Distillation Tower modes", () => {
     [5, 1024],
   ])("runs %i middle slices in distillery mode at %i parallels", (height, parallels) => {
     const configured = { ...node, machineConfigTiers: { megaDtHeight: String(height) } };
-    const effective = applyMachineHandlerToRecipe(recipe("Distillery"), configured);
-    expect(getMachineStructuralParallels(effective, configured)).toBe(parallels);
+    const effective = applyMachineHandlerToRecipe(recipe("Distillery"), configured, "2.9");
+    expect(getMachineStructuralParallels(effective, configured, "2.9")).toBe(parallels);
   });
 
   it("defaults to the full 5 slices, and keeps distillery's speed and EU", () => {
-    const effective = applyMachineHandlerToRecipe(recipe("Distillery"), node);
-    expect(getMachineStructuralParallels(effective, node)).toBe(1024);
-    expect(getMachineDurationMultiplier(effective, node)).toBe(0.5);
-    expect(getMachineEutMultiplier(effective, node)).toBe(0.5);
+    const effective = applyMachineHandlerToRecipe(recipe("Distillery"), node, "2.9");
+    expect(getMachineStructuralParallels(effective, node, "2.9")).toBe(1024);
+    expect(getMachineDurationMultiplier(effective, node, "2.9")).toBe(0.5);
+    expect(getMachineEutMultiplier(effective, node, "2.9")).toBe(0.5);
   });
 
   it("runs tower mode at 256 parallels, x1.5 speed and 90% EU at any height", () => {
     const configured = { ...node, machineConfigTiers: { megaDtHeight: "1" } };
-    const effective = applyMachineHandlerToRecipe(recipe("Distillation Tower"), configured);
-    expect(getMachineStructuralParallels(effective, configured)).toBe(256);
-    expect(getMachineDurationMultiplier(effective, configured)).toBeCloseTo(1 / 1.5, 10);
-    expect(getMachineEutMultiplier(effective, configured)).toBe(0.9);
+    const effective = applyMachineHandlerToRecipe(recipe("Distillation Tower"), configured, "2.9");
+    expect(getMachineStructuralParallels(effective, configured, "2.9")).toBe(256);
+    expect(getMachineDurationMultiplier(effective, configured, "2.9")).toBeCloseTo(1 / 1.5, 10);
+    expect(getMachineEutMultiplier(effective, configured, "2.9")).toBe(0.9);
   });
 });

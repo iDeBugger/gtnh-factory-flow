@@ -99,9 +99,9 @@ const HOUR = 3600;
 describe("Extreme Heat Exchanger", () => {
   it.each([1, 20, 200])("runs a %i-tick recipe on its 20-tick cycle", (durationTicks) => {
     const recipe = { ...heliumPlasma, durationTicks };
-    expect(applyMachineHandlerToRecipe(recipe, { machineHandlerId: undefined }).durationTicks).toBe(20);
+    expect(applyMachineHandlerToRecipe(recipe, { machineHandlerId: undefined }, "2.9").durationTicks).toBe(20);
     for (const tier of ["ULV", "LV", "IV", "MAX"]) {
-      const stats = getOverclockedRecipeStats(recipe, node(1, tier));
+      const stats = getOverclockedRecipeStats(recipe, node(1, tier), "2.9");
       expect(stats.durationTicks).toBe(20);
       expect(stats.overclockSteps).toBe(0);
       expect(stats.eut).toBe(0);

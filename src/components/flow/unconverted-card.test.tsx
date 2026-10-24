@@ -5,6 +5,8 @@ import { ReactFlowProvider, type NodeProps } from "@xyflow/react";
 import { PROJECT_SCHEMA_VERSION, type FactoryProject, type UnconvertedRecipe } from "@/lib/model/types";
 import { unconvertedCardRecipes } from "@/lib/model/unconverted-card";
 import { useFactoryStore } from "@/store/factory-store";
+import type { DatasetManifest } from "@/lib/datasets/types";
+import { unconvertedView } from "./clean/clean-model";
 import { RecipeNodeSwitch } from "./clean/CleanRecipeNode";
 import type { RecipeFlowNode } from "./RecipeNode";
 
@@ -165,5 +167,53 @@ describe("a card whose recipe was not converted", () => {
       expect.objectContaining({ role: "takes", kind: "item", id: "ore", displayName: "Iron Ore" }),
       expect.objectContaining({ role: "makes", kind: "item", id: "dust", displayName: "Iron Dust" }),
     ]);
+  });
+
+  describe("on a plan for a version this site has no recipes for", () => {
+    const manifest: DatasetManifest = {
+      schemaVersion: 1,
+      latestStableVersion: "local-2.9.0-rc-2",
+      versions: [
+        {
+          id: "local-2.9.0-rc-2",
+          gtnhVersion: "2.9.0-RC-2",
+          channel: "stable",
+          publishedAt: "2026-10-20T00:00:00.000Z",
+          manifestPath: "/datasets/gtnh/datasets.manifest.json",
+          recipeDatasetPath: "/datasets/gtnh/local-2.9.0-rc-2/recipes.json.gz",
+          sourceInfo: { sourceId: "recex", generatedAt: "2026-10-20T00:00:00.000Z" },
+        },
+      ],
+    };
+    afterEach(() => useFactoryStore.setState({ datasetManifest: undefined }));
+
+    it("says this site has no recipes for the version, not that the game lacks the recipe", () => {
+      const project = { ...plan(), gameVersion: "2.10" } as FactoryProject;
+      useFactoryStore.getState().setProject(project);
+      useFactoryStore.setState({ datasetManifest: manifest });
+      const { container, getByText } = renderCard(project);
+      expect(getByText("Recipes for GTNH 2.10 are not on this site.")).toBeTruthy();
+      expect(container.textContent).not.toContain("Not in GTNH 2.10");
+    });
+
+    it("its tip says the card is out of the solve and offers no pick", () => {
+      const node = plan().nodes.find((entry) => entry.id === "mid")!;
+      const view = unconvertedView({ gameVersion: "2.10" }, node, "2.10");
+      expect(view?.line).toBe("Recipes for GTNH 2.10 are not on this site.");
+      expect(view?.tip.notes?.map((note) => note.text)).toEqual([
+        "The card is left out of the solve.",
+        "Its wires count as outside inputs and outputs.",
+      ]);
+      // A served plan keeps the game's line.
+      expect(unconvertedView({ gameVersion: "2.8.1" }, node)?.line).toBe("Not in GTNH 2.8.1. Pick a recipe.");
+    });
+
+    it("a served plan's card keeps its line while the manifest lists its version", () => {
+      const project = plan();
+      useFactoryStore.getState().setProject(project);
+      useFactoryStore.setState({ datasetManifest: manifest });
+      const { getByText } = renderCard(project);
+      expect(getByText("Not in GTNH 2.9. Pick a recipe.")).toBeTruthy();
+    });
   });
 });

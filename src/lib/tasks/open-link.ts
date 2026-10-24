@@ -6,6 +6,7 @@ import { leaveLibrary } from "@/lib/library/library-tab";
 import { openSharedPlan } from "@/lib/library/open-shared";
 import { parseDocKey } from "@/lib/live/protocol";
 import type { FactoryProject, PlanTaskLink } from "@/lib/model/types";
+import { planGameVersion, type GameVersion } from "@/lib/model/game-version";
 import { leaveWelcomeTab } from "@/lib/welcome/welcome-tab";
 import { useDesignStore } from "@/store/design-store";
 import { useFactoryStore } from "@/store/factory-store";
@@ -27,15 +28,19 @@ export interface LinkState {
   planName?: string;
   /** The card's machine, for its picture: its handler, or its power source. */
   handlerId?: string;
-  powerSourceId?: string;
+  /** A power card's source with its plan's version: each pack draws a source with its own item. */
+  power?: { sourceId: string; gameVersion: GameVersion };
 }
 
 /** The machine a card of `project` runs, for its picture. */
-function machineOf(project: FactoryProject, node: string): { handlerId?: string; powerSourceId?: string } {
+function machineOf(
+  project: FactoryProject,
+  node: string,
+): Pick<LinkState, "handlerId" | "power"> {
   const card = project.nodes.find((entry) => entry.id === node);
   const recipe = card ? project.recipes.find((entry) => entry.id === card.recipeId) : undefined;
   if (!card || !recipe) return {};
-  if (recipe.power?.sourceId) return { powerSourceId: recipe.power.sourceId };
+  if (recipe.power?.sourceId) return { power: { sourceId: recipe.power.sourceId, gameVersion: planGameVersion(project) } };
   return { handlerId: getSelectedMachineHandler(recipe, card).id };
 }
 

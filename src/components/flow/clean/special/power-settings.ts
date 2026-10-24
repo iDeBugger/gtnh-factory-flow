@@ -1,5 +1,6 @@
 import {
-  selectValue,
+  storedSelectValue,
+  type PowerSelectOption,
   type PowerSelectSetting,
   type PowerSetting,
   type PowerSourceDefinition,
@@ -54,8 +55,8 @@ export function powerSettingValue(
 ): string | undefined {
   const setting = source.settings.find((entry) => entry.id === id);
   if (!setting) return undefined;
+  if (setting.type === "select") return storedSelectValue(setting, values);
   const raw = rawOf(values, id);
-  if (setting.type === "select") return selectValue(setting, raw);
   if (setting.type === "toggle") return currentToggle(setting, raw) ? "1" : "0";
   return String(currentNumber(setting, raw));
 }
@@ -70,7 +71,7 @@ export function powerSettingRows(
     const enabled =
       gate === undefined || powerSettingValue(source, values, gate.settingId) === gate.equals;
     if (setting.type === "select") {
-      const key = selectValue(setting, raw);
+      const key = storedSelectValue(setting, values);
       const option = setting.options.find((entry) => entry.key === key);
       return {
         id: setting.id,
@@ -108,6 +109,17 @@ export function powerSettingRows(
   });
 }
 
+/** One select as the card shows it: the option it reads as (legacy ids included) and its options. */
+export function powerSettingsSelectModel(
+  source: PowerSourceDefinition,
+  values: Record<string, string> | undefined,
+  settingId: string,
+): { current: string; options: PowerSelectOption[] } | undefined {
+  const setting = source.settings.find((entry) => entry.id === settingId);
+  if (setting?.type !== "select") return undefined;
+  return { current: storedSelectValue(setting, values), options: setting.options };
+}
+
 /** The strip's chips: the settings pinned to the card and in play, the tier (a header chip) left out. */
 export function powerStripRows(
   rows: PowerSettingRow[],
@@ -128,7 +140,7 @@ export function powerTierChip(
   const select = source.settings.find(isTierSelect);
   if (select) {
     return {
-      label: selectValue(select, rawOf(values, "tier")),
+      label: storedSelectValue(select, values),
       fixed: select.options.length <= 1,
       options: select.options.map((option) => option.key),
     };

@@ -53,10 +53,18 @@ describe("the community plan routes with the setting on", () => {
   withModAndCommunityOn();
 
   // This test server has no community database, so each route answers as it
-  // always has without one: never the switched-off 404 body.
+  // always has without one: the hub's 503, the card's redirect to the site
+  // image, and no stored preview.
+  const unconfigured = { error: "Community hub is not configured." };
+  const expected: Record<string, [number, unknown]> = {
+    "GET /plans/[id]/card": [302, undefined],
+    "GET /plans/[id]/preview": [404, { error: "No preview." }],
+  };
   it.each(handlers)("%s answers as before", async (...entry) => {
     const response = await call(entry);
-    const body = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
-    expect(body?.error).not.toBe("Not found");
+    const body = await response.json().catch(() => undefined);
+    const [status, answer] = expected[entry[0]] ?? [503, unconfigured];
+    expect(response.status).toBe(status);
+    expect(body).toEqual(answer);
   });
 });

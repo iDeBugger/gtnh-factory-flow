@@ -21,7 +21,7 @@ it("opens without changing power and supports repeated steps, typing, lower tier
   const changed = vi.fn();
   function Harness() {
     const [node, setNode] = useState(initial);
-    return <HatchPowerControls recipe={recipe} node={node} mode="build" locked={() => false}
+    return <HatchPowerControls recipe={recipe} node={node} gameVersion="2.9" mode="build" locked={() => false}
       onChange={(tier, amps, mode) => { changed(tier, amps, mode); setNode({ ...node, hatchVoltageTier: tier, hatchAmps: amps, powerInputMode: mode }); }} />;
   }
   render(<Harness />);
@@ -46,7 +46,7 @@ it("lifts a supply under one amp to 1A when the tier changes", () => {
   const changed = vi.fn();
   const cheap = { ...recipe, minimumTier: "LV" as const, eut: 30 };
   render(<HatchPowerControls recipe={cheap} node={{ ...initial, hatchVoltageTier: "LV", hatchAmps: 0.9375 }}
-    mode="build" locked={() => false} onChange={changed} />);
+    gameVersion="2.9" mode="build" locked={() => false} onChange={changed} />);
   fireEvent.click(screen.getByRole("button", { name: "Power input unit" }));
   fireEvent.change(within(screen.getByRole("dialog")).getByRole("combobox"), { target: { value: "HV" } });
   expect(changed).toHaveBeenLastCalledWith("HV", 1, "amps");
@@ -54,7 +54,7 @@ it("lifts a supply under one amp to 1A when the tier changes", () => {
 
 it("does not open or edit a locked machine", () => {
   const changed = vi.fn();
-  render(<HatchPowerControls recipe={recipe} node={initial} mode="build" locked={() => true} onChange={changed} />);
+  render(<HatchPowerControls recipe={recipe} node={initial} gameVersion="2.9" mode="build" locked={() => true} onChange={changed} />);
   fireEvent.click(screen.getByRole("button", { name: "Hatch amps" }));
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(changed).not.toHaveBeenCalled();

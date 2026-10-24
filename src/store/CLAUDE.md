@@ -63,8 +63,8 @@ Every save goes through `persistCanvas` in design-store.ts:
 - Live editing leaves the field out (`live-shape.ts` `DROPPED_FIELDS`), and the service refuses a batch that sets it.
 - A version this site serves no dataset for (`unservedPlanVersion`: a file stamped "2.10") opens with its stored recipe
   bodies, is never refreshed, and shows `PlanVersionNotice` ("This plan is for GTNH <v>. This site has recipes
-  for ..."); the recipe browser, the item list and the crop and mob lists say "Recipes for GTNH <v> are not on this
-  site." The notice's key, Convert to GTNH 2.9, shows while this site serves 2.9.
+  for ..."); the recipe browser, the item list, the crop and mob lists, a marked card and the unconverted-cards notice say
+  "Recipes for GTNH <v> are not on this site." The notice's key, Convert to GTNH 2.9, shows while this site serves 2.9.
 - Convert (`src/lib/datasets/convert-action.ts`: the notice's key, and a tab menu's "Convert to GTNH <v>" row for every
   served version but the plan's, outside the community rows) loads the target's dataset (`ensureDatasetFor`),
   converts a clone (`convertProjectToVersion`) and opens it with `importProjectAsDesign`. The source tab is not

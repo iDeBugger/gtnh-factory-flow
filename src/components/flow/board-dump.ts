@@ -38,6 +38,7 @@ import type {
 import { APP_VERSION } from "@/lib/version";
 import { deriveNodeVerdict, type NodeVerdict } from "./node-verdict";
 import { findDeathSpirals } from "./death-spiral";
+import { planGameVersion } from "@/lib/model/game-version";
 
 /** Kept as short lines: one long paragraph wraps into mush in a chat window. */
 const READ_ME = [
@@ -225,19 +226,20 @@ function dumpMachine(
   naming: Naming,
 ) {
   const handler = getSelectedMachineHandler(recipe, node);
-  const withHandler = applyMachineHandlerToRecipe(recipe, node);
-  const effective = applyRecipeInputOverrides(withHandler, node);
-  const stats = getOverclockedRecipeStats(recipe, node);
-  const parallels = getMachineParallelMultiplier(effective, node);
+  const gameVersion = planGameVersion(project);
+  const withHandler = applyMachineHandlerToRecipe(recipe, node, gameVersion);
+  const effective = applyRecipeInputOverrides(withHandler, node, gameVersion);
+  const stats = getOverclockedRecipeStats(recipe, node, gameVersion);
+  const parallels = getMachineParallelMultiplier(effective, node, gameVersion);
   const nodeResult = result?.nodes[node.id];
   const verdict = deriveNodeVerdict(project, result, node.id);
 
   const config: Record<string, string> = {};
-  const coil = getRecipeCoilTierControl(effective, node);
+  const coil = getRecipeCoilTierControl(effective, node, gameVersion);
   if (coil) {
     config[coil.label] = coil.current.label;
   }
-  for (const control of getRecipeMachineConfigTierControls(effective, node)) {
+  for (const control of getRecipeMachineConfigTierControls(effective, node, gameVersion)) {
     config[control.label] = control.current.label;
   }
 

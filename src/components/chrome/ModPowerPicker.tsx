@@ -10,7 +10,7 @@ import { getUiScale } from "@/lib/ui-scale";
 import { GT_VOLTAGE_TIERS } from "@/lib/model";
 import { getPowerMachineIcon } from "@/lib/power/planner-data";
 import { hitPlacementSettings, searchPowerSources, type PowerSearchHit } from "@/lib/power/power-search";
-import { POWER_GROUPS, POWER_SOURCES } from "@/lib/power/registry";
+import { POWER_GROUPS, powerSourcesFor } from "@/lib/power/registry";
 import { getPowerStructureArt } from "@/lib/power/structure-art";
 import type { PowerGroupId } from "@/lib/power/types";
 import { useFactoryStore } from "@/store/factory-store";
@@ -19,6 +19,12 @@ import { tierChipColors } from "@/components/flow/clean/tokens";
 import { measureClean } from "@/components/flow/clean/text-measure";
 import { CHROME_SCREEN_K, ChromeMenu, chromeAnchorOf, MENU_ANCHOR_ATTR, type ChromeAnchor, type MenuEntry } from "./ChromeMenu";
 import { PixelBolt } from "./pixel-icons";
+import { planGameVersion, type GameVersion } from "@/lib/model/game-version";
+import { planningCardsFor, type PlanningCard } from "@/lib/model/planning-cards";
+import { cropsNhAvailable, knownCropsNhAvailable } from "@/lib/datasets/crops-availability";
+import { activeVersionServesPlan } from "@/lib/datasets/dataset-cache";
+import { DEFAULT_DATASET_MANIFEST_URL } from "@/lib/datasets/remote";
+import type { DatasetVersion } from "@/lib/datasets/types";
 
 /** The sheet's width with the backdrop's side padding, in the mod's GUI pixels (power-picker.css .mp, .mp-backdrop). */
 const SHEET_W = 802 + 16;
@@ -32,25 +38,16 @@ const COLUMNS: ReadonlyArray<ReadonlyArray<PowerGroupId>> = [
   ["reactors", "endgame"],
 ];
 
-/** The planning cards the picker lists first: no recipe, no tier. */
-interface OtherCard {
-  id: "custom-rate" | "fluid-tank" | "crop-farm";
-  name: string;
-  blurb: string;
-}
-const OTHERS: readonly OtherCard[] = [
-  { id: "custom-rate", name: "Custom Rate", blurb: "A rate you set: supplies or drains any resource, at a dial." },
-  { id: "fluid-tank", name: "Fluid Tank", blurb: "Empties a filled cell into its fluid and the empty cell, or fills cells. Free and instant." },
-  { id: "crop-farm", name: "Crop Farm", blurb: "Crops planted and harvested: pick the crop on the card." },
-];
-
 type Entry =
   | { kind: "source"; hit: PowerSearchHit }
-  | { kind: "other"; card: OtherCard };
+  | { kind: "other"; card: PlanningCard };
 
-const TIER_FILTERS = GT_VOLTAGE_TIERS.map((entry) => entry.tier).filter((tier) =>
-  POWER_SOURCES.some((source) => source.unlock === tier),
-);
+function tierFilters(gameVersion: GameVersion): string[] {
+  const sources = powerSourcesFor(gameVersion);
+  return GT_VOLTAGE_TIERS.map((entry) => entry.tier).filter((tier) =>
+    sources.some((source) => source.unlock === tier),
+  );
+}
 
 /**
  * The non-recipe machines (the mod's PowerPicker): everything you can put on the board that does not run a recipe,
@@ -63,7 +60,9 @@ export function ModPowerPicker() {
   const open = useFactoryStore((state) => state.powerMenuOpen);
   const closePowerMenu = useFactoryStore((state) => state.closePowerMenu);
   const addPowerSourceNode = useFactoryStore((state) => state.addPowerSourceNode);
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
   const addCustomRateNode = useFactoryStore((state) => state.addCustomRateNode);
+  const tierOptions = useMemo(() => tierFilters(gameVersion), [gameVersion]);
   const [query, setQuery] = useState("");
   const [groupFilter, setGroupFilter] = useState<PowerGroupId | "all">("all");
   const [tierFilter, setTierFilter] = useState<string>("all");
@@ -71,6 +70,32 @@ export function ModPowerPicker() {
   const [preview, setPreview] = useState<{ entry: Entry; rect: DOMRect }>();
   const sheetRef = useRef<HTMLDivElement>(null);
   const [frame, setFrame] = useState({ left: 0, right: 0, top: 0, zoom: 1 });
+
+  // The Crop Farm is listed only once the plan's dataset is known to carry CropsNH crops (2.8.1 has none); until the
+  // answer arrives it stays out, so no card the dataset cannot back is ever offered.
+  const datasetManifestUrl = useFactoryStore((state) => state.datasetManifestUrl);
+  const servesPlan = useFactoryStore(activeVersionServesPlan);
+  const datasetVersion = useFactoryStore((state): DatasetVersion | undefined =>
+    state.datasetManifest?.versions.find((entry) => entry.id === state.selectedDatasetVersionId),
+  );
+  const planVersion = servesPlan ? datasetVersion : undefined;
+  const [cropsNh, setCropsNh] = useState<{ versionId: string; has: boolean }>();
+  useEffect(() => {
+    if (!open || !planVersion) return;
+    let cancelled = false;
+    cropsNhAvailable(datasetManifestUrl ?? DEFAULT_DATASET_MANIFEST_URL, planVersion)
+      .then((has) => {
+        if (!cancelled) setCropsNh({ versionId: planVersion.id, has });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, planVersion, datasetManifestUrl]);
+  const hasCropsNh = planVersion
+    ? (cropsNh?.versionId === planVersion.id ? cropsNh.has : knownCropsNhAvailable(planVersion.id)) === true
+    : false;
+  const others = useMemo(() => planningCardsFor({ datasetHasCropsNh: hasCropsNh }), [hasCropsNh]);
 
   // Esc closes it, from anywhere (the search too).
   useEffect(() => {
@@ -129,20 +154,20 @@ export function ModPowerPicker() {
     const needle = query.trim().toLowerCase();
     const out: Entry[] = [];
     if (tierFilter === "all" && (groupFilter === "all" || groupFilter === "other")) {
-      for (const card of OTHERS) {
+      for (const card of others) {
         if (!needle || card.name.toLowerCase().includes(needle) || card.blurb.toLowerCase().includes(needle)) {
           out.push({ kind: "other", card });
         }
       }
     }
     // Then the sources: Other's own (the Railcraft Water Tank) come after its planning cards.
-    for (const hit of searchPowerSources(query)) {
+    for (const hit of searchPowerSources(query, gameVersion)) {
       if (groupFilter !== "all" && hit.source.group !== groupFilter) continue;
       if (tierFilter !== "all" && hit.source.unlock !== tierFilter) continue;
       out.push({ kind: "source", hit });
     }
     return out;
-  }, [open, query, groupFilter, tierFilter]);
+  }, [open, query, groupFilter, tierFilter, gameVersion, others]);
 
   const place = useCallback(
     (entry: Entry) => {
@@ -178,7 +203,7 @@ export function ModPowerPicker() {
         ]
       : [
           { label: "All tiers", current: tierFilter === "all", onSelect: () => setTierFilter("all") },
-          ...TIER_FILTERS.map((tier) => ({ label: tier, current: tierFilter === tier, onSelect: () => setTierFilter(tier) })),
+          ...tierOptions.map((tier) => ({ label: tier, current: tierFilter === tier, onSelect: () => setTierFilter(tier) })),
         ];
 
   const columns = COLUMNS.map((groups) => groups.filter((id) => inGroup(id).length > 0)).filter((groups) => groups.length > 0);
@@ -380,6 +405,7 @@ function TierTag({ tier }: { tier: string }) {
 }
 
 function MachineArt({ entry, size }: { entry: Entry; size: number }) {
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
   if (entry.kind === "other") {
     if (entry.card.id === "crop-farm") return <SproutArt size={size} />;
     return entry.card.id === "custom-rate" ? <Gauge scale={size >= 40 ? 4 : 2} /> : <TankArt size={size} />;
@@ -389,7 +415,7 @@ function MachineArt({ entry, size }: { entry: Entry; size: number }) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={art} alt="" draggable={false} className="mp-img" />;
   }
-  const icon = getPowerMachineIcon(entry.hit.source.id);
+  const icon = getPowerMachineIcon(entry.hit.source.id, gameVersion);
   if (icon?.iconPath) {
     return (
       <span className="mp-icon" style={{ width: size, height: size }}>

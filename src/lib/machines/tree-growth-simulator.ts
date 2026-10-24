@@ -1,4 +1,7 @@
 import treeData from "./data/tgs-trees.json";
+import treeData281 from "./data/2.8.1/tgs-trees.json";
+import { forVersion, type VersionOverrides } from "./version-overrides";
+import type { GameVersion } from "@/lib/model/game-version";
 import { formulaNumber, knob, type FormulaLine } from "./formula-lines";
 import type { MachineConfigControl, MachineConfigTierOption, Recipe, RecipeOutput } from "@/lib/model/types";
 import { GT_VOLTAGE_TIERS, getVoltageTierForEuT, getVoltageTierIndex } from "@/lib/model/tiers";
@@ -41,7 +44,12 @@ export interface TgsTree {
   forestry?: TgsForestry;
 }
 
-const TREES = (treeData as { trees: TgsTree[] }).trees;
+interface TgsData {
+  trees: TgsTree[];
+}
+
+/** The pack's tree file for each version whose trees differ from 2.9's. */
+const TREE_DATA_OVERRIDES: VersionOverrides<TgsData> = { "2.8.1": { "tgs-trees": treeData281 as TgsData } };
 
 // -- Settings -------------------------------------------------------------
 
@@ -181,8 +189,11 @@ function geneControl(id: string, label: string, alleles: Array<[string, number]>
 }
 
 /** The knobs this tree's card offers: a tool per output it has, and a Forestry sapling's genes. */
-export function getTgsControls(recipe: Partial<Pick<Recipe, "outputs" | "machineType">>): MachineConfigControl[] {
-  const match = matchTgsTree(recipe);
+export function getTgsControls(
+  recipe: Partial<Pick<Recipe, "outputs" | "machineType">>,
+  gameVersion: GameVersion,
+): MachineConfigControl[] {
+  const match = matchTgsTree(recipe, gameVersion);
   const modes = match ? TGS_MODES.filter((mode) => match.modes.includes(mode)) : TGS_MODES;
   const controls = modes.map(toolControl);
   const forestry = match?.tree.forestry;
@@ -208,24 +219,46 @@ export interface TgsMatch {
   modes: TgsMode[];
 }
 
-const exactIndex = new Map<string, TgsTree>();
-for (const tree of TREES) {
-  const key = TGS_MODES.filter((mode) => tree.outputs[mode])
-    .map((mode) => `${tree.outputs[mode]!.id}x${tree.outputs[mode]!.amount}`)
-    .join(";");
-  if (!exactIndex.has(key)) exactIndex.set(key, tree);
+interface TgsTables {
+  trees: TgsTree[];
+  exactIndex: Map<string, TgsTree>;
+  matches: Map<string, TgsMatch | null>;
 }
-const matchCache = new Map<string, TgsMatch | null>();
+
+const tablesByVersion = new Map<GameVersion, TgsTables>();
+
+/** One version's trees, index and match cache, built once: a 2.8.1 match never serves a 2.9 card. */
+function tgsTables(gameVersion: GameVersion): TgsTables {
+  const cached = tablesByVersion.get(gameVersion);
+  if (cached) return cached;
+  const trees = forVersion("tgs-trees", treeData as TgsData, TREE_DATA_OVERRIDES, gameVersion)?.trees ?? [];
+  const exactIndex = new Map<string, TgsTree>();
+  for (const tree of trees) {
+    const key = TGS_MODES.filter((mode) => tree.outputs[mode])
+      .map((mode) => `${tree.outputs[mode]!.id}x${tree.outputs[mode]!.amount}`)
+      .join(";");
+    if (!exactIndex.has(key)) exactIndex.set(key, tree);
+  }
+  const tables: TgsTables = { trees, exactIndex, matches: new Map() };
+  tablesByVersion.set(gameVersion, tables);
+  return tables;
+}
 
 /**
  * The tree a TGS recipe farms, and which output is which mode: by NEI's outputs (ids and amounts), else by ids
  * alone where the dataset is missing a mode the pack has (an older export).
  */
-export function matchTgsTree(recipe: Partial<Pick<Recipe, "outputs" | "machineType">>): TgsMatch | undefined {
+export function matchTgsTree(
+  recipe: Partial<Pick<Recipe, "outputs" | "machineType" | "metadata">>,
+  gameVersion: GameVersion,
+): TgsMatch | undefined {
   if (recipe.machineType !== undefined && recipe.machineType !== TGS_MACHINE_TYPE) return undefined;
   const outputs = recipe.outputs ?? [];
   if (outputs.length === 0) return undefined;
-  const key = outputs.map((output) => `${output.id}x${output.amount}`).join(";");
+  // A recipe given reference amounts matches by NEI's own amounts: the reference ones can be another tree's.
+  const stored = recipe.metadata?.[TGS_NEI_OUTPUTS];
+  const key = typeof stored === "string" ? stored : outputsKey(outputs);
+  const { trees, exactIndex, matches: matchCache } = tgsTables(gameVersion);
   const cached = matchCache.get(key);
   if (cached !== undefined) return cached ?? undefined;
   const modesFor = (tree: TgsTree): TgsMode[] | undefined => {
@@ -245,7 +278,7 @@ export function matchTgsTree(recipe: Partial<Pick<Recipe, "outputs" | "machineTy
   if (exact && exactModes) {
     match = { tree: exact, modes: exactModes };
   } else {
-    for (const tree of TREES) {
+    for (const tree of trees) {
       const modes = modesFor(tree);
       if (modes) {
         match = { tree, modes };
@@ -255,6 +288,41 @@ export function matchTgsTree(recipe: Partial<Pick<Recipe, "outputs" | "machineTy
   }
   matchCache.set(key, match);
   return match ?? undefined;
+}
+
+function outputsKey(outputs: RecipeOutput[]): string {
+  return outputs.map((output) => `${output.id}x${output.amount}`).join(";");
+}
+
+/** The metadata key holding NEI's outputs (ids and amounts) once `withTgsReferenceAmounts` has replaced a 0. */
+const TGS_NEI_OUTPUTS = "tgsNeiOutputs";
+
+/** The gene-free amount of a Forestry mode: the product at gene 1, times the mode's multiplier. */
+function tgsReferenceAmount(tree: TgsTree, mode: TgsMode): number | undefined {
+  const base = tree.forestry?.base[mode];
+  return base === undefined ? undefined : base * MODE_MULTIPLIER[mode];
+}
+
+/**
+ * NEI's TGS recipe is built once from the species' default genes, but each run recomputes from the real
+ * sapling's genes (MTETreeFarm.process). 2.8.1 fruit has no floor, so a low-yield species shows 0 in NEI, yet a
+ * higher yield gene makes fruit. Rates are an output's amount times its multiplier, so on 2.8.1 such an output
+ * takes its gene-free amount here and `getTgsOutputMultiplier` scales from it. 2.9 recipes come back as they are.
+ */
+export function withTgsReferenceAmounts<T extends Partial<Pick<Recipe, "outputs" | "machineType" | "metadata">>>(
+  recipe: T,
+  gameVersion: GameVersion,
+): T {
+  if (fruitHasFloor(gameVersion)) return recipe;
+  const outputs = recipe.outputs;
+  if (!outputs?.some((output) => !(output.amount > 0))) return recipe;
+  const match = matchTgsTree(recipe, gameVersion);
+  if (!match?.tree.forestry) return recipe;
+  const next = outputs.map((output, index) => {
+    const reference = output.amount > 0 ? undefined : tgsReferenceAmount(match.tree, match.modes[index]);
+    return reference === undefined ? output : { ...output, amount: reference };
+  });
+  return { ...recipe, outputs: next, metadata: { ...recipe.metadata, [TGS_NEI_OUTPUTS]: outputsKey(outputs) } };
 }
 
 export function isTgsRecipe(recipe: Partial<Pick<Recipe, "machineType">>): boolean {
@@ -309,8 +377,23 @@ function geneTimesTen(value: number): number {
   return Math.fround(Math.fround(value) * 10);
 }
 
+/**
+ * 2.9 floors fruit at 1 like the sapling (GT5U@5.09.54.205 gregtech/common/tileentities/machines/multi/MTETreeFarm.java:731).
+ * 2.8.1 truncates fruit with no floor, so a low-yield tree gives 0
+ * (GT5U@5.09.51.476 gtPlusPlus/xmod/gregtech/common/tileentities/machines/multi/production/MTETreeFarm.java:637).
+ * The sapling keeps its floor in both (5.09.51.476 :619, 5.09.54.205 :713).
+ */
+function fruitHasFloor(gameVersion: GameVersion): boolean {
+  return gameVersion !== "2.8.1";
+}
+
 /** MTETreeFarm.getOutputsForForestrySapling: one mode's product at these genes, before the mode's multiplier. */
-export function tgsForestryProduct(forestry: TgsForestry, mode: TgsMode, settings: TgsSettings): number | undefined {
+export function tgsForestryProduct(
+  forestry: TgsForestry,
+  mode: TgsMode,
+  settings: TgsSettings,
+  gameVersion: GameVersion,
+): number | undefined {
   const base = forestry.base[mode];
   if (base === undefined) return undefined;
   if (mode === "log") {
@@ -318,13 +401,16 @@ export function tgsForestryProduct(forestry: TgsForestry, mode: TgsMode, setting
     return Math.trunc(base * height * forestry.girth);
   }
   if (mode === "sapling") return Math.max(1, Math.trunc(base * geneTimesTen(settings.fertility ?? forestry.fertility)));
-  if (mode === "fruit") return Math.max(1, Math.trunc(base * geneTimesTen(settings.yield ?? forestry.yield)));
+  if (mode === "fruit") {
+    const fruit = Math.trunc(base * geneTimesTen(settings.yield ?? forestry.yield));
+    return fruitHasFloor(gameVersion) ? Math.max(1, fruit) : fruit;
+  }
   return base;
 }
 
 /** One run's NEI amount for a mode (the product times the mode's multiplier), at the card's genes. */
-export function tgsNeiAmount(tree: TgsTree, mode: TgsMode, settings: TgsSettings): number {
-  const forestry = tree.forestry ? tgsForestryProduct(tree.forestry, mode, settings) : undefined;
+export function tgsNeiAmount(tree: TgsTree, mode: TgsMode, settings: TgsSettings, gameVersion: GameVersion): number {
+  const forestry = tree.forestry ? tgsForestryProduct(tree.forestry, mode, settings, gameVersion) : undefined;
   if (forestry !== undefined) return forestry * MODE_MULTIPLIER[mode];
   return tree.outputs[mode]?.amount ?? 0;
 }
@@ -334,21 +420,27 @@ export function tgsNeiAmount(tree: TgsTree, mode: TgsMode, settings: TgsSettings
  * getOverclockedRecipeStats reports for a TGS card, which is already the game's t.
  */
 export function getTgsOutputMultiplier(
-  recipe: Partial<Pick<Recipe, "outputs" | "machineType">>,
+  recipe: Partial<Pick<Recipe, "outputs" | "machineType" | "metadata">>,
   output: RecipeOutput,
   settings: Record<string, string> | undefined,
   tierIndex: number,
+  gameVersion: GameVersion,
 ): number {
-  const match = matchTgsTree(recipe);
-  if (!match || !(output.amount > 0)) return 1;
+  const match = matchTgsTree(recipe, gameVersion);
+  if (!match) return 1;
+  // 2.8.1 fruit can be 0, so NEI's amount can be 0 too; that output scales from its gene-free amount, never 0 / 0.
+  const hasAmount = output.amount > 0;
+  if (!hasAmount && fruitHasFloor(gameVersion)) return 1;
   const index = (recipe.outputs ?? []).indexOf(output);
   const mode = match.modes[index >= 0 ? index : (recipe.outputs ?? []).findIndex((entry) => entry.id === output.id)];
   if (!mode) return 1;
   const parsed = getTgsSettings(settings, match.tree);
   const tool = parsed.tools[mode];
   if (!tool) return 0;
-  const perRun = tgsNeiAmount(match.tree, mode, parsed) * tgsTierMultiplier(Math.max(1, tierIndex)) * tool.multiplier;
-  return perRun / output.amount;
+  const perRun = tgsNeiAmount(match.tree, mode, parsed, gameVersion) * tgsTierMultiplier(Math.max(1, tierIndex)) * tool.multiplier;
+  const reference = hasAmount ? output.amount : tgsReferenceAmount(match.tree, mode);
+  if (reference === undefined || !(reference > 0)) return 0;
+  return perRun / reference;
 }
 
 export interface TgsStats {
@@ -372,8 +464,9 @@ export function getTgsFormulas(
   settings: Record<string, string> | undefined,
   voltageEuT: number,
   amps: number,
+  gameVersion: GameVersion,
 ): FormulaLine[] {
-  const match = matchTgsTree(recipe);
+  const match = matchTgsTree(recipe, gameVersion);
   const pool = voltageEuT * amps;
   const t = tgsTier(pool);
   const mult = tgsTierMultiplier(t);
@@ -395,21 +488,23 @@ export function getTgsFormulas(
       lines.push({
         label: "height",
         math: [`${base.log}·(3·(`, knob(height, TGS_HEIGHT), `−1)+1)·${forestry.girth}`],
-        result: `${tgsForestryProduct(forestry, "log", parsed)} logs`,
+        result: `${tgsForestryProduct(forestry, "log", parsed, gameVersion)} logs`,
       });
     }
     if (match.modes.includes("sapling") && base.sapling !== undefined) {
       lines.push({
         label: "fertility",
         math: [`max(1, ⌊${base.sapling}·`, knob(parsed.fertility ?? forestry.fertility, TGS_FERTILITY), "·10⌋)"],
-        result: `${tgsForestryProduct(forestry, "sapling", parsed)}`,
+        result: `${tgsForestryProduct(forestry, "sapling", parsed, gameVersion)}`,
       });
     }
     if (match.modes.includes("fruit") && base.fruit !== undefined) {
       lines.push({
         label: "yield",
-        math: [`max(1, ⌊${base.fruit}·`, knob(parsed.yield ?? forestry.yield, TGS_YIELD), "·10⌋)"],
-        result: `${tgsForestryProduct(forestry, "fruit", parsed)}`,
+        math: fruitHasFloor(gameVersion)
+          ? [`max(1, ⌊${base.fruit}·`, knob(parsed.yield ?? forestry.yield, TGS_YIELD), "·10⌋)"]
+          : [`⌊${base.fruit}·`, knob(parsed.yield ?? forestry.yield, TGS_YIELD), "·10⌋"],
+        result: `${tgsForestryProduct(forestry, "fruit", parsed, gameVersion)}`,
       });
     }
   }
@@ -417,7 +512,7 @@ export function getTgsFormulas(
   let electric = 0;
   for (const mode of match.modes) {
     const tool = parsed.tools[mode];
-    const nei = tgsNeiAmount(match.tree, mode, parsed);
+    const nei = tgsNeiAmount(match.tree, mode, parsed, gameVersion);
     if (!tool) {
       lines.push({ label: MODE_PLURAL[mode], math: ["no tool"], result: "0/s", tone: "bad" });
       continue;

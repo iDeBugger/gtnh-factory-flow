@@ -4,9 +4,18 @@
  * docs/power-planner-math.md; where the workbook leaves a cost out (IC2
  * rods), the card says so.
  */
-import { powerPlannerData } from "../planner-data";
+import type { GameVersion } from "@/lib/model/game-version";
+import type { PowerTables } from "../planner-data";
 import type { PowerModel, PowerSourceDefinition } from "../types";
-import { formatAmount, items, lifespanHours, liters, percent, stat } from "./helpers";
+import {
+  formatAmount,
+  items,
+  lifespanHours,
+  liters,
+  percent,
+  stat,
+  type PowerSourceBuilder,
+} from "./helpers";
 
 const thtr: PowerSourceDefinition = {
   id: "thtr",
@@ -109,7 +118,7 @@ export function htgrFuelName(pebble: string, burned: boolean): string {
   return `${burned ? "Burned Out TRISO Fuel" : "TRISO Fuel"} (${pebble.replace("-", " ")})`;
 }
 
-const htgr: PowerSourceDefinition = {
+const kubatechHtgr = (tables: PowerTables): PowerSourceDefinition => ({
   id: "htgr",
   name: "High Temperature Gas-cooled Reactor",
   group: "reactors",
@@ -121,16 +130,16 @@ const htgr: PowerSourceDefinition = {
       type: "select",
       id: "pebble",
       label: "TRISO pebble",
-      options: powerPlannerData.htgrPebbles.map((entry) => ({ key: entry.name, label: entry.name })),
-      defaultKey: powerPlannerData.htgrPebbles[0]?.name ?? "",
+      options: tables.htgrPebbles.map((entry) => ({ key: entry.name, label: entry.name })),
+      defaultKey: tables.htgrPebbles[0]?.name ?? "",
     },
     // MTEHighTempGasCooledReactor will not start below 1% of its 10,000 balls.
     { type: "number", id: "fill", label: "Pebble fill", min: 100, max: 10_000, step: 100, defaultValue: 10_000 },
   ],
   compute(read): PowerModel {
     const pebble =
-      powerPlannerData.htgrPebbles.find((entry) => entry.name === read.select("pebble")) ??
-      powerPlannerData.htgrPebbles[0];
+      tables.htgrPebbles.find((entry) => entry.name === read.select("pebble")) ??
+      tables.htgrPebbles[0];
     const fill = read.number("fill");
     const run = htgrOperation(pebble, fill);
     const cycleSeconds = run.cycleTicks / 20;
@@ -159,11 +168,113 @@ const htgr: PowerSourceDefinition = {
       ],
     };
   },
+});
+
+/**
+ * bartworks' HTGR, the one in GTNH 2.8.1 (GT5U@5.09.51.476
+ * bartworks/common/tileentities/multis/MTEHighTempGasCooledReactor.java). One fuel type
+ * at a time, kept topped up to the fill every tick by onPostTick.
+ */
+const BARTWORKS_HTGR_MAX_PEBBLES = 720_000; // :132 maxcapacity
+const BARTWORKS_HTGR_MIN_PEBBLES = BARTWORKS_HTGR_MAX_PEBBLES / 10; // :133 mincapacity
+/** sHTGR_Fuel order (:555-584): the fuel type index multiplies the coolant by 1 + type / 2. */
+const BARTWORKS_HTGR_FUELS = ["Thorium", "Uranium", "Plutonium"];
+
+/** One bartworks HTGR operation at a fill of TRISO pebbles (checkProcessing, :292-319). */
+export function bartworksHtgrOperation(fuelType: number, fill: number) {
+  const ratio = fill / BARTWORKS_HTGR_MIN_PEBBLES;
+  // A fully maintained reactor: the repair term is 0.
+  const efficiency = Math.min(ratio * ratio, 100) / 100;
+  const burned = Math.floor(fill * 0.025 * efficiency);
+  return {
+    efficiency,
+    burned,
+    burnedBalls: Math.floor(burned / 64),
+    burnedPebbles: burned % 64,
+    // onRunningTick (:370) drains this much IC2 Coolant once every 20 ticks.
+    coolantPerSecond: Math.trunc(4000 * (fuelType * 0.5 + 1) * efficiency),
+    cycleTicks: Math.trunc(72000 * (1 - efficiency / 2)),
+  };
+}
+
+const bartworksHtgr: PowerSourceDefinition = {
+  id: "htgr",
+  name: "High Temperature Gas-cooled Reactor",
+  group: "reactors",
+  // CraftingRecipes.java:346-350: the controller is crafted with four circuitSuperconductor (UV) circuits.
+  unlock: "UV",
+  blurb: "TRISO pebbles to hot coolant.",
+  settings: [
+    {
+      type: "select",
+      id: "fuel",
+      label: "Fuel",
+      options: BARTWORKS_HTGR_FUELS.map((name) => ({ key: name, label: name })),
+      defaultKey: "Thorium",
+    },
+    // A new id, not 2.9's "fill": a converted plan's kubatech ball count is no pebble count.
+    {
+      type: "number",
+      id: "pebbles",
+      label: "Pebbles kept",
+      min: BARTWORKS_HTGR_MIN_PEBBLES,
+      max: BARTWORKS_HTGR_MAX_PEBBLES,
+      step: 1000,
+      defaultValue: BARTWORKS_HTGR_MAX_PEBBLES,
+    },
+  ],
+  compute(read): PowerModel {
+    const fuelType = Math.max(0, BARTWORKS_HTGR_FUELS.indexOf(read.select("fuel")));
+    const fuel = BARTWORKS_HTGR_FUELS[fuelType];
+    const run = bartworksHtgrOperation(fuelType, read.number("pebbles"));
+    const cycleSeconds = run.cycleTicks / 20;
+    // Item names as HTGRMaterials localizes them (:547-597): "<base> (<fuel>)".
+    return {
+      // :131 powerUsage = TierEU.RECIPE_LuV, drawn every tick.
+      euPerTick: -30720,
+      inputs: [
+        liters("Coolant", run.coolantPerSecond),
+        items(`TRISO pebble (${fuel})`, run.burned / cycleSeconds),
+      ],
+      outputs: [
+        liters("Hot Coolant", run.coolantPerSecond),
+        items(`Burned out TRISO Ball (${fuel})`, run.burnedBalls / cycleSeconds),
+        items(`Burned out TRISO Pebble (${fuel})`, run.burnedPebbles / cycleSeconds),
+      ],
+      stats: [
+        stat("Efficiency", percent(run.efficiency)),
+        stat("Coolant multiplier", `x${formatAmount(fuelType * 0.5 + 1)}`),
+        stat("Pebbles per cycle", formatAmount(run.burned)),
+        stat("Cycle", `${formatAmount(cycleSeconds)}s`),
+        // :130 HELIUM_NEEDED, primed once; emptying mode hands it all back.
+        stat("Helium charge", "730,000 L, kept"),
+      ],
+    };
+  },
 };
+
+/** Whether this version's HTGR is bartworks' (2.8.1) rather than kubatech's (2.9). */
+export function runsBartworksHtgr(gameVersion: GameVersion): boolean {
+  return gameVersion === "2.8.1";
+}
+
+/**
+ * The bartworks HTGR card's settings for a recipe page that burns one of its pebbles: bartworks' HTGR recipes take
+ * `TRISO pebble (<fuel>)` in and give its burned ball back, which is what the card runs on that fuel.
+ */
+export function bartworksHtgrSettingsFor(itemNames: Iterable<string | undefined>): Record<string, string> | undefined {
+  const names = new Set([...itemNames].map((name) => name?.toLowerCase()));
+  const fuel = BARTWORKS_HTGR_FUELS.find((entry) => names.has(`TRISO pebble (${entry})`.toLowerCase()));
+  return fuel ? { fuel } : undefined;
+}
+
+/** The HTGR this version runs: kubatech's in 2.9, bartworks' in 2.8.1. */
+const htgr = (tables: PowerTables, gameVersion: GameVersion): PowerSourceDefinition =>
+  runsBartworksHtgr(gameVersion) ? bartworksHtgr : kubatechHtgr(tables);
 
 const LFTR_URANIUM_233_PER_SECOND = (20 * 5.5) / 300;
 
-const lftr: PowerSourceDefinition = {
+const lftr = (tables: PowerTables): PowerSourceDefinition => ({
   id: "lftr",
   name: "Liquid Fluoride Thorium Reactor",
   group: "reactors",
@@ -175,14 +286,14 @@ const lftr: PowerSourceDefinition = {
       type: "select",
       id: "fuel",
       label: "Fuel",
-      options: powerPlannerData.lftrFuels.map((entry) => ({ key: entry.name, label: entry.name })),
-      defaultKey: powerPlannerData.lftrFuels[0]?.name ?? "",
+      options: tables.lftrFuels.map((entry) => ({ key: entry.name, label: entry.name })),
+      defaultKey: tables.lftrFuels[0]?.name ?? "",
     },
   ],
   compute(read): PowerModel {
     const fuel =
-      powerPlannerData.lftrFuels.find((entry) => entry.name === read.select("fuel")) ??
-      powerPlannerData.lftrFuels[0];
+      tables.lftrFuels.find((entry) => entry.name === read.select("fuel")) ??
+      tables.lftrFuels[0];
     // RecipeLoaderLFTR burns 100 L in 100 seconds (1 L/s). Its output
     // metadata x4 in MTENuclearReactor agrees with EU/L divided by 20.
     // Use that numeric value, not the display label (mixed-case LuV breaks
@@ -208,7 +319,7 @@ const lftr: PowerSourceDefinition = {
       stats: [stat("EU per L", formatAmount(fuel.euPerLiter))],
     };
   },
-};
+});
 
 const IC2_DESIGNS = [
   { key: "design-1", label: "Design 1 (1,150 L/s)", rate: 1150 },
@@ -587,7 +698,11 @@ const SOLAR_PANEL_TIERS = [
   { key: "UV", label: "UV Solar Panel (524,288 EU/t)", eut: 524288 },
 ];
 
-const solarPanel: PowerSourceDefinition = {
+/** The panels a version registers: 2.8.1 has no ULV panel (LoaderMetaTileEntities.java:10630 at 5.09.51.476 starts at LV). */
+const solarPanelTiers = (gameVersion: GameVersion) =>
+  gameVersion === "2.8.1" ? SOLAR_PANEL_TIERS.filter((entry) => entry.key !== "ULV") : SOLAR_PANEL_TIERS;
+
+const solarPanel = (gameVersion: GameVersion): PowerSourceDefinition => ({
   id: "solar-panel",
   name: "Solar Panel",
   group: "passive",
@@ -598,13 +713,16 @@ const solarPanel: PowerSourceDefinition = {
       type: "select",
       id: "panel",
       label: "Panel",
-      options: SOLAR_PANEL_TIERS.map(({ key, label }) => ({ key, label })),
+      options: solarPanelTiers(gameVersion).map(({ key, label }) => ({ key, label })),
       defaultKey: "LV",
     },
     { type: "number", id: "duty", label: "Duty", min: 1, max: 100, step: 1, defaultValue: 100, unit: "%" },
   ],
   compute(read): PowerModel {
-    const panel = SOLAR_PANEL_TIERS.find((entry) => entry.key === read.select("panel")) ?? SOLAR_PANEL_TIERS[1];
+    const tiers = solarPanelTiers(gameVersion);
+    const panel =
+      tiers.find((entry) => entry.key === read.select("panel")) ??
+      SOLAR_PANEL_TIERS.find((entry) => entry.key === "LV")!;
     const duty = read.number("duty") / 100;
     return {
       euPerTick: panel.eut * duty,
@@ -613,14 +731,12 @@ const solarPanel: PowerSourceDefinition = {
       stats: [stat("Daytime output", `${formatAmount(panel.eut)} EU/t`)],
     };
   },
+});
+
+export const buildReactorSources: PowerSourceBuilder = (tables, gameVersion) => {
+  return [thtr, htgr(tables, gameVersion), lftr(tables), ic2FluidReactor, vacuumReactor, dehp];
 };
 
-export const reactorSources: PowerSourceDefinition[] = [
-  thtr,
-  htgr,
-  lftr,
-  ic2FluidReactor,
-  vacuumReactor,
-  dehp,
-];
-export const passiveSources: PowerSourceDefinition[] = [solarTower, solarPanel];
+export const buildPassiveSources: PowerSourceBuilder = (_tables, gameVersion) => {
+  return [solarTower, solarPanel(gameVersion)];
+};

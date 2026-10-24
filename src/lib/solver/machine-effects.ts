@@ -52,6 +52,7 @@ import {
   type MachineContext,
 } from "@/lib/machines/machine-table";
 import type { FactoryNode, MachineTier, Recipe, RecipeOutput } from "@/lib/model/types";
+import type { GameVersion } from "@/lib/model/game-version";
 
 type VoltageTier = Exclude<MachineTier, "DEMO">;
 
@@ -84,10 +85,11 @@ type MachineEffectNode = Pick<FactoryNode, "machineConfigTiers" | "coilTier"> &
 export function buildMachineContext(
   recipe: MachineEffectRecipe,
   node: MachineEffectNode,
+  gameVersion: GameVersion,
 ): MachineContext {
   const controls = [
-    ...getRecipeMachineConfigTierControls(recipe, node),
-    ...(getRecipeCoilTierControl(recipe, node) ? [getRecipeCoilTierControl(recipe, node)!] : []),
+    ...getRecipeMachineConfigTierControls(recipe, node, gameVersion),
+    ...(getRecipeCoilTierControl(recipe, node, gameVersion) ? [getRecipeCoilTierControl(recipe, node, gameVersion)!] : []),
   ];
 
   const find = (controlId: string) => controls.find((entry) => entry.id === controlId);
@@ -134,12 +136,13 @@ export function buildMachineContext(
     // What GTUtility.getTier(getMaxInputVoltage()) reports: the tier of the
     // SUMMED hatch voltage, so stacked hatches raise the ordinal the
     // "parallels per voltage tier" formulas scale on.
-    voltageTier: getEffectiveVoltageOrdinal(recipe, node, getNodeRunTier(recipe as Recipe, node)),
+    voltageTier: getEffectiveVoltageOrdinal(recipe, node, getNodeRunTier(recipe as Recipe, node, gameVersion), gameVersion),
     recipeVoltageTier: getVoltageTierIndex(getVoltageTierForEuT(Math.abs(recipe.eut ?? 0))),
     recipeSpecialValue: getRecipeSpecialValue(recipe),
     recipeMap: recipe.source?.recipeMap ?? recipe.machineType,
     recipe: recipe as Partial<Recipe>,
     settings: node.machineConfigTiers,
+    gameVersion,
   };
 }
 
@@ -148,6 +151,7 @@ export function getMachineOutputMultiplier(
   node: Pick<FactoryNode, "machineConfigTiers"> & Partial<Pick<FactoryNode, "machineHandlerId">>,
   output: RecipeOutput,
   tier: VoltageTier,
+  gameVersion: GameVersion,
 ): number {
   if (isEecRecipe(recipe)) {
     return getEecOutputMultiplier(
@@ -163,11 +167,12 @@ export function getMachineOutputMultiplier(
       output,
       node.machineConfigTiers,
       getVoltageTierIndex(tier),
+      gameVersion,
     );
   }
   if (isVatRecipe(recipe)) {
     // MTEBioVat: the first fluid out times the output hatch's fill multiplier.
-    return getVatOutputMultiplier(recipe as Partial<Recipe>, output, node.machineConfigTiers);
+    return getVatOutputMultiplier(recipe as Partial<Recipe>, output, node.machineConfigTiers, gameVersion);
   }
   const cropStats = getCropsNhStats(recipe);
   if (cropStats) {
@@ -204,19 +209,19 @@ export function getMachineOutputMultiplier(
     return (reference > 0 ? current / reference : 1) * rounds;
   }
 
-  const configMultiplier = getRecipeMachineConfigTierControls(recipe, node)
+  const configMultiplier = getRecipeMachineConfigTierControls(recipe, node, gameVersion)
     .filter((control) => !isBeeFrameSlotControlId(control.id))
     .reduce((multiplier, control) => multiplier * (control.current.outputMultiplier ?? 1), 1);
 
   if (isBeeProductionRecipe(recipe)) {
-    const gameMultiplier = getBeeGameOutputMultiplier(recipe, node, output);
+    const gameMultiplier = getBeeGameOutputMultiplier(recipe, node, output, gameVersion);
     if (gameMultiplier !== undefined) {
       return gameMultiplier;
     }
     return (
       configMultiplier *
-      getBeeClimateOutputMultiplier(recipe, node, output) *
-      getBeeProductionTermOutputMultiplier(recipe, node, tier) *
+      getBeeClimateOutputMultiplier(recipe, node, output, gameVersion) *
+      getBeeProductionTermOutputMultiplier(recipe, node, tier, gameVersion) *
       getBeeMegaApiaryBatchMultiplier(recipe, tier)
     );
   }
@@ -233,6 +238,7 @@ function getBeeGameOutputMultiplier(
   recipe: Pick<Recipe, "machineType" | "source" | "nei" | "machineConfigControls" | "metadata">,
   node: Pick<FactoryNode, "machineConfigTiers">,
   output: RecipeOutput,
+  gameVersion: GameVersion,
 ): number | undefined {
   if (isMegaApiaryRecipe(recipe)) {
     return undefined;
@@ -241,11 +247,11 @@ function getBeeGameOutputMultiplier(
   if (chance === undefined) {
     return undefined;
   }
-  const climate = getBeeClimateOutputMultiplier(recipe, node, output);
+  const climate = getBeeClimateOutputMultiplier(recipe, node, output, gameVersion);
   if (climate === 0) {
     return 0;
   }
-  const controls = getRecipeMachineConfigTierControls(recipe, node);
+  const controls = getRecipeMachineConfigTierControls(recipe, node, gameVersion);
   const term = getBeeProductionTerm(recipe, controls);
   if (term <= 0) {
     return 0;
@@ -328,12 +334,13 @@ function getBeeClimateOutputMultiplier(
   recipe: Pick<Recipe, "machineType" | "source" | "nei" | "machineConfigControls">,
   node: Pick<FactoryNode, "machineConfigTiers">,
   output: RecipeOutput,
+  gameVersion: GameVersion,
 ) {
   if (hasBeeMegaApiaryRequirement(output) && !isMegaApiaryRecipe(recipe)) {
     return 0;
   }
 
-  const climateControl = getRecipeMachineConfigTierControls(recipe, node).find(
+  const climateControl = getRecipeMachineConfigTierControls(recipe, node, gameVersion).find(
     (control) => control.id === BEE_ENVIRONMENT_CONTROL_ID,
   );
   const climateKey = climateControl?.current.key;
@@ -362,9 +369,10 @@ function getBeeProductionTermOutputMultiplier(
   recipe: Pick<Recipe, "machineType" | "source" | "nei" | "machineConfigControls">,
   node: Pick<FactoryNode, "machineConfigTiers">,
   tier: VoltageTier,
+  gameVersion: GameVersion,
 ) {
   const baseTerm = getBeeBaseProductionTerm(recipe.machineType);
-  const controls = getRecipeMachineConfigTierControls(recipe, node);
+  const controls = getRecipeMachineConfigTierControls(recipe, node, gameVersion);
   const hasUpgradedSpeed8 = controls.some(
     (control) =>
       control.id === BEE_INDUSTRIAL_SPEED_CONTROL_ID && control.current.key === "speed-8-upgraded",
@@ -417,9 +425,10 @@ export function applyMachineOutputMultipliers(
   recipe: Recipe,
   node: Pick<FactoryNode, "machineConfigTiers">,
   tier: VoltageTier,
+  gameVersion: GameVersion,
 ): Recipe {
   const outputs = recipe.outputs.map((output) => {
-    const multiplier = getMachineOutputMultiplier(recipe, node, output, tier);
+    const multiplier = getMachineOutputMultiplier(recipe, node, output, tier, gameVersion);
     return multiplier === 1 ? output : { ...output, amount: output.amount * multiplier };
   });
 
@@ -431,16 +440,18 @@ export function applyMachineOutputMultipliers(
 export function getMachineParallelMultiplier(
   recipe: MachineEffectRecipe,
   node: MachineEffectNode,
+  gameVersion: GameVersion,
 ): number {
   return Math.min(
-    getMachineStructuralParallels(recipe, node),
-    getPoweredParallelLimit(recipe, node),
+    getMachineStructuralParallels(recipe, node, gameVersion),
+    getPoweredParallelLimit(recipe, node, gameVersion),
   );
 }
 
 export function getMachineStructuralParallels(
   recipe: MachineEffectRecipe,
   node: MachineEffectNode,
+  gameVersion: GameVersion,
 ): number {
   const fusion = getFusionStats(recipe);
   if (fusion) return fusion.parallels;
@@ -449,15 +460,15 @@ export function getMachineStructuralParallels(
   // hatches raise it, because the game reads the tier of the SUMMED voltage.
   const tierOrdinal = Math.max(
     1,
-    getEffectiveVoltageOrdinal(recipe, node, getNodeRunTier(recipe as Recipe, node)),
+    getEffectiveVoltageOrdinal(recipe, node, getNodeRunTier(recipe as Recipe, node, gameVersion), gameVersion),
   );
-  const behaviour = getMachineBehaviour(recipe.machineType);
+  const behaviour = getMachineBehaviour(recipe.machineType, gameVersion);
   const structural = behaviour
     ? Math.max(
         1,
-        Math.floor(resolveCoefficient(behaviour.parallels, buildMachineContext(recipe, node), 1)),
+        Math.floor(resolveCoefficient(behaviour.parallels, buildMachineContext(recipe, node, gameVersion), 1)),
       )
-    : getRecipeMachineConfigTierControls(recipe, node).reduce((multiplier, control) => {
+    : getRecipeMachineConfigTierControls(recipe, node, gameVersion).reduce((multiplier, control) => {
         const fixed = control.current.parallelMultiplier ?? 1;
         const perTier = control.current.parallelPerVoltageTier;
         const base = control.current.parallelVoltageBase ?? 0;
@@ -478,9 +489,9 @@ export function getMachineStructuralParallels(
  * A chem plant with titanium pipe casings offers six parallels, but a 480
  * EU/t recipe on an HV hatch (512 EU/t) can only run one of them.
  */
-function getPoweredParallelLimit(recipe: MachineEffectRecipe, node: MachineEffectNode): number {
-  const runTier = getNodeRunTier(recipe as Recipe, node);
-  const available = getPowerPoolEuT(recipe, node, runTier);
+function getPoweredParallelLimit(recipe: MachineEffectRecipe, node: MachineEffectNode, gameVersion: GameVersion): number {
+  const runTier = getNodeRunTier(recipe as Recipe, node, gameVersion);
+  const available = getPowerPoolEuT(recipe, node, runTier, gameVersion);
   if (!Number.isFinite(available)) {
     return Number.POSITIVE_INFINITY;
   }
@@ -489,15 +500,21 @@ function getPoweredParallelLimit(recipe: MachineEffectRecipe, node: MachineEffec
   // of them into the same hatch. The heat discount counts too:
   // `ParallelHelper.determineParallel` folds it into `tRecipeEUt` before
   // dividing the available EU, so a hot blast furnace runs more parallels.
-  const recipeEuT =
+  const discountedEuT =
     Math.abs(recipe.eut ?? 0) *
-    getMachineEutMultiplier(recipe, node) *
+    getMachineEutMultiplier(recipe, node, gameVersion) *
     getHeatDiscountMultiplier(
       recipe,
       node,
       runTier,
-      getEffectiveVoltageOrdinal(recipe, node, runTier),
+      gameVersion,
+      getEffectiveVoltageOrdinal(recipe, node, runTier, gameVersion),
     );
+  // The hatch is divided by one parallel's draw rounded up to a whole EU/t
+  // (GT5U@5.09.54.205 ParallelHelper.java:399, divided at :479;
+  // GT5U@5.09.51.476 :399, :476), so 53 EU/t at a 0.8 discount (42.4) costs
+  // 43 a parallel and one MV hatch fits 2.
+  const recipeEuT = Math.ceil(discountedEuT);
   if (!(recipeEuT > 0)) {
     return Number.POSITIVE_INFINITY;
   }
@@ -508,6 +525,7 @@ function getPoweredParallelLimit(recipe: MachineEffectRecipe, node: MachineEffec
 export function getMachineDurationMultiplier(
   recipe: MachineEffectRecipe,
   node: MachineEffectNode,
+  gameVersion: GameVersion,
 ): number {
   const cropStats = getCropsNhStats(recipe);
   if (cropStats) {
@@ -536,33 +554,49 @@ export function getMachineDurationMultiplier(
 
   // The curated table states speed as a throughput multiplier, so a machine
   // that runs at 200% divides the duration by two.
-  const behaviour = getMachineBehaviour(recipe.machineType);
+  const behaviour = getMachineBehaviour(recipe.machineType, gameVersion);
   if (behaviour) {
-    const speed = resolveCoefficient(behaviour.speed, buildMachineContext(recipe, node), 1);
+    const ctx = buildMachineContext(recipe, node, gameVersion);
+    if (behaviour.durationMultiplier !== undefined) {
+      const multiplier = resolveCoefficient(behaviour.durationMultiplier, ctx, 1);
+      return multiplier > 0 ? multiplier : 1;
+    }
+    const speed = resolveCoefficient(behaviour.speed, ctx, 1);
     return speed > 0 ? 1 / speed : 1;
   }
 
-  const coilControl = getRecipeCoilTierControl(recipe, node);
+  const coilControl = getRecipeCoilTierControl(recipe, node, gameVersion);
   const coilMultiplier = coilControl?.current.durationMultiplier ?? 1;
-  const configMultiplier = getRecipeMachineConfigTierControls(recipe, node).reduce(
+  const configMultiplier = getRecipeMachineConfigTierControls(recipe, node, gameVersion).reduce(
     (multiplier, control) => multiplier * (control.current.durationMultiplier ?? 1),
     1,
   );
   return coilMultiplier * configMultiplier;
 }
 
+/** The table's line about a setting its formulas replaced with a default, if any. */
+export function getMachineSettingWarning(
+  recipe: MachineEffectRecipe,
+  node: MachineEffectNode,
+  gameVersion: GameVersion,
+): string | undefined {
+  const behaviour = getMachineBehaviour(recipe.machineType, gameVersion);
+  return behaviour?.settingWarning?.(buildMachineContext(recipe, node, gameVersion));
+}
+
 export function getMachineEutMultiplier(
   recipe: MachineEffectRecipe,
   node: MachineEffectNode,
+  gameVersion: GameVersion,
 ): number {
-  const behaviour = getMachineBehaviour(recipe.machineType);
+  const behaviour = getMachineBehaviour(recipe.machineType, gameVersion);
   if (behaviour) {
-    return resolveCoefficient(behaviour.power, buildMachineContext(recipe, node), 1);
+    return resolveCoefficient(behaviour.power, buildMachineContext(recipe, node, gameVersion), 1);
   }
 
-  const coilControl = getRecipeCoilTierControl(recipe, node);
+  const coilControl = getRecipeCoilTierControl(recipe, node, gameVersion);
   const coilMultiplier = coilControl?.current.eutMultiplier ?? 1;
-  const controls = getRecipeMachineConfigTierControls(recipe, node);
+  const controls = getRecipeMachineConfigTierControls(recipe, node, gameVersion);
   const hasUpgradedSpeed8 = controls.some(
     (control) =>
       control.id === BEE_INDUSTRIAL_SPEED_CONTROL_ID && control.current.key === "speed-8-upgraded",

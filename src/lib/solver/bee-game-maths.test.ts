@@ -78,12 +78,12 @@ function perCycle(housing: string, tiers: Record<string, string>, index = 0) {
     machineHandlerId: housing,
     overclockTier: "MV",
   } as unknown as NodeLike;
-  const recipe = applyMachineHandlerToRecipe(base, node);
+  const recipe = applyMachineHandlerToRecipe(base, node, "2.9");
   const output = recipe.outputs[index]!;
   return (
     (output.amount ?? 1) *
     (output.chance ?? 1) *
-    getMachineOutputMultiplier(recipe, node, output, "MV")
+    getMachineOutputMultiplier(recipe, node, output, "MV", "2.9")
   );
 }
 
@@ -122,8 +122,8 @@ describe("bee maths from the game's code", () => {
       machineConfigTiers: tiers,
       machineHandlerId: "magic-apiary",
     } as unknown as NodeLike;
-    const recipe = applyMachineHandlerToRecipe(sure, node);
-    const multiplier = getMachineOutputMultiplier(recipe, node, recipe.outputs[0]!, "MV");
+    const recipe = applyMachineHandlerToRecipe(sure, node, "2.9");
+    const multiplier = getMachineOutputMultiplier(recipe, node, recipe.outputs[0]!, "MV", "2.9");
     // F(100%) caps at 1; F(50%) is not capped: 1 + F(0.5).
     expect(multiplier).toBeCloseTo(1 + beeFinalChance(0.5, 2, 6.9), 5);
   });
@@ -160,9 +160,9 @@ describe("bee maths from the game's code", () => {
       machineHandlerId: "industrial-apiary",
       overclockTier: "MV",
     } as unknown as NodeLike;
-    const recipe = applyMachineHandlerToRecipe(base, node);
-    expect(getMachineEutMultiplier(recipe, node) * 37).toBeCloseTo(4322, 6);
-    expect(getOverclockedRecipeStats(recipe, node).eut).toBeCloseTo(4322, 6);
+    const recipe = applyMachineHandlerToRecipe(base, node, "2.9");
+    expect(getMachineEutMultiplier(recipe, node, "2.9") * 37).toBeCloseTo(4322, 6);
+    expect(getOverclockedRecipeStats(recipe, node, "2.9").eut).toBeCloseTo(4322, 6);
   });
 
   it("a short-lived queen cuts the acceleration", () => {
@@ -181,12 +181,12 @@ describe("bee maths from the game's code", () => {
       machineHandlerId: "industrial-apiary",
       overclockTier: "MV",
     } as unknown as NodeLike;
-    const normal = applyMachineHandlerToRecipe(base, node);
+    const normal = applyMachineHandlerToRecipe(base, node, "2.9");
     const brief = { ...normal, metadata: { beeLifespan: 10 } };
     const out = normal.outputs[0]!;
     expect(
-      getMachineOutputMultiplier(brief, node, out, "MV") /
-        getMachineOutputMultiplier(normal, node, out, "MV"),
+      getMachineOutputMultiplier(brief, node, out, "MV", "2.9") /
+        getMachineOutputMultiplier(normal, node, out, "MV", "2.9"),
     ).toBeCloseTo(246 / 256, 10);
   });
 });

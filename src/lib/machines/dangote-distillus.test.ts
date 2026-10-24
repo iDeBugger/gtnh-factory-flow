@@ -37,11 +37,11 @@ const node: FactoryNode = {
 
 describe("Dangote Distillus source-verified modes", () => {
   it.each(["Distillery", "Distillation Tower"])("enables working hatch controls for %s and drops stale parallel controls", (map) => {
-    const effective = applyMachineHandlerToRecipe(recipe(map), node);
-    expect(isMultiblockRecipe(effective)).toBe(true);
-    expect(prefersCuratedMachineMath(effective)).toBe(true);
+    const effective = applyMachineHandlerToRecipe(recipe(map), node, "2.9");
+    expect(isMultiblockRecipe(effective, "2.9")).toBe(true);
+    expect(prefersCuratedMachineMath(effective, "2.9")).toBe(true);
     // Distillery mode offers its height; tower mode runs 12 parallels at any height and offers nothing.
-    expect(getRecipeMachineConfigTierControls(effective, node).map((control) => control.id)).toEqual(
+    expect(getRecipeMachineConfigTierControls(effective, node, "2.9").map((control) => control.id)).toEqual(
       map === "Distillery" ? ["distillusHeight"] : [],
     );
     expect(effective.eut).toBe(120);
@@ -52,14 +52,14 @@ describe("Dangote Distillus source-verified modes", () => {
   it.each([['LV', 8], ['MV', 16], ['HV', 24], ['EV', 32], ['IV', 40], ['LuV', 48], ['ZPM', 56]])(
     "scales a 12-layer distillery at %s to %i structural parallels", (tier, parallels) => {
       const configured = { ...node, hatchVoltageTier: tier as FactoryNode["hatchVoltageTier"] };
-      const effective = applyMachineHandlerToRecipe(recipe("Distillery"), configured);
-      expect(getMachineStructuralParallels(effective, configured)).toBe(parallels);
-      expect(getMachineDurationMultiplier(effective, configured)).toBe(0.5);
-      expect(getMachineEutMultiplier(effective, configured)).toBe(0.15);
-      const tower = applyMachineHandlerToRecipe(recipe("Distillation Tower"), configured);
-      expect(getMachineStructuralParallels(tower, configured)).toBe(12);
-      expect(getMachineDurationMultiplier(tower, configured)).toBe(1 / 3);
-      expect(getMachineEutMultiplier(tower, configured)).toBe(1);
+      const effective = applyMachineHandlerToRecipe(recipe("Distillery"), configured, "2.9");
+      expect(getMachineStructuralParallels(effective, configured, "2.9")).toBe(parallels);
+      expect(getMachineDurationMultiplier(effective, configured, "2.9")).toBe(0.5);
+      expect(getMachineEutMultiplier(effective, configured, "2.9")).toBe(0.15);
+      const tower = applyMachineHandlerToRecipe(recipe("Distillation Tower"), configured, "2.9");
+      expect(getMachineStructuralParallels(tower, configured, "2.9")).toBe(12);
+      expect(getMachineDurationMultiplier(tower, configured, "2.9")).toBe(1 / 3);
+      expect(getMachineEutMultiplier(tower, configured, "2.9")).toBe(1);
     },
   );
 
@@ -71,32 +71,32 @@ describe("Dangote Distillus source-verified modes", () => {
         hatchVoltageTier: "EV" as FactoryNode["hatchVoltageTier"],
         machineConfigTiers: { distillusHeight: String(height) },
       };
-      const effective = applyMachineHandlerToRecipe(recipe("Distillery"), configured);
+      const effective = applyMachineHandlerToRecipe(recipe("Distillery"), configured, "2.9");
       // EV is voltage ordinal 4.
-      expect(getMachineStructuralParallels(effective, configured)).toBe(thirds * 2 * 4);
-      const tower = applyMachineHandlerToRecipe(recipe("Distillation Tower"), configured);
-      expect(getMachineStructuralParallels(tower, configured)).toBe(12);
+      expect(getMachineStructuralParallels(effective, configured, "2.9")).toBe(thirds * 2 * 4);
+      const tower = applyMachineHandlerToRecipe(recipe("Distillation Tower"), configured, "2.9");
+      expect(getMachineStructuralParallels(tower, configured, "2.9")).toBe(12);
     },
   );
 
   it("spends real supplied power on parallels and counts stacked ordinary hatch voltages", () => {
     const distillery = recipe("Distillery");
-    const single = getNodePowerReport(distillery, node);
+    const single = getNodePowerReport(distillery, node, "2.9");
     expect(single.parallels).toBe(7); // floor(128 / (120 * .15))
-    expect(getOverclockedRecipeStats(distillery, node).durationTicks).toBe(300);
+    expect(getOverclockedRecipeStats(distillery, node, "2.9").durationTicks).toBe(300);
     const pair = { ...node, hatchAmps: 4 }; // Two ordinary MV hatches: 256 summed V -> HV ordinal.
-    expect(getNodePowerReport(distillery, pair).parallels).toBe(24);
-    expect(getOverclockedRecipeStats(distillery, pair).durationTicks).toBe(300);
+    expect(getNodePowerReport(distillery, pair, "2.9").parallels).toBe(24);
+    expect(getOverclockedRecipeStats(distillery, pair, "2.9").durationTicks).toBe(300);
     const legacy = { ...node, hatchVoltageTier: undefined, hatchAmps: undefined, overclockTier: "MV" as const, energyHatches: 2 };
-    expect(getNodePowerReport(distillery, normalizeHatchInput(distillery, legacy, true)).parallels).toBe(24);
+    expect(getNodePowerReport(distillery, normalizeHatchInput(distillery, legacy, "2.9", true), "2.9").parallels).toBe(24);
   });
 
   it("keeps tower mode at twelve parallels and spends spare amps on normal overclocks", () => {
     const tower = recipe("Distillation Tower");
-    expect(getNodePowerReport(tower, node).parallels).toBe(1);
-    expect(getOverclockedRecipeStats(tower, node).durationTicks).toBe(200);
+    expect(getNodePowerReport(tower, node, "2.9").parallels).toBe(1);
+    expect(getOverclockedRecipeStats(tower, node, "2.9").durationTicks).toBe(200);
     const supplied = { ...node, hatchAmps: 64 };
-    expect(getNodePowerReport(tower, supplied).parallels).toBe(12);
-    expect(getOverclockedRecipeStats(tower, supplied).durationTicks).toBe(100);
+    expect(getNodePowerReport(tower, supplied, "2.9").parallels).toBe(12);
+    expect(getOverclockedRecipeStats(tower, supplied, "2.9").durationTicks).toBe(100);
   });
 });

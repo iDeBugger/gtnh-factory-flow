@@ -35,7 +35,7 @@ import {
   solveEquilibrium,
   type EquilibriumSolution,
 } from "./equilibrium";
-import { getMachineOutputMultiplier, getMachineParallelMultiplier } from "./machine-effects";
+import { getMachineOutputMultiplier, getMachineParallelMultiplier, getMachineSettingWarning } from "./machine-effects";
 import { getOverclockedRecipeStats } from "./overclock";
 import {
   describePowerStall,
@@ -50,7 +50,7 @@ import {
 } from "./runtime-calculation";
 import { closeBoundaries } from "./close-boundaries";
 import { expandSharedMachines } from "../model/shared-machine";
-import { planGameVersion } from "../model/game-version";
+import { planGameVersion, type GameVersion } from "../model/game-version";
 import { unconvertedWarning } from "../model/unconverted-card";
 import { expandPool, getPoolProject } from "./pool-mode";
 import { getSetupRules } from "../model/setup-rules";
@@ -75,6 +75,7 @@ export function calculateThroughput(
   project: FactoryProject,
   options: SolverOptions = {},
 ): ThroughputResult {
+  const gameVersion = planGameVersion(project);
   // SETUP RULES (model/setup-rules.ts). getSetupRules answers every plan
   // with closed boundaries. A free side would add a
   // virtual drawer on every slot of that side, never reaching the board and
@@ -150,7 +151,7 @@ export function calculateThroughput(
         theoreticalMachinesRequired: 0,
         status: "missing-recipe",
         unconverted: true,
-        warnings: [unconvertedWarning(planGameVersion(project))],
+        warnings: [unconvertedWarning(gameVersion)],
       };
       bottlenecks.push({
         id: `missing-recipe:${node.id}`,
@@ -194,20 +195,20 @@ export function calculateThroughput(
       continue;
     }
 
-    const nodeRecipe = applyRecipeInputOverrides(recipe, node);
-    const effectiveRecipe = applyMachineHandlerToRecipe(nodeRecipe, node);
-    const overclockedRecipe = getOverclockedRecipeStats(nodeRecipe, node);
-    const runtimeVariant = selectRuntimeCalculationVariant(effectiveRecipe, node);
-    const runtimeOutputs = getRuntimeCalculationOutputs(effectiveRecipe, node);
+    const nodeRecipe = applyRecipeInputOverrides(recipe, node, gameVersion);
+    const effectiveRecipe = applyMachineHandlerToRecipe(nodeRecipe, node, gameVersion);
+    const overclockedRecipe = getOverclockedRecipeStats(nodeRecipe, node, gameVersion);
+    const runtimeVariant = selectRuntimeCalculationVariant(effectiveRecipe, node, gameVersion);
+    const runtimeOutputs = getRuntimeCalculationOutputs(effectiveRecipe, node, gameVersion);
     const machineParallelMultiplier =
-      runtimeVariant?.parallel ?? getMachineParallelMultiplier(effectiveRecipe, node);
+      runtimeVariant?.parallel ?? getMachineParallelMultiplier(effectiveRecipe, node, gameVersion);
     // A build the game would refuse to start produces nothing - GT has no
     // slow mode - but it is a machine at 0%, not a blank card: rates stay
     // nameplate so ports and wires keep their shape, and the equilibrium pins
     // the node to zero the same way a bare slot does. The card's power cell
     // is what says why.
     const powerReport = hasPowerReport(nodeRecipe)
-      ? getNodePowerReport(nodeRecipe, node)
+      ? getNodePowerReport(nodeRecipe, node, gameVersion)
       : undefined;
     const powerStall = powerReport && isPowerStalled(powerReport) ? powerReport : undefined;
     const operationRatePerSecond =
@@ -231,7 +232,7 @@ export function calculateThroughput(
         getChanceMultiplier(effectiveRecipe, output) *
         (runtimeOutputs
           ? 1
-          : getMachineOutputMultiplier(effectiveRecipe, node, output, overclockedRecipe.tier)) *
+          : getMachineOutputMultiplier(effectiveRecipe, node, output, overclockedRecipe.tier, gameVersion)) *
         operationRatePerSecond;
       addFlow(outputs, output, amountPerSecond);
     }
@@ -263,7 +264,8 @@ export function calculateThroughput(
       status: "underutilized",
       warnings: [
         powerStall ? describePowerStall(powerStall) : undefined,
-        runtimeCalculationWarning(effectiveRecipe, node),
+        runtimeCalculationWarning(effectiveRecipe, node, gameVersion),
+        getMachineSettingWarning(effectiveRecipe, node, gameVersion),
       ].filter((warning): warning is string => Boolean(warning)),
     };
   }
@@ -342,7 +344,7 @@ export function calculateThroughput(
   }
   const edgeResults: Record<string, EdgeThroughput> = {};
   writeEdgeResultsFromEquilibrium(project, nodes, edgeResults, equilibrium);
-  finalizeNodeReports(project, recipesById, nodes, edgeResults, storagesById, equilibrium);
+  finalizeNodeReports(project, recipesById, nodes, edgeResults, storagesById, equilibrium, gameVersion);
   refreshStorageResultsFromEdges(projectStorages, storages, project.edges, edgeResults);
 
   for (const node of project.nodes) {
@@ -868,6 +870,7 @@ function finalizeNodeReports(
   edgeResults: Record<string, EdgeThroughput>,
   storagesById: Map<string, FactoryStorage>,
   equilibrium: EquilibriumSolution,
+  gameVersion: GameVersion,
 ): void {
   const requiredByNodeAndResource = new Map<string, Map<ResourceKey, number>>();
   const inputSupplyByNodeAndResource = calculateConnectedInputSupply(
@@ -962,11 +965,11 @@ function finalizeNodeReports(
       }
     }
 
-    const nodeRecipe = applyRecipeInputOverrides(recipe, node);
+    const nodeRecipe = applyRecipeInputOverrides(recipe, node, gameVersion);
     const overclockedRecipe = {
-      ...applyMachineHandlerToRecipe(nodeRecipe, node),
-      ...getOverclockedRecipeStats(nodeRecipe, node),
-      outputs: applyOutputMultipliers(nodeRecipe, node),
+      ...applyMachineHandlerToRecipe(nodeRecipe, node, gameVersion),
+      ...getOverclockedRecipeStats(nodeRecipe, node, gameVersion),
+      outputs: applyOutputMultipliers(nodeRecipe, node, gameVersion),
     };
     const utilizationReport = selectLimitingOutput(
       overclockedRecipe,
@@ -1340,19 +1343,20 @@ function selectLimitingOutput(
   return best;
 }
 
-function applyOutputMultipliers(recipe: Recipe, node: FactoryProject["nodes"][number]) {
-  const effectiveRecipe = applyMachineHandlerToRecipe(recipe, node);
-  const runtimeOutputs = getRuntimeCalculationOutputs(effectiveRecipe, node);
+function applyOutputMultipliers(recipe: Recipe, node: FactoryProject["nodes"][number], gameVersion: GameVersion) {
+  const effectiveRecipe = applyMachineHandlerToRecipe(recipe, node, gameVersion);
+  const runtimeOutputs = getRuntimeCalculationOutputs(effectiveRecipe, node, gameVersion);
   if (runtimeOutputs) {
     return runtimeOutputs;
   }
-  const overclockedRecipe = getOverclockedRecipeStats(recipe, node);
+  const overclockedRecipe = getOverclockedRecipeStats(recipe, node, gameVersion);
   return effectiveRecipe.outputs.map((output) => {
     const multiplier = getMachineOutputMultiplier(
       effectiveRecipe,
       node,
       output,
       overclockedRecipe.tier,
+      gameVersion,
     );
     return multiplier === 1 ? output : { ...output, amount: output.amount * multiplier };
   });

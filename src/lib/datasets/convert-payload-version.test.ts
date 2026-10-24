@@ -180,10 +180,12 @@ describe("preparePayloadForPlan", () => {
   });
 
   test("a 2.9 power card pasted into a 2.8.1 plan is rebuilt, and a Large Neutralization Engine arrives marked", async () => {
-    const power = buildPowerRecipe("large-combustion-engine", undefined, "power:lce")!;
+    const power = buildPowerRecipe("large-combustion-engine", undefined, "power:lce", "2.9")!;
     // A copied body that no rebuild would produce: if it lands, the card was copied, not rebuilt.
     const copiedPower = { ...power, outputs: [] };
-    const lne = buildPowerRecipe("large-neutralization-engine", undefined, "power:lne")!;
+    // The rebuild is the target plan's version's card.
+    const rebuilt = buildPowerRecipe("large-combustion-engine", undefined, "power:lce", "2.8.1")!;
+    const lne = buildPowerRecipe("large-neutralization-engine", undefined, "power:lne", "2.9")!;
     const payload: BoardClipboardPayload = {
       gameVersion: "2.9",
       nodes: [node("p", "power:lce"), node("l", "power:lne", 300)],
@@ -195,7 +197,7 @@ describe("preparePayloadForPlan", () => {
     };
     const prepared = await preparePayloadForPlan(payload, empty281(), source);
     expect(prepared.gameVersion).toBe("2.8.1");
-    expect(prepared.recipes.find((recipe) => recipe.id === "power:lce")?.outputs).toEqual(power.outputs);
+    expect(prepared.recipes.find((recipe) => recipe.id === "power:lce")?.outputs).toEqual(rebuilt.outputs);
     expect(prepared.nodes.find((entry) => entry.id === "p")?.unconverted).toBeUndefined();
     expect(prepared.recipes.some((recipe) => recipe.id === "power:lne")).toBe(false);
     expect(prepared.nodes.find((entry) => entry.id === "l")?.unconverted).toEqual(
@@ -209,6 +211,15 @@ describe("preparePayloadForPlan", () => {
     const prepared = await preparePayloadForPlan(payload, plan("2.9", [], []), source);
     expect(prepared).toBe(payload);
     expect(payload).toEqual(before);
+  });
+
+  test("a paste from another version before the manifest lands is refused, never marked", async () => {
+    const payload = copied29();
+    await expect(preparePayloadForPlan(payload, plan("2.8.1", [], []), { manifestUrl: "/manifest.json" })).rejects.toThrow(
+      "Recipes are still loading. Try again.",
+    );
+    // The same version needs no manifest.
+    expect(await preparePayloadForPlan(payload, plan("2.9", [], []), {})).toBe(payload);
   });
 
   test("a paste into a plan whose version is not served marks every dataset card", async () => {

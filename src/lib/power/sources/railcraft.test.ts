@@ -9,11 +9,11 @@ import { boilerWarmUpTicks, waterTankFill } from "./railcraft";
  * tag 9.17.26). The mod's RailcraftTest pins the same values.
  */
 function compute(sourceId: string, settings: Record<string, string> = {}) {
-  const source = getPowerSource(sourceId);
+  const source = getPowerSource(sourceId, "2.9");
   if (!source) {
     throw new Error(`No power source ${sourceId}`);
   }
-  return source.compute(buildPowerSettingsReader(source, settings));
+  return source.compute(buildPowerSettingsReader(source, settings, "2.9"), "2.9");
 }
 
 function flow(model: ReturnType<typeof compute>, name: string): number | undefined {
@@ -52,8 +52,8 @@ describe("Railcraft Water Tank (TileTankWater.updateEntity)", () => {
   });
 
   it("lists under Other and makes the dataset's water", () => {
-    expect(getPowerSource("railcraft-water-tank")?.group).toBe("other");
-    expect(resolvePowerResource("Water")?.id).toBe("water");
+    expect(getPowerSource("railcraft-water-tank", "2.9")?.group).toBe("other");
+    expect(resolvePowerResource("Water", "2.9")?.id).toBe("water");
   });
 });
 
@@ -105,11 +105,11 @@ describe("Railcraft Boiler (SteamBoiler at full heat)", () => {
   });
 
   it("resolves every fuel it offers to a dataset resource", () => {
-    const source = getPowerSource("railcraft-boiler");
+    const source = getPowerSource("railcraft-boiler", "2.9");
     const fuel = source?.settings.find((setting) => setting.id === "fuel");
     expect(fuel?.type).toBe("select");
     for (const option of fuel?.type === "select" ? fuel.options : []) {
-      expect(resolvePowerResource(option.key), option.key).toBeDefined();
+      expect(resolvePowerResource(option.key, "2.9"), option.key).toBeDefined();
     }
     expect(source?.group).toBe("steam");
   });

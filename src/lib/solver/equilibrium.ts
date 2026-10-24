@@ -11,6 +11,7 @@ import type {
   ResourceKey,
   ResourceKind,
 } from "../model/types";
+import { planGameVersion } from "@/lib/model/game-version";
 
 const EPSILON = 0.000001;
 
@@ -2591,11 +2592,12 @@ export function getEdgeTargetDemandKey(
   project: FactoryProject,
   edge: FactoryProject["edges"][number],
 ): ResourceKey | undefined {
+  const gameVersion = planGameVersion(project);
   const targetNode = project.nodes.find((node) => node.id === edge.target);
   const targetRecipe = project.recipes.find((recipe) => recipe.id === targetNode?.recipeId);
   const edgeResource = { kind: edge.resourceKind, id: edge.resourceId };
   const effectiveTargetRecipe =
-    targetNode && targetRecipe ? applyRecipeInputOverrides(targetRecipe, targetNode) : undefined;
+    targetNode && targetRecipe ? applyRecipeInputOverrides(targetRecipe, targetNode, gameVersion) : undefined;
   const input = effectiveTargetRecipe?.inputs.find(
     (entry) => isRecipeInputConsumed(entry) && resourceMatchesInput(edgeResource, entry),
   );

@@ -133,6 +133,8 @@ export function LibraryTile({
   // A finger on a tile is a scroll, a tap, or a HELD press for the menu
   // (iPhones send no contextmenu event). It is never a drag: the drag would
   // swallow the swipe. Filing into collections is in the menu on a phone.
+  // Every post mark is the community's: with it switched off a tile wears none.
+  const community = isModAndCommunityOn();
   const press = useRef<{ timer: number; x: number; y: number } | undefined>(undefined);
   const cancelPress = () => {
     if (press.current) {
@@ -304,8 +306,7 @@ export function LibraryTile({
               open
             </span>
           ) : null}
-          {/* Every post mark is the community's: with it switched off a tile wears none. */}
-          {marks.privatePost && isModAndCommunityOn() ? (
+          {marks.privatePost && community ? (
             <span
               className="text-[var(--mc-ink-muted)]"
               aria-label="Private: only you can see it"
@@ -314,7 +315,7 @@ export function LibraryTile({
               <EyeOff className="h-3 w-3" aria-hidden />
             </span>
           ) : null}
-          {isModAndCommunityOn() ? <PostGlyph marks={marks} onPost={onPost} onCopyLink={onCopyLink} /> : null}
+          {community ? <PostGlyph marks={marks} onPost={onPost} onCopyLink={onCopyLink} /> : null}
           {social ? (
             <>
               <button

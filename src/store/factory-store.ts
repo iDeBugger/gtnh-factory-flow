@@ -1612,7 +1612,7 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
         return state;
       }
 
-      const effectiveRecipe = marked ? recipe : applyRecipeInputOverrides(recipe, node);
+      const effectiveRecipe = marked ? recipe : applyRecipeInputOverrides(recipe, node, planGameVersion(state.project));
       const seed: RecipeSeedClause[] = [];
       const seen = new Set<string>();
       const push = (role: RecipeSeedClause["role"], resource: ResourceAmount) => {
@@ -1881,8 +1881,8 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
   addNodeForRecipeObject: (recipe, resource, options) => {
     set((state) => {
       // A recipe whose machine is a power card here (kubatech's HTGR fuel pages) adds that card.
-      const power = powerCardForRecipe(recipe);
-      const powerRecipe = power && buildPowerRecipe(power.sourceId, power.settings, createId("recipe"));
+      const power = powerCardForRecipe(recipe, planGameVersion(state.project));
+      const powerRecipe = power && buildPowerRecipe(power.sourceId, power.settings, createId("recipe"), planGameVersion(state.project));
       return powerRecipe
         ? addRecipeNodeToState(state, powerRecipe, undefined, {
             focusCamera: options?.focusCamera,
@@ -2187,7 +2187,7 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
     set((state) => {
       // Each power card owns its recipe, custom-rate style; settings are
       // defaults until the card's knobs write machineConfigTiers.
-      const recipe = buildPowerRecipe(sourceId, settings, createId("recipe"));
+      const recipe = buildPowerRecipe(sourceId, settings, createId("recipe"), planGameVersion(state.project));
       if (!recipe) {
         return state;
       }
@@ -2202,7 +2202,7 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
   },
   refactorNodeToPowerSource: (nodeId, sourceId, settings) => {
     set((state) => {
-      const recipe = buildPowerRecipe(sourceId, settings, createId("recipe"));
+      const recipe = buildPowerRecipe(sourceId, settings, createId("recipe"), planGameVersion(state.project));
       if (!recipe) {
         return state;
       }
@@ -2235,7 +2235,7 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
         (entry) => entry.id !== nodeId && entry.recipeId === recipe.id,
       );
       const nextRecipeId = sharedWithAnotherNode ? createId("recipe") : recipe.id;
-      const nextRecipe = buildPowerRecipe(recipe.power.sourceId, nextSettings, nextRecipeId);
+      const nextRecipe = buildPowerRecipe(recipe.power.sourceId, nextSettings, nextRecipeId, planGameVersion(state.project));
       if (!nextRecipe) {
         return state;
       }
@@ -5154,6 +5154,7 @@ function addRecipeNodeToState(
     machineConfigTiers?: Record<string, string>;
   },
 ): Partial<FactoryStore> {
+  const gameVersion = planGameVersion(state.project);
   if (refusesDatasetRecipe(state, recipe)) return state;
   const index = state.project.nodes.length;
   const center = state.flowViewportCenter ?? viewportCenter;
@@ -5203,7 +5204,7 @@ function addRecipeNodeToState(
   };
   // Plan mode: the settings last changed on this machine come with the new card (the mod's SettingMemory).
   const node: FactoryNode = state.project.planMode
-    ? { ...plainNode, ...applySettingMemory(recipe, plainNode) }
+    ? { ...plainNode, ...applySettingMemory(recipe, plainNode, gameVersion) }
     : plainNode;
   const recipeAlreadyInProject = state.project.recipes.some((entry) => entry.id === recipe.id);
   const project = touchProject({
@@ -5414,6 +5415,7 @@ function buildResourceEdgesBetweenNodes(
   targetNodeId: string,
   resource: Pick<ResourceAmount, "kind" | "id">,
 ): FactoryEdge[] {
+  const gameVersion = planGameVersion(project);
   const sourceNode = project.nodes.find((node) => node.id === sourceNodeId);
   const targetNode = project.nodes.find((node) => node.id === targetNodeId);
   if (!sourceNode || !targetNode) {
@@ -5432,13 +5434,13 @@ function buildResourceEdgesBetweenNodes(
     if (!sourceRecipe) {
       continue;
     }
-    const effectiveSource = applyRecipeInputOverrides(sourceRecipe, source.node);
+    const effectiveSource = applyRecipeInputOverrides(sourceRecipe, source.node, gameVersion);
     for (const target of listNodeSections(targetNode)) {
       const targetRecipe = project.recipes.find((recipe) => recipe.id === target.node.recipeId);
       if (!targetRecipe) {
         continue;
       }
-      const effectiveTarget = applyRecipeInputOverrides(targetRecipe, target.node);
+      const effectiveTarget = applyRecipeInputOverrides(targetRecipe, target.node, gameVersion);
       effectiveSource.outputs.forEach((output, outputIndex) => {
         if (!matchesResource(output)) {
           return;
@@ -5600,6 +5602,7 @@ function refactorNodeToState(
   recipe: Recipe,
   options?: { machineHandlerId?: string; machineConfigTiers?: Record<string, string> },
 ): Partial<FactoryStore> {
+  const gameVersion = planGameVersion(state.project);
   if (refusesDatasetRecipe(state, recipe)) return state;
   // A shared card's section (`card#rN`): only a recipe that was not converted is picked for one.
   // A shared card's own recipe takes the same care: the machine runs the card's other recipes too.
@@ -5656,6 +5659,7 @@ function refactorNodeToState(
               ? carryMachineVoltage(
                   { recipe: oldRecipe, node: entry },
                   { recipe, machineHandlerId: spawnHandler?.id },
+                  gameVersion,
                 )
               : undefined),
             // A power pick carries its dialed settings into the swap; every
@@ -6103,6 +6107,7 @@ function pruneInvalidEdgesAndOrphanStorages(project: FactoryProject): FactoryPro
 }
 
 function isFactoryEdgeStillValid(project: FactoryProject, edge: FactoryEdge): boolean {
+  const gameVersion = planGameVersion(project);
   // Each end is read as the SECTION its handle names; a wire onto a recipe
   // that has since left the card finds no section and goes with it.
   const sourceNode = nodeSectionForHandle(project, edge.source, edge.sourceHandle);
@@ -6126,7 +6131,7 @@ function isFactoryEdgeStillValid(project: FactoryProject, edge: FactoryEdge): bo
         ? wired.kind === sourceStorage.kind && wired.id === sourceStorage.resourceId
         : sourceNode !== undefined &&
           sourceRecipe !== undefined &&
-          applyRecipeInputOverrides(sourceRecipe, sourceNode).outputs.some((output) =>
+          applyRecipeInputOverrides(sourceRecipe, sourceNode, gameVersion).outputs.some((output) =>
             resourceMatchesInput(wired, output),
           ));
     const targetHolds =
@@ -6136,7 +6141,7 @@ function isFactoryEdgeStillValid(project: FactoryProject, edge: FactoryEdge): bo
         : targetNode !== undefined &&
           targetRecipe !== undefined &&
           (isTrashRecipe(targetRecipe) ||
-            applyRecipeInputOverrides(targetRecipe, targetNode).inputs.some(
+            applyRecipeInputOverrides(targetRecipe, targetNode, gameVersion).inputs.some(
               (input) => isRecipeInputConsumed(input) && resourceMatchesInput(wired, input),
             )));
     return sourceHolds && targetHolds;
@@ -6153,7 +6158,7 @@ function isFactoryEdgeStillValid(project: FactoryProject, edge: FactoryEdge): bo
     if (!sourceNode || !sourceRecipe) {
       return false;
     }
-    const effectiveSourceRecipe = applyRecipeInputOverrides(sourceRecipe, sourceNode);
+    const effectiveSourceRecipe = applyRecipeInputOverrides(sourceRecipe, sourceNode, gameVersion);
     return effectiveSourceRecipe.outputs.some((output) =>
       resourceMatchesInput({ kind: edge.resourceKind, id: edge.resourceId }, output),
     );
@@ -6172,7 +6177,7 @@ function isFactoryEdgeStillValid(project: FactoryProject, edge: FactoryEdge): bo
 
   if (sourceStorage && targetRecipe) {
     const effectiveTargetRecipe = targetNode
-      ? applyRecipeInputOverrides(targetRecipe, targetNode)
+      ? applyRecipeInputOverrides(targetRecipe, targetNode, gameVersion)
       : targetRecipe;
     return (
       edge.resourceKind === sourceStorage.kind &&
@@ -6187,7 +6192,7 @@ function isFactoryEdgeStillValid(project: FactoryProject, edge: FactoryEdge): bo
 
   if (sourceRecipe && targetStorage) {
     const effectiveSourceRecipe = sourceNode
-      ? applyRecipeInputOverrides(sourceRecipe, sourceNode)
+      ? applyRecipeInputOverrides(sourceRecipe, sourceNode, gameVersion)
       : sourceRecipe;
     return (
       edge.resourceKind === targetStorage.kind &&
@@ -6202,8 +6207,8 @@ function isFactoryEdgeStillValid(project: FactoryProject, edge: FactoryEdge): bo
     return false;
   }
 
-  const effectiveSourceRecipe = applyRecipeInputOverrides(sourceRecipe, sourceNode);
-  const effectiveTargetRecipe = applyRecipeInputOverrides(targetRecipe, targetNode);
+  const effectiveSourceRecipe = applyRecipeInputOverrides(sourceRecipe, sourceNode, gameVersion);
+  const effectiveTargetRecipe = applyRecipeInputOverrides(targetRecipe, targetNode, gameVersion);
 
   return (
     effectiveSourceRecipe.outputs.some((output) =>
@@ -6230,6 +6235,7 @@ function buildEdgeBetweenNodes(
     targetHandle?: string;
   },
 ): FactoryEdge | undefined {
+  const gameVersion = planGameVersion(project);
   // A handle names the section of a shared machine the wire lands on; the
   // gesture's card is read as that section. No handle means the card's own.
   const sourceNode = nodeSectionForHandle(project, sourceNodeId, selectedResource?.sourceHandle);
@@ -6273,7 +6279,7 @@ function buildEdgeBetweenNodes(
 
   if (sourceStorage && targetRecipe && selectedResource) {
     const effectiveTargetRecipe = targetNode
-      ? applyRecipeInputOverrides(targetRecipe, targetNode)
+      ? applyRecipeInputOverrides(targetRecipe, targetNode, gameVersion)
       : targetRecipe;
     const matchedInput = effectiveTargetRecipe.inputs.find(
       (input) =>
@@ -6300,7 +6306,7 @@ function buildEdgeBetweenNodes(
 
   if (sourceRecipe && targetStorage && selectedResource) {
     const effectiveSourceRecipe = sourceNode
-      ? applyRecipeInputOverrides(sourceRecipe, sourceNode)
+      ? applyRecipeInputOverrides(sourceRecipe, sourceNode, gameVersion)
       : sourceRecipe;
     const matchedOutput = effectiveSourceRecipe.outputs.find((output) =>
       resourceMatchesInput(sourceStorageResource(targetStorage), output),
@@ -6326,7 +6332,7 @@ function buildEdgeBetweenNodes(
   }
 
   if (selectedResource?.sourceHandle && selectedResource.targetHandle) {
-    const matchedInput = getExplicitTargetInput(targetRecipe, targetNode, selectedResource);
+    const matchedInput = getExplicitTargetInput(targetRecipe, targetNode, selectedResource, gameVersion);
     if (!matchedInput) {
       return undefined;
     }
@@ -6380,9 +6386,10 @@ function getExplicitTargetInput(
   selectedResource: Pick<ResourceAmount, "kind" | "id"> & {
     targetHandle?: string;
   },
+  gameVersion: GameVersion,
 ): Recipe["inputs"][number] | undefined {
   const targetHandle = parseResourceHandleId(selectedResource.targetHandle);
-  const targetRecipeWithOverrides = applyRecipeInputOverrides(targetRecipe, targetNode);
+  const targetRecipeWithOverrides = applyRecipeInputOverrides(targetRecipe, targetNode, gameVersion);
   const indexedInput =
     targetHandle?.side === "input" && targetHandle.slotIndex !== undefined
       ? targetRecipeWithOverrides.inputs[targetHandle.slotIndex]
@@ -6461,6 +6468,7 @@ function buildCompatibleEdgesForStorage(
   project: FactoryProject,
   storage: FactoryStorage,
 ): FactoryEdge[] {
+  const gameVersion = planGameVersion(project);
   const edges: FactoryEdge[] = [];
   const storageInputHandle = makeResourceHandleId("input", {
     kind: storage.kind,
@@ -6476,7 +6484,7 @@ function buildCompatibleEdgesForStorage(
     if (!recipe) {
       continue;
     }
-    const effectiveRecipe = applyRecipeInputOverrides(recipe, node);
+    const effectiveRecipe = applyRecipeInputOverrides(recipe, node, gameVersion);
 
     effectiveRecipe.outputs.forEach((output, outputIndex) => {
       if (!resourceMatchesInput(sourceStorageResource(storage), output)) {

@@ -2,6 +2,7 @@ import type { FactoryNode, Recipe, ResourceAmount, ResourceKind } from "./types"
 import { isOreDictionaryResource } from "./resources";
 import { applyVatInputs, isVatRecipe } from "@/lib/machines/bacterial-vat";
 import { getOverclockedRecipeStats } from "@/lib/solver/overclock";
+import type { GameVersion } from "@/lib/model/game-version";
 
 /**
  * The recipe's input amount, restated in the units of the substitute actually
@@ -36,11 +37,12 @@ export function inputOverrideAmount(
 export function applyRecipeInputOverrides(
   recipe: Recipe,
   node: Pick<FactoryNode, "recipeInputOverrides"> & Partial<FactoryNode>,
+  gameVersion: GameVersion,
 ): Recipe {
   const overridden = applyWiredOverrides(recipe, node);
   if (isVatRecipe(recipe)) {
-    const stats = getOverclockedRecipeStats(recipe, node as FactoryNode);
-    return applyVatInputs(overridden, node.machineConfigTiers, stats.durationTicks / 20);
+    const stats = getOverclockedRecipeStats(recipe, node as FactoryNode, gameVersion);
+    return applyVatInputs(overridden, node.machineConfigTiers, stats.durationTicks / 20, gameVersion);
   }
   return overridden;
 }

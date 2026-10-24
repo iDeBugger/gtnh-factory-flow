@@ -1,13 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, test } from "vitest";
+import type { GameVersion } from "@/lib/model/game-version";
+import { powerTablesFor } from "../planner-data";
+import { buildPowerRecipe } from "../power-recipe";
 import { getPowerSource } from "../registry";
-import { buildPowerSettingsReader } from "../types";
+import { buildPowerSettingsReader, type PowerSourceDefinition } from "../types";
 
 function compute(sourceId: string, settings: Record<string, string> = {}) {
-  const source = getPowerSource(sourceId);
+  const source = getPowerSource(sourceId, "2.9");
   if (!source) {
     throw new Error(`No power source ${sourceId}`);
   }
-  return source.compute(buildPowerSettingsReader(source, settings));
+  return source.compute(buildPowerSettingsReader(source, settings, "2.9"), "2.9");
 }
 
 function statValue(model: ReturnType<typeof compute>, label: string) {
@@ -81,7 +84,7 @@ describe("steam turbine (MTESteamTurbine)", () => {
 
 describe("naquadah reactor marks (MTENaquadahReactor)", () => {
   it("offers only the naquadah or tiberium form; the mark picks the rod", () => {
-    const source = getPowerSource("naquadah-reactor")!;
+    const source = getPowerSource("naquadah-reactor", "2.9")!;
     const fuel = source.settings.find((setting) => setting.id === "fuel");
     expect(fuel?.type === "select" && fuel.options.map((option) => option.key)).toEqual([
       "naquadah",
@@ -162,7 +165,7 @@ describe("RTG pellets (MTERTGenerator)", () => {
   });
 
   it("labels each pellet with its real run time", () => {
-    const source = getPowerSource("rtg")!;
+    const source = getPowerSource("rtg", "2.9")!;
     const pellet = source.settings.find((setting) => setting.id === "pellet");
     expect(pellet?.type === "select" && pellet.options.map((option) => option.label)).toEqual([
       "Am-241 (15 EU/t, 77.67 days)",
@@ -179,7 +182,129 @@ describe("RTG pellets (MTERTGenerator)", () => {
 
 describe("unlock chips (the controller's own recipe)", () => {
   it("puts the RTG at IV and the plasma generator at LuV", () => {
-    expect(getPowerSource("rtg")?.unlock).toBe("IV");
-    expect(getPowerSource("plasma-generator")?.unlock).toBe("LuV");
+    expect(getPowerSource("rtg", "2.9")?.unlock).toBe("IV");
+    expect(getPowerSource("plasma-generator", "2.9")?.unlock).toBe("LuV");
+  });
+});
+
+function computeIn(sourceId: string, settings: Record<string, string>, gameVersion: GameVersion) {
+  const source = getPowerSource(sourceId, gameVersion);
+  if (!source) {
+    throw new Error(`No power source ${sourceId} in ${gameVersion}`);
+  }
+  return source.compute(buildPowerSettingsReader(source, settings, gameVersion), gameVersion);
+}
+
+function optionKeys(setting: PowerSourceDefinition["settings"][number] | undefined): string[] {
+  return setting?.type === "select" ? setting.options.map((option) => option.key) : [];
+}
+
+// bartworks AdditionalRecipes.java:247-271 at GT5U 5.09.51.476, cheapest first.
+const CHEM_2_8_1_EXPECTED: Array<[string, number]> = [
+  ["Diluted Sulfuric Acid", 9],
+  ["Molten Redstone", 10],
+  ["Acetic Acid", 11],
+  ["Diluted Hydrochloric Acid", 14],
+  ["Sulfuric Acid", 18],
+  ["Nitric Acid", 24],
+  ["Hydrochloric Acid", 28],
+  ["Hypochlorous Acid", 30],
+  ["Mercury", 32],
+  ["Phosphoric Acid", 36],
+  ["Hydrofluoric Acid", 40],
+  ["Formic Acid", 40],
+];
+
+function fuelValue(table: Array<{ name: string; euPerLiter?: number }>, name: string) {
+  return table.find((row) => row.name === name)?.euPerLiter;
+}
+
+describe("2.8.1 singleblock generators and fuels", () => {
+  test("acid-generator 2.8.1 is LV to EV at 97/94/91/88%", () => {
+    const tiers = (v: GameVersion) => getPowerSource("acid-generator", v)!.settings.find((s) => s.id === "tier");
+    expect(optionKeys(tiers("2.8.1"))).toEqual(["LV", "MV", "HV", "EV"]);
+    expect(optionKeys(tiers("2.9"))).toEqual(["LV", "MV", "HV", "EV", "IV"]);
+    // EV sulfuric acid: floor(18 x 88 / 100) = 15 EU/L on 2.8.1; floor(28 x 88 / 100) = 24 on 2.9.
+    expect(statValue(computeIn("acid-generator", { tier: "EV", fuel: "Sulfuric Acid" }, "2.8.1"), "EU per L")).toBe("15");
+    expect(statValue(computeIn("acid-generator", { tier: "EV", fuel: "Sulfuric Acid" }, "2.9"), "EU per L")).toBe("24");
+  });
+
+  test("acid-generator 2.8.1 names a saved IV generator and runs it at LV", () => {
+    expect(buildPowerRecipe("acid-generator", { tier: "IV" }, "r", "2.8.1")?.power?.warnings).toContain(
+      "Not in GTNH 2.8.1: IV. Using LV.",
+    );
+    expect(buildPowerRecipe("acid-generator", { tier: "IV" }, "r", "2.9")?.power?.warnings ?? []).toEqual([]);
+  });
+
+  test("power-planner-data.json: chemFuels 2.8.1 is the 12 old acids", () => {
+    expect(powerTablesFor("2.8.1").chemFuels.map((f) => [f.name, f.euPerLiter])).toEqual(CHEM_2_8_1_EXPECTED);
+    expect(powerTablesFor("2.9").chemFuels).toHaveLength(20);
+    expect(fuelValue(powerTablesFor("2.9").chemFuels, "Sulfuric Acid")).toBe(28);
+    expect(fuelValue(powerTablesFor("2.9").chemFuels, "Molten Redstone")).toBe(40);
+  });
+
+  test("power-planner-data.json: semifluidFuels 2.8.1 has Nefarious Oil at 572 and the manure fuels", () => {
+    const old = powerTablesFor("2.8.1").semifluidFuels;
+    const now = powerTablesFor("2.9").semifluidFuels;
+    expect(fuelValue(old, "Nefarious Oil")).toBe(572);
+    expect(fuelValue(old, "Poop Juice")).toBe(12);
+    expect(fuelValue(old, "Manure Slurry")).toBe(24);
+    expect(fuelValue(old, "Fertile Manure Slurry")).toBe(32);
+    // Every 2.9 row is in 2.8.1 at its 2.9 value except Nefarious Oil.
+    for (const row of now) {
+      expect([row.name, fuelValue(old, row.name)]).toEqual([
+        row.name,
+        row.name === "Nefarious Oil" ? 572 : row.euPerLiter,
+      ]);
+    }
+    expect(old).toHaveLength(now.length + 3);
+    expect(fuelValue(now, "Nefarious Oil")).toBe(512);
+    expect(fuelValue(now, "Poop Juice")).toBeUndefined();
+    expect(fuelValue(now, "Hemp Seed Oil")).toBeUndefined();
+  });
+
+  test("semifluid-generator 2.8.1 offers neither Hemp Seed Oil nor Lin Seed Oil", () => {
+    // Both materials have no fluid: their cells burn only in the semifluid boiler map, and the
+    // generator's map copies an item fuel only as the fluid its container holds
+    // (GT5U@5.09.51.476 ProcessingCell.java:55, SemiFluidFuelHandler.java:31-38).
+    for (const version of ["2.8.1", "2.9"]) {
+      const fuel = getPowerSource("semifluid-generator", version)?.settings.find((setting) => setting.id === "fuel");
+      const keys = fuel?.type === "select" ? fuel.options.map((option) => option.key) : [];
+      expect(keys, version).toContain("Seed Oil");
+      expect(keys, version).not.toContain("Hemp Seed Oil");
+      expect(keys, version).not.toContain("Lin Seed Oil");
+    }
+  });
+
+  test("power-planner-data.json: magicSolids 2.8.1 Amber is 3/32 of 2.9 (Chipped Amber 3 / 2 = 1)", () => {
+    const old = powerTablesFor("2.8.1").magicSolids;
+    const now = powerTablesFor("2.9").magicSolids;
+    expect(old).toHaveLength(now.length);
+    const amber = now.filter((row) => row.name.includes("Amber"));
+    expect(amber.map((row) => row.name).sort()).toEqual(
+      ["Amber Dust", "Amber Gem", "Amber Plate", "Chipped Amber", "Exquisite Amber", "Flawed Amber", "Flawless Amber"],
+    );
+    for (const row of now) {
+      const value = old.find((entry) => entry.name === row.name)?.euPerItem;
+      // Chipped Amber's FUEL_VALUE is 3 / 2 in Java ints: 1, not 1.5.
+      const expected = !row.name.includes("Amber")
+        ? row.euPerItem
+        : row.name === "Chipped Amber"
+          ? 1_000
+          : ((row.euPerItem ?? 0) * 3) / 32;
+      expect([row.name, value]).toEqual([row.name, expected]);
+    }
+    expect(old.find((row) => row.name === "Amber Dust")?.euPerItem).toBe(3_000);
+    expect(now.find((row) => row.name === "Amber Dust")?.euPerItem).toBe(32_000);
+    expect(now.find((row) => row.name === "Chipped Amber")?.euPerItem).toBe(16_000);
+  });
+
+  test("power-planner-data.json: singleblockEfficiency 2.8.1 has no IV acid generator", () => {
+    expect(powerTablesFor("2.8.1").singleblockEfficiency.chem[4]).toBeNull();
+    expect(powerTablesFor("2.8.1").singleblockEfficiency.chem.slice(0, 4)).toEqual([0.97, 0.94, 0.91, 0.88]);
+    expect(powerTablesFor("2.9").singleblockEfficiency.chem[4]).toBe(0.5);
+    const { chem: _old, ...oldRest } = powerTablesFor("2.8.1").singleblockEfficiency;
+    const { chem: _now, ...nowRest } = powerTablesFor("2.9").singleblockEfficiency;
+    expect(oldRest).toEqual(nowRest);
   });
 });

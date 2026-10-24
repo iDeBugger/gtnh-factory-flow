@@ -164,8 +164,8 @@ describe("power card tiers in the machine list", () => {
     const { buildPowerRecipe } = await import("@/lib/power/power-recipe");
     const lheSettings = { fluid: "Hot Coolant", intake: "1000", tier: "1" };
     const turbineSettings = { tier: "EV" };
-    const lhe = buildPowerRecipe("large-heat-exchanger", lheSettings, "r-lhe")!;
-    const turbine = buildPowerRecipe("steam-turbine", turbineSettings, "r-turbine")!;
+    const lhe = buildPowerRecipe("large-heat-exchanger", lheSettings, "r-lhe", "2.9")!;
+    const turbine = buildPowerRecipe("steam-turbine", turbineSettings, "r-turbine", "2.9")!;
     const p: FactoryProject = {
       schemaVersion: PROJECT_SCHEMA_VERSION,
       id: "power-tiers",

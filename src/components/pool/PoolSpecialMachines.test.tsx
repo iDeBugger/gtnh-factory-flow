@@ -61,7 +61,7 @@ describe("Pool specialized machines", () => {
     expect(logs()).toBeCloseTo(10);
   });
   it("keeps generator-specific controls available in the compact settings panel", () => {
-    const recipe = buildPowerRecipe("large-gas-turbine", { rotor: "Carbon", size: "Normal", fitting: "tight", flowMode: "optimal", fuel: "Benzene" }, "power")!;
+    const recipe = buildPowerRecipe("large-gas-turbine", { rotor: "Carbon", size: "Normal", fitting: "tight", flowMode: "optimal", fuel: "Benzene" }, "power", "2.9")!;
     const project = plan(recipe);
     project.nodes[0].machineConfigTiers = { rotor: "Carbon", size: "Normal", fitting: "tight", flowMode: "optimal", fuel: "Benzene" };
     useFactoryStore.getState().setProject(project);

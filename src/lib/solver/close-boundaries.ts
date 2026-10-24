@@ -3,6 +3,7 @@ import { applyRecipeInputOverrides } from "../model/recipe-input-overrides";
 import { applyMachineHandlerToRecipe } from "../model/recipe-rules";
 import type { FactoryProject, FactoryStorage, ResourceKey } from "../model/types";
 import { getRuntimeCalculationOutputs } from "./runtime-calculation";
+import { planGameVersion } from "@/lib/model/game-version";
 
 /**
  * How far each side of the boundary is closed.
@@ -47,6 +48,7 @@ export function closeBoundaries(
   project: FactoryProject,
   options: CloseBoundariesOptions = {},
 ): FactoryProject {
+  const gameVersion = planGameVersion(project);
   const inputScope = options.inputs ?? "bare";
   const outputScope = options.outputs ?? "bare";
   if (inputScope === "none" && outputScope === "none") {
@@ -138,9 +140,9 @@ export function closeBoundaries(
     // can change what comes out. A drawer on a port the solve does not have
     // is an edge the solve drops (a silent starve). Only the keys matter, not
     // rates, so this can run before the solver.
-    const nodeRecipe = applyRecipeInputOverrides(recipe, node);
-    const effectiveRecipe = applyMachineHandlerToRecipe(nodeRecipe, node);
-    const outputs = getRuntimeCalculationOutputs(effectiveRecipe, node) ?? effectiveRecipe.outputs;
+    const nodeRecipe = applyRecipeInputOverrides(recipe, node, gameVersion);
+    const effectiveRecipe = applyMachineHandlerToRecipe(nodeRecipe, node, gameVersion);
+    const outputs = getRuntimeCalculationOutputs(effectiveRecipe, node, gameVersion) ?? effectiveRecipe.outputs;
     // Non-consumed inputs are not ingredients and never need a feeder.
     for (const input of nodeRecipe.inputs) {
       if (!isRecipeInputConsumed(input) || (input.amount ?? 0) <= 0) {

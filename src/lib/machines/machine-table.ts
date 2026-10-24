@@ -29,12 +29,16 @@
  * regenerate it.
  */
 import type { MachineConfigControl, Recipe } from "@/lib/model/types";
+import type { GameVersion } from "@/lib/model/game-version";
+import { forVersion, MACHINE_OVERRIDES, type VersionOverrides } from "./version-overrides";
 import { TGS_TICKS, getTgsControls } from "./tree-growth-simulator";
 import { getVatControls, getVatGateReason } from "./bacterial-vat";
 import { EEC_CONTROLS, EEC_MODE } from "./extreme-entity-crusher";
 import { neutronActivatorSpeed, quantiseNeutronActivatorDuration } from "./neutron-activator";
 import { HILE_SOURCE_CONTROL, hileSourceAt, normalizeHileSettings } from "./hile";
 import { PRASS_NORMAL_CASING, PRASS_PRECISE_CASING, PRASS_MACHINE_CASING, prassInputVoltageLimit } from "./precise-assembler";
+import { OVERCLOCK, choiceControl, countControl } from "./table-builders";
+import { f32, floatBonus, powInt, rampCeiling, speedFromBonus } from "./java-float";
 
 /**
  * How a machine spends each step of spare voltage, mirroring the reference's
@@ -62,31 +66,7 @@ export interface OverclockRule {
   euMultiplier?: number;
 }
 
-export const OVERCLOCK = {
-  /** 2x speed for 4x EU/t on every step. */
-  normal: (): OverclockRule => ({ maxPerfect: 0, maxNormal: Infinity, multiplier: 4 }),
-  /** 4x speed for 4x EU/t, total energy unchanged. */
-  perfect: (maxPerfect = Infinity, multiplier = 4): OverclockRule => ({
-    maxPerfect,
-    maxNormal: 0,
-    multiplier,
-  }),
-  /** Perfect while they last, then normal. */
-  perfectThenNormal: (maxPerfect = Infinity): OverclockRule => ({
-    maxPerfect,
-    maxNormal: Infinity,
-    multiplier: 4,
-  }),
-  /** Duration divided by `speedFactor`, EU/t times 4, on every step. */
-  custom: (speedFactor: number): OverclockRule => ({
-    maxPerfect: Infinity,
-    maxNormal: 0,
-    multiplier: speedFactor,
-    euMultiplier: 4,
-  }),
-  /** Extra voltage buys nothing. */
-  none: (): OverclockRule => ({ maxPerfect: 0, maxNormal: 0, multiplier: 4 }),
-} as const;
+export { OVERCLOCK };
 
 /**
  * Blast furnace family. Coil heat above the recipe's required heat buys perfect
@@ -135,6 +115,8 @@ export interface MachineContext {
   recipe?: Partial<Recipe>;
   /** The node's raw settings, by control id. */
   settings?: Record<string, string>;
+  /** The plan's game version: the rules and data a coefficient reads are this version's. */
+  gameVersion: GameVersion;
 }
 
 type Coefficient = number | ((ctx: MachineContext) => number);
@@ -150,6 +132,13 @@ export interface MachineBehaviour {
   cycleTicks?: number;
   /** Throughput multiplier: 2 means the recipe finishes in half the time. */
   speed?: Coefficient;
+  /**
+   * The duration multiplier the Java passes to `setSpeedBonus`, stated
+   * directly; it wins over `speed`. For a Java float `1 / speed` cannot always
+   * give back (0.95F has no double whose reciprocal is it), so the duration's
+   * truncation would see a different last bit.
+   */
+  durationMultiplier?: Coefficient;
   /** EU/t multiplier applied before parallels. */
   power?: Coefficient;
   /** Parallels the structure offers, before the voltage has to pay for them. */
@@ -200,11 +189,16 @@ export interface MachineBehaviour {
    * Knobs that depend on the recipe (a tree's tool per output it has, radiation only where a vat recipe needs
    * it). Used instead of `controls` when a recipe is at hand.
    */
-  controlsFor?: (recipe: Partial<Recipe>) => MachineConfigControl[];
+  controlsFor?: (recipe: Partial<Recipe>, gameVersion: GameVersion) => MachineConfigControl[];
   /** Resolve legacy choices before both the UI and the solver read controls. */
   normalizeConfig?: (settings: Record<string, string>) => Record<string, string>;
   /** Structural recipe gate independent of how much power the hatches supply. */
   recipeGate?: (ctx: MachineContext) => string | undefined;
+  /**
+   * A setting the formulas could not read as the game would (a key this version has no such option for):
+   * the formulas fall back to a stated default and the card says so in this line.
+   */
+  settingWarning?: (ctx: MachineContext) => string | undefined;
   /** Structural cap on working voltage, before multiplying by supplied amps. */
   inputVoltageTierLimit?: (settings: Record<string, string>) => number;
   /** The controller's unlock tier is not a minimum energy-hatch voltage. */
@@ -246,87 +240,6 @@ const SAWBLADE = "sawblade";
 const UPGRADE_CHIP = "maceratorUpgrade";
 const CONTAINMENT = "containmentBlockTier";
 const ELECTROMAGNET = "electromagnet";
-
-/**
- * Builds one of our machine config controls from a plain list of option
- * labels. The option's position IS the value the table's formulas read, so the
- * order here must match the reference's choice list exactly.
- *
- * Icons fall back to a generated id when there is no obvious block to show,
- * which the config UI renders as a labelled slot.
- */
-function choiceControl(
-  id: string,
-  label: string,
-  options: Array<string | { label: string; icon: string; name?: string }>,
-  defaultIndex = 0,
-): MachineConfigControl {
-  const tiers = options.map((option, index) => {
-    const optionLabel = typeof option === "string" ? option : option.label;
-    const icon =
-      typeof option === "string" ? `factoryflow:machine_config/${slug(id)}_${index}` : option.icon;
-    return {
-      key: slug(optionLabel) || `option-${index}`,
-      label: optionLabel,
-      resource: {
-        kind: "item" as const,
-        id: icon,
-        amount: 1,
-        // The block's full name: the config UI also matches icons by name, and
-        // a bare "Tin" could land on some other item called Tin.
-        displayName: typeof option === "string" ? optionLabel : (option.name ?? optionLabel),
-        tooltip: [label],
-        consumed: false,
-      },
-    };
-  });
-
-  return {
-    id,
-    label,
-    minimumKey: tiers[0].key,
-    defaultKey: tiers[defaultIndex]?.key ?? tiers[0].key,
-    tiers,
-  };
-}
-
-/**
- * A numeric knob the reference models as an unbounded count (slices, catalysts,
- * laser amperage). We offer a discrete ladder instead, because the config UI is
- * built from tier lists rather than free number entry.
- */
-function countControl(
-  id: string,
-  label: string,
-  values: number[],
-  defaultIndex = 0,
-): MachineConfigControl {
-  return {
-    id,
-    label,
-    minimumKey: String(values[0]),
-    defaultKey: String(values[defaultIndex] ?? values[0]),
-    tiers: values.map((value) => ({
-      key: String(value),
-      label: `${value}`,
-      resource: {
-        kind: "item" as const,
-        id: `factoryflow:machine_config/${slug(id)}_${value}`,
-        amount: 1,
-        displayName: `${label}: ${value}`,
-        tooltip: [label],
-        consumed: false,
-      },
-    })),
-  };
-}
-
-function slug(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
 
 /**
  * Item pipe casings, in the reference's order: gt.blockcasings11 metas 0-7,
@@ -441,6 +354,15 @@ const ELECTROMAGNETS = [
   { name: "Samarium Electromagnet", speed: 2, power: 0.6, parallels: 96 },
   { name: "Tengam Electromagnet", speed: 2.5, power: 0.5, parallels: 256 },
 ];
+
+/**
+ * The Mass Solidifier's and Fluid Shaper's steady speed: `speedup += 0.025D`
+ * while under 3, so the double ramp ends at 3.025, and the duration is
+ * 1.0D / speedup. GT5U@5.09.54.205
+ * gregtech/common/tileentities/machines/multi/MTEFluidShaper.java:314-316, :308;
+ * MTEMassSolidifier.java:199-201, :326.
+ */
+const MOMENTUM_SPEED = rampCeiling(1, 0.025, 3, false);
 
 /** Reads a lookup row, clamped so an out-of-range selection cannot crash. */
 function row<T>(table: T[], index: number): T {
@@ -744,7 +666,10 @@ const MACHINES: Record<string, MachineBehaviour> = {
   "Oil Cracker": {
     overclock: OVERCLOCK.normal(),
     aliases: ["Oil Cracking Unit"],
-    power: (c) => 1 - Math.min(0.5, (c.tier(COIL) + 1) * 0.1),
+    // Float in both versions: 1.0F - min(0.1F x (coil + 1), 0.5F).
+    // GT5U@5.09.54.205 gregtech/common/tileentities/machines/multi/MTEOilCracker.java:197;
+    // GT5U@5.09.51.476 :186.
+    power: (c) => f32(1 - Math.min(f32(f32(0.1) * (c.tier(COIL) + 1)), f32(0.5))),
   },
   "Mega Oil Cracker": {
     overclock: OVERCLOCK.normal(),
@@ -752,8 +677,9 @@ const MACHINES: Record<string, MachineBehaviour> = {
     fullPowerPool: true,
     unlimitedTierSkip: true,
     // Unlike the small cracker's additive, capped discount, the mega compounds
-    // 10% per coil tier with no cap: MTEMegaOilCracker.getEuModifier.
-    power: (c) => Math.pow(0.9, c.tier(COIL) + 1),
+    // 10% per coil tier with no cap: MTEMegaOilCracker.getEuModifier,
+    // GTUtility.powInt(0.9, coil + 1) (GT5U@5.09.54.205 MTEMegaOilCracker.java:468-469).
+    power: (c) => powInt(0.9, c.tier(COIL) + 1),
   },
   Zyngen: {
     // MTEIndustrialAlloySmelter: mLevel = coil tier + 1 (cupronickel = 1); the
@@ -779,24 +705,31 @@ const MACHINES: Record<string, MachineBehaviour> = {
     // MTEMegaAlloyBlastSmelter: duration x (1 - 5% per coil tier above TPV),
     // stated here as throughput; and a compounding 5% EU discount per coil
     // tier above the RECIPE's own voltage tier, never a penalty.
-    speed: (c) => 1 / (1 - 0.05 * Math.max(0, c.tier(COIL) - 3)),
+    // Both versions compute the speed in float, 1 - 0.05f x bonusTier, and the
+    // discount with powInt(0.95, n): GT5U@5.09.54.205
+    // gtPlusPlus/xmod/gregtech/common/tileentities/machines/multi/production/mega/MTEMegaAlloyBlastSmelter.java:245,
+    // :255; GT5U@5.09.51.476 :238, :248.
+    durationMultiplier: (c) => f32(1 - f32(f32(0.05) * Math.max(0, c.tier(COIL) - 3))),
     power: (c) =>
-      Math.pow(0.95, Math.max(0, c.tier(COIL) + 1 - (c.recipeVoltageTier ?? c.voltageTier))),
+      powInt(0.95, Math.max(0, c.tier(COIL) + 1 - (c.recipeVoltageTier ?? c.voltageTier))),
     note: "Assumes a matching glass tier.",
   },
   "Large Fluid Extractor": {
     overclock: OVERCLOCK.normal(),
     speed: (c) => 1.5 + c.tier(COIL) * 0.1,
-    power: (c) => 0.8 * Math.pow(0.9, c.tier(COIL)),
+    // 0.8 x GTUtility.powInt(0.9, coil): GT5U@5.09.54.205
+    // gregtech/common/tileentities/machines/multi/MTELargeFluidExtractor.java:378.
+    power: (c) => 0.8 * powInt(0.9, c.tier(COIL)),
     parallels: (c) => (c.tier(SOLENOID) + 2) * 8,
   },
   "Large Thermal Refinery": {
     overclock: OVERCLOCK.normal(),
     // MTEIndustrialThermalCentrifuge: 1/(2.5 + 0.05 x coil tier) duration,
-    // 0.8 x 0.95^coilTier EU, 8 per voltage tier plus 2 per solenoid voltage
-    // tier (MV solenoid = 2).
+    // 0.8 x 0.95^coilTier EU in GTUtility.powInt (GT5U@5.09.54.205
+    // MTEIndustrialThermalCentrifuge.java:275-279), 8 per voltage tier plus 2
+    // per solenoid voltage tier (MV solenoid = 2).
     speed: (c) => 2.5 + 0.05 * c.tier(COIL),
-    power: (c) => 0.8 * Math.pow(0.95, c.tier(COIL)),
+    power: (c) => 0.8 * powInt(0.95, c.tier(COIL)),
     parallels: (c) => c.voltageTier * 8 + (c.tier(SOLENOID) + 2) * 2,
   },
 
@@ -848,7 +781,10 @@ const MACHINES: Record<string, MachineBehaviour> = {
   },
   "Large Scale Auto-Assembler v1.01": {
     overclock: OVERCLOCK.normal(),
-    speed: 3,
+    // setSpeedBonus(1F / 3F) in both versions: GT5U@5.09.54.205
+    // gtPlusPlus/xmod/gregtech/common/tileentities/machines/multi/production/MTEAutoCrafter.java:162;
+    // GT5U@5.09.51.476 :154.
+    speed: speedFromBonus(floatBonus(3)),
     parallels: (c) => c.voltageTier * 2,
   },
   // MTEMegaDistillationTower: the mode follows the recipe map. Tower mode: 1.5x speed, 90% EU, 256 parallels.
@@ -1118,8 +1054,10 @@ const MACHINES: Record<string, MachineBehaviour> = {
   "Endothermic Fridge": {
     overclock: (c) => OVERCLOCK.perfectThenNormal(c.tier("fridgeCoolant")),
     // Its speed boost ramps from 1 to 1.5 while it runs (cryotheum only
-    // speeds the ramp), so steady state is the full 1.5.
-    speed: 1.5,
+    // speeds the ramp), so steady state is the full 1.5f, passed as the float
+    // 1f / speedBoost (GT5U@5.09.54.205
+    // gregtech/common/tileentities/machines/multi/MTEEndothermicFridge.java:430, :447).
+    speed: speedFromBonus(floatBonus(1.5)),
     parallels: 256,
     controls: [COOLANT_CONTROL],
     note: "Assumes fully ramped up. Coolant consumption is not counted.",
@@ -1146,8 +1084,8 @@ const MACHINES: Record<string, MachineBehaviour> = {
    */
   "Bacterial Vat": {
     overclock: OVERCLOCK.normal(),
-    controlsFor: (recipe) => getVatControls(recipe),
-    recipeGate: (c) => (c.recipe ? getVatGateReason(c.recipe, c.settings) : undefined),
+    controlsFor: (recipe, gameVersion) => getVatControls(recipe, gameVersion),
+    recipeGate: (c) => (c.recipe ? getVatGateReason(c.recipe, c.settings, c.gameVersion) : undefined),
   },
   /**
    * MTETreeFarm (tree-growth-simulator.ts): a fixed 100-tick run at VP[t] whatever the voltage, which
@@ -1157,7 +1095,7 @@ const MACHINES: Record<string, MachineBehaviour> = {
     overclock: OVERCLOCK.none(),
     cycleTicks: TGS_TICKS,
     parallels: 1,
-    controlsFor: (recipe) => getTgsControls(recipe),
+    controlsFor: (recipe, gameVersion) => getTgsControls(recipe, gameVersion),
   },
   "Research Station": { overclock: OVERCLOCK.normal(), aliases: ["Research station"] },
 
@@ -1191,8 +1129,9 @@ const MACHINES: Record<string, MachineBehaviour> = {
     // brick-oven node must not buy it overclocks.
     overclock: (c) => c.value(COKE_SLICES) > 0 ? OVERCLOCK.normal() : OVERCLOCK.none(),
     // Coils are a 2% EU discount each, compounding, and nothing else:
-    // MTEIndustrialCokeOven bills 0.98^(coil tier + 1), cupronickel included.
-    power: (c) => 0.98 ** (c.tier(COIL) + 1),
+    // MTEIndustrialCokeOven bills powInt(0.98, coil tier + 1), cupronickel
+    // included (GT5U@5.09.54.205 MTEIndustrialCokeOven.java:366-367, :379-380).
+    power: (c) => powInt(0.98, c.tier(COIL) + 1),
     parallels: (c) => {
       const slices = c.value(COKE_SLICES);
       if (slices === 0) {
@@ -1251,6 +1190,31 @@ const MACHINES: Record<string, MachineBehaviour> = {
     overclock: OVERCLOCK.normal(),
     power: 3,
     amperage: 3,
+  },
+  /**
+   * A basic machine works with its recipe map's amps
+   * (MTEBasicMachineWithRecipe passes `aRecipes.getAmperage()`,
+   * GT5U@5.09.54.205 :81, GT5U@5.09.51.476 :89), and the thermal centrifuge
+   * map has 2 (recipe-map-amperage.ts). Its overclocks count against
+   * `V[tier] x 2` (EUOverclockDescriber.createCalculator), so a 48 EU/t
+   * recipe runs on LV and takes one step on MV. The oracle's ladder used 1 A.
+   */
+  "Thermal Centrifuge": {
+    kind: "single",
+    overclock: OVERCLOCK.normal(),
+    amperage: 2,
+  },
+  /**
+   * MTEMassfabricator works with 8 A (constructor, GT5U@5.09.54.205 :75,
+   * GT5U@5.09.51.476 :67), so LV runs its 256 EU/t recipe. Its overclock
+   * describer charges 2x EU/t per step and allows tier - 1 steps
+   * (:219-220, :211-212); the power and voltage limits at 8 A allow the same
+   * count, so every step is 2x speed for 2x EU/t.
+   */
+  "Mass Fabricator": {
+    kind: "single",
+    overclock: { maxPerfect: Infinity, maxNormal: 0, multiplier: 2, euMultiplier: 2 },
+    amperage: 8,
   },
   /**
    * GT++'s Electric Auto Workbench (MTEElectricAutoWorkbench, LV through UV):
@@ -1335,20 +1299,21 @@ const MACHINES: Record<string, MachineBehaviour> = {
     power: 0.75,
     parallels: (c) => c.voltageTier * 16,
   },
-  // MTEMassSolidifier: 10 * GTUtility.getTier, setEuModifier(0.8F), and a
-  // momentum speed ramp from 1x to 3x while running.
+  // MTEMassSolidifier: 10 * GTUtility.getTier, setEuModifier(0.8D), and a
+  // momentum speed ramp while running that stops at 3.025, not 3
+  // (MOMENTUM_SPEED).
   "Mass Solidifier": {
     overclock: OVERCLOCK.normal(),
-    speed: 3,
+    durationMultiplier: 1 / MOMENTUM_SPEED,
     power: 0.8,
     parallels: (c) => c.voltageTier * 10,
     note: "Assumes max speed.",
   },
   // MTEFluidShaper: (2 + 3 per width expansion) * GTUtility.getTier,
-  // setEuModifier(0.8F), the same momentum ramp as the Mass Solidifier.
+  // setEuModifier(0.8D), the same momentum ramp as the Mass Solidifier.
   "Fluid Shaper": {
     overclock: OVERCLOCK.normal(),
-    speed: 3,
+    durationMultiplier: 1 / MOMENTUM_SPEED,
     power: 0.8,
     parallels: (c) => c.voltageTier * (2 + 3 * c.value(WIDTH_EXPANSION)),
     controls: [WIDTH_EXPANSION_CONTROL],
@@ -1400,16 +1365,98 @@ const MACHINES: Record<string, MachineBehaviour> = {
   },
 };
 
-const BY_NAME = new Map<string, MachineBehaviour>();
+/** Every name the table answers to (canonical names and aliases, normalized) to its canonical name. */
+const CANONICAL_NAME = new Map<string, string>();
 for (const [name, behaviour] of Object.entries(MACHINES)) {
-  BY_NAME.set(normalizeMachineName(name), behaviour);
+  CANONICAL_NAME.set(normalizeMachineName(name), name);
   for (const alias of behaviour.aliases ?? []) {
-    BY_NAME.set(normalizeMachineName(alias), behaviour);
+    CANONICAL_NAME.set(normalizeMachineName(alias), name);
   }
 }
 
-export function getMachineBehaviour(machineType: string | undefined): MachineBehaviour | undefined {
-  return machineType ? BY_NAME.get(normalizeMachineName(machineType)) : undefined;
+/**
+ * Aliases an override adds in one version, per override map and version. A
+ * 2.8.1 map with one machine family carries no handlers, so its cards are
+ * named after the map; the alias that reaches them must not exist in 2.9,
+ * where the same map name lists its machines.
+ */
+const VERSION_ALIASES = new WeakMap<VersionOverrides<MachineBehaviour>, Map<GameVersion, Map<string, string>>>();
+
+/** The table name for a normalized machine name in `gameVersion`: a table name or alias first, then the version's own aliases. */
+function canonicalMachineName(
+  normalized: string,
+  gameVersion: GameVersion,
+  overrides: VersionOverrides<MachineBehaviour>,
+): string | undefined {
+  const name = CANONICAL_NAME.get(normalized);
+  if (name !== undefined) return name;
+  const byName = overrides[gameVersion];
+  if (!byName) return undefined;
+  let byVersion = VERSION_ALIASES.get(overrides);
+  if (!byVersion) {
+    byVersion = new Map();
+    VERSION_ALIASES.set(overrides, byVersion);
+  }
+  let aliases = byVersion.get(gameVersion);
+  if (!aliases) {
+    aliases = new Map();
+    for (const [machine, entry] of Object.entries(byName)) {
+      if (!entry || !(machine in MACHINES)) continue;
+      for (const alias of entry.aliases ?? []) aliases.set(normalizeMachineName(alias), machine);
+    }
+    byVersion.set(gameVersion, aliases);
+  }
+  return aliases.get(normalized);
+}
+
+/** Merged entries per override map and version, so a hot lookup never rebuilds one. */
+const MERGED = new WeakMap<VersionOverrides<MachineBehaviour>, Map<GameVersion, Map<string, MachineBehaviour | undefined>>>();
+
+/**
+ * The table's entry for a machine as it is in `gameVersion`. Overrides are
+ * keyed by canonical names, so an alias reaches its machine's override too.
+ */
+export function getMachineBehaviour(
+  machineType: string | undefined,
+  gameVersion: GameVersion,
+  overrides: VersionOverrides<MachineBehaviour> = MACHINE_OVERRIDES,
+): MachineBehaviour | undefined {
+  if (!machineType) return undefined;
+  const name = canonicalMachineName(normalizeMachineName(machineType), gameVersion, overrides);
+  if (name === undefined) return undefined;
+  const base = MACHINES[name];
+  if (!overrides[gameVersion]) return base;
+  let byVersion = MERGED.get(overrides);
+  if (!byVersion) {
+    byVersion = new Map();
+    MERGED.set(overrides, byVersion);
+  }
+  let byName = byVersion.get(gameVersion);
+  if (!byName) {
+    byName = new Map();
+    byVersion.set(gameVersion, byName);
+  }
+  if (!byName.has(name)) {
+    byName.set(name, withOneSpeedField(forVersion(name, base, overrides, gameVersion), overrides[gameVersion]?.[name]));
+  }
+  return byName.get(name);
+}
+
+/**
+ * `speed` and `durationMultiplier` state one fact two ways, and a stated
+ * `durationMultiplier` wins. An override that states one of them replaces the
+ * base's other, so a base's durationMultiplier never hides an override's speed.
+ */
+function withOneSpeedField(
+  merged: MachineBehaviour | undefined,
+  override: Partial<MachineBehaviour> | null | undefined,
+): MachineBehaviour | undefined {
+  if (!merged || !override) return merged;
+  const statesSpeed = Object.prototype.hasOwnProperty.call(override, "speed");
+  const statesMultiplier = Object.prototype.hasOwnProperty.call(override, "durationMultiplier");
+  if (statesSpeed === statesMultiplier) return merged;
+  const { speed, durationMultiplier, ...rest } = merged;
+  return statesSpeed ? { ...rest, speed } : { ...rest, durationMultiplier };
 }
 
 /**
@@ -1422,26 +1469,37 @@ export function getMachineBehaviour(machineType: string | undefined): MachineBeh
  * power (the Multi Smelter, whose handler carries GT's ABSOLUTE 128t/4EU
  * furnace recipe) keep their handler stats.
  */
-export function machineTableSeedsFromBase(machineType: string | undefined): boolean {
-  const behaviour = getMachineBehaviour(machineType);
+export function machineTableSeedsFromBase(
+  machineType: string | undefined,
+  gameVersion: GameVersion,
+  overrides: VersionOverrides<MachineBehaviour> = MACHINE_OVERRIDES,
+): boolean {
+  const behaviour = getMachineBehaviour(machineType, gameVersion, overrides);
   return (
-    behaviour !== undefined && (behaviour.speed !== undefined || behaviour.power !== undefined)
+    behaviour !== undefined &&
+    (behaviour.speed !== undefined || behaviour.durationMultiplier !== undefined || behaviour.power !== undefined)
   );
 }
 
 /** Config knobs this machine contributes on top of whatever the dataset carries. */
 export function getMachineTableControls(
   machineType: string | undefined,
-  recipe?: Partial<Recipe>,
+  recipe: Partial<Recipe> | undefined,
+  gameVersion: GameVersion,
+  overrides: VersionOverrides<MachineBehaviour> = MACHINE_OVERRIDES,
 ): MachineConfigControl[] {
-  const behaviour = getMachineBehaviour(machineType);
-  if (behaviour?.controlsFor && recipe) return behaviour.controlsFor(recipe);
+  const behaviour = getMachineBehaviour(machineType, gameVersion, overrides);
+  if (behaviour?.controlsFor && recipe) return behaviour.controlsFor(recipe, gameVersion);
   return behaviour?.controls ?? [];
 }
 
 /** Dataset control ids this machine does not actually have. */
-export function getMachineHiddenControlIds(machineType: string | undefined): string[] {
-  return getMachineBehaviour(machineType)?.hidesControls ?? [];
+export function getMachineHiddenControlIds(
+  machineType: string | undefined,
+  gameVersion: GameVersion,
+  overrides: VersionOverrides<MachineBehaviour> = MACHINE_OVERRIDES,
+): string[] {
+  return getMachineBehaviour(machineType, gameVersion, overrides)?.hidesControls ?? [];
 }
 
 /** Resolves the overclock rule, which for the heat machines depends on the recipe. */

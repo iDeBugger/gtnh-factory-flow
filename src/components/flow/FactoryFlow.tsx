@@ -339,7 +339,7 @@ import { loopEdges, type LoopTone } from "./clean/loops";
 import { findUnwiredNodeIds } from "./node-verdict";
 import { useBoardPulseGate, useBoardPulseSync } from "./animation-phase";
 import { useSlicedMount } from "./sliced-mount";
-import { boardVirtualizer } from "./virtual/card-virtualizer";
+import { boardVirtualizer, geometryPublishKey } from "./virtual/card-virtualizer";
 import { boardEdges } from "./virtual/board-edges";
 import { VirtualizationController } from "./virtual/VirtualizationController";
 import { writeBoardZoom } from "./virtual/zoom-var";
@@ -433,6 +433,7 @@ import { BOARD_PAPER_IDS } from "@/lib/model/board-paper";
 import { nearestFreeSpot, type PlacementRect, type PlacementRegion } from "./board-placement";
 import { registerBoardResize, type BoardResizeDraft } from "./board-resize";
 import { RESOURCE_DRAG_TYPE, readResourceDrag } from "@/lib/resource-drag";
+import { planGameVersion } from "@/lib/model/game-version";
 
 /** How long after the last camera step the settled camera work runs. */
 const MOVE_END_SETTLE_MS = 120;
@@ -2510,6 +2511,7 @@ export function FactoryFlow() {
     };
   }, [flowNodes]);
   const obstacleGeometryFingerprint = geometryFingerprints.obstacle;
+  const geometryKey = geometryPublishKey(project.id, obstacleGeometryFingerprint);
   const annotationGeometryFingerprint = geometryFingerprints.annotation;
   const flowNodesRef = useRef(flowNodes);
   flowNodesRef.current = flowNodes;
@@ -2846,10 +2848,8 @@ export function FactoryFlow() {
     // recompute against what was just published, including nodes that grew
     // as icons or NEI layout resolved.
     setLayoutVersion((version) => version + 1);
-    // Another plan on the board publishes too: `boardVirtualizer.useBoard` forgot every box when it landed, and a
-    // plan with the same cards in the same places (a converted copy, the same file opened twice) has the same
-    // fingerprint. Without its boxes no wire is picked to be drawn.
-  }, [obstacleGeometryFingerprint, project.id, publishBoardGeometry]);
+    // Another plan on the board publishes too (`geometryPublishKey`): without its boxes no wire is picked to be drawn.
+  }, [geometryKey, publishBoardGeometry]);
   useLayoutEffect(() => {
     // Annotation geometry changed and nothing else: refresh the published
     // maps and touch nothing routing owns. Quiet mid-drag: the drop's
@@ -11049,7 +11049,7 @@ function measuredPortOffsetY(
 function estimateNodeCardSize(
   node: FactoryNode,
   recipe: Recipe | undefined,
-  project: Pick<FactoryProject, "recipes">,
+  project: Pick<FactoryProject, "recipes" | "gameVersion">,
 ): { width: number; height: number } {
   if (recipe && isTrashRecipe(recipe)) {
     return { width: TRASH_NODE_WIDTH, height: TRASH_NODE_HEIGHT };
@@ -11067,7 +11067,7 @@ function estimateNodeCardSize(
     if (!sectionRecipe) {
       continue;
     }
-    const effective = getEffectiveNodeRecipe(sectionRecipe, view);
+    const effective = getEffectiveNodeRecipe(sectionRecipe, view, planGameVersion(project));
     const rows = Math.max(1, effective.inputs.length, effective.outputs.length);
     rails += cells(2) * rows + (shared ? cells(1) : 0);
   }
@@ -12251,7 +12251,7 @@ function findNodeDropTargetOnSide(
       : undefined;
   }
 
-  const contextualRecipe = getEffectiveNodeRecipe(recipe, node);
+  const contextualRecipe = getEffectiveNodeRecipe(recipe, node, planGameVersion(project));
 
   // A custom rate card takes anything. Unset, the drop lands on its universal
   // socket; set, on the port it shows, and the card adopts the new resource.
@@ -12280,7 +12280,7 @@ function findNodeDropTargetOnSide(
     const sectionRecipe =
       section === 0 ? contextualRecipe : (() => {
         const raw = project.recipes.find((entry) => entry.id === view.recipeId);
-        return raw ? getEffectiveNodeRecipe(raw, view) : undefined;
+        return raw ? getEffectiveNodeRecipe(raw, view, planGameVersion(project)) : undefined;
       })();
     if (!sectionRecipe) {
       continue;
@@ -12749,7 +12749,7 @@ function getDraggedResourceForHandle(
     return undefined;
   }
 
-  const contextualRecipe = getEffectiveNodeRecipe(recipe, node);
+  const contextualRecipe = getEffectiveNodeRecipe(recipe, node, planGameVersion(project));
   const resources = handle.side === "input" ? contextualRecipe.inputs : contextualRecipe.outputs;
   const resource = resources.find(
     (entry) => entry.kind === handle.kind && entry.id === handle.resourceId,
@@ -12808,7 +12808,7 @@ function getResourceForHandle(
     return undefined;
   }
 
-  const contextualRecipe = getEffectiveNodeRecipe(recipe, node);
+  const contextualRecipe = getEffectiveNodeRecipe(recipe, node, planGameVersion(project));
   const resources = handle.side === "input" ? contextualRecipe.inputs : contextualRecipe.outputs;
 
   return resources?.find((entry) => entry.kind === handle.kind && entry.id === handle.resourceId);

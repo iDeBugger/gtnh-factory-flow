@@ -243,6 +243,7 @@ import { playBoardSound, suppressBoardSound } from "@/lib/board-sounds";
 import { fetchRecipeTwins, recipeMayHaveTwins, type RecipeTwin } from "@/lib/datasets/recipe-twins";
 import { getRecipeDatasetRecipe } from "@/lib/datasets/browser-loader";
 import { DEFAULT_DATASET_MANIFEST_URL } from "@/lib/datasets/remote";
+import { planGameVersion, type GameVersion } from "@/lib/model/game-version";
 
 // Full width so the crop config panel and stat grid line up with the recipe
 // canvas edge instead of forcing their own wider box.
@@ -281,6 +282,7 @@ export type RecipeFlowNode = Node<RecipeNodeData, "recipeNode">;
 function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEditor }: Pick<NodeProps<RecipeFlowNode>, "data" | "selected"> & { controlsOnly?: boolean; renderEditor?: (controls: ReactNode, picture: ReactNode, settings: ReactNode, tier: ReactNode) => ReactNode }) {
   const { projectNode, recipe, result } = data;
   const editorLocked = useFactoryStore((state) => state.isReadOnly || state.checklistMode);
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
   const [isCompareOpen, setCompareOpenState] = useState(false);
   // The machine menu's open and close SOUND, the search's leaf lifted and
   // laid down; a switch made from the list closes it with the same sound.
@@ -382,44 +384,45 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
     const projectNode = previewedNode;
     const machineHandlers = getRecipeMachineHandlers(recipe);
     const selectedMachineHandler = getSelectedMachineHandler(recipe, projectNode);
-    const nodeRecipe = applyRecipeInputOverrides(recipe, projectNode);
-    const effectiveRecipe = applyMachineHandlerToRecipe(nodeRecipe, projectNode);
+    const nodeRecipe = applyRecipeInputOverrides(recipe, projectNode, gameVersion);
+    const effectiveRecipe = applyMachineHandlerToRecipe(nodeRecipe, projectNode, gameVersion);
     const recipePowerTier = getRecipePowerTier(effectiveRecipe);
     // A vanilla furnace or steam machine draws no EU, so offering ULV/LV/...
     // voltage tiers on it is meaningless - the chip disappears instead.
     const machineDrawsEu =
       effectiveRecipe.eut > 0 && !isSteamMachineHandler(selectedMachineHandler);
     const tierControl = machineDrawsEu
-      ? getNodeTierControl(effectiveRecipe, projectNode)
+      ? getNodeTierControl(effectiveRecipe, projectNode, gameVersion)
       : undefined;
     // The card's power facts: pool, draw, and whether the build can start at
     // all. Only where power means something - crops, bees, steam and zero-EU
     // recipes have no power section.
     const powerReport =
       machineDrawsEu && tierControl && hasPowerReport(nodeRecipe)
-        ? getNodePowerReport(nodeRecipe, projectNode)
+        ? getNodePowerReport(nodeRecipe, projectNode, gameVersion)
         : undefined;
     // Steam machines get a steam cell where electric ones get the power cell:
     // the litres per second a boiler bank has to cover.
     const steamReport = !machineDrawsEu
-      ? getNodeSteamReport(nodeRecipe, projectNode)
+      ? getNodeSteamReport(nodeRecipe, projectNode, gameVersion)
       : undefined;
     // The hatch chip rides only on multiblocks whose maths our own engine
     // runs; runtime-ladder machines would show a knob that changes nothing.
     const showHatchControl = Boolean(
-      powerReport?.isMultiblock && prefersCuratedMachineMath(effectiveRecipe) && !getFusionMachine(effectiveRecipe.machineType),
+      powerReport?.isMultiblock && prefersCuratedMachineMath(effectiveRecipe, gameVersion) && !getFusionMachine(effectiveRecipe.machineType),
     );
     // Which hatch family feeds the build: the plain 2 A pair, or one exotic
     // hatch (multi-amp, laser) carrying its whole rating. Picked in the
     // chip's own menu, top right, where the count and tier already live.
     const energyHatchType = getEnergyHatchType(projectNode.energyHatchType);
-    const coilControl = getRecipeCoilTierControl(effectiveRecipe, projectNode);
+    const coilControl = getRecipeCoilTierControl(effectiveRecipe, projectNode, gameVersion);
     const coilResource = coilControl
       ? resolveDatasetMachineConfigResource(coilControl.resource, dataset)
       : undefined;
     const machineConfigControls = getRecipeMachineConfigTierControls(
       effectiveRecipe,
       projectNode,
+      gameVersion,
     ).map((control) => ({
       ...control,
       resource: resolveDatasetMachineConfigResource(control.resource, dataset),
@@ -446,7 +449,7 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
       isBeeFrameSlotControlId(control.id),
     );
     const tgsToolControls = machineConfigControls.filter(isTreeGrowthSimulatorToolControl);
-    const overclockedStats = getOverclockedRecipeStats(nodeRecipe, projectNode);
+    const overclockedStats = getOverclockedRecipeStats(nodeRecipe, projectNode, gameVersion);
     const toolAdjustedRecipe = applyTreeGrowthSimulatorToolInputs(effectiveRecipe, tgsToolControls);
     const displayRecipe = isBeeProductionNode
       ? stripBeeFrameSlotInputs(toolAdjustedRecipe)
@@ -455,6 +458,7 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
       displayRecipe,
       projectNode,
       overclockedStats.tier,
+      gameVersion,
     );
     const overclockedRecipe = {
       ...displayRecipe,
@@ -508,11 +512,12 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
       ? getTgsFormulas(
         recipe,
         projectNode.machineConfigTiers,
-        getVoltageTierMaxEuT(getMachineFormulaTier(effectiveRecipe, projectNode)),
-        getMachineFormulaAmps(effectiveRecipe, projectNode),
+        getVoltageTierMaxEuT(getMachineFormulaTier(effectiveRecipe, projectNode, gameVersion)),
+        getMachineFormulaAmps(effectiveRecipe, projectNode, gameVersion),
+        gameVersion,
       )
       : isVatRecipe(effectiveRecipe)
-        ? getVatFormulas(recipe, projectNode.machineConfigTiers, overclockedStats)
+        ? getVatFormulas(recipe, projectNode.machineConfigTiers, overclockedStats, gameVersion)
         : [];
     return {
       machineFormulaLines,
@@ -547,7 +552,7 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
           !isCropProductionConfigControl(control.id) &&
           !isBeeProductionConfigControl(control.id),
       ),
-      machineParallelMultiplier: getMachineParallelMultiplier(effectiveRecipe, projectNode),
+      machineParallelMultiplier: getMachineParallelMultiplier(effectiveRecipe, projectNode, gameVersion),
       // The circuit slot, read off the recipe the card actually runs: swapping
       // machine handler swaps the recipe, and a different handler can want a
       // different setting.
@@ -564,7 +569,7 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
       // the raw recipe - the panel writes settings there, custom-rate style.
       powerInfo: recipe.power,
     };
-  }, [dataset, previewedNode, recipe]);
+  }, [dataset, previewedNode, recipe, gameVersion]);
 
   const {
     machineHandlers: recipeMachineHandlers,
@@ -625,10 +630,10 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
           if (!sectionRecipe) {
             return undefined;
           }
-          const sectionNodeRecipe = applyRecipeInputOverrides(sectionRecipe, node);
-          const sectionEffective = applyMachineHandlerToRecipe(sectionNodeRecipe, node);
-          const stats = getOverclockedRecipeStats(sectionNodeRecipe, node);
-          const adjusted = applyMachineOutputMultipliers(sectionEffective, node, stats.tier);
+          const sectionNodeRecipe = applyRecipeInputOverrides(sectionRecipe, node, gameVersion);
+          const sectionEffective = applyMachineHandlerToRecipe(sectionNodeRecipe, node, gameVersion);
+          const stats = getOverclockedRecipeStats(sectionNodeRecipe, node, gameVersion);
+          const adjusted = applyMachineOutputMultipliers(sectionEffective, node, stats.tier, gameVersion);
           // The section's own draw at the card's budget: what the POWER
           // cell's peak and average are built from.
           const drawsEu = sectionEffective.eut > 0 && !isSteamMachineHandler(getSelectedMachineHandler(sectionRecipe, node));
@@ -637,12 +642,12 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
             node,
             recipe: sectionRecipe,
             display: { ...sectionEffective, ...adjusted, ...stats },
-            powerReport: drawsEu && hasPowerReport(sectionNodeRecipe) ? getNodePowerReport(sectionNodeRecipe, node) : undefined,
-            steamReport: !drawsEu ? getNodeSteamReport(sectionNodeRecipe, node) : undefined,
+            powerReport: drawsEu && hasPowerReport(sectionNodeRecipe) ? getNodePowerReport(sectionNodeRecipe, node, gameVersion) : undefined,
+            steamReport: !drawsEu ? getNodeSteamReport(sectionNodeRecipe, node, gameVersion) : undefined,
           };
         })
         .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined),
-    [liveRecipes, projectNode],
+    [liveRecipes, projectNode, gameVersion],
   );
   // The chip's own art: the concrete hatch item this tier-and-family pair
   // names, from the once-per-dataset catalog.
@@ -762,7 +767,7 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
     // A processing multiblock with a render of its own wears the same window
     // as a generator; the rest keep the controller icon.
     getMachineStructureArt(selectedMachineHandler.id);
-  const powerMachineIcon = powerInfo ? getPowerMachineIcon(powerInfo.sourceId) : undefined;
+  const powerMachineIcon = powerInfo ? getPowerMachineIcon(powerInfo.sourceId, gameVersion) : undefined;
 
   // A generator's EU rides the output rail as its first row (a real port,
   // kind "power"); machines that only DRAW keep the figure in the footer.
@@ -782,6 +787,7 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
   const powerReadout: ComponentProps<typeof PowerReadout> | undefined = showHatchControl ? {
     recipe: nodeRecipe,
     node: projectNode,
+    gameVersion,
     mode: tooltipMode(liveProject),
     // In Solve/Pool, inactive results retain nameplate EU/t for their ports.
     plannedEuT: result ? [result, ...sectionRails.map((entry) => entry.result)].reduce(
@@ -853,7 +859,7 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
     ? // An exchanger's `tier` is its pipe tier, a bare number, not a voltage.
       (isVoltageTierName(projectNode.machineConfigTiers?.tier)
         ? projectNode.machineConfigTiers?.tier
-        : getPowerSource(powerInfo.sourceId)?.unlock)
+        : getPowerSource(powerInfo.sourceId, gameVersion)?.unlock)
     : undefined;
   // What the LOD step paints this card, per smart view. Every non-identity
   // view returns a surface for EVERY card — a card with nothing to say gets
@@ -983,6 +989,7 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
         compact={controlsOnly}
         recipe={recipe}
         node={projectNode}
+        gameVersion={gameVersion}
         controls={visibleMachineConfigControls}
         facts={configFacts}
         onSelect={(controlId, nextTier) => {
@@ -1042,6 +1049,7 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
       ...carryMachineVoltage(
         { recipe: nodeRecipe, node: projectNode },
         { recipe: nodeRecipe, machineHandlerId: nextHandler.id },
+        gameVersion,
       ),
     });
     // Silent: the switch itself sounds (the board's adjust tap), and a
@@ -1058,8 +1066,8 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
   // pointer first rests on the name bar, so a one-machine card knows whether
   // to show a chevron before it is clicked.
   const mayHaveTwins = useMemo(
-    () => recipeMayHaveTwins(recipe, projectNode),
-    [recipe, projectNode.recipeInputOverrides],
+    () => recipeMayHaveTwins(recipe, projectNode, gameVersion),
+    [recipe, projectNode.recipeInputOverrides, gameVersion],
   );
   // The answer is keyed by the question (recipe, its slot picks, the
   // dataset) so a stale answer never shows under a new recipe; until the
@@ -1299,7 +1307,7 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
     const tier = (
       <fieldset disabled={editorLocked} className="pool-tier-editor min-w-0 border-0 p-0 text-[var(--mc-ink)]">
           <div className="pool-editor-power">
-          {powerInfo ? <PowerTierChip nodeId={projectNode.id} sourceId={powerInfo.sourceId} values={projectNode.machineConfigTiers} /> : null}
+          {powerInfo ? <PowerTierChip nodeId={projectNode.id} sourceId={powerInfo.sourceId} values={projectNode.machineConfigTiers} gameVersion={gameVersion} /> : null}
           {cropTierControl && !tierControl && !powerInfo ? <CropTierChip control={cropTierControl} onPick={(key) => updateMachineConfigTier(cropTierControl.id, key)} /> : null}
           {powerReadout ? <HatchPowerControls {...powerReadout} locked={() => editorLocked}
             onChange={(hatchVoltageTier, hatchAmps, powerInputMode) => updateNode(projectNode.id, {
@@ -1885,6 +1893,7 @@ function RecipeNodeComponent({ data, selected, controlsOnly = false, renderEdito
               nodeId={projectNode.id}
               sourceId={powerInfo.sourceId}
               values={projectNode.machineConfigTiers}
+              gameVersion={gameVersion}
             />
           ) : null}
           {cropTierControl && !tierControl && !powerInfo && !calmMode ? (
@@ -3360,13 +3369,15 @@ function PowerTierChip({
   nodeId,
   sourceId,
   values,
+  gameVersion,
 }: {
   nodeId: string;
   sourceId: string;
   values: Record<string, string> | undefined;
+  gameVersion: GameVersion;
 }) {
   const setPowerSetting = useFactoryStore((state) => state.setPowerSetting);
-  const source = getPowerSource(sourceId);
+  const source = getPowerSource(sourceId, gameVersion);
   if (!source) {
     return null;
   }
@@ -4157,7 +4168,7 @@ function normalizeSearch(value: string) {
 
 type VoltageTier = Exclude<MachineTier, "DEMO">;
 
-function getNodeTierControl(recipe: Recipe, node: FactoryNode) {
+function getNodeTierControl(recipe: Recipe, node: FactoryNode, gameVersion: GameVersion) {
   const fusion = getFusionMachine(recipe.machineType);
   if (fusion) return { minimum: fusion.tier, maximum: fusion.tier, current: fusion.tier, available: undefined, allowBelowMinimum: false, fixed: true };
   if (isIndustrialApiaryMachineType(recipe.machineType)) {
@@ -4172,11 +4183,11 @@ function getNodeTierControl(recipe: Recipe, node: FactoryNode) {
     return undefined;
   }
 
-  const minimum = getOverclockedRecipeStats(recipe, node).minimumTier;
+  const minimum = getOverclockedRecipeStats(recipe, node, gameVersion).minimumTier;
   // A multiblock's pick is honoured even below the minimum - the power cell
   // is what says an underpowered build won't start, not a silent clamp. A
   // singleblock is floored: a lower machine does not exist to be built.
-  const allowBelowMinimum = isMultiblockRecipe(recipe);
+  const allowBelowMinimum = isMultiblockRecipe(recipe, gameVersion);
   // ...and capped at the family's last registered machine. Higher-tier
   // names may change (Canning Machine -> Can Operator) within that family.
   const maximum = allowBelowMinimum ? undefined : getRecipeMaximumVoltageTier(recipe);
@@ -4282,6 +4293,7 @@ function getBeePanelControls(controls: MachineConfigTierControl[]): MachineConfi
 function MachineConfigControlPanel({
   recipe,
   node,
+  gameVersion,
   controls,
   facts = [],
   onSelect,
@@ -4289,6 +4301,7 @@ function MachineConfigControlPanel({
 }: {
   recipe: Recipe;
   node: FactoryNode;
+  gameVersion: GameVersion;
   controls: MachineConfigTierControl[];
   /** Read-only tiles after the settings, in the same grid. */
   facts?: Array<{ id: string; caption: string; value: string; help?: ReactNode | (() => ReactNode) }>;
@@ -4319,7 +4332,7 @@ function MachineConfigControlPanel({
             key={control.id}
             control={control}
             onSelect={(key) => onSelect(control.id, key)}
-            help={() => <RecipeTooltip view={buildConfigTooltip(recipe, node, control)} />}
+            help={() => <RecipeTooltip view={buildConfigTooltip(recipe, node, control, gameVersion)} />}
           />
         ))}
         {facts.map((fact) => (
@@ -5781,11 +5794,12 @@ function PowerStoryContent({ report, utilization, machines = 1, recipe, node, ac
 }) {
   const mode = useFactoryStore((state) => tooltipMode(state.project));
   const peak = report.drawEuT * machines;
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
   // The calculator's working, on hover only: the scan behind the next win
   // samples the report a few hundred times.
   const working = useMemo(
-    () => (report.isMultiblock && recipe && node && !getFusionMachine(applyMachineHandlerToRecipe(recipe, node).machineType) ? describePowerWorking(recipe, node, report.poolEuT) : undefined),
-    [report.isMultiblock, report.poolEuT, recipe, node],
+    () => (report.isMultiblock && recipe && node && !getFusionMachine(applyMachineHandlerToRecipe(recipe, node, gameVersion).machineType) ? describePowerWorking(recipe, node, report.poolEuT, gameVersion) : undefined),
+    [report.isMultiblock, report.poolEuT, recipe, node, gameVersion],
   );
   const rows = working
     ? [

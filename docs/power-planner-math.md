@@ -224,12 +224,17 @@ Tungstensteel 16000 SH (per boiler). Rules:
   per-tier fuel tables in Fuel Data (higher tiers burn faster - smaller
   divisors). Water in = steam / 160.
 - Titanium/Tungstensteel chain SH turbines into steam turbines (cascade).
-- Java corrections (`correctSteamMakers`): a solid burns fuel value / 80
-  ticks times the tier's runtimeBoost (x2, x1, x3/10, x15/100,
-  `MTELargeBoilerBase`); the sheet's longer times for Solid Super Fuel, Magic
-  Solid Super Fuel, Diamond and Block of Diamond carry the NEI-only log bonus.
-  Titanium/Tungstensteel take only `LargeBoilerFuelBackend.ALLOWED_FUELS`, so
-  Naquadah Gas, Nefarious Gas and Nitrobenzene are dropped.
+- Solid burn time (computed from the Java, not read from the sheet): on 2.9,
+  fuel value / 80 ticks through `LargeBoilerFuelBackend.getBurntimeRatioTicks`
+  (s = ticks / 20 seconds, s x max(1, 1 + ln(s / 10) x 0.025), rounded half up
+  to 2 places, x 20), then the tier's runtimeBoost (x2, x1, x3/10, x15/100;
+  GT5U 5.09.54.205 `MTELargeBoilerBase.java:334-339, :369`). The log bonus
+  lengthens every burn over 10 s: Solid Super Fuel is 2614 ticks in bronze, not
+  2500. `src/lib/power/overrides-2.9/boilers.ts`; 2.8.1's old `MTELargeBoiler`
+  rule (log base 9 of fuel / 1600) is `src/lib/power/overrides-2.8.1/boilers.ts`.
+- Java corrections (`correctSteamMakers`): Titanium/Tungstensteel take only
+  `LargeBoilerFuelBackend.ALLOWED_FUELS`, so Naquadah Gas, Nefarious Gas and
+  Nitrobenzene are dropped.
 
 ## SOFC I / II (`2. SOFC`)
 

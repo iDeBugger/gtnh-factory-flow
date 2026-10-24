@@ -1,5 +1,10 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderHook } from "@testing-library/react";
+import type { Recipe } from "@/lib/model/types";
+import { createEmptyProject } from "@/examples";
+import { useFactoryStore } from "@/store/factory-store";
+import { getOverclockedRecipeStats } from "@/lib/solver/overclock";
 import type { FactoryNode } from "@/lib/model/types";
 import type { RailPort } from "../node-verdict";
 import type { PlanSolveExtras, PlanUpTo } from "@/lib/solver/plan/types";
@@ -22,9 +27,16 @@ import {
   stateFrameTone,
   wheelCount,
   wheelDraft,
+  useCleanCardModel,
   withReasonPorts,
   type CleanPortView,
 } from "./clean-model";
+
+// A pass-through spy: the card's numbers stay real, the test reads which version each call asked for.
+vi.mock("@/lib/solver/overclock", async (original) => {
+  const actual = await original<typeof import("@/lib/solver/overclock")>();
+  return { ...actual, getOverclockedRecipeStats: vi.fn(actual.getOverclockedRecipeStats) };
+});
 
 const node = (
   pin?: number,
@@ -570,5 +582,43 @@ describe("the Up to mock", () => {
       new Set(["FULL", "BOTTLENECK", "STARVED", "CLOGGED", "UNUSED", "LIMITED", null]),
     );
     expect(extras.forced.map((entry) => entry.nodeId)).toEqual(["exact"]);
+  });
+});
+
+describe("the card model reads the plan's version", () => {
+  // The test puts a 2.8.1 plan in the store; a test after it must not inherit it.
+  const before = useFactoryStore.getState().project;
+  afterEach(() => {
+    useFactoryStore.setState({ project: before });
+  });
+
+  it("builds a 2.8.1 plan's card with 2.8.1", () => {
+    const recipe: Recipe = {
+      id: "plate",
+      name: "Copper Plate",
+      machineType: "Bender",
+      minimumTier: "LV",
+      durationTicks: 20,
+      eut: 8,
+      inputs: [{ kind: "item", id: "copper", amount: 1 }],
+      outputs: [{ kind: "item", id: "plate", displayName: "Copper Plate", amount: 1 }],
+    };
+    const projectNode = {
+      id: "n0",
+      recipeId: "plate",
+      machineCount: 1,
+      parallel: 1,
+      overclockTier: "LV",
+      enabled: true,
+      position: { x: 0, y: 0 },
+    } as FactoryNode;
+    useFactoryStore.setState({
+      project: { ...createEmptyProject(), gameVersion: "2.8.1", recipes: [recipe], nodes: [projectNode] },
+    });
+    const stats = vi.mocked(getOverclockedRecipeStats);
+    stats.mockClear();
+    renderHook(() => useCleanCardModel({ projectNode, recipe }, false));
+    expect(stats).toHaveBeenCalled();
+    expect(new Set(stats.mock.calls.map((call) => call[2]))).toEqual(new Set(["2.8.1"]));
   });
 });

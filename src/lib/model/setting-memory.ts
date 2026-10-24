@@ -6,6 +6,7 @@ import {
   getRecipeMachineConfigTierControls,
   getSelectedMachineHandler,
 } from "./recipe-rules";
+import type { GameVersion } from "@/lib/model/game-version";
 
 /**
  * The settings last changed on each machine, so the next card for it starts with them (the mod's `SettingMemory`):
@@ -53,16 +54,16 @@ export function rememberSetting(machine: string, controlId: string, optionKey: s
  * The patch that gives a new card the settings last changed on its machine, those its machine has; a remembered
  * option only when the machine still offers it (a coil only when it is hot enough for the recipe).
  */
-export function applySettingMemory(recipe: Recipe, node: FactoryNode): Partial<FactoryNode> | undefined {
+export function applySettingMemory(recipe: Recipe, node: FactoryNode, gameVersion: GameVersion): Partial<FactoryNode> | undefined {
   const memory = read();
   const prefix = `${settingMemoryMachine(recipe, node)}|`;
   const kept = Object.entries(memory).filter(([name]) => name.startsWith(prefix));
   if (kept.length === 0) return undefined;
-  const effective = applyMachineHandlerToRecipe(applyRecipeInputOverrides(recipe, node), node);
+  const effective = applyMachineHandlerToRecipe(applyRecipeInputOverrides(recipe, node, gameVersion), node, gameVersion);
   const patch: Partial<FactoryNode> = {};
   const tiers: Record<string, string> = {};
-  const coil = getRecipeCoilTierControl(effective, node);
-  const controls = getRecipeMachineConfigTierControls(effective, node);
+  const coil = getRecipeCoilTierControl(effective, node, gameVersion);
+  const controls = getRecipeMachineConfigTierControls(effective, node, gameVersion);
   for (const [name, optionKey] of kept) {
     const id = name.slice(prefix.length);
     if (id === "heatingCoil") {

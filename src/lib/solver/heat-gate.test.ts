@@ -38,13 +38,13 @@ function smelterRecipe(): Recipe {
 
 describe("coil heat gate", () => {
   it("is a heat machine's only", () => {
-    expect(isHeatOverclockMachine("Multi Smelter")).toBe(false);
-    expect(isHeatOverclockMachine("Electric Blast Furnace")).toBe(true);
+    expect(isHeatOverclockMachine("Multi Smelter", "2.9")).toBe(false);
+    expect(isHeatOverclockMachine("Electric Blast Furnace", "2.9")).toBe(true);
   });
 
   it("asks nothing of a Multi Smelter coil", () => {
     const node = { machineConfigTiers: {}, coilTier: "cupronickel", machineHandlerId: undefined };
-    const stats = getHeatOverclockStats(smelterRecipe(), node, "MV", 2);
+    const stats = getHeatOverclockStats(smelterRecipe(), node, "MV", 2, "2.9");
     expect(stats).toEqual({
       heatOverclockSteps: 0,
       regularOverclockSteps: 2,
@@ -59,7 +59,7 @@ describe("coil heat gate", () => {
       position: { x: 0, y: 0 },
       overclockTier: "MV",
       coilTier: "cupronickel",
-    } as never);
+    } as never, "2.9");
     expect(report.recipeGateReason).toBeUndefined();
     expect(report.state).not.toBe("over-tier");
   });

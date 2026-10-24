@@ -67,7 +67,8 @@ The board has its own notes in `flow/CLAUDE.md`, the Pool worksheet in `pool/CLA
   frame, the line `Not in GTNH <v>. Pick a recipe.`, one port per wired resource) and is listed by the notices bar. Its
   line refactors it: the stencil is what its wires carry, the pick (even under the same id) clears the marker, and a
   shared card's marked section is picked for as `card#rN` on a machine that runs the card's other recipes. Its wires
-  never read invalid: they are its ports.
+  never read invalid: they are its ports. On a plan this site serves no recipes for (`unservedPlanVersion`) the line and
+  the notice read `Recipes for GTNH <v> are not on this site.` instead: the recipe may exist in that version.
 - The tier ceiling also filters generator cards by their `unlock` chip, client side
   (`powerUnlockWithinTier`); a source with no chip is never filtered.
 - A machine pin (`recipeBrowserMachinePin`, a card's "Add another recipe") scopes the maps to one machine and adds the

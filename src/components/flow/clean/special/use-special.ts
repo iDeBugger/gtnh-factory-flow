@@ -96,6 +96,7 @@ import {
 } from "./special-model";
 import type { SheetRow } from "./SpecialSheets";
 import { unconvertedPlaceholderRecipe } from "@/lib/model/unconverted-card";
+import type { GameVersion } from "@/lib/model/game-version";
 
 /** What a special card does beyond the plain card's actions. */
 export interface SpecialActions extends CleanCardActions {
@@ -179,6 +180,7 @@ function section0(base: { view: CleanCardView }): SpecialSection {
  */
 export function useSharedCardModel(data: RecipeNodeData, selected: boolean): SpecialModel {
   const base = useCleanCardModel(data, selected);
+  const { gameVersion } = base.context;
   const { projectNode, recipe, result } = data;
   const averageDraw = useWorkspaceView().averageMachineDraw;
   const liveRecipes = useFactoryStore((state) => state.project.recipes);
@@ -219,19 +221,19 @@ export function useSharedCardModel(data: RecipeNodeData, selected: boolean): Spe
             ? markedExtras?.[section - 1]
             : liveRecipes.find((entry) => entry.id === node.recipeId);
           if (!sectionRecipe) return undefined;
-          const nodeRecipe = applyRecipeInputOverrides(sectionRecipe, node);
-          const effective = applyMachineHandlerToRecipe(nodeRecipe, node);
-          const stats = getOverclockedRecipeStats(nodeRecipe, node);
-          const adjusted = applyMachineOutputMultipliers(effective, node, stats.tier);
+          const nodeRecipe = applyRecipeInputOverrides(sectionRecipe, node, gameVersion);
+          const effective = applyMachineHandlerToRecipe(nodeRecipe, node, gameVersion);
+          const stats = getOverclockedRecipeStats(nodeRecipe, node, gameVersion);
+          const adjusted = applyMachineOutputMultipliers(effective, node, stats.tier, gameVersion);
           return {
             section,
             node,
             display: { ...effective, ...adjusted, ...stats } as Recipe,
-            ...sectionPower(sectionRecipe, node),
+            ...sectionPower(sectionRecipe, node, gameVersion),
           };
         })
         .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined),
-    [liveRecipes, markedExtras, projectNode],
+    [liveRecipes, markedExtras, projectNode, gameVersion],
   );
 
   // The forced entries of every section (spills into buffers among them), filed under the card and the section's
@@ -295,7 +297,7 @@ export function useSharedCardModel(data: RecipeNodeData, selected: boolean): Spe
   }
 
   // The card's one power row.
-  const own = sectionPower(recipe, projectNode);
+  const own = sectionPower(recipe, projectNode, gameVersion);
   const parts = [own, ...extras];
   // As the plain card bills it: each recipe's draw at the machines the solve gives it, by its use (all of it in peak
   // mode while it runs at all).
@@ -422,15 +424,15 @@ export function useSharedCardModel(data: RecipeNodeData, selected: boolean): Spe
 }
 
 /** One recipe's power or steam report at its node's settings. */
-function sectionPower(recipe: Recipe, node: FactoryNode) {
-  const nodeRecipe = applyRecipeInputOverrides(recipe, node);
-  const effective = applyMachineHandlerToRecipe(nodeRecipe, node);
+function sectionPower(recipe: Recipe, node: FactoryNode, gameVersion: GameVersion) {
+  const nodeRecipe = applyRecipeInputOverrides(recipe, node, gameVersion);
+  const effective = applyMachineHandlerToRecipe(nodeRecipe, node, gameVersion);
   const drawsEu =
     effective.eut > 0 && !isSteamMachineHandler(getSelectedMachineHandler(recipe, node));
   return {
     powerReport:
-      drawsEu && hasPowerReport(nodeRecipe) ? getNodePowerReport(nodeRecipe, node) : undefined,
-    steamReport: !drawsEu ? getNodeSteamReport(nodeRecipe, node) : undefined,
+      drawsEu && hasPowerReport(nodeRecipe) ? getNodePowerReport(nodeRecipe, node, gameVersion) : undefined,
+    steamReport: !drawsEu ? getNodeSteamReport(nodeRecipe, node, gameVersion) : undefined,
   };
 }
 
@@ -438,9 +440,10 @@ function sectionPower(recipe: Recipe, node: FactoryNode) {
 
 export function usePowerCardModel(data: RecipeNodeData, selected: boolean): SpecialModel {
   const base = useCleanCardModel(data, selected);
+  const { gameVersion } = base.context;
   const { projectNode, recipe } = data;
   const info = recipe.power!;
-  const source = getPowerSource(info.sourceId);
+  const source = getPowerSource(info.sourceId, gameVersion);
   const setPowerSetting = useFactoryStore((state) => state.setPowerSetting);
   const setSettingPins = useFactoryStore((state) => state.setSettingPins);
   // The pins are the plan's, kept per source as a machine's are: a generator shows none until one is pinned.
@@ -477,7 +480,7 @@ export function usePowerCardModel(data: RecipeNodeData, selected: boolean): Spec
   };
 
   const name = recipe.machineType || base.view.name;
-  const icon = getPowerMachineIcon(info.sourceId);
+  const icon = getPowerMachineIcon(info.sourceId, gameVersion);
   const art = getPowerStructureArt(info.sourceId);
   const needed = data.result?.theoreticalMachinesRequired ?? 0;
   const plan = useFactoryStore.getState().lastResult?.plan;
@@ -593,6 +596,7 @@ export function usePowerCardModel(data: RecipeNodeData, selected: boolean): Spec
  */
 export function useCropCardModel(data: RecipeNodeData, selected: boolean): SpecialModel {
   const base = useCleanCardModel(data, selected);
+  const { gameVersion } = base.context;
   const { projectNode, recipe, result } = data;
   const averageDraw = useWorkspaceView().averageMachineDraw;
   const updateNode = useFactoryStore((state) => state.updateNode);
@@ -602,12 +606,12 @@ export function useCropCardModel(data: RecipeNodeData, selected: boolean): Speci
   const placeholder =
     recipe.id === CROP_FARM_PLACEHOLDER_RECIPE_ID || (farm && recipe.outputs.length === 0);
   const effective = useMemo(
-    () => applyMachineHandlerToRecipe(applyRecipeInputOverrides(recipe, projectNode), projectNode),
-    [recipe, projectNode],
+    () => applyMachineHandlerToRecipe(applyRecipeInputOverrides(recipe, projectNode, gameVersion), projectNode, gameVersion),
+    [recipe, projectNode, gameVersion],
   );
   const controls = useMemo(
-    () => getRecipeMachineConfigTierControls(effective, projectNode),
-    [effective, projectNode],
+    () => getRecipeMachineConfigTierControls(effective, projectNode, gameVersion),
+    [effective, projectNode, gameVersion],
   );
   const tierControl = controls.find(
     (control) =>

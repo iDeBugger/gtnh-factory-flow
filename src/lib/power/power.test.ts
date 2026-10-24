@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildPowerRecipe, resynthesizePowerRecipes } from "./power-recipe";
 import {
   hitPlacementSettings,
@@ -6,11 +6,19 @@ import {
   searchPowerSources,
   searchPowerSourcesForStencil,
 } from "./power-search";
-import { getPowerSource, POWER_SOURCES } from "./registry";
+import { getPowerSource, powerSourcesFor } from "./registry";
 import { buildPowerSettingsReader } from "./types";
 import { resolvePowerResource } from "./planner-data";
 import { htgrOperation } from "./sources/reactors";
-import type { FactoryNode, Recipe } from "@/lib/model/types";
+import { PROJECT_SCHEMA_VERSION, type FactoryNode, type FactoryProject, type Recipe } from "@/lib/model/types";
+import { getMachineBehaviour } from "@/lib/machines/machine-table";
+import { calculateThroughput } from "@/lib/solver/throughput";
+
+// A pass-through spy: every lookup from another module is recorded with the version it asked for.
+vi.mock("@/lib/machines/machine-table", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/machines/machine-table")>();
+  return { ...actual, getMachineBehaviour: vi.fn(actual.getMachineBehaviour) };
+});
 
 /**
  * Golden values are the Power Planner 2.9 workbook's own computed cells
@@ -18,11 +26,11 @@ import type { FactoryNode, Recipe } from "@/lib/model/types";
  * transcription drifted from the spreadsheet, not that the spreadsheet moved.
  */
 function compute(sourceId: string, settings: Record<string, string> = {}) {
-  const source = getPowerSource(sourceId);
+  const source = getPowerSource(sourceId, "2.9");
   if (!source) {
     throw new Error(`No power source ${sourceId}`);
   }
-  return source.compute(buildPowerSettingsReader(source, settings));
+  return source.compute(buildPowerSettingsReader(source, settings, "2.9"), "2.9");
 }
 
 describe("singleblock generators", () => {
@@ -182,7 +190,7 @@ describe("community-flagged additions (2.9 sheet)", () => {
     expect(sc.inputs[0].name).toBe("SC Steam");
     expect(sc.outputs[0].name).toBe("SH Steam");
     // The plain XL only offers plain and dense steam now.
-    const plain = getPowerSource("xl-turbo-steam-turbine")!;
+    const plain = getPowerSource("xl-turbo-steam-turbine", "2.9")!;
     const grade = plain.settings.find((setting) => setting.id === "grade");
     expect(grade?.type === "select" && grade.options.map((option) => option.key)).toEqual([
       "Steam",
@@ -239,7 +247,7 @@ describe("turbines", () => {
   });
 
   it("penalizes over-optimal flow but caps at max", () => {
-    const source = getPowerSource("large-steam-turbine");
+    const source = getPowerSource("large-steam-turbine", "2.9");
     const atOptimal = compute("large-steam-turbine", {
       rotor: "Shadow Metal",
       size: "Normal",
@@ -366,7 +374,7 @@ describe("RTG and Dyson Swarm", () => {
     expect(model.inputs).toEqual([
       { name: "Pu Pellet", perSecond: 1 / ((2 ** 31 - 1) / 62 / 20), unit: "item" },
     ]);
-    expect(resolvePowerResource("Pu Pellet")?.id).toBe("miscutils:mu-metaitem.01@32041");
+    expect(resolvePowerResource("Pu Pellet", "2.9")?.id).toBe("miscutils:mu-metaitem.01@32041");
   });
 
   it("pays the Dyson Swarm 10M EU/t per module times the dimension factor", () => {
@@ -391,7 +399,7 @@ describe("reactors and endgame", () => {
     expect(perOperation(model.inputs.find((flow) => flow.name === "TRISO pebble")!.perSecond)).toBe(3375);
     expect(perOperation(model.outputs.find((flow) => flow.name === "Burned Out TRISO pebble ball")!.perSecond)).toBe(52);
     expect(perOperation(model.outputs.find((flow) => flow.name === "Burned Out TRISO pebble")!.perSecond)).toBe(47);
-    expect(resolvePowerResource("TRISO pebble")).toMatchObject({ kind: "item", id: "bartworks:bw.thtrmaterials@4" });
+    expect(resolvePowerResource("TRISO pebble", "2.9")).toMatchObject({ kind: "item", id: "bartworks:bw.thtrmaterials@4" });
     // The helium is a one-time charge the reactor keeps, not a flow.
     expect(model.inputs.some((flow) => flow.name === "Helium")).toBe(false);
   });
@@ -409,7 +417,7 @@ describe("reactors and endgame", () => {
     expect(model.inputs.find((flow) => flow.name === "TRISO Fuel (Glowstone)")!.perSecond).toBeCloseTo(run.burned / cycleSeconds, 9);
     expect(model.outputs.find((flow) => flow.name === "Burned Out TRISO Fuel (Glowstone)")!.perSecond).toBeCloseTo(run.burned / cycleSeconds, 9);
     expect(model.inputs.find((flow) => flow.name === "Helium")!.perSecond).toBeCloseTo(256 / cycleSeconds, 9);
-    expect(resolvePowerResource("TRISO Fuel (Uranium 235)")?.id).toBe("kubatech:htgr_item_triso_fuel@1");
+    expect(resolvePowerResource("TRISO Fuel (Uranium 235)", "2.9")?.id).toBe("kubatech:htgr_item_triso_fuel@1");
     // A half-full reactor keeps its fuel base: the ball count alone scales the draw.
     const half = htgrOperation(pebble, 5_000);
     expect(half.energyMultiplier).toBeCloseTo(2 * Math.pow(1.1, 1.05), 9);
@@ -442,13 +450,13 @@ describe("reactors and endgame", () => {
     expect((model.euPerTick * 20) / model.inputs[0].perSecond).toBe(euPerLiter);
     // A 1-in-300 chance every tick of 1-10 L.
     expect(model.outputs.find((flow) => flow.name === "Uranium-233")?.perSecond).toBeCloseTo(0.36667, 5);
-    const recipe = buildPowerRecipe("lftr", { fuel }, "lftr-test");
+    const recipe = buildPowerRecipe("lftr", { fuel }, "lftr-test", "2.9");
     expect(recipe?.power?.euPerTick).toBe(euPerTick);
     expect(recipe?.outputs.find((slot) => slot.kind === "power")?.amount).toBe(euPerTick * 20);
   });
 
   it("repairs saved LFTR Fuel 3 power and its output port on load", () => {
-    const recipe = buildPowerRecipe("lftr", { fuel: "LFTR Fuel 3" }, "lftr-saved") as Recipe;
+    const recipe = buildPowerRecipe("lftr", { fuel: "LFTR Fuel 3" }, "lftr-saved", "2.9") as Recipe;
     recipe.power!.euPerTick = 32_768;
     recipe.outputs.find((slot) => slot.kind === "power")!.amount = 655_360;
     const node = {
@@ -461,7 +469,7 @@ describe("reactors and endgame", () => {
       position: { x: 0, y: 0 },
       machineConfigTiers: { fuel: "LFTR Fuel 3" },
     } as FactoryNode;
-    const loaded = resynthesizePowerRecipes({ nodes: [node], recipes: [recipe] });
+    const loaded = resynthesizePowerRecipes({ nodes: [node], recipes: [recipe] }, "2.9");
     expect(loaded.recipes[0].power?.euPerTick).toBe(524_288);
     expect(loaded.recipes[0].outputs.find((slot) => slot.kind === "power")?.amount).toBe(10_485_760);
     expect(loaded.recipes[0].inputs).toEqual(recipe.inputs);
@@ -479,11 +487,11 @@ describe("reactors and endgame", () => {
       unit: "item",
     });
     expect(model.outputs[1]).toEqual(model.inputs[1]);
-    expect(resolvePowerResource("360k He Coolant Cell")?.kind).toBe("item");
-    expect(resolvePowerResource("10k Coolant Cell")?.kind).toBe("item");
-    expect(resolvePowerResource("Quad Fuel Rod (Uranium)")?.kind).toBe("item");
-    expect(resolvePowerResource("Fuel Rod (Depleted Tiberium)")?.kind).toBe("item");
-    expect(resolvePowerResource("The Core (Depleted)")?.kind).toBe("item");
+    expect(resolvePowerResource("360k He Coolant Cell", "2.9")?.kind).toBe("item");
+    expect(resolvePowerResource("10k Coolant Cell", "2.9")?.kind).toBe("item");
+    expect(resolvePowerResource("Quad Fuel Rod (Uranium)", "2.9")?.kind).toBe("item");
+    expect(resolvePowerResource("Fuel Rod (Depleted Tiberium)", "2.9")?.kind).toBe("item");
+    expect(resolvePowerResource("The Core (Depleted)", "2.9")?.kind).toBe("item");
     // Sheet: average cell decay 813.7 Hu/s, minimum coolant lifespan 267.9 s.
     expect(model.stats.find((line) => line.label === "Cell heat")?.value).toBe("813.71/s avg, 1,344/s max");
     expect(model.stats.find((line) => line.label === "Coolant lifespan")?.value).toBe(
@@ -586,6 +594,24 @@ describe("reactors and endgame", () => {
     expect(model.inputs).toHaveLength(2);
   });
 
+  it("offers each recipe of a plasma two recipes make, and a stored plain name stays the first", () => {
+    const source = getPowerSource("fusion-reactor", "2.9")!;
+    const recipe = source.settings.find((setting) => setting.id === "recipe");
+    const helium = recipe?.type === "select" ? recipe.options.filter((option) => option.key.startsWith("Helium Plasma")) : [];
+    expect(helium).toEqual([
+      { key: "Helium Plasma", label: "Helium Plasma (Deuterium + Helium-3)" },
+      { key: "Helium Plasma (Deuterium + Tritium)", label: "Helium Plasma (Deuterium + Tritium)" },
+    ]);
+    // D + T burns Tritium at its own drain (GT5U@5.09.54.205 FusionReactorRecipes.java:40, 3840 EU/t).
+    const dt = compute("fusion-reactor", { recipe: "Helium Plasma (Deuterium + Tritium)", mark: "1" });
+    expect(dt.euPerTick).toBe(-3840);
+    expect(dt.inputs.map((flow) => flow.name)).toEqual(["Deuterium", "Tritium"]);
+    expect(compute("fusion-reactor", { recipe: "Helium Plasma", mark: "1" }).inputs.map((flow) => flow.name)).toEqual([
+      "Deuterium",
+      "Helium-3",
+    ]);
+  });
+
   it("finds an interior antimatter optimum with positive net power", () => {
     const model = compute("antimatter", { amount: "0" });
     expect(model.euPerTick).toBeGreaterThan(1e12);
@@ -613,22 +639,22 @@ describe("resource resolution", () => {
       "Plutonium Fuel",
     ]);
     const unresolved = new Set<string>();
-    const collect = (model: ReturnType<(typeof POWER_SOURCES)[number]["compute"]>) => {
+    const collect = (model: ReturnType<ReturnType<typeof powerSourcesFor>[number]["compute"]>) => {
       for (const flow of [...model.inputs, ...model.outputs]) {
-        if (flow.perSecond > 0 && !resolvePowerResource(flow.name)) {
+        if (flow.perSecond > 0 && !resolvePowerResource(flow.name, "2.9")) {
           unresolved.add(flow.name);
         }
       }
     };
-    for (const source of POWER_SOURCES) {
-      collect(source.compute(buildPowerSettingsReader(source, undefined)));
+    for (const source of powerSourcesFor("2.9")) {
+      collect(source.compute(buildPowerSettingsReader(source, undefined, "2.9"), "2.9"));
       for (const setting of source.settings) {
         if (setting.type !== "select") {
           continue;
         }
         for (const option of setting.options) {
           collect(
-            source.compute(buildPowerSettingsReader(source, { [setting.id]: option.key })),
+            source.compute(buildPowerSettingsReader(source, { [setting.id]: option.key }, "2.9"), "2.9"),
           );
         }
       }
@@ -640,7 +666,7 @@ describe("resource resolution", () => {
 
 describe("power search", () => {
   it("finds every machine that burns benzene, with the fuel dialed in", () => {
-    const hits = searchPowerSources("benzene");
+    const hits = searchPowerSources("benzene", "2.9");
     const ids = hits.map((hit) => hit.source.id);
     expect(ids).toContain("gas-turbine");
     expect(ids).toContain("solid-oxide-fuel-cell-1");
@@ -654,14 +680,14 @@ describe("power search", () => {
   });
 
   it("dials a non-default fuel into the placement settings", () => {
-    const hits = searchPowerSources("nitrobenzene");
+    const hits = searchPowerSources("nitrobenzene", "2.9");
     const turbine = hits.find((hit) => hit.source.id === "gas-turbine");
     expect(turbine?.via?.direction).toBe("takes");
     expect(hitPlacementSettings(turbine!)).toEqual({ fuel: "Nitrobenzene" });
   });
 
   it("finds makers of superheated steam and prefers makes over takes", () => {
-    const hits = searchPowerSources("superheated steam");
+    const hits = searchPowerSources("superheated steam", "2.9");
     const boiler = hits.find((hit) => hit.source.id === "large-titanium-boiler");
     expect(boiler?.via?.direction).toBe("makes");
     const sofc2 = hits.find((hit) => hit.source.id === "solid-oxide-fuel-cell-2");
@@ -671,8 +697,8 @@ describe("power search", () => {
   });
 
   it("matches machine names first and returns the whole catalog when empty", () => {
-    expect(searchPowerSources("")).toHaveLength(POWER_SOURCES.length);
-    const hits = searchPowerSources("turbine");
+    expect(searchPowerSources("", "2.9")).toHaveLength(powerSourcesFor("2.9").length);
+    const hits = searchPowerSources("turbine", "2.9");
     expect(hits[0]?.via).toBeUndefined();
     expect(hits.some((hit) => hit.source.id === "steam-turbine")).toBe(true);
   });
@@ -680,23 +706,25 @@ describe("power search", () => {
 
 describe("stencil search (the recipe book's view of the generators)", () => {
   it("answers a takes clause by resource id, dialing the fuel when needed", () => {
-    const nitro = resolvePowerResource("Nitrobenzene")!;
+    const nitro = resolvePowerResource("Nitrobenzene", "2.9")!;
     const hits = searchPowerSourcesForStencil(
       [{ role: "takes", kind: nitro.kind, id: nitro.id }],
       "all",
       "all",
       "",
+      "2.9",
     );
     const turbine = hits.find((hit) => hit.source.id === "gas-turbine");
     expect(turbine).toBeDefined();
     expect(turbine?.settings).toEqual({ fuel: "Nitrobenzene" });
     // Benzene is the default: same machine, no dial.
-    const benzene = resolvePowerResource("Benzene")!;
+    const benzene = resolvePowerResource("Benzene", "2.9")!;
     const defaults = searchPowerSourcesForStencil(
       [{ role: "takes", kind: benzene.kind, id: benzene.id }],
       "all",
       "all",
       "",
+      "2.9",
     );
     expect(defaults.find((hit) => hit.source.id === "gas-turbine")?.settings).toBeUndefined();
   });
@@ -707,6 +735,7 @@ describe("stencil search (the recipe book's view of the generators)", () => {
       "all",
       "all",
       "",
+      "2.9",
     );
     expect(hits.length).toBeGreaterThan(20);
     expect(hits.some((hit) => hit.source.id === "large-combustion-engine")).toBe(true);
@@ -716,6 +745,7 @@ describe("stencil search (the recipe book's view of the generators)", () => {
       "all",
       "all",
       "combustion",
+      "2.9",
     );
     expect(narrowed.every((hit) => hit.source.name.toLowerCase().includes("combustion"))).toBe(
       true,
@@ -724,7 +754,7 @@ describe("stencil search (the recipe book's view of the generators)", () => {
   });
 
   it("intersects both sides: takes steam AND makes power is the steam turbines", () => {
-    const steam = resolvePowerResource("Steam")!;
+    const steam = resolvePowerResource("Steam", "2.9")!;
     const hits = searchPowerSourcesForStencil(
       [
         { role: "takes", kind: steam.kind, id: steam.id },
@@ -733,6 +763,7 @@ describe("stencil search (the recipe book's view of the generators)", () => {
       "all",
       "all",
       "",
+      "2.9",
     );
     const ids = hits.map((hit) => hit.source.id);
     expect(ids).toContain("steam-turbine");
@@ -741,12 +772,13 @@ describe("stencil search (the recipe book's view of the generators)", () => {
   });
 
   it("expands an unpinned fuel knob into one card per fuel, NEI-style", () => {
-    const shSteam = resolvePowerResource("SH Steam")!;
+    const shSteam = resolvePowerResource("SH Steam", "2.9")!;
     const hits = searchPowerSourcesForStencil(
       [{ role: "makes", kind: shSteam.kind, id: shSteam.id }],
       "all",
       "all",
       "",
+      "2.9",
     );
     // The titanium boiler makes SH steam on ANY of its fuels: one card each.
     const titanium = hits.filter((hit) => hit.source.id === "large-titanium-boiler");
@@ -754,19 +786,20 @@ describe("stencil search (the recipe book's view of the generators)", () => {
     const fuels = new Set(titanium.map((hit) => hit.settings?.liquidFuel));
     expect(fuels.size).toBe(titanium.length);
     // A clause that PINS the fuel keeps exactly one card for it.
-    const benzene = resolvePowerResource("Benzene")!;
+    const benzene = resolvePowerResource("Benzene", "2.9")!;
     const pinned = searchPowerSourcesForStencil(
       [{ role: "takes", kind: benzene.kind, id: benzene.id }],
       "all",
       "all",
       "",
+      "2.9",
     );
     expect(pinned.filter((hit) => hit.source.id === "gas-turbine")).toHaveLength(1);
   });
 
   it("drops a source when two clauses need the same knob at different positions", () => {
-    const nitro = resolvePowerResource("Nitrobenzene")!;
-    const naphtha = resolvePowerResource("Naphtha")!;
+    const nitro = resolvePowerResource("Nitrobenzene", "2.9")!;
+    const naphtha = resolvePowerResource("Naphtha", "2.9")!;
     const hits = searchPowerSourcesForStencil(
       [
         { role: "takes", kind: nitro.kind, id: nitro.id },
@@ -775,6 +808,7 @@ describe("stencil search (the recipe book's view of the generators)", () => {
       "all",
       "all",
       "",
+      "2.9",
     );
     expect(hits.find((hit) => hit.source.id === "gas-turbine")).toBeUndefined();
     // ANY keeps it: one of the fuels is enough.
@@ -786,6 +820,7 @@ describe("stencil search (the recipe book's view of the generators)", () => {
       "any",
       "all",
       "",
+      "2.9",
     );
     expect(anyHits.find((hit) => hit.source.id === "gas-turbine")).toBeDefined();
   });
@@ -793,7 +828,7 @@ describe("stencil search (the recipe book's view of the generators)", () => {
 
 describe("power recipes", () => {
   it("synthesizes a wired benzene input on the gas turbine card", () => {
-    const recipe = buildPowerRecipe("gas-turbine", { fuel: "Benzene" }, "recipe-test");
+    const recipe = buildPowerRecipe("gas-turbine", { fuel: "Benzene" }, "recipe-test", "2.9");
     expect(recipe).toBeDefined();
     expect(recipe?.power?.euPerTick).toBe(32);
     expect(recipe?.durationTicks).toBe(20);
@@ -801,7 +836,7 @@ describe("power recipes", () => {
   });
 
   it("puts the EU output first on the rail, per second, byproduct-marked", () => {
-    const recipe = buildPowerRecipe("gas-turbine", { fuel: "Benzene" }, "recipe-eu");
+    const recipe = buildPowerRecipe("gas-turbine", { fuel: "Benzene" }, "recipe-eu", "2.9");
     expect(recipe?.outputs[0]).toMatchObject({
       kind: "power",
       id: "eu",
@@ -811,7 +846,7 @@ describe("power recipes", () => {
   });
 
   it("resynthesizes recipes from node settings on load", () => {
-    const recipe = buildPowerRecipe("gas-turbine", undefined, "recipe-1") as Recipe;
+    const recipe = buildPowerRecipe("gas-turbine", undefined, "recipe-1", "2.9") as Recipe;
     const node = {
       id: "node-1",
       recipeId: "recipe-1",
@@ -827,7 +862,7 @@ describe("power recipes", () => {
         "0": { kind: "fluid", id: "benzene", amount: 1, displayName: "Benzene" },
       },
     } as FactoryNode;
-    const project = resynthesizePowerRecipes({ nodes: [node], recipes: [recipe] });
+    const project = resynthesizePowerRecipes({ nodes: [node], recipes: [recipe] }, "2.9");
     expect(project.recipes[0].power?.euPerTick).toBe(512);
     expect(project.recipes[0].inputs[0].id).toBe("nitrobenzene");
     expect(project.nodes[0].recipeInputOverrides).toBeUndefined();
@@ -835,15 +870,85 @@ describe("power recipes", () => {
 
   it("keeps every source id unique and computable at defaults", () => {
     const seen = new Set<string>();
-    for (const source of POWER_SOURCES) {
+    for (const source of powerSourcesFor("2.9")) {
       expect(seen.has(source.id)).toBe(false);
       seen.add(source.id);
-      const model = source.compute(buildPowerSettingsReader(source, undefined));
+      const model = source.compute(buildPowerSettingsReader(source, undefined, "2.9"), "2.9");
       expect(Number.isFinite(model.euPerTick)).toBe(true);
       for (const flow of [...model.inputs, ...model.outputs]) {
         expect(Number.isFinite(flow.perSecond)).toBe(true);
         expect(flow.perSecond).toBeGreaterThanOrEqual(0);
       }
     }
+  });
+});
+
+describe("game version", () => {
+  it("power and synthesized recipes take the plan's version", () => {
+    const power = buildPowerRecipe("steam-turbine", { tier: "LV" }, "power", "2.9")!;
+    const crafting: Recipe = {
+      id: "crafting",
+      name: "Crafting",
+      machineType: "Shaped Crafting",
+      source: { recipeMap: "Shaped Crafting" },
+      minimumTier: "LV",
+      durationTicks: 1,
+      eut: 0,
+      inputs: [{ kind: "item", id: "plank", amount: 4 }],
+      outputs: [{ kind: "item", id: "table", amount: 1 }],
+    };
+    const steam: Recipe = {
+      id: "steam",
+      name: "Macerating",
+      machineType: "Macerator",
+      minimumTier: "ULV",
+      durationTicks: 200,
+      eut: 2,
+      inputs: [{ kind: "item", id: "ore", amount: 1 }],
+      outputs: [{ kind: "item", id: "dust", amount: 2 }],
+      machineHandlers: [
+        { id: "steam-macerator", label: "Steam Macerator", machineType: "Steam Macerator", minimumTier: "ULV", kind: "single" },
+      ],
+    };
+    const node = (id: string, recipeId: string, extra: Partial<FactoryNode> = {}): FactoryNode => ({
+      id,
+      recipeId,
+      machineCount: 1,
+      parallel: 1,
+      overclockTier: "LV",
+      enabled: true,
+      position: { x: 0, y: 0 },
+      ...extra,
+    });
+    const project: FactoryProject = {
+      schemaVersion: PROJECT_SCHEMA_VERSION,
+      id: "v281",
+      name: "2.8.1 plan",
+      gameVersion: "2.8.1",
+      recipes: [power, crafting, steam],
+      nodes: [
+        node("generator", "power", { machineConfigTiers: { tier: "LV" } }),
+        node("bench", "crafting"),
+        node("grinder", "steam", { machineHandlerId: "steam-macerator" }),
+      ],
+      edges: [],
+      fuelProfiles: [],
+    };
+
+    const source = getPowerSource("steam-turbine", "2.8.1")!;
+    const compute = vi.spyOn(source, "compute");
+    resynthesizePowerRecipes(project, "2.8.1");
+    expect(compute).toHaveBeenCalled();
+    expect(compute.mock.calls.every((call) => call[1] === "2.8.1")).toBe(true);
+    compute.mockRestore();
+
+    const lookups = vi.mocked(getMachineBehaviour);
+    lookups.mockClear();
+    calculateThroughput(project);
+    const versionsFor = (machine: string) =>
+      new Set(lookups.mock.calls.filter((call) => call[0] === machine).map((call) => call[1]));
+    expect(versionsFor("Auto Workbench")).toEqual(new Set(["2.8.1"]));
+    expect(versionsFor("Steam Macerator")).toEqual(new Set(["2.8.1"]));
+    expect(new Set(lookups.mock.calls.map((call) => call[1]))).toEqual(new Set(["2.8.1"]));
   });
 });

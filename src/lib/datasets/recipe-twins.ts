@@ -12,6 +12,7 @@ import { queryRecipeDatasetRecipes } from "./browser-loader";
 import { MAX_RECIPE_QUERY_CLAUSES, type RecipeQueryClause } from "./recipe-query";
 import { DEFAULT_DATASET_MANIFEST_URL } from "./remote";
 import type { DatasetVersion, RecipeSummary } from "./types";
+import { gameVersionOfDataset, type GameVersion } from "@/lib/model/game-version";
 
 /**
  * A card's TWINS: every other recipe that takes exactly this card's consumed
@@ -38,11 +39,12 @@ export const RECIPE_TWIN_LIMIT = 200;
 export function buildRecipeTwinClauses(
   recipe: Recipe,
   node: Pick<FactoryNode, "recipeInputOverrides">,
+  gameVersion: GameVersion,
 ): RecipeQueryClause[] | undefined {
   if (isPowerRecipe(recipe) || isCropFarmRecipe(recipe) || isCustomRateRecipe(recipe)) {
     return undefined;
   }
-  const effective = applyRecipeInputOverrides(recipe, node);
+  const effective = applyRecipeInputOverrides(recipe, node, gameVersion);
   const clauses: RecipeQueryClause[] = [];
   const seen = new Set<string>();
   const push = (role: RecipeQueryClause["role"], resource: ResourceAmount) => {
@@ -70,8 +72,12 @@ export function buildRecipeTwinClauses(
 }
 
 /** Whether a card can have twins at all, so the chevron knows to show. */
-export function recipeMayHaveTwins(recipe: Recipe, node: Pick<FactoryNode, "recipeInputOverrides">): boolean {
-  return buildRecipeTwinClauses(recipe, node) !== undefined;
+export function recipeMayHaveTwins(
+  recipe: Recipe,
+  node: Pick<FactoryNode, "recipeInputOverrides">,
+  gameVersion: GameVersion,
+): boolean {
+  return buildRecipeTwinClauses(recipe, node, gameVersion) !== undefined;
 }
 
 const slotKey = (slot: ResourceAmount) => `${slot.kind}:${slot.id}:${slot.amount}`;
@@ -121,7 +127,8 @@ export async function fetchRecipeTwins(
   node: Pick<FactoryNode, "recipeInputOverrides">,
   options: { signal?: AbortSignal } = {},
 ): Promise<RecipeTwin[]> {
-  const clauses = buildRecipeTwinClauses(recipe, node);
+  // The twins are that dataset's recipes, so the card is read by its version's rules.
+  const clauses = buildRecipeTwinClauses(recipe, node, gameVersionOfDataset(version));
   if (!clauses) return [];
   const result = await queryRecipeDatasetRecipes(
     DEFAULT_DATASET_MANIFEST_URL,

@@ -8,9 +8,17 @@
  * stored plans always carry the current math.
  */
 import type { FactoryNode, Recipe, RecipeInput, RecipeOutput } from "@/lib/model/types";
+import { DEFAULT_GAME_VERSION, gameVersionLabel, type GameVersion } from "@/lib/model/game-version";
 import { resolvePowerResource } from "./planner-data";
-import { getPowerSource } from "./registry";
-import { buildPowerSettingsReader, type PowerFlowLine, type PowerModel } from "./types";
+import { ABSENT_POWER_SOURCES, getPowerSource } from "./registry";
+import { powerReaderContext } from "./version-settings";
+import {
+  buildPowerSettingsReader,
+  type PowerFlowLine,
+  type PowerModel,
+  type PowerSettingsReader,
+  type PowerSourceDefinition,
+} from "./types";
 import { formatAmount } from "./sources/helpers";
 
 export const POWER_RECIPE_CATEGORY = "power-source";
@@ -45,8 +53,8 @@ export function isPowerRecipe(
   return Boolean(recipe?.power);
 }
 
-function flowToSlot(flow: PowerFlowLine): (RecipeInput & RecipeOutput) | undefined {
-  const resource = resolvePowerResource(flow.name);
+function flowToSlot(flow: PowerFlowLine, gameVersion: GameVersion): (RecipeInput & RecipeOutput) | undefined {
+  const resource = resolvePowerResource(flow.name, gameVersion);
   if (!resource || !(flow.perSecond > 0)) {
     return undefined;
   }
@@ -61,14 +69,14 @@ function flowToSlot(flow: PowerFlowLine): (RecipeInput & RecipeOutput) | undefin
 }
 
 /** The flows the resource map cannot wire, shown as stat lines instead. */
-function unresolvedFlowStats(model: PowerModel): Array<{ label: string; value: string }> {
+function unresolvedFlowStats(model: PowerModel, gameVersion: GameVersion): Array<{ label: string; value: string }> {
   const lines: Array<{ label: string; value: string }> = [];
   for (const [flows, direction] of [
     [model.inputs, "in"],
     [model.outputs, "out"],
   ] as const) {
     for (const flow of flows) {
-      if (!resolvePowerResource(flow.name) && flow.perSecond > 0) {
+      if (!resolvePowerResource(flow.name, gameVersion) && flow.perSecond > 0) {
         lines.push({
           label: flow.name,
           value: `${formatAmount(flow.perSecond)}${flow.unit === "L" ? " L" : ""}/s ${direction}`,
@@ -80,6 +88,43 @@ function unresolvedFlowStats(model: PowerModel): Array<{ label: string; value: s
 }
 
 /**
+ * What a converted plan's card stores that this version lacks, as card warnings: each select
+ * value with no option here names the option used instead, another version's choice this card
+ * lacks is named the same way, several stored fuels read as one name the one used, and settings
+ * this version does not have are named once by their label on `reference` (the same source on
+ * 2.9) or on `others` (the source in the other versions). A stored id
+ * `reference` does not declare either is no setting of any version and is not named.
+ */
+export function powerSettingWarnings(
+  source: PowerSourceDefinition,
+  reference: PowerSourceDefinition | undefined,
+  read: PowerSettingsReader,
+  gameVersion: GameVersion,
+  others: readonly PowerSourceDefinition[] = [],
+): string[] {
+  const warnings: string[] = [];
+  const optionLabel = (settingId: string, key: string) => {
+    const setting = source.settings.find((entry) => entry.id === settingId);
+    return (setting?.type === "select" && setting.options.find((option) => option.key === key)?.label) || key;
+  };
+  for (const { settingId, stored, used } of read.missing()) {
+    warnings.push(`Not in GTNH ${gameVersion}: ${stored}. Using ${optionLabel(settingId, used)}.`);
+  }
+  // Only 2.8.1's boilers merge two stored fuels into one select (2.9's liquid and solid).
+  for (const { settingId, used } of read.merged()) {
+    warnings.push(`GTNH ${gameVersion} boilers burn one fuel at a time. Using ${optionLabel(settingId, used)}.`);
+  }
+  const labels = read
+    .unknownSettings()
+    .map((id) => [reference, ...others].flatMap((def) => def?.settings ?? []).find((setting) => setting.id === id)?.label)
+    .filter((label): label is string => Boolean(label));
+  if (labels.length > 0) {
+    warnings.push(`Not in GTNH ${gameVersion}: ${labels.join(", ")}.`);
+  }
+  return warnings;
+}
+
+/**
  * The recipe for one power card at the given settings. Amount per craft is
  * amount per second: the recipe runs one craft a second, like custom rate
  * cards, so the solver needs no special case.
@@ -88,14 +133,26 @@ export function buildPowerRecipe(
   sourceId: string,
   settings: Record<string, string> | undefined,
   recipeId: string,
+  gameVersion: GameVersion,
 ): Recipe | undefined {
-  const source = getPowerSource(sourceId);
+  const source = getPowerSource(sourceId, gameVersion);
   if (!source) {
     return undefined;
   }
-  const model = source.compute(buildPowerSettingsReader(source, settings));
-  const inputs = model.inputs.map(flowToSlot).filter(Boolean) as RecipeInput[];
-  const outputs = model.outputs.map(flowToSlot).filter(Boolean) as RecipeOutput[];
+  const context = powerReaderContext(sourceId, gameVersion);
+  const read = buildPowerSettingsReader(source, settings, gameVersion, context);
+  const model = source.compute(read, gameVersion);
+  const settingWarnings = powerSettingWarnings(
+    source,
+    getPowerSource(sourceId, "2.9"),
+    read,
+    gameVersion,
+    context.others,
+  );
+  const warnings =
+    settingWarnings.length > 0 ? [...(model.warnings ?? []), ...settingWarnings] : model.warnings;
+  const inputs = model.inputs.map((flow) => flowToSlot(flow, gameVersion)).filter(Boolean) as RecipeInput[];
+  const outputs = model.outputs.map((flow) => flowToSlot(flow, gameVersion)).filter(Boolean) as RecipeOutput[];
   // The EU output port, FIRST on the rail (a generator's product is power).
   // Marked byproduct so primaryOutput never crowns it over a material
   // output, and per second (x20) like every flow.
@@ -123,8 +180,8 @@ export function buildPowerRecipe(
     power: {
       sourceId,
       euPerTick: model.euPerTick,
-      stats: [...model.stats, ...unresolvedFlowStats(model)],
-      warnings: model.warnings,
+      stats: [...model.stats, ...unresolvedFlowStats(model, gameVersion)],
+      warnings,
     },
   };
 }
@@ -133,12 +190,16 @@ export function buildPowerRecipe(
  * Every power card's recipe rebuilt from its node's settings. Runs in the
  * load funnel so saved plans always carry the current math and resource
  * mapping; a recipe whose source id is unknown (a newer plan on an older
- * build) is left exactly as saved.
+ * build) is left exactly as saved. A card whose source the version does not
+ * have (`ABSENT_POWER_SOURCES`) is marked `unconverted` with the reason and
+ * its recipe body dropped, as a conversion marks it: it never shows another
+ * version's numbers.
  */
 export function resynthesizePowerRecipes<
   Project extends { nodes: FactoryNode[]; recipes: Recipe[] },
->(project: Project): Project {
+>(project: Project, gameVersion: GameVersion): Project {
   let changed = false;
+  project = markAbsentPowerCards(project, gameVersion);
   // A power card OWNS its recipe. Saved plans can hold two nodes on one
   // power recipe (a clone that did not remint), where one card's settings
   // would rewrite the other's output. Every node past the first gets its
@@ -182,6 +243,7 @@ export function resynthesizePowerRecipes<
       recipe.power.sourceId,
       settingsByRecipeId.get(recipe.id),
       recipe.id,
+      gameVersion,
     );
     if (!rebuilt) {
       return recipe;
@@ -200,4 +262,37 @@ export function resynthesizePowerRecipes<
     return { ...node, recipeInputOverrides: undefined };
   });
   return changed ? { ...project, recipes, nodes } : project;
+}
+
+/**
+ * Cards on a power source `gameVersion` lacks, marked with the reason; the bodies go. Absent lists are relative to
+ * the default version, which has every source, so that is the version a marked card's recipe came from.
+ */
+function markAbsentPowerCards<Project extends { nodes: FactoryNode[]; recipes: Recipe[] }>(
+  project: Project,
+  gameVersion: GameVersion,
+): Project {
+  const absent = ABSENT_POWER_SOURCES[gameVersion];
+  if (!absent?.length) return project;
+  const absentRecipes = new Map<string, Recipe>();
+  for (const recipe of project.recipes) {
+    if (isPowerRecipe(recipe) && absent.includes(recipe.power.sourceId)) absentRecipes.set(recipe.id, recipe);
+  }
+  if (absentRecipes.size === 0) return project;
+  const reason = `Not in ${gameVersionLabel(gameVersion)}.`;
+  const nodes = project.nodes.map((node): FactoryNode => {
+    const recipe = absentRecipes.get(node.recipeId);
+    if (!recipe || node.unconverted) return node;
+    return {
+      ...node,
+      unconverted: {
+        fromGameVersion: DEFAULT_GAME_VERSION,
+        recipeId: recipe.id,
+        recipeName: recipe.name,
+        machineType: recipe.machineType,
+        reason,
+      },
+    };
+  });
+  return { ...project, nodes, recipes: project.recipes.filter((recipe) => !absentRecipes.has(recipe.id)) };
 }

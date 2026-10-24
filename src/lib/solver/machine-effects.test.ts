@@ -56,20 +56,20 @@ describe("voltage-scaled parallels", () => {
 
   it("scales linearly with the run tier", () => {
     const recipe = recipeWithControl({ parallelPerVoltageTier: 2 });
-    expect(getMachineParallelMultiplier(recipe, { overclockTier: "LV" })).toBe(2);
-    expect(getMachineParallelMultiplier(recipe, { overclockTier: "EV" })).toBe(8);
+    expect(getMachineParallelMultiplier(recipe, { overclockTier: "LV" }, "2.9")).toBe(2);
+    expect(getMachineParallelMultiplier(recipe, { overclockTier: "EV" }, "2.9")).toBe(8);
   });
 
   it("supports affine base with floor (Zhuhai and Density^2 forms)", () => {
     const zhuhai = recipeWithControl({ parallelPerVoltageTier: 2, parallelVoltageBase: 2 });
-    expect(getMachineParallelMultiplier(zhuhai, { overclockTier: "LV" })).toBe(4);
-    expect(getMachineParallelMultiplier(zhuhai, { overclockTier: "UV" })).toBe(18);
+    expect(getMachineParallelMultiplier(zhuhai, { overclockTier: "LV" }, "2.9")).toBe(4);
+    expect(getMachineParallelMultiplier(zhuhai, { overclockTier: "UV" }, "2.9")).toBe(18);
 
     const density = recipeWithControl({ parallelPerVoltageTier: 0.5, parallelVoltageBase: 1 });
-    expect(getMachineParallelMultiplier(density, { overclockTier: "LV" })).toBe(1);
-    expect(getMachineParallelMultiplier(density, { overclockTier: "MV" })).toBe(2);
-    expect(getMachineParallelMultiplier(density, { overclockTier: "HV" })).toBe(2);
-    expect(getMachineParallelMultiplier(density, { overclockTier: "EV" })).toBe(3);
+    expect(getMachineParallelMultiplier(density, { overclockTier: "LV" }, "2.9")).toBe(1);
+    expect(getMachineParallelMultiplier(density, { overclockTier: "MV" }, "2.9")).toBe(2);
+    expect(getMachineParallelMultiplier(density, { overclockTier: "HV" }, "2.9")).toBe(2);
+    expect(getMachineParallelMultiplier(density, { overclockTier: "EV" }, "2.9")).toBe(3);
   });
 });
 
@@ -121,9 +121,9 @@ describe("CropsNH analytic crop math", () => {
     // ceil(1400 / 112) = 13 cycles of 256 ticks -> duration 1 at defaults.
     // Output is the default LV Crop Manager's 1 + 0.05 harvest rounds - the
     // by-hand rung is gone, so a bare card is an LV-managed one.
-    expect(getMachineDurationMultiplier(recipe, { machineConfigTiers: {} })).toBe(1);
+    expect(getMachineDurationMultiplier(recipe, { machineConfigTiers: {} }, "2.9")).toBe(1);
     expect(
-      getMachineOutputMultiplier(recipe, { machineConfigTiers: {} }, recipe.outputs[0]!, "LV"),
+      getMachineOutputMultiplier(recipe, { machineConfigTiers: {} }, recipe.outputs[0]!, "LV", "2.9"),
     ).toBeCloseTo(1.05, 10);
   });
 
@@ -131,7 +131,7 @@ describe("CropsNH analytic crop math", () => {
     const recipe = argentia();
     const node = { machineConfigTiers: { cropGrowthStat: "1" } };
     // Growth 1: rate = trunc(7 * 305 / 100) = 21; ceil(1400 / 21) = 67 cycles.
-    expect(getMachineDurationMultiplier(recipe, node)).toBeCloseTo(67 / 13, 10);
+    expect(getMachineDurationMultiplier(recipe, node, "2.9")).toBeCloseTo(67 / 13, 10);
   });
 
   it("scales yield by 1.03^gain drop rounds plus the bonus roll", () => {
@@ -141,7 +141,7 @@ describe("CropsNH analytic crop math", () => {
     // own gain curve.
     const expected = ((1.03 ** (1 - 31) * (1 + 0.02)) / (1 + 0.32)) * 1.05;
     expect(
-      getMachineOutputMultiplier(recipe, node, recipe.outputs[0]!, "LV"),
+      getMachineOutputMultiplier(recipe, node, recipe.outputs[0]!, "LV", "2.9"),
     ).toBeCloseTo(expected, 10);
   });
 
@@ -158,9 +158,9 @@ describe("CropsNH analytic crop math", () => {
     // score 5 -> supply 25 vs demand 70: penalty 180% kills growth entirely.
     // (Empty water and fertilizer are worth +0, not +1: floor((0 + 9) / 10) = 0.)
     expect(
-      getMachineOutputMultiplier(recipe, node, recipe.outputs[0]!, "LV"),
+      getMachineOutputMultiplier(recipe, node, recipe.outputs[0]!, "LV", "2.9"),
     ).toBe(0);
-    expect(getMachineDurationMultiplier(recipe, node)).toBe(1);
+    expect(getMachineDurationMultiplier(recipe, node, "2.9")).toBe(1);
   });
 });
 
@@ -174,12 +174,12 @@ describe("passive production machine effects", () => {
       machineConfigTiers: { cropStats: "23-31-0" },
     };
 
-    expect(getMachineDurationMultiplier(recipe, lowStatsNode)).toBeCloseTo(3.102);
-    expect(getMachineOutputMultiplier(recipe, lowStatsNode, recipe.outputs[0]!, "LV")).toBeCloseTo(
+    expect(getMachineDurationMultiplier(recipe, lowStatsNode, "2.9")).toBeCloseTo(3.102);
+    expect(getMachineOutputMultiplier(recipe, lowStatsNode, recipe.outputs[0]!, "LV", "2.9")).toBeCloseTo(
       0.866,
     );
-    expect(getMachineDurationMultiplier(recipe, gainNode)).toBe(1);
-    expect(getMachineOutputMultiplier(recipe, gainNode, recipe.outputs[0]!, "LV")).toBeCloseTo(
+    expect(getMachineDurationMultiplier(recipe, gainNode, "2.9")).toBe(1);
+    expect(getMachineOutputMultiplier(recipe, gainNode, recipe.outputs[0]!, "LV", "2.9")).toBeCloseTo(
       2.741,
     );
   });
@@ -197,9 +197,9 @@ describe("passive production machine effects", () => {
       },
     };
 
-    expect(getMachineOutputMultiplier(recipe, emptyNode, recipe.outputs[0]!, "LV")).toBe(1);
+    expect(getMachineOutputMultiplier(recipe, emptyNode, recipe.outputs[0]!, "LV", "2.9")).toBe(1);
     expect(
-      getMachineOutputMultiplier(recipe, provenFramesNode, recipe.outputs[0]!, "LV"),
+      getMachineOutputMultiplier(recipe, provenFramesNode, recipe.outputs[0]!, "LV", "2.9"),
     ).toBeCloseTo(Math.pow(31, 0.52));
   });
 
@@ -213,12 +213,12 @@ describe("passive production machine effects", () => {
     };
 
     expect(
-      getMachineOutputMultiplier(recipe, blindingNode, recipe.outputs[0]!, "LV"),
+      getMachineOutputMultiplier(recipe, blindingNode, recipe.outputs[0]!, "LV", "2.9"),
     ).toBeCloseTo(Math.pow(2, 0.37), 5);
     expect(
-      getMachineOutputMultiplier(recipe, slowestNode, recipe.outputs[0]!, "LV"),
+      getMachineOutputMultiplier(recipe, slowestNode, recipe.outputs[0]!, "LV", "2.9"),
     ).toBeCloseTo(Math.pow(0.3, 0.37), 5);
-    expect(getMachineDurationMultiplier(recipe, blindingNode)).toBe(1);
+    expect(getMachineDurationMultiplier(recipe, blindingNode, "2.9")).toBe(1);
   });
 
   it("stacks the speed gene with housing production terms", () => {
@@ -227,9 +227,9 @@ describe("passive production machine effects", () => {
       machineConfigTiers: { beeSpeedGene: "blinding" },
       machineHandlerId: "alveary",
     };
-    const alvearyRecipe = applyMachineHandlerToRecipe(recipe, node);
+    const alvearyRecipe = applyMachineHandlerToRecipe(recipe, node, "2.9");
 
-    expect(getMachineOutputMultiplier(alvearyRecipe, node, recipe.outputs[0]!, "LV")).toBeCloseTo(
+    expect(getMachineOutputMultiplier(alvearyRecipe, node, recipe.outputs[0]!, "LV", "2.9")).toBeCloseTo(
       Math.pow(2, 0.37) * Math.pow(10, 0.52),
       5,
     );
@@ -262,13 +262,13 @@ describe("passive production machine effects", () => {
       machineConfigTiers: { beeEnvironment: "wrong" },
     };
 
-    expect(getMachineOutputMultiplier(recipe, toleratedNode, recipe.outputs[0]!, "LV")).toBeCloseTo(
+    expect(getMachineOutputMultiplier(recipe, toleratedNode, recipe.outputs[0]!, "LV", "2.9")).toBeCloseTo(
       // F(30%) + F(15%) over the 30% base: Forestry rolls a product twice, the second species at half chance.
       0.0841469 / 0.3,
       5,
     );
-    expect(getMachineOutputMultiplier(recipe, toleratedNode, recipe.outputs[1]!, "LV")).toBe(0);
-    expect(getMachineOutputMultiplier(recipe, wrongNode, recipe.outputs[0]!, "LV")).toBe(0);
+    expect(getMachineOutputMultiplier(recipe, toleratedNode, recipe.outputs[1]!, "LV", "2.9")).toBe(0);
+    expect(getMachineOutputMultiplier(recipe, wrongNode, recipe.outputs[0]!, "LV", "2.9")).toBe(0);
   });
 
   it("applies bee machine handler production terms", () => {
@@ -277,9 +277,9 @@ describe("passive production machine effects", () => {
       machineConfigTiers: {},
       machineHandlerId: "alveary",
     };
-    const alvearyRecipe = applyMachineHandlerToRecipe(recipe, node);
+    const alvearyRecipe = applyMachineHandlerToRecipe(recipe, node, "2.9");
 
-    expect(getMachineOutputMultiplier(alvearyRecipe, node, recipe.outputs[0]!, "LV")).toBeCloseTo(
+    expect(getMachineOutputMultiplier(alvearyRecipe, node, recipe.outputs[0]!, "LV", "2.9")).toBeCloseTo(
       Math.pow(10, 0.52),
     );
   });
@@ -294,8 +294,8 @@ describe("passive production machine effects", () => {
       machineHandlerId: "industrial-apiary",
       overclockTier: "HV",
     };
-    const industrialRecipe = applyMachineHandlerToRecipe(recipe, node);
-    const stats = getOverclockedRecipeStats(industrialRecipe, node);
+    const industrialRecipe = applyMachineHandlerToRecipe(recipe, node, "2.9");
+    const stats = getOverclockedRecipeStats(industrialRecipe, node, "2.9");
 
     expect(industrialRecipe.machineConfigControls?.map((control) => control.id)).toEqual([
       "beeSpeedGene",
@@ -303,15 +303,15 @@ describe("passive production machine effects", () => {
       "beeIndustrialProduction",
       "beeEnvironment",
     ]);
-    expect(getMachineDurationMultiplier(industrialRecipe, node)).toBeCloseTo(1 / 16);
+    expect(getMachineDurationMultiplier(industrialRecipe, node, "2.9")).toBeCloseTo(1 / 16);
     expect(stats.tier).toBe("MV");
     expect(stats.overclockSteps).toBe(0);
     expect(stats.durationTicks).toBeCloseTo(550 / 16);
     // MTEIndustrialApiary: (int)(37 * 1.4^4 * 16) + 32 * 4^3.
     expect(stats.eut).toBeCloseTo(4322, 5);
-    expect(getMachineEutMultiplier(industrialRecipe, node)).toBeCloseTo(4322 / 37, 8);
+    expect(getMachineEutMultiplier(industrialRecipe, node, "2.9")).toBeCloseTo(4322 / 37, 8);
     expect(
-      getMachineOutputMultiplier(industrialRecipe, node, recipe.outputs[0]!, "MV"),
+      getMachineOutputMultiplier(industrialRecipe, node, recipe.outputs[0]!, "MV", "2.9"),
     ).toBeCloseTo(Math.pow((4 * 1.2 ** 4 + 8) / 0.1, 0.52));
   });
 
@@ -321,16 +321,16 @@ describe("passive production machine effects", () => {
       machineConfigTiers: { beeIndustrialSpeed: "speed-8-upgraded", beeIndustrialProduction: "8" },
       machineHandlerId: "industrial-apiary",
     };
-    const industrialRecipe = applyMachineHandlerToRecipe(recipe, node);
+    const industrialRecipe = applyMachineHandlerToRecipe(recipe, node, "2.9");
 
-    expect(getMachineDurationMultiplier(industrialRecipe, node)).toBeCloseTo(1 / 256);
+    expect(getMachineDurationMultiplier(industrialRecipe, node, "2.9")).toBeCloseTo(1 / 256);
     // The production upgrades keep their energy: (int)(37 * 1.4^8 * 14.75 * 256) + 32 * 4^7.
-    expect(getMachineEutMultiplier(industrialRecipe, node)).toBeCloseTo(
+    expect(getMachineEutMultiplier(industrialRecipe, node, "2.9")).toBeCloseTo(
       (Math.trunc(37 * 1.4 ** 8 * 14.75 * 256) + 524288) / 37,
       8,
     );
     expect(
-      getMachineOutputMultiplier(industrialRecipe, node, recipe.outputs[0]!, "MV"),
+      getMachineOutputMultiplier(industrialRecipe, node, recipe.outputs[0]!, "MV", "2.9"),
     ).toBeCloseTo(Math.pow((17.19926784 + 8) / 0.1, 0.52));
   });
 
@@ -344,13 +344,13 @@ describe("passive production machine effects", () => {
       machineHandlerId: "mega-apiary",
       overclockTier: "ZPM",
     };
-    const megaRecipe = applyMachineHandlerToRecipe(recipe, node);
-    const stats = getOverclockedRecipeStats(megaRecipe, node);
+    const megaRecipe = applyMachineHandlerToRecipe(recipe, node, "2.9");
+    const stats = getOverclockedRecipeStats(megaRecipe, node, "2.9");
 
     expect(megaRecipe.durationTicks).toBe(100);
     expect(stats.durationTicks).toBe(100);
     expect(stats.eut).toBe(8110 * 4);
-    expect(getMachineOutputMultiplier(megaRecipe, node, recipe.outputs[0]!, "ZPM")).toBeCloseTo(
+    expect(getMachineOutputMultiplier(megaRecipe, node, recipe.outputs[0]!, "ZPM", "2.9")).toBeCloseTo(
       (6400 / 550) * 4 * 3 * Math.pow((17.19926784 + 7) / 0.1, 0.52),
     );
   });
@@ -441,8 +441,8 @@ describe("CropsNH harvesters", () => {
     const recipe = oilBerry();
     const output = recipe.outputs[0]!;
     const full = { machineConfigTiers: {}, ...node };
-    const seconds = (recipe.durationTicks * getMachineDurationMultiplier(recipe, full)) / 20;
-    const amount = output.amount * getMachineOutputMultiplier(recipe, full, output, "LV");
+    const seconds = (recipe.durationTicks * getMachineDurationMultiplier(recipe, full, "2.9")) / 20;
+    const amount = output.amount * getMachineOutputMultiplier(recipe, full, output, "LV", "2.9");
     return (amount / seconds) * 5;
   };
 
@@ -473,7 +473,7 @@ describe("CropsNH harvesters", () => {
     // LV: 1 + 0.05 * 1 harvest rounds, and its full three-layer reach - for a
     // stored legacy "none" exactly as for an explicit LV pick.
     for (const key of ["none", "1"]) {
-      expect(getMachineOutputMultiplier(recipe, at(key), output, "LV")).toBeCloseTo(1.05, 10);
+      expect(getMachineOutputMultiplier(recipe, at(key), output, "LV", "2.9")).toBeCloseTo(1.05, 10);
       expect(
         cropsNhCropsPerMachine(cropsNhHarvesterFromTiers({ cropManagerTier: key }, "crop-manager")),
       ).toBe(362);
@@ -483,7 +483,7 @@ describe("CropsNH harvesters", () => {
   it("hides water, fertilizer and sky on an Industrial Farm and shows them elsewhere", () => {
     const recipe = oilBerry();
     const controlIds = (handlerId: string) =>
-      applyMachineHandlerToRecipe(recipe, { machineHandlerId: handlerId }).machineConfigControls?.map(
+      applyMachineHandlerToRecipe(recipe, { machineHandlerId: handlerId }, "2.9").machineConfigControls?.map(
         (control) => control.id,
       ) ?? [];
 
@@ -498,7 +498,7 @@ describe("CropsNH harvesters", () => {
     // A seed bed always exists, so it never offers a "none" rung.
     const seedBed = applyMachineHandlerToRecipe(recipe, {
       machineHandlerId: "crop-industrial-farm",
-    }).machineConfigControls!.find((control) => control.id === "cropSeedBedTier")!;
+    }, "2.9").machineConfigControls!.find((control) => control.id === "cropSeedBedTier")!;
     expect(seedBed.tiers.map((tier) => tier.key)).not.toContain("none");
     // A card says how many sticks it has and who picks them. How the field is
     // stacked is the machine's business, never a question put to the player.
@@ -622,9 +622,9 @@ describe("CropsNH harvesters", () => {
       machineHandlerId: "crop-industrial-farm",
     };
     // speed = (1 + 2*1.0) * (1 + 0.5) = 4.5, so duration is 1/4.5 of a stick's.
-    expect(getMachineDurationMultiplier(recipe, node)).toBeCloseTo(1 / 4.5, 10);
+    expect(getMachineDurationMultiplier(recipe, node, "2.9")).toBeCloseTo(1 / 4.5, 10);
     // rounds = (1 + 0.2*5 + 0.5) * (1 + 0.2*1) = 2.5 * 1.2 = 3.0
-    expect(getMachineOutputMultiplier(recipe, node, output, "LV")).toBeCloseTo(3, 10);
+    expect(getMachineOutputMultiplier(recipe, node, output, "LV", "2.9")).toBeCloseTo(3, 10);
   });
 
   it("never spends more upgrade slots than the seed bed has", () => {
@@ -727,7 +727,7 @@ describe("CropsNH harvesters", () => {
     });
     const seedBed = applyMachineHandlerToRecipe(recipe, {
       machineHandlerId: "crop-industrial-farm",
-    }).machineConfigControls!.find((control) => control.id === "cropSeedBedTier")!;
+    }, "2.9").machineConfigControls!.find((control) => control.id === "cropSeedBedTier")!;
     expect(seedBed.tiers[0]!.key).toBe("5");
     expect(seedBed.defaultKey).toBe("5");
   });
@@ -752,6 +752,7 @@ describe("CropsNH harvesters", () => {
         { machineHandlerId: "crop-manager", machineConfigTiers: { cropManagerTier: "3" } },
         output,
         "LV",
+        "2.9",
       ),
     ).toBe(0);
     expect(
@@ -763,6 +764,7 @@ describe("CropsNH harvesters", () => {
         },
         output,
         "LV",
+        "2.9",
       ),
     ).toBeGreaterThan(0);
   });
@@ -833,8 +835,8 @@ describe("CropsNH harvesters", () => {
     const bare = { machineConfigTiers: {} } as FactoryNode;
     const recipe = oilBerry();
     // A manager never speeds the crop up; it only rolls more harvests.
-    expect(getMachineDurationMultiplier(recipe, bare)).toBe(1);
-    expect(getMachineOutputMultiplier(recipe, bare, recipe.outputs[0]!, "LV")).toBeCloseTo(
+    expect(getMachineDurationMultiplier(recipe, bare, "2.9")).toBe(1);
+    expect(getMachineOutputMultiplier(recipe, bare, recipe.outputs[0]!, "LV", "2.9")).toBeCloseTo(
       1.05,
       10,
     );

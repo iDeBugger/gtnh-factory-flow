@@ -5,7 +5,7 @@ import { useFactoryStore } from "@/store/factory-store";
 import { useDesignStore } from "@/store/design-store";
 import { writeWorkspaceView } from "@/lib/workspace-view";
 import { OPEN_FEEDBACK_EVENT } from "./chrome-events";
-import { ModBar } from "./ModBar";
+import { ModBar, plansTip } from "./ModBar";
 import { NEW_PLAN_VERSION_STORAGE_KEY } from "@/lib/datasets/new-plan-version";
 import type { DatasetManifest } from "@/lib/datasets/types";
 import { useCommunityAuthStore } from "@/store/community-auth-store";
@@ -305,7 +305,15 @@ describe("the top bar with the mod and the community switched off (unset)", () =
   it("the Plans tip names no Community", () => {
     renderBar();
     const tip = JSON.parse(key("plans").getAttribute("data-tip")!).title as string;
-    expect(tip).toBe("Plans: your plans and the ones shared with you");
+    // This test build has no live plans either, so it names only the player's own.
+    expect(tip).toBe("Plans: your plans");
+  });
+
+  it("the Plans tip names only the shelves the build has", () => {
+    expect(plansTip(true, true)).toBe("Plans: your plans, the ones shared with you, and Community");
+    expect(plansTip(true, false)).toBe("Plans: your plans and the ones shared with you");
+    expect(plansTip(false, true)).toBe("Plans: your plans and Community");
+    expect(plansTip(false, false)).toBe("Plans: your plans");
   });
 });
 

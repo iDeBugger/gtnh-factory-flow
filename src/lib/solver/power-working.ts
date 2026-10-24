@@ -15,6 +15,7 @@ import {
   type PowerWin,
   type PowerWinNode,
 } from "./power-wins";
+import type { GameVersion } from "@/lib/model/game-version";
 
 /**
  * One rung of the ladder: what the recipe is on its own, and what it is with
@@ -86,11 +87,12 @@ export function describePowerWorking(
   recipe: Recipe,
   node: PowerWinNode,
   budgetEuT: number,
+  gameVersion: GameVersion,
 ): PowerWorking {
   const budgeted = powerNodeAtBudget(node, budgetEuT);
-  const report = getNodePowerReport(recipe, budgeted);
-  const stats = getOverclockedRecipeStats(recipe, budgeted);
-  const effective = recipe.machineType ? applyMachineHandlerToRecipe(recipe, budgeted) : recipe;
+  const report = getNodePowerReport(recipe, budgeted, gameVersion);
+  const stats = getOverclockedRecipeStats(recipe, budgeted, gameVersion);
+  const effective = recipe.machineType ? applyMachineHandlerToRecipe(recipe, budgeted, gameVersion) : recipe;
   const tier = report.tier;
   const voltage = getVoltageTierMaxEuT(tier);
   const amps = budgetEuT / voltage;
@@ -98,12 +100,13 @@ export function describePowerWorking(
   const baseEuT = Math.abs(effective.eut);
   const baseTicks = effective.durationTicks;
   const discount =
-    getMachineEutMultiplier(effective, budgeted) *
+    getMachineEutMultiplier(effective, budgeted, gameVersion) *
     getHeatDiscountMultiplier(
       effective,
       budgeted,
       report.tier,
-      getEffectiveVoltageOrdinal(effective, budgeted, report.tier),
+      gameVersion,
+      getEffectiveVoltageOrdinal(effective, budgeted, report.tier, gameVersion),
     );
 
   const perfect = stats.perfectOverclockSteps;
@@ -177,7 +180,7 @@ export function describePowerWorking(
       ? `Two of these at ${compact(budgetEuT / 4)} EU/t each: same output, half the power.`
       : undefined;
 
-  const wins = listPowerWinsCached(recipe, node);
+  const wins = listPowerWinsCached(recipe, node, gameVersion);
   const nextWin = nextPowerWin(wins, budgetEuT);
   const previousWin = previousPowerWin(wins, budgetEuT);
   const floor = previousWin?.euT ?? Math.min(budgetEuT, nextWin?.euT ?? budgetEuT);

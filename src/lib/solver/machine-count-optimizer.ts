@@ -18,6 +18,7 @@ import type {
 import { TICKS_PER_SECOND } from "@/lib/model/types";
 import { getOverclockedRecipeStats } from "./overclock";
 import { getMachineOutputMultiplier, getMachineParallelMultiplier } from "./machine-effects";
+import { type GameVersion, planGameVersion } from "@/lib/model/game-version";
 
 const EPSILON = 0.000001;
 const STORAGE_BUS_PREFIX = "storage-bus:";
@@ -1252,6 +1253,7 @@ function hashMachineCounts(nodes: FactoryNode[], machineCounts: Map<string, numb
 }
 
 function buildGraphContext(project: FactoryProject): GraphContext {
+  const gameVersion = planGameVersion(project);
   const recipesById = new Map(project.recipes.map((recipe) => [recipe.id, recipe]));
   const nodesById = new Map(project.nodes.map((node) => [node.id, node]));
   const storagesById = new Map((project.storages ?? []).map((storage) => [storage.id, storage]));
@@ -1272,7 +1274,7 @@ function buildGraphContext(project: FactoryProject): GraphContext {
 
   for (const node of project.nodes) {
     adjacency.set(node.id, []);
-    ratePlans.set(node.id, buildRatePlan(node, recipesById.get(node.recipeId)));
+    ratePlans.set(node.id, buildRatePlan(node, recipesById.get(node.recipeId), gameVersion));
   }
   for (const storageKey of new Set(storageResourceById.values())) {
     adjacency.set(storageBusId(storageKey), []);
@@ -1357,7 +1359,7 @@ function buildGraphContext(project: FactoryProject): GraphContext {
   };
 }
 
-function buildRatePlan(node: FactoryNode, recipe: Recipe | undefined): RatePlan {
+function buildRatePlan(node: FactoryNode, recipe: Recipe | undefined, gameVersion: GameVersion): RatePlan {
   if (!recipe) {
     return {
       node,
@@ -1381,10 +1383,10 @@ function buildRatePlan(node: FactoryNode, recipe: Recipe | undefined): RatePlan 
     };
   }
 
-  const nodeRecipe = applyRecipeInputOverrides(recipe, node);
-  const effectiveRecipe = applyMachineHandlerToRecipe(nodeRecipe, node);
-  const overclockedRecipe = getOverclockedRecipeStats(nodeRecipe, node);
-  const machineParallelMultiplier = getMachineParallelMultiplier(effectiveRecipe, node);
+  const nodeRecipe = applyRecipeInputOverrides(recipe, node, gameVersion);
+  const effectiveRecipe = applyMachineHandlerToRecipe(nodeRecipe, node, gameVersion);
+  const overclockedRecipe = getOverclockedRecipeStats(nodeRecipe, node, gameVersion);
+  const machineParallelMultiplier = getMachineParallelMultiplier(effectiveRecipe, node, gameVersion);
   const operationRatePerMachine =
     (node.parallel * machineParallelMultiplier * TICKS_PER_SECOND) /
     overclockedRecipe.durationTicks;
@@ -1403,7 +1405,7 @@ function buildRatePlan(node: FactoryNode, recipe: Recipe | undefined): RatePlan 
     const outputRate =
       output.amount *
       getChanceMultiplier(effectiveRecipe, output) *
-      getMachineOutputMultiplier(effectiveRecipe, node, output, overclockedRecipe.tier) *
+      getMachineOutputMultiplier(effectiveRecipe, node, output, overclockedRecipe.tier, gameVersion) *
       operationRatePerMachine;
     addRate(outputs, makeResourceKey(output.kind, output.id), outputRate);
   }

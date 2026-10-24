@@ -398,14 +398,15 @@ export function SpecialCard({ model, recipe, node }: SpecialCardProps) {
   const holder = view.kind === "custom-rate" || view.kind === "tank";
   // A shared machine's and a crop's settings are the machine's own controls (the plain card's gear sheet and chips).
   const machineSheet = context.sheet.kind === "machine";
-  const tipFacts: CardTipFacts = useCardTipFacts(recipe, node);
+  const { gameVersion } = context;
+  const tipFacts: CardTipFacts = useCardTipFacts(recipe, node, gameVersion);
   const controls = useMemo(
-    () => (machineSheet ? settingControls(recipe, node) : []),
-    [machineSheet, recipe, node],
+    () => (machineSheet ? settingControls(recipe, node, gameVersion) : []),
+    [machineSheet, recipe, node, gameVersion],
   );
   const heatNeed = useMemo(
-    () => (machineSheet ? recipeHeatNeed(recipe, node) : undefined),
-    [machineSheet, recipe, node],
+    () => (machineSheet ? recipeHeatNeed(recipe, node, gameVersion) : undefined),
+    [machineSheet, recipe, node, gameVersion],
   );
   const stepChip = (id: string, direction: -1 | 1) => {
     const control = controls.find((entry) => entry.id === id);

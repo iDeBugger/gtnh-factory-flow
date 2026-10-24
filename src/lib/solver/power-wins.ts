@@ -4,6 +4,7 @@ import type { FactoryNode, Recipe } from "@/lib/model/types";
 import { getNodePowerReport, type NodePowerReport } from "./power-report";
 import { applyMachineHandlerToRecipe } from "@/lib/model/recipe-rules";
 import { getMachineStructuralParallels } from "./machine-effects";
+import type { GameVersion } from "@/lib/model/game-version";
 
 /**
  * One budget worth stepping to: the smallest EU/t at which the build gains
@@ -34,8 +35,8 @@ export type PowerWinNode = Pick<
 /** The largest budget worth scanning: past MAX voltage there is no hatch. */
 const CEILING = getVoltageTierMaxEuT("MAX") * 16_777_216;
 
-function outcome(recipe: Recipe, node: PowerWinNode, euT: number): NodePowerReport {
-  return getNodePowerReport(recipe, powerNodeAtBudget(node, euT));
+function outcome(recipe: Recipe, node: PowerWinNode, euT: number, gameVersion: GameVersion): NodePowerReport {
+  return getNodePowerReport(recipe, powerNodeAtBudget(node, euT), gameVersion);
 }
 
 function same(a: NodePowerReport, b: NodePowerReport): boolean {
@@ -68,32 +69,32 @@ function describe(report: NodePowerReport): string {
  * EU/t it happens at. Cheap enough for a hover: the report is a handful of
  * arithmetic per sample.
  */
-export function listPowerWins(recipe: Recipe, node: PowerWinNode): PowerWin[] {
+export function listPowerWins(recipe: Recipe, node: PowerWinNode, gameVersion: GameVersion): PowerWin[] {
   if (isFusionRecipe(recipe)) return [];
   const floor = 1;
   const wins: PowerWin[] = [];
   const stepRatio = 2 ** 0.25;
   let previousEuT = floor;
-  let previous = outcome(recipe, node, previousEuT);
+  let previous = outcome(recipe, node, previousEuT, gameVersion);
   if (previous.state === "ok") {
     wins.push(toWin(previousEuT, previous));
   }
   for (let euT = floor * stepRatio; euT <= CEILING; euT *= stepRatio) {
-    const current = outcome(recipe, node, euT);
+    const current = outcome(recipe, node, euT, gameVersion);
     if (!same(previous, current)) {
       // The change lives somewhere in (previousEuT, euT]: bisect to it.
       let low = previousEuT;
       let high = euT;
       for (let i = 0; i < 60 && high - low > Math.max(1e-6, Number.EPSILON * high * 2); i += 1) {
         const mid = (low + high) / 2;
-        if (same(previous, outcome(recipe, node, mid))) {
+        if (same(previous, outcome(recipe, node, mid, gameVersion))) {
           low = mid;
         } else {
           high = mid;
         }
       }
-      const exact = snapToWholeEuT(high, recipe, node, previous);
-      const report = outcome(recipe, node, exact);
+      const exact = snapToWholeEuT(high, recipe, node, previous, gameVersion);
+      const report = outcome(recipe, node, exact, gameVersion);
       if (report.state === "ok") wins.push(toWin(exact, report));
     }
     previous = current;
@@ -108,11 +109,12 @@ function snapToWholeEuT(
   recipe: Recipe,
   node: PowerWinNode,
   before: NodePowerReport,
+  gameVersion: GameVersion,
 ): number {
   // The bisection stops a hair above the threshold; the whole number just
   // under it is the win when it already buys the change, else the next one.
   const whole = Math.floor(euT);
-  return same(before, outcome(recipe, node, whole)) ? whole + 1 : whole;
+  return same(before, outcome(recipe, node, whole, gameVersion)) ? whole + 1 : whole;
 }
 
 function toWin(euT: number, report: NodePowerReport): PowerWin {
@@ -136,8 +138,9 @@ function toWin(euT: number, report: NodePowerReport): PowerWin {
 const winsCache = new Map<string, PowerWin[]>();
 const WINS_CACHE_LIMIT = 400;
 
-export function listPowerWinsCached(recipe: Recipe, node: PowerWinNode): PowerWin[] {
+export function listPowerWinsCached(recipe: Recipe, node: PowerWinNode, gameVersion: GameVersion): PowerWin[] {
   const key = JSON.stringify([
+    gameVersion,
     recipe.id,
     recipe.machineType,
     recipe.durationTicks,
@@ -155,7 +158,7 @@ export function listPowerWinsCached(recipe: Recipe, node: PowerWinNode): PowerWi
   if (hit) {
     return hit;
   }
-  const wins = listPowerWins(recipe, node);
+  const wins = listPowerWins(recipe, node, gameVersion);
   if (winsCache.size >= WINS_CACHE_LIMIT) {
     const oldest = winsCache.keys().next().value;
     if (oldest !== undefined) {
@@ -172,15 +175,15 @@ export function nextPowerWin(wins: PowerWin[], euT: number): PowerWin | undefine
 }
 
 /** Target full parallel capacity before advancing to individual overclock gains. */
-export function fullParallelPowerWin(recipe: Recipe, node: FactoryNode, wins: PowerWin[]): PowerWin | undefined {
-  const effective = applyMachineHandlerToRecipe(recipe, node);
-  const current = getNodePowerReport(recipe, node);
-  const capacity = getMachineStructuralParallels(effective, node);
+export function fullParallelPowerWin(recipe: Recipe, node: FactoryNode, wins: PowerWin[], gameVersion: GameVersion): PowerWin | undefined {
+  const effective = applyMachineHandlerToRecipe(recipe, node, gameVersion);
+  const current = getNodePowerReport(recipe, node, gameVersion);
+  const capacity = getMachineStructuralParallels(effective, node, gameVersion);
   if (capacity <= 1 || !Number.isFinite(capacity) || (current.state === "ok" && current.parallels >= capacity)) return undefined;
   const isFull = (euT: number) => {
     const candidate = powerNodeAtBudget(node, euT);
-    const report = getNodePowerReport(recipe, candidate);
-    return report.state === "ok" && report.parallels >= getMachineStructuralParallels(effective, candidate);
+    const report = getNodePowerReport(recipe, candidate, gameVersion);
+    return report.state === "ok" && report.parallels >= getMachineStructuralParallels(effective, candidate, gameVersion);
   };
   const upper = wins.find(win => win.euT > current.poolEuT && isFull(win.euT));
   if (!upper) return undefined;
@@ -195,7 +198,7 @@ export function fullParallelPowerWin(recipe: Recipe, node: FactoryNode, wins: Po
   }
   const whole = Math.floor(high);
   const euT = isFull(whole) ? whole : whole + 1;
-  return toWin(euT, outcome(recipe, node, euT));
+  return toWin(euT, outcome(recipe, node, euT, gameVersion));
 }
 
 /** The last win strictly below this budget, if any. */

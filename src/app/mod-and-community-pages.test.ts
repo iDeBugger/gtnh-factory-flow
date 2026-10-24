@@ -39,6 +39,7 @@ import robots from "./robots";
 import { GET as llms } from "./llms.txt/route";
 import { generateMetadata } from "./page";
 import CommunityRedirect from "./community/page";
+import { siteMetadata } from "./site-metadata";
 
 const planSearch = { searchParams: Promise.resolve({ plan: "plan-1" }) };
 
@@ -69,6 +70,14 @@ describe("with the setting unset", () => {
     expect(getPublicPlanRow).not.toHaveBeenCalled();
   });
 
+  it("the site's descriptions say nothing of the community", () => {
+    const meta = siteMetadata();
+    for (const text of [meta.description, meta.openGraph?.description, meta.twitter?.description]) {
+      expect(text).toBeTruthy();
+      expect(String(text).toLowerCase()).not.toContain("community");
+    }
+  });
+
   it("/community does not exist", async () => {
     await expect(CommunityRedirect(planSearch)).rejects.toMatchObject({
       digest: expect.stringContaining("404"),
@@ -86,6 +95,13 @@ describe("with the setting on", () => {
     expect(text).toContain("## Popular community plans");
     expect(text).toContain("share plans with the community");
     expect(robots().rules).toMatchObject([{ allow: ["/", "/api/community/plans/*/card"] }]);
+  });
+
+  it("the site's descriptions name community plans", () => {
+    const meta = siteMetadata();
+    expect(meta.description).toContain("community-shared plans.");
+    expect(meta.openGraph?.description).toContain("share plans with the community.");
+    expect(meta.twitter?.description).toContain("share plans with the community.");
   });
 
   it("a ?plan= link unfurls as its plan, and /community redirects to it", async () => {

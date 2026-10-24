@@ -4,9 +4,9 @@
  * Antimatter loop (closed-form optimum search instead of the workbook's
  * 3,235-row sweep).
  */
-import { powerPlannerData } from "../planner-data";
+import type { PowerTables } from "../planner-data";
 import type { PowerModel, PowerSourceDefinition } from "../types";
-import { formatAmount, liters, stat } from "./helpers";
+import { formatAmount, liters, stat, type PowerSourceBuilder } from "./helpers";
 
 const NONE = "None";
 
@@ -27,7 +27,7 @@ const LNR_DEPLETED: Record<string, string | undefined> = {
   "Naq Fuel Mk-VI": "Naquadah Based Liquid Fuel MkVI (Depleted)",
 };
 
-const lnr: PowerSourceDefinition = {
+const lnr = (tables: PowerTables): PowerSourceDefinition => ({
   id: "large-naquadah-reactor",
   name: "Large Naquadah Reactor",
   group: "endgame",
@@ -39,7 +39,7 @@ const lnr: PowerSourceDefinition = {
       type: "select",
       id: "fuel",
       label: "Fuel",
-      options: powerPlannerData.lnrFuels.map((entry) => ({ key: entry.name, label: entry.name })),
+      options: tables.lnrFuels.map((entry) => ({ key: entry.name, label: entry.name })),
       defaultKey: "Naq Fuel Mk-I",
     },
     {
@@ -48,7 +48,7 @@ const lnr: PowerSourceDefinition = {
       label: "Coolant",
       options: [
         { key: NONE, label: "None" },
-        ...powerPlannerData.lnrCoolants
+        ...tables.lnrCoolants
           .filter((entry) => entry.name !== NONE)
           .map((entry) => ({ key: entry.name, label: `${entry.name} (x${entry.efficiency})` })),
       ],
@@ -60,7 +60,7 @@ const lnr: PowerSourceDefinition = {
       label: "Booster",
       options: [
         { key: NONE, label: "None" },
-        ...powerPlannerData.lnrBoosters
+        ...tables.lnrBoosters
           .filter((entry) => entry.name !== NONE)
           .map((entry) => ({ key: entry.name, label: `${entry.name} (x${entry.multiplier})` })),
       ],
@@ -69,10 +69,10 @@ const lnr: PowerSourceDefinition = {
   ],
   compute(read): PowerModel {
     const fuel =
-      powerPlannerData.lnrFuels.find((entry) => entry.name === read.select("fuel")) ??
-      powerPlannerData.lnrFuels[0];
-    const coolant = powerPlannerData.lnrCoolants.find((entry) => entry.name === read.select("coolant"));
-    const booster = powerPlannerData.lnrBoosters.find((entry) => entry.name === read.select("booster"));
+      tables.lnrFuels.find((entry) => entry.name === read.select("fuel")) ??
+      tables.lnrFuels[0];
+    const coolant = tables.lnrCoolants.find((entry) => entry.name === read.select("coolant"));
+    const booster = tables.lnrBoosters.find((entry) => entry.name === read.select("booster"));
     const coolantEfficiency = coolant?.efficiency ?? 1;
     const boostMultiplier = booster?.multiplier ?? 1;
     const euPerTick = fuel.euPerTick * coolantEfficiency * boostMultiplier;
@@ -103,9 +103,26 @@ const lnr: PowerSourceDefinition = {
       stats: [stat("Fuel", `${formatAmount(fuelPerSecond)} L/s`)],
     };
   },
-};
+});
 
-function buildFusion(compact: boolean): PowerSourceDefinition {
+/**
+ * The fusion card's choice of each recipe row. A plasma two recipes make (Helium Plasma from D + He-3 and from D + T)
+ * is offered once per recipe: the first row keeps the plain name as its key, so stored plans read as before, and a
+ * later one is keyed by its inputs. Both are labelled by their inputs.
+ */
+function fusionChoices(rows: PowerTables["fusionRecipes"]) {
+  const seen = new Set<string>();
+  const shared = new Set(rows.filter((row, index) => rows.findIndex((other) => other.name === row.name) !== index).map((row) => row.name));
+  return rows.map((row) => {
+    const byInputs = `${row.name} (${[row.input1, row.input2].filter(Boolean).join(" + ")})`;
+    const key = seen.has(row.name) ? byInputs : row.name;
+    seen.add(row.name);
+    return { row, key, label: shared.has(row.name) ? byInputs : row.name };
+  });
+}
+
+function buildFusion(tables: PowerTables, compact: boolean): PowerSourceDefinition {
+  const choices = fusionChoices(tables.fusionRecipes);
   const marks = compact ? ["MK-I", "MK-II", "MK-III", "MK-IV", "MK-V"] : ["Mk-I", "Mk-II", "Mk-III", "Mk-IV", "Mk-V"];
   return {
     id: compact ? "compact-fusion-reactor" : "fusion-reactor",
@@ -120,9 +137,9 @@ function buildFusion(compact: boolean): PowerSourceDefinition {
         type: "select",
         id: "recipe",
         label: "Plasma",
-        options: powerPlannerData.fusionRecipes
-          .filter((entry) => (entry.euPerLiter ?? 0) > 0)
-          .map((entry) => ({ key: entry.name, label: entry.name })),
+        options: choices
+          .filter(({ row }) => (row.euPerLiter ?? 0) > 0)
+          .map(({ key, label }) => ({ key, label })),
         defaultKey: "Helium Plasma",
       },
       {
@@ -134,9 +151,7 @@ function buildFusion(compact: boolean): PowerSourceDefinition {
       },
     ],
     compute(read): PowerModel {
-      const recipe =
-        powerPlannerData.fusionRecipes.find((entry) => entry.name === read.select("recipe")) ??
-        powerPlannerData.fusionRecipes[0];
+      const recipe = choices.find(({ key }) => key === read.select("recipe"))?.row ?? tables.fusionRecipes[0];
       const markIndex = Number(read.select("mark")) - 1;
       const output = (compact ? recipe.compactOutputLpsByMark : recipe.outputLpsByMark)[markIndex] ?? 0;
       const drain = (compact ? recipe.compactDrainEutByMark : recipe.drainEutByMark)[markIndex] ?? 0;
@@ -172,7 +187,7 @@ function buildFusion(compact: boolean): PowerSourceDefinition {
  * tiers, success chance shown as a stat. Almost always a net EU cost (the
  * EOH is a materials machine); the card puts that bill in the power summary.
  */
-const eoh: PowerSourceDefinition = {
+const eoh = (tables: PowerTables): PowerSourceDefinition => ({
   id: "eye-of-harmony",
   name: "Eye of Harmony",
   group: "endgame",
@@ -183,14 +198,14 @@ const eoh: PowerSourceDefinition = {
       type: "select",
       id: "star",
       label: "Target block",
-      options: powerPlannerData.eohStars.map((entry) => ({ key: entry.name, label: entry.name })),
-      defaultKey: powerPlannerData.eohStars[0]?.name ?? "",
+      options: tables.eohStars.map((entry) => ({ key: entry.name, label: entry.name })),
+      defaultKey: tables.eohStars[0]?.name ?? "",
     },
   ],
   compute(read): PowerModel {
     const star =
-      powerPlannerData.eohStars.find((entry) => entry.name === read.select("star")) ??
-      powerPlannerData.eohStars[0];
+      tables.eohStars.find((entry) => entry.name === read.select("star")) ??
+      tables.eohStars[0];
     // Base upgrade tiers: EU-output efficiency 0.6, no overclocks.
     const netPerCycle = star.euOutput * 0.6 - star.euInput;
     // EyeOfHarmonyRecipeStorage.timeCalculator returns seconds
@@ -215,7 +230,7 @@ const eoh: PowerSourceDefinition = {
       warnings: ["Simplified model: base upgrade tiers, success assumed."],
     };
   },
-};
+});
 
 /**
  * Antimatter: gain scales ~AM^0.55, costs ~AM^1.45, so there is one best
@@ -370,11 +385,13 @@ const dysonSwarm: PowerSourceDefinition = {
   },
 };
 
-export const endgameSources: PowerSourceDefinition[] = [
-  lnr,
-  buildFusion(false),
-  buildFusion(true),
-  eoh,
-  antimatter,
-  dysonSwarm,
-];
+export const buildEndgameSources: PowerSourceBuilder = (tables) => {
+  return [
+    lnr(tables),
+    buildFusion(tables, false),
+    buildFusion(tables, true),
+    eoh(tables),
+    antimatter,
+    dysonSwarm,
+  ];
+};

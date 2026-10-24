@@ -89,11 +89,17 @@ export function resolveVoltageTier(
   return defaultTier;
 }
 
-/** The lowest voltage that can run this recipe at all: its structural gate or its EU/t draw. */
+/**
+ * The lowest voltage that can run this recipe at all: its structural gate or
+ * the tier whose voltage times the recipe map's amperage covers its EU/t (the
+ * game's recipe lookup; `recipeMapAmperage` is set on a singleblock by
+ * `applyMachineHandlerToRecipe`, and absent means 1 A).
+ */
 export function getRecipeMinimumVoltageTier(
-  recipe: Pick<Recipe, "eut" | "minimumTier">,
+  recipe: Pick<Recipe, "eut" | "minimumTier"> & Partial<Pick<Recipe, "recipeMapAmperage">>,
 ): Exclude<MachineTier, "DEMO"> {
-  const powerTier = getRecipePowerTier(recipe);
+  const amps = recipe.recipeMapAmperage;
+  const powerTier = getVoltageTierForEuT(amps && amps > 1 ? recipe.eut / amps : recipe.eut);
   const declaredMinimum = resolveVoltageTier(recipe.minimumTier, powerTier);
 
   return getVoltageTierIndex(declaredMinimum) >= getVoltageTierIndex(powerTier)
@@ -109,7 +115,7 @@ export function getRecipeMinimumVoltageTier(
  * which honours an under-tiered hatch choice and lets power-report call it.
  */
 export function getRunVoltageTier(
-  recipe: Pick<Recipe, "eut" | "minimumTier"> & Partial<Pick<Recipe, "maximumTier" | "availableTiers">>,
+  recipe: Pick<Recipe, "eut" | "minimumTier"> & Partial<Pick<Recipe, "maximumTier" | "availableTiers" | "recipeMapAmperage">>,
   requestedTier: string | undefined,
 ): Exclude<MachineTier, "DEMO"> {
   const minimumTier = getRecipeMinimumVoltageTier(recipe);

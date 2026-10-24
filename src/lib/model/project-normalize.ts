@@ -13,6 +13,7 @@ import { sectionNodeView, splitSectionHandleId } from "./shared-machine";
 import { repairWiredInputOverrides } from "./edge-input-overrides";
 import { openAsPlan, type PlanConversionNotice } from "@/lib/solver/plan/to-plan";
 import { convertLooseCellWires } from "./cell-wires";
+import { planGameVersion } from "@/lib/model/game-version";
 
 /**
  * Everything a project must go through on its way in, whether it arrives from
@@ -99,6 +100,7 @@ function withCellWireNotice(
 }
 
 function normalizeLegacyProject(project: FactoryProject): FactoryProject {
+  const gameVersion = planGameVersion(project);
   project = normalizeProductionGroups(project);
   project = repairWiredInputOverrides(project);
   return normalizeProjectHatchInputs(
@@ -119,6 +121,7 @@ function normalizeLegacyProject(project: FactoryProject): FactoryProject {
                       normalizeProjectFuelProfiles(
                         normalizeFullFarms(renameOpvTier(adoptSetupRules(requirePlanForSolve(requireSolveForPool(project))))),
                       ),
+                      gameVersion,
                     ),
                   ),
                 ),

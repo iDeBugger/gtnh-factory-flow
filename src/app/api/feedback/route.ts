@@ -33,23 +33,56 @@ function refuse(status: number, error: string): NextResponse {
 }
 
 /**
+ * The body as text, or undefined once it passes `max` bytes. A declared length over the cap is refused unread,
+ * and a body with no length (chunked) stops being read at the cap rather than buffered whole.
+ */
+async function readCapped(request: Request, max: number): Promise<string | undefined> {
+  if (Number(request.headers.get("content-length") ?? 0) > max) {
+    return undefined;
+  }
+  const reader = request.body?.getReader();
+  if (!reader) {
+    return "";
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel();
+      return undefined;
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return new TextDecoder().decode(body);
+}
+
+/**
  * A report from the in-game Feedback box, opened as a GitHub issue on the planner's repo. Answers the issue's
  * number and page, which the game shows. `feedback-guard.ts` has what a report must get past first.
  */
 export async function POST(request: Request) {
-  const token = process.env.GITHUB_FEEDBACK_TOKEN;
-  if (!token || !isCommunityConfigured()) {
-    return NextResponse.json({ error: "Reports can't be sent yet." }, { status: 503 });
-  }
   // With the mod integration off the game's reports are answered as absent,
   // so the body is read first: they never count against the gate the web
-  // planner's reports share.
+  // planner's reports share, and absent comes before the server's own
+  // readiness, as on every other gated route. The read is capped, since it
+  // runs ahead of the gate.
   let early: string | undefined;
   if (!isModAndCommunityOn()) {
-    if (Number(request.headers.get("content-length") ?? 0) > FEEDBACK_MAX_BYTES) {
+    early = await readCapped(request, FEEDBACK_MAX_BYTES);
+    if (early === undefined) {
       return NextResponse.json({ error: "The report is too big. Send fewer plans." }, { status: 413 });
     }
-    early = await request.text();
     let peek: unknown;
     try {
       peek = JSON.parse(early);
@@ -60,6 +93,10 @@ export async function POST(request: Request) {
       return modAndCommunityOffResponse();
     }
   }
+  const token = process.env.GITHUB_FEEDBACK_TOKEN;
+  if (!token || !isCommunityConfigured()) {
+    return NextResponse.json({ error: "Reports can't be sent yet." }, { status: 503 });
+  }
   const gate = feedbackGate.admit();
   if (gate === "paused") {
     return NextResponse.json({ error: "Reports are paused for a while. Try again later." }, { status: 503 });
@@ -68,11 +105,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Lots of reports are coming in. Try again in a few minutes." }, { status: 429 });
   }
   try {
-    if (Number(request.headers.get("content-length") ?? 0) > FEEDBACK_MAX_BYTES) {
-      return refuse(413, "The report is too big. Send fewer plans.");
-    }
-    const raw = early ?? (await request.text());
-    if (raw.length > FEEDBACK_MAX_BYTES) {
+    const raw = early ?? (await readCapped(request, FEEDBACK_MAX_BYTES));
+    if (raw === undefined) {
       return refuse(413, "The report is too big. Send fewer plans.");
     }
     let json: unknown;

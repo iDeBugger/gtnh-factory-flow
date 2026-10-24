@@ -47,8 +47,8 @@ const node = (patch: Partial<FactoryNode> = {}): FactoryNode => ({
 describe("per-card hatch input", () => {
   it("distinguishes equal supplies by hatch voltage and applies zero tier skips", () => {
     const r = recipe("Precise Assembler", 524288);
-    const low = getNodePowerReport(r, node({ hatchVoltageTier: "ZPM", hatchAmps: 4096 }));
-    const high = getNodePowerReport(r, node({ hatchVoltageTier: "UHV", hatchAmps: 256 }));
+    const low = getNodePowerReport(r, node({ hatchVoltageTier: "ZPM", hatchAmps: 4096 }), "2.9");
+    const high = getNodePowerReport(r, node({ hatchVoltageTier: "UHV", hatchAmps: 256 }), "2.9");
     expect(low.poolEuT).toBe(high.poolEuT);
     expect(low.state).toBe("over-tier");
     expect(high.state).toBe("ok");
@@ -56,6 +56,7 @@ describe("per-card hatch input", () => {
       getNodePowerReport(
         recipe("Industrial Arc Furnace", 120),
         node({ hatchVoltageTier: "LV", hatchAmps: 100 }),
+        "2.9",
       ).state,
     ).toBe("over-tier");
   });
@@ -119,13 +120,13 @@ describe("per-card hatch input", () => {
         ],
       },
     ];
-    const one = getNodePowerReport(r, node({ hatchVoltageTier: "MV", hatchAmps: 1 }));
-    const many = getNodePowerReport(r, node({ hatchVoltageTier: "MV", hatchAmps: 100 }));
+    const one = getNodePowerReport(r, node({ hatchVoltageTier: "MV", hatchAmps: 1 }), "2.9");
+    const many = getNodePowerReport(r, node({ hatchVoltageTier: "MV", hatchAmps: 100 }), "2.9");
     expect(one.parallels).toBe(1);
     expect(many.parallels).toBe(4);
     expect(many.overclockSteps).toBe(0);
     expect(
-      getOverclockedRecipeStats(r, node({ hatchVoltageTier: "HV", hatchAmps: 100 })).overclockSteps,
+      getOverclockedRecipeStats(r, node({ hatchVoltageTier: "HV", hatchAmps: 100 }), "2.9").overclockSteps,
     ).toBe(1);
   });
   it("seeds full structural parallels without overclocks, including voltage-scaled machines", () => {
@@ -136,29 +137,29 @@ describe("per-card hatch input", () => {
       "Neutron Activator",
     ]) {
       const r = recipe(machine, 480);
-      const n = normalizeHatchInput(r, node({ recipeId: r.id }));
-      const report = getNodePowerReport(r, n);
+      const n = normalizeHatchInput(r, node({ recipeId: r.id }), "2.9");
+      const report = getNodePowerReport(r, n, "2.9");
       expect(n.hatchVoltageTier).toBe("HV");
       expect(report.state).toBe("ok");
       expect(report.parallels).toBe(
-        getMachineStructuralParallels(applyMachineHandlerToRecipe(r, n), n),
+        getMachineStructuralParallels(applyMachineHandlerToRecipe(r, n, "2.9"), n, "2.9"),
       );
       expect(report.overclockSteps).toBe(0);
-      expect(normalizeHatchInput(r, n)).toBe(n);
+      expect(normalizeHatchInput(r, n, "2.9")).toBe(n);
     }
   });
   it("seeds whole amps, so a cheap recipe starts on one hatch rather than 0.94A", () => {
     const r = recipe("Large Chemical Reactor", 30);
     r.minimumTier = "LV";
-    const n = normalizeHatchInput(r, node({ recipeId: r.id, overclockTier: "LV" }));
+    const n = normalizeHatchInput(r, node({ recipeId: r.id, overclockTier: "LV" }), "2.9");
     expect(n).toMatchObject({ hatchVoltageTier: "LV", hatchAmps: 1, powerEuT: 32 });
     // The community report: 0.94A carried to HV ran like an MV reactor.
-    const short = getNodePowerReport(r, { ...n, hatchVoltageTier: "HV", hatchAmps: 0.9375 });
+    const short = getNodePowerReport(r, { ...n, hatchVoltageTier: "HV", hatchAmps: 0.9375 }, "2.9");
     const lifted = getNodePowerReport(r, {
       ...n,
       hatchVoltageTier: "HV",
       hatchAmps: ampsForNewTier(0.9375),
-    });
+    }, "2.9");
     expect(short.overclockSteps).toBe(1);
     expect(lifted.overclockSteps).toBe(2);
     expect([0, 0.2, 1, 2.5, 12].map(ampsForNewTier)).toEqual([0, 1, 1, 2.5, 12]);
@@ -188,11 +189,12 @@ describe("per-card hatch input", () => {
     const r = hammer(1536);
     const single = node({ recipeId: r.id, machineHandlerId: "single", overclockTier: "EV" });
     expect(
-      normalizeHatchInput(r, { ...single, machineHandlerId: "multi", overclockTier: "LV" }),
+      normalizeHatchInput(r, { ...single, machineHandlerId: "multi", overclockTier: "LV" }, "2.9"),
     ).toMatchObject({ hatchVoltageTier: "EV", hatchAmps: 63 });
     const patch = carryMachineVoltage(
       { recipe: r, node: single },
       { recipe: r, machineHandlerId: "multi" },
+      "2.9",
     );
     expect(patch).toEqual({
       hatchVoltageTier: "EV",
@@ -205,34 +207,36 @@ describe("per-card hatch input", () => {
       machineHandlerId: "multi",
       overclockTier: "LV",
       ...patch,
-    });
+    }, "2.9");
     expect(multi).toMatchObject({ hatchVoltageTier: "EV", hatchAmps: 1 });
-    expect(getNodePowerReport(r, multi).state).toBe("ok");
+    expect(getNodePowerReport(r, multi, "2.9").state).toBe("ok");
     // A cheap recipe on an HV hammer: 1A HV, not 16.875A LV.
     const cheap = hammer(15);
     expect(
       carryMachineVoltage(
         { recipe: cheap, node: { ...single, overclockTier: "HV" } },
         { recipe: cheap, machineHandlerId: "multi" },
+        "2.9",
       ),
     ).toMatchObject({ hatchVoltageTier: "HV", hatchAmps: 1 });
     // Back to the singleblock: it takes the hatch tier.
     const hatched = { ...multi, hatchVoltageTier: "IV" as const, hatchAmps: 4 };
     expect(
-      carryMachineVoltage({ recipe: r, node: hatched }, { recipe: r, machineHandlerId: "single" }),
+      carryMachineVoltage({ recipe: r, node: hatched }, { recipe: r, machineHandlerId: "single" }, "2.9"),
     ).toEqual({ overclockTier: "IV" });
     // Multiblock to multiblock and singleblock to singleblock carry nothing.
     expect(
-      carryMachineVoltage({ recipe: r, node: hatched }, { recipe: r, machineHandlerId: "multi" }),
+      carryMachineVoltage({ recipe: r, node: hatched }, { recipe: r, machineHandlerId: "multi" }, "2.9"),
     ).toEqual({});
     expect(
-      carryMachineVoltage({ recipe: r, node: single }, { recipe: r, machineHandlerId: "single" }),
+      carryMachineVoltage({ recipe: r, node: single }, { recipe: r, machineHandlerId: "single" }, "2.9"),
     ).toEqual({});
     // A singleblock below the recipe's draw is floored at it.
     expect(
       carryMachineVoltage(
         { recipe: r, node: { ...single, overclockTier: "LV" } },
         { recipe: hammer(8000), machineHandlerId: "multi" },
+        "2.9",
       ),
     ).toMatchObject({ hatchVoltageTier: "IV", hatchAmps: 1 });
     // A refactor onto a multiblock twin carries the voltage the same way.
@@ -268,23 +272,24 @@ describe("per-card hatch input", () => {
       const r = recipe("Nano Forge", 120);
       r.minimumTier = "MV";
       const old = node({ recipeId: r.id, overclockTier: "HV", energyHatches });
-      const before = getNodePowerReport(r, old);
+      const before = getNodePowerReport(r, old, "2.9");
       const migrated = normalizeLoadedProject({
         ...createEmptyProject(),
         recipes: [r],
         nodes: [old],
       }).nodes[0];
+      // The Nano Forge reads getMaxInputEu (MTENanoForge.java:533-538), so a lone hatch is its full 2A.
       expect(migrated).toMatchObject({
         hatchVoltageTier: "HV",
-        hatchAmps: energyHatches === 1 ? 1 : 4,
+        hatchAmps: energyHatches === 1 ? 2 : 4,
       });
-      const after = getNodePowerReport(r, migrated);
+      const after = getNodePowerReport(r, migrated, "2.9");
       expect(before.overclockSteps).toBeGreaterThan(0);
       expect(after.overclockSteps).toBe(before.overclockSteps);
       expect(after.poolEuT).toBe(before.poolEuT);
       expect(after.parallels).toBe(before.parallels);
-      expect(getOverclockedRecipeStats(r, migrated).durationTicks).toBe(
-        getOverclockedRecipeStats(r, old).durationTicks,
+      expect(getOverclockedRecipeStats(r, migrated, "2.9").durationTicks).toBe(
+        getOverclockedRecipeStats(r, old, "2.9").durationTicks,
       );
     },
   );
@@ -292,9 +297,10 @@ describe("per-card hatch input", () => {
     const n = normalizeHatchInput(
       recipe(),
       node({ hatchVoltageTier: "IV", hatchAmps: 4, powerEuT: 1 }),
+      "2.9",
     );
     expect(n.powerEuT).toBe(32768);
-    expect(getNodePowerReport(recipe(), n).poolEuT).toBe(32768);
+    expect(getNodePowerReport(recipe(), n, "2.9").poolEuT).toBe(32768);
   });
   it("keeps card supplies independent through edits, undo, and reload", () => {
     const store = useFactoryStore;
@@ -317,9 +323,9 @@ describe("per-card hatch input", () => {
     const r = recipe("Nano Forge", 120);
     r.minimumTier = "MV";
     const a = node({ hatchVoltageTier: "MV", hatchAmps: 4 });
-    const low = listPowerWinsCached(r, a);
-    expect(listPowerWinsCached(r, { ...a, hatchAmps: 100 })).toBe(low);
-    const high = listPowerWinsCached(r, { ...a, hatchVoltageTier: "HV" });
+    const low = listPowerWinsCached(r, a, "2.9");
+    expect(listPowerWinsCached(r, { ...a, hatchAmps: 100 }, "2.9")).toBe(low);
+    const high = listPowerWinsCached(r, { ...a, hatchVoltageTier: "HV" }, "2.9");
     expect(high.some((w) => w.overclockSteps > 0)).toBe(true);
     expect(low.every((w) => w.overclockSteps === 0)).toBe(true);
   });
@@ -361,13 +367,13 @@ describe("raw EU/t and whole amp steps", () => {
   it("assumes legal voltage in raw mode while preserving the exact available power", () => {
     const r = recipe("Industrial Arc Furnace", 120);
     const lowTier = node({ hatchVoltageTier: "ULV", hatchAmps: 1000 / 8 });
-    expect(getNodePowerReport(r, lowTier).state).toBe("over-tier");
+    expect(getNodePowerReport(r, lowTier, "2.9").state).toBe("over-tier");
     const raw = { ...lowTier, powerInputMode: "eut" as const };
-    const report = getNodePowerReport(r, raw);
+    const report = getNodePowerReport(r, raw, "2.9");
     expect(report.state).toBe("ok");
     expect(report.poolEuT).toBe(1000);
-    expect(getNodePowerReport(r, { ...raw, hatchAmps: 0 }).state).toBe("under-powered");
-    const tiny = getNodePowerReport(r, { ...raw, hatchAmps: 1 / 8 });
+    expect(getNodePowerReport(r, { ...raw, hatchAmps: 0 }, "2.9").state).toBe("under-powered");
+    const tiny = getNodePowerReport(r, { ...raw, hatchAmps: 1 / 8 }, "2.9");
     expect(tiny.state).toBe("under-powered");
     expect(tiny.poolEuT).toBe(1);
     const explicit = {
@@ -376,12 +382,105 @@ describe("raw EU/t and whole amp steps", () => {
       hatchVoltageTier: report.tier,
       hatchAmps: report.amps,
     };
-    expect(getOverclockedRecipeStats(r, raw)).toEqual(getOverclockedRecipeStats(r, explicit));
+    expect(getOverclockedRecipeStats(r, raw, "2.9")).toEqual(getOverclockedRecipeStats(r, explicit, "2.9"));
   });
   it("keeps raw and explicit hatch power ladders separate", () => {
     const r = recipe("Industrial Arc Furnace", 120);
     const n = node({ hatchVoltageTier: "ULV", hatchAmps: 100 });
-    expect(listPowerWinsCached(r, n)).toHaveLength(0);
-    expect(listPowerWinsCached(r, { ...n, powerInputMode: "eut" })).not.toHaveLength(0);
+    expect(listPowerWinsCached(r, n, "2.9")).toHaveLength(0);
+    expect(listPowerWinsCached(r, { ...n, powerInputMode: "eut" }, "2.9")).not.toHaveLength(0);
+  });
+});
+
+/**
+ * setProcessingLogicPower clamps exactly one regular energy hatch (and no exotic one) to 1 A
+ * (GT5U@5.09.54.205 MTEMultiBlockBase.java:1150-1155; GT5U@5.09.51.476 MTEMultiBlockBase.java:1020-1025).
+ * A typed supply of up to 2 A is one hatch, so it works at 1 A; mega-style machines read
+ * getMaxInputEu() and keep the hatch's whole 2 A.
+ */
+describe("a typed supply on one regular hatch", () => {
+  for (const gameVersion of ["2.9", "2.8.1"] as const) {
+    it(`runs a Large Chemical Reactor on 1 A of a 2 A HV supply on ${gameVersion}`, () => {
+      const r = recipe();
+      const two = getNodePowerReport(
+        r,
+        node({ hatchVoltageTier: "HV", hatchAmps: 2 }),
+        gameVersion,
+      );
+      expect(two.amps).toBe(2);
+      expect(two.workingAmps).toBe(1);
+      expect(two.poolEuT).toBe(512);
+      // Two hatches work at 2 A each: a 4 A supply keeps its pool.
+      const four = getNodePowerReport(
+        r,
+        node({ hatchVoltageTier: "HV", hatchAmps: 4 }),
+        gameVersion,
+      );
+      expect(four.poolEuT).toBe(2048);
+      // A legacy EU/t budget reads the same way.
+      const budget = getNodePowerReport(r, node({ powerEuT: 1024 }), gameVersion);
+      expect(budget.poolEuT).toBe(512);
+    });
+  }
+
+  it("leaves a mega machine's full pool on one hatch", () => {
+    const r = recipe("Mega Blast Furnace", 120);
+    const report = getNodePowerReport(
+      r,
+      node({ recipeId: r.id, hatchVoltageTier: "HV", hatchAmps: 2 }),
+      "2.9",
+    );
+    expect(report.poolEuT).toBe(1024);
+  });
+
+  it("never seeds a non-mega machine at 2 A, which one hatch cannot work", () => {
+    // A Chemical Plant at 300 EU/t on HV seeded 2 A: its parallels need more than one hatch's 1 A.
+    const r = recipe("Chemical Plant", 300);
+    r.minimumTier = "LV";
+    const seeded = normalizeHatchInput(r, node({ recipeId: r.id }), "2.9");
+    expect(seeded.hatchVoltageTier).toBe("HV");
+    expect(seeded.hatchAmps).toBeGreaterThan(2);
+    expect(getNodePowerReport(r, seeded, "2.9").state).toBe("ok");
+  });
+});
+
+/**
+ * Machines whose setProcessingLogicPower reads the whole hatch (getMaxInputEu at 1 A) or drops the
+ * lone-hatch clause (getMaxInputAmps) keep a lone hatch's 2 A at each tag (src/lib/machines/hatch-power.ts).
+ */
+describe("machines that keep a lone hatch's 2 A", () => {
+  const cases: Array<[string, "2.9" | "2.8.1"]> = [
+    ["Exothermic Hearth", "2.9"],
+    ["Endothermic Fridge", "2.9"],
+    ["Component Assembly Line", "2.9"],
+    ["Component Assembly Line", "2.8.1"],
+    ["Nano Forge", "2.9"],
+    ["Nano Forge", "2.8.1"],
+    ["Exo-Foundry", "2.9"],
+    ["Mega Vacuum Freezer", "2.9"],
+    ["Mega Vacuum Freezer", "2.8.1"],
+    ["Quantum Force Transformer", "2.9"],
+    ["Quantum Force Transformer", "2.8.1"],
+    ["Industrial Arc Furnace", "2.9"],
+  ];
+  for (const [machine, gameVersion] of cases) {
+    it(`${machine} on ${gameVersion} works 2 A of HV on one hatch`, () => {
+      const r = recipe(machine, 120);
+      const typed = getNodePowerReport(r, node({ recipeId: r.id, hatchVoltageTier: "HV", hatchAmps: 2 }), gameVersion);
+      expect(typed.workingAmps).toBe(2);
+      expect(typed.poolEuT).toBe(1024);
+      const legacy = getNodePowerReport(r, node({ recipeId: r.id, overclockTier: "HV", energyHatches: 1 }), gameVersion);
+      expect(legacy.poolEuT).toBe(1024);
+    });
+  }
+
+  it("hatch-power.ts 2.8.1 runs the GT++ Industrial Arc Furnace on the base rule, and leaves it where no class overrides it", () => {
+    // The Industrial Arc Furnace in 2.8.1 is GT++'s, on the base hatch power; the Large Chemical
+    // Reactor never overrides it.
+    for (const [machine, gameVersion] of [["Large Chemical Reactor", "2.9"], ["Industrial Arc Furnace", "2.8.1"]] as const) {
+      const r = recipe(machine, 120);
+      const report = getNodePowerReport(r, node({ recipeId: r.id, hatchVoltageTier: "HV", hatchAmps: 2 }), gameVersion);
+      expect(report.poolEuT).toBe(512);
+    }
   });
 });

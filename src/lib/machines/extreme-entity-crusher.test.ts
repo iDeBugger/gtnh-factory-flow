@@ -150,16 +150,16 @@ describe("Extreme Entity Crusher", () => {
       hatchAmps: 4,
       machineConfigTiers: { [EEC_INFERNAL]: "off", [EEC_LOOTING]: "2" },
     };
-    const stats = getOverclockedRecipeStats(recipe, node);
+    const stats = getOverclockedRecipeStats(recipe, node, "2.9");
     expect(stats.durationTicks).toBe(5);
     expect(stats.eut).toBe(30720);
-    expect(getMachineOutputMultiplier(recipe, node, recipe.outputs[0], stats.tier)).toBe(2);
+    expect(getMachineOutputMultiplier(recipe, node, recipe.outputs[0], stats.tier, "2.9")).toBe(2);
   });
 
   it("offers the GUI's knobs, weapon damage in Sharpness quarters", () => {
     const controls = getRecipeMachineConfigTierControls(zombie(), {
       machineConfigTiers: { [EEC_WEAPON_DAMAGE]: "13.3" },
-    });
+    }, "2.9");
     expect(controls.map((control) => control.id)).toEqual(EEC_CONTROLS.map((control) => control.id));
     const weapon = controls.find((control) => control.id === EEC_WEAPON_DAMAGE)!;
     expect(weapon.current.key).toBe("13.25");

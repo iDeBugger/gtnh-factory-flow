@@ -5,6 +5,7 @@ import { parseFactoryProjectJson, serializeFactoryProject } from "@/lib/import-e
 import { createCustomRatePlaceholderRecipe } from "@/lib/model/custom-rate";
 import { createCropFarmPlaceholderRecipe } from "@/lib/model/passive-production";
 import { buildPowerRecipe } from "@/lib/power/power-recipe";
+import { getSelectedMachineHandler } from "@/lib/model/recipe-rules";
 import type { DatasetVersion } from "./types";
 import { convertProjectToVersion, matchRecipesToVersion } from "./convert-plan-version";
 
@@ -14,6 +15,12 @@ const datasets = vi.hoisted(() => new Map<string, Map<string, unknown>>());
 const failing = vi.hoisted(() => new Set<string>());
 /** The loader as the server answers it: bodies by id, and content matches scored the way `resolveDatasetRecipeRefs` scores them. */
 vi.mock("./browser-loader", () => ({
+  // The crop picker's list: the dataset's Crop Farm map.
+  listRecipeDatasetCrops: async (_manifestUrl: string, version: { id: string }) => ({
+    crops: ([...(datasets.get(version.id)?.values() ?? [])] as Recipe[])
+      .filter((recipe) => recipe.source?.recipeMap === "Crop Farm")
+      .map((recipe) => ({ ...recipe, recipeMap: "Crop Farm" })),
+  }),
   getRecipeDatasetRecipe: async (_manifestUrl: string, version: { id: string }, id: string) => {
     if (failing.has(id)) throw new Error("Failed to fetch");
     const found = datasets.get(version.id)?.get(id);
@@ -82,8 +89,22 @@ const dust = (datasetVersionId: string) =>
 function install(versionId: string, recipes: Recipe[]) {
   datasets.set(versionId, new Map(recipes.map((recipe) => [recipe.id, recipe])));
 }
+// A picked CropsNH crop: 2.9 has the Crop Farm map, 2.8.1 ships no CropsNH.
+const wheatId = "oracle:cropsnh:crop-farm:wheat0000";
+const wheat = gtRecipe(wheatId, version29.id, {
+  name: "Crop Farm: Wheat",
+  kind: "crop_produce",
+  category: "cropsnh-crop",
+  machineType: "Crop Farm",
+  minimumTier: "NONE",
+  durationTicks: 256,
+  eut: 0,
+  inputs: [],
+  outputs: [{ kind: "item", id: "minecraft:wheat", amount: 1 }],
+  source: { datasetVersionId: version29.id, recipeMap: "Crop Farm" },
+});
 install(version281.id, [silicon281, dust(version281.id)]);
-install(version29.id, [silicon29, dust(version29.id)]);
+install(version29.id, [silicon29, dust(version29.id), wheat]);
 
 function node(id: string, recipeId: string, extra: Partial<FactoryNode> = {}): FactoryNode {
   return {
@@ -212,9 +233,9 @@ describe("convertProjectToVersion", () => {
   });
 
   test("power cards re-synthesize; custom rate cards stay", async () => {
-    const power = buildPowerRecipe("large-combustion-engine", undefined, "power:lce")!;
+    const power = buildPowerRecipe("large-combustion-engine", undefined, "power:lce", "2.9")!;
     const stalePower = { ...power, outputs: [] };
-    const lne = buildPowerRecipe("large-neutralization-engine", undefined, "power:lne")!;
+    const lne = buildPowerRecipe("large-neutralization-engine", undefined, "power:lne", "2.9")!;
     const custom = { ...createCustomRatePlaceholderRecipe("custom:1"), outputs: [{ kind: "item" as const, id: "x", amount: 5 }] };
     const crop = createCropFarmPlaceholderRecipe();
     const demo = { ...gtRecipe("demo:1", "demo"), isDemo: true };
@@ -235,6 +256,108 @@ describe("convertProjectToVersion", () => {
     expect(unconverted).toEqual([
       { nodeId: "l", section: 0, recipe: expect.objectContaining({ recipeId: "power:lne", reason: "Not in GTNH 2.8.1." }) },
     ]);
+  });
+
+  describe("a power card's fuel keeps the source version's meaning", () => {
+    /** One power card on `sourceId` converted from `from`: its stored settings and its recipe's warnings and inputs. */
+    async function convertCard(sourceId: string, settings: Record<string, string> | undefined, from: string) {
+      const recipe = buildPowerRecipe(sourceId, settings, "power:card", from)!;
+      const source = plan(from, [recipe], [node("p", "power:card", { machineConfigTiers: settings })]);
+      const { project } = await convertProjectToVersion(source, from === "2.9" ? target281 : target29);
+      const card = project.recipes.find((r) => r.id === "power:card")!;
+      return {
+        settings: project.nodes[0]!.machineConfigTiers,
+        warnings: card.power?.warnings ?? [],
+        burns: card.inputs.map((slot) => slot.displayName),
+      };
+    }
+
+    test("a 2.9 superheated boiler with no liquid stored says its Ether is now Solid Super Fuel on 2.8.1", async () => {
+      const titanium = await convertCard("large-titanium-boiler", undefined, "2.9");
+      expect(titanium.settings).toMatchObject({ liquidFuel: "Ether", solidFuel: "None" });
+      expect(titanium.warnings).toContain("Not in GTNH 2.8.1: Ether. Using Solid Super Fuel.");
+      expect(titanium.burns).toContain("Solid Super Fuel");
+    });
+
+    test("a 2.9 card with only a solid stored keeps its implicit liquid and says which fuel 2.8.1 burns", async () => {
+      const bronze = await convertCard("large-bronze-boiler", { solidFuel: "Coal" }, "2.9");
+      expect(bronze.settings).toMatchObject({ liquidFuel: "Fish Oil", solidFuel: "Coal" });
+      expect(bronze.warnings).toContain("GTNH 2.8.1 boilers burn one fuel at a time. Using Fish Oil.");
+      const titanium = await convertCard("large-titanium-boiler", { solidFuel: "Solid Super Fuel" }, "2.9");
+      expect(titanium.warnings).toContain("GTNH 2.8.1 boilers burn one fuel at a time. Using Solid Super Fuel.");
+    });
+
+    test("a 2.8.1 boiler's one fuel lands on 2.9's liquid or solid select, the other set to None", async () => {
+      const coal = await convertCard("large-bronze-boiler", { fuel: "Coal" }, "2.8.1");
+      expect(coal.settings).toMatchObject({ liquidFuel: "None", solidFuel: "Coal" });
+      expect(coal.warnings).toEqual([]);
+      expect(coal.burns).toContain("Coal");
+      expect(coal.burns).not.toContain("Fish Oil");
+      // The default fuel too: a 2.8.1 superheated boiler burns Solid Super Fuel, never 2.9's default Ether.
+      const titanium = await convertCard("large-titanium-boiler", undefined, "2.8.1");
+      expect(titanium.settings).toMatchObject({ liquidFuel: "None", solidFuel: "Solid Super Fuel" });
+      expect(titanium.burns).not.toContain("Ether");
+    });
+
+    test("a fuel stored by an earlier conversion never overrules the card's own", async () => {
+      // A 2.9 card that went to 2.8.1 and came back keeps the 2.8.1 fuel under its old id.
+      const back = await convertCard("large-bronze-boiler", { fuel: "Coal", liquidFuel: "Creosote Oil", solidFuel: "None" }, "2.9");
+      expect(back.settings?.fuel).toBeUndefined();
+      expect(back.burns).toContain("Creosote Oil");
+    });
+
+    test("the HTGR's material carries across both reactors, and one the other lacks is named", async () => {
+      // 2.8.1's bartworks fuels are 2.9's kubatech pebbles of the same element.
+      const thorium = await convertCard("htgr", undefined, "2.8.1");
+      expect(thorium.settings).toEqual({ pebble: "Thorium" });
+      expect(thorium.warnings).toEqual([]);
+      expect(thorium.burns).toContain("TRISO Fuel (Thorium)");
+      const uranium = await convertCard("htgr", { fuel: "Uranium" }, "2.8.1");
+      expect(uranium.settings).toEqual({ pebble: "Uranium-235" });
+      expect(uranium.warnings).toEqual([]);
+      expect((await convertCard("htgr", { pebble: "Uranium-235" }, "2.9")).settings).toEqual({ fuel: "Uranium" });
+      expect((await convertCard("htgr", { pebble: "Thorium" }, "2.9")).warnings).toEqual([]);
+      // 2.8.1's reactor has no Glowstone or Silver fuel: the card says what it burns instead.
+      const glowstone = await convertCard("htgr", undefined, "2.9");
+      expect(glowstone.warnings).toEqual(["Not in GTNH 2.8.1: Glowstone. Using Thorium."]);
+      // A pebble count 2.9's reactor has no setting for is named, not silently replaced.
+      expect((await convertCard("htgr", { fuel: "Thorium", pebbles: "100000" }, "2.8.1")).warnings).toEqual([
+        "Not in GTNH 2.9: Pebbles kept.",
+      ]);
+    });
+
+    test("a 2.8.1 boiler fuel 2.9 has no option for is named once, with what the card burns", async () => {
+      // No served 2.8.1 fuel is missing from 2.9 today; an old stored key stands in for one.
+      const recipe = buildPowerRecipe("large-bronze-boiler", { fuel: "Unobtainium" }, "power:card", "2.8.1")!;
+      const source = plan("2.8.1", [recipe], [node("p", "power:card", { machineConfigTiers: { fuel: "Unobtainium" } })]);
+      const { project } = await convertProjectToVersion(source, target29);
+      expect(project.recipes.find((r) => r.id === "power:card")?.power?.warnings).toEqual([
+        "Not in GTNH 2.9: Unobtainium. Using Fish Oil.",
+      ]);
+    });
+
+    test("a converted boiler keeps no copy of the fuel it carried", async () => {
+      expect((await convertCard("large-bronze-boiler", { fuel: "Coal" }, "2.8.1")).settings?.fuel).toBeUndefined();
+    });
+
+    test("a default both versions offer is carried with no line", async () => {
+      // The magic absorber's first fuel differs by version: the converted card keeps the one it burned.
+      const absorber = await convertCard("magic-energy-absorber", undefined, "2.9");
+      expect(absorber.settings).toMatchObject({ fuel: "Magic Tallow" });
+      expect(absorber.warnings).toEqual([]);
+    });
+  });
+
+  test("crop maths absent in 2.8.1 marks a picked crop with the reason when the dataset has no CropsNH crops", async () => {
+    const { project, unconverted } = await convertProjectToVersion(plan("2.9", [wheat], [node("w", wheatId)]), target281);
+    expect(unconverted).toEqual([
+      { nodeId: "w", section: 0, recipe: expect.objectContaining({ recipeId: wheatId, machineType: "Crop Farm", reason: "Not in GTNH 2.8.1." }) },
+    ]);
+    expect(project.recipes).toEqual([]);
+    // 2.9 has the crop: it converts like any recipe.
+    const on29 = await convertProjectToVersion(plan("2.8.1", [wheat], [node("w", wheatId)]), target29);
+    expect(on29.unconverted).toEqual([]);
+    expect(on29.project.recipes.map((r) => r.id)).toEqual([wheatId]);
   });
 
   test("an unconverted marker survives parse and serialize", async () => {
@@ -506,6 +629,9 @@ describe("the same machine across versions", () => {
     const down = await convertCard("2.9", "Acid Generator", acid29, acid281, { overclockTier: "HV", machineHandlerId: "acid-generator" });
     expect(down.unconverted).toEqual([]);
     expect(down.project.nodes[0]?.machineHandlerId).toBe("acid-generator-hv");
+    // 2.8.1's picker lists each tier's generator on its own, so the pinned id is one it offers.
+    const body = down.project.recipes.find((recipe) => recipe.id === down.project.nodes[0]?.recipeId)!;
+    expect(getSelectedMachineHandler(body, down.project.nodes[0]!).id).toBe("acid-generator-hv");
   });
 
   test("GT++'s High Current Industrial Arc Furnace is not the Industrial Arc Furnace: the card is marked", async () => {

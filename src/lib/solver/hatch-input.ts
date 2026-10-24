@@ -15,8 +15,11 @@ import {
   getEffectiveVoltageOrdinal,
   getNodePowerAmps,
   getNodeRunTier,
+  isClampedLoneHatchSupply,
   isMultiblockRecipe,
+  machineHatchPower,
 } from "./power";
+import { type GameVersion, planGameVersion } from "@/lib/model/game-version";
 
 /** Highest selectable amperage; raw EU/t remains an explicit power budget. */
 export const MAX_HATCH_AMPS = 16_777_216;
@@ -25,6 +28,7 @@ export const MAX_HATCH_AMPS = 16_777_216;
 export function normalizeHatchInput(
   recipe: Recipe,
   node: FactoryNode,
+  gameVersion: GameVersion,
   migrate = false,
 ): FactoryNode {
   // Most edits reach an already-normalized node. Keep this path constant
@@ -33,25 +37,25 @@ export function normalizeHatchInput(
     const powerEuT = getVoltageTierMaxEuT(node.hatchVoltageTier) * node.hatchAmps;
     return node.powerEuT === powerEuT ? node : { ...node, powerEuT };
   }
-  const effective = applyMachineHandlerToRecipe(recipe, node);
-  if (!isMultiblockRecipe(effective) || effective.eut <= 0 || recipe.power) return node;
+  const effective = applyMachineHandlerToRecipe(recipe, node, gameVersion);
+  if (!isMultiblockRecipe(effective, gameVersion) || effective.eut <= 0 || recipe.power) return node;
   const hatchVoltageTier =
     node.hatchVoltageTier ??
-    (migrate ? getNodeRunTier(effective, node) : getRecipeMinimumVoltageTier(effective));
+    (migrate ? getNodeRunTier(effective, node, gameVersion) : getRecipeMinimumVoltageTier(effective));
   const voltage = getVoltageTierMaxEuT(hatchVoltageTier);
   let amps: number = node.hatchAmps ?? 0;
   if (node.hatchAmps === undefined) {
     if (node.powerEuT !== undefined) amps = node.powerEuT / voltage;
     else if (migrate) {
       amps =
-        (getVoltageTierMaxEuT(getNodeRunTier(effective, node)) *
-          getNodePowerAmps(effective, node)) /
+        (getVoltageTierMaxEuT(getNodeRunTier(effective, node, gameVersion)) *
+          getNodePowerAmps(effective, node, gameVersion)) /
         voltage;
     } else {
       // Parallels and heat discounts are constant within each summed-voltage
       // tier. Search those intervals in order. A fixed-point iteration can
       // oscillate when crossing a heat bonus reduces the required supply.
-      const factor = getMachineBehaviour(effective.machineType)?.fullPowerPool ? 1 : 2;
+      const factor = machineHatchPower(effective, gameVersion) === "full-pool" ? 1 : 2;
       let lower = 0;
       for (const { maxEuT } of GT_VOLTAGE_TIERS) {
         const upper = factor * maxEuT;
@@ -59,20 +63,28 @@ export function normalizeHatchInput(
         const candidate = { ...node, hatchVoltageTier, hatchAmps: lower / voltage };
         const perParallel =
           Math.abs(effective.eut) *
-          getMachineEutMultiplier(effective, candidate) *
+          getMachineEutMultiplier(effective, candidate, gameVersion) *
           getHeatDiscountMultiplier(
             effective,
             candidate,
             hatchVoltageTier,
-            getEffectiveVoltageOrdinal(effective, candidate, hatchVoltageTier),
+            gameVersion,
+            getEffectiveVoltageOrdinal(effective, candidate, hatchVoltageTier, gameVersion),
           );
         const required = Math.ceil(
-          getMachineStructuralParallels(effective, candidate) * perParallel,
+          getMachineStructuralParallels(effective, candidate, gameVersion) * perParallel,
         );
         // Whole amps: nobody builds 0.94A, and a fraction carried onto a
         // higher tier leaves the card short of that tier's own voltage.
         const whole = Math.max(1, Math.ceil(Math.max(lower, required) / voltage));
-        if (whole * voltage <= upper || maxEuT === GT_VOLTAGE_TIERS.at(-1)!.maxEuT) {
+        // 2A is one regular hatch, which the game works at 1A: past 1A the
+        // seed needs a second hatch, so it moves on to the next interval.
+        const last = maxEuT === GT_VOLTAGE_TIERS.at(-1)!.maxEuT;
+        if (!last && isClampedLoneHatchSupply(effective, candidate, whole, gameVersion)) {
+          lower = upper + 1;
+          continue;
+        }
+        if (whole * voltage <= upper || last) {
           amps = whole;
           break;
         }
@@ -103,15 +115,16 @@ export function normalizeHatchInput(
 export function carryMachineVoltage(
   from: { recipe: Recipe; node: FactoryNode },
   to: { recipe: Recipe; machineHandlerId: string | undefined },
+  gameVersion: GameVersion,
 ): Partial<FactoryNode> {
   if (from.recipe.power || to.recipe.power) return {};
-  const before = applyMachineHandlerToRecipe(from.recipe, from.node);
-  const after = applyMachineHandlerToRecipe(to.recipe, { machineHandlerId: to.machineHandlerId });
+  const before = applyMachineHandlerToRecipe(from.recipe, from.node, gameVersion);
+  const after = applyMachineHandlerToRecipe(to.recipe, { machineHandlerId: to.machineHandlerId }, gameVersion);
   if (getFusionMachine(before.machineType) || getFusionMachine(after.machineType)) return {};
-  const wasMultiblock = isMultiblockRecipe(before);
-  const isMultiblock = isMultiblockRecipe(after);
+  const wasMultiblock = isMultiblockRecipe(before, gameVersion);
+  const isMultiblock = isMultiblockRecipe(after, gameVersion);
   if (wasMultiblock === isMultiblock) return {};
-  const tier = getNodeRunTier(before, from.node);
+  const tier = getNodeRunTier(before, from.node, gameVersion);
   if (wasMultiblock) return { overclockTier: tier };
   if (after.eut <= 0) return {};
   // Floored at what the recipe draws, never at the handler's declared
@@ -142,11 +155,12 @@ export function normalizeProjectHatchInputs(
   project: FactoryProject,
   migrate = false,
 ): FactoryProject {
+  const gameVersion = planGameVersion(project);
   const recipes = new Map(project.recipes.map((recipe) => [recipe.id, recipe]));
   let changed = false;
   const nodes = project.nodes.map((node) => {
     const recipe = recipes.get(node.recipeId);
-    const next = recipe ? normalizeHatchInput(recipe, node, migrate) : node;
+    const next = recipe ? normalizeHatchInput(recipe, node, gameVersion, migrate) : node;
     changed ||= next !== node;
     return next;
   });

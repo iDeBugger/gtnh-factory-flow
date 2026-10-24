@@ -13,7 +13,7 @@ import {
   type PowerSearchHit,
 } from "@/lib/power/power-search";
 import { getPowerStructureArt } from "@/lib/power/structure-art";
-import { POWER_GROUPS, POWER_SOURCES } from "@/lib/power/registry";
+import { POWER_GROUPS, powerSourcesFor } from "@/lib/power/registry";
 import type { PowerGroupId } from "@/lib/power/types";
 import { GT_VOLTAGE_TIERS } from "@/lib/model";
 import { GT_TIER_COLORS } from "@/components/flow/tier-colors";
@@ -21,6 +21,7 @@ import { ResourceIcon } from "@/components/nei/ResourceIcon";
 import { useFactoryStore } from "@/store/factory-store";
 import { overlayInsets } from "@/lib/workspace-columns";
 import type { MachineTier } from "@/lib/model/types";
+import { planGameVersion, type GameVersion } from "@/lib/model/game-version";
 
 /**
  * The power source picker, sized like the recipe search. Browsing lays the
@@ -31,19 +32,24 @@ import type { MachineTier } from "@/lib/model/types";
  * renders.
  */
 /** Every unlock tier the catalog actually holds, in the game's own order. */
-const TIER_FILTER_OPTIONS = GT_VOLTAGE_TIERS.map((entry) => entry.tier).filter((tier) =>
-  POWER_SOURCES.some((source) => source.unlock === tier),
-);
+function tierFilters(gameVersion: GameVersion): string[] {
+  const sources = powerSourcesFor(gameVersion);
+  return GT_VOLTAGE_TIERS.map((entry) => entry.tier).filter((tier) =>
+    sources.some((source) => source.unlock === tier),
+  );
+}
 
 export function PowerSourceOverlay() {
   const open = useFactoryStore((state) => state.powerMenuOpen);
   const closePowerMenu = useFactoryStore((state) => state.closePowerMenu);
   const addPowerSourceNode = useFactoryStore((state) => state.addPowerSourceNode);
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
   const compact = useIsCompactViewport();
   const [query, setQuery] = useState("");
   const [groupFilter, setGroupFilter] = useState<PowerGroupId | "all">("all");
   const [tierFilter, setTierFilter] = useState<string>("all");
   const layout = usePowerPickerViewport(open);
+  const tierOptions = useMemo(() => tierFilters(gameVersion), [gameVersion]);
 
   useEffect(() => {
     if (!open) {
@@ -71,7 +77,7 @@ export function PowerSourceOverlay() {
     if (!open) {
       return [];
     }
-    let all = searchPowerSources(query);
+    let all = searchPowerSources(query, gameVersion);
     if (groupFilter !== "all") {
       all = all.filter((hit) => hit.source.group === groupFilter);
     }
@@ -79,7 +85,7 @@ export function PowerSourceOverlay() {
       all = all.filter((hit) => hit.source.unlock === tierFilter);
     }
     return all;
-  }, [open, query, groupFilter, tierFilter]);
+  }, [open, query, groupFilter, tierFilter, gameVersion]);
 
   if (!open) {
     return null;
@@ -189,7 +195,7 @@ export function PowerSourceOverlay() {
                 ].join(" ")}
               >
                 <option value="all">All tiers</option>
-                {TIER_FILTER_OPTIONS.map((tier) => (
+                {tierOptions.map((tier) => (
                   <option key={tier} value={tier}>
                     {tier}
                   </option>
@@ -316,7 +322,8 @@ function PowerSourceCard({
 }) {
   const { source, via } = hit;
   const structureArt = getPowerStructureArt(source.id);
-  const icon = getPowerMachineIcon(source.id);
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
+  const icon = getPowerMachineIcon(source.id, gameVersion);
   return (
     <button
       type="button"

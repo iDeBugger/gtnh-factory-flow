@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Recipe } from "@/lib/model/types";
 import type { DatasetManifest, DatasetVersion, RecipeDataset } from "@/lib/datasets/types";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
@@ -95,6 +95,13 @@ vi.mock("@/lib/datasets/browser-loader", () => ({
 }));
 
 describe("RecipeBrowser", () => {
+  // Unmount each render: a browser left mounted keeps reacting to the store and scheduling frames after the
+  // file ends, and those callbacks then run with no window.
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
 

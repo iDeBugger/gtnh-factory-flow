@@ -9,19 +9,19 @@ const node: FactoryNode = { id: 'n', recipeId: recipe.id, machineCount: 1, paral
 
 describe('full parallel power target', () => {
   it('targets full capacity rather than one more parallel, then returns to next improvement', () => {
-    const wins = listPowerWinsCached(recipe, node);
-    const target = fullParallelPowerWin(recipe, node, wins)!;
+    const wins = listPowerWinsCached(recipe, node, "2.9");
+    const target = fullParallelPowerWin(recipe, node, wins, "2.9")!;
     expect(target).toBeDefined();
-    expect(target.euT).toBeGreaterThan(nextPowerWin(wins, getNodePowerReport(recipe, node).poolEuT)!.euT);
+    expect(target.euT).toBeGreaterThan(nextPowerWin(wins, getNodePowerReport(recipe, node, "2.9").poolEuT)!.euT);
     const at = powerNodeAtBudget(node, target.euT);
-    expect(getNodePowerReport(recipe, at).parallels).toBe(getMachineStructuralParallels(recipe, at));
+    expect(getNodePowerReport(recipe, at, "2.9").parallels).toBe(getMachineStructuralParallels(recipe, at, "2.9"));
     const below = powerNodeAtBudget(node, target.euT - 1);
-    expect(getNodePowerReport(recipe, below).parallels).toBeLessThan(getMachineStructuralParallels(recipe, below));
-    expect(fullParallelPowerWin(recipe, { ...node, ...at }, wins)).toBeUndefined();
+    expect(getNodePowerReport(recipe, below, "2.9").parallels).toBeLessThan(getMachineStructuralParallels(recipe, below, "2.9"));
+    expect(fullParallelPowerWin(recipe, { ...node, ...at }, wins, "2.9")).toBeUndefined();
     expect(nextPowerWin(wins, target.euT)).toBeDefined();
   });
   it('does not add a parallel milestone to a machine without parallels', () => {
     const single = { ...recipe, machineType: 'Large Chemical Reactor' };
-    expect(fullParallelPowerWin(single, node, listPowerWinsCached(single, node))).toBeUndefined();
+    expect(fullParallelPowerWin(single, node, listPowerWinsCached(single, node, "2.9"), "2.9")).toBeUndefined();
   });
 });

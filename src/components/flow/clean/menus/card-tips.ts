@@ -19,6 +19,7 @@ import {
 } from "../clean-model";
 import type { TipSpec } from "../interaction/tip-spec";
 import type { SettingControl } from "./settings-model";
+import type { GameVersion } from "@/lib/model/game-version";
 
 /**
  * The card's richer tips (spec 10.3, the mod's `RecipeCard.tip`): the name's plate with what it needs, the tier chip's
@@ -38,9 +39,9 @@ export interface CardTipFacts {
   recipes: number;
 }
 
-export function cardTipFacts(recipe: Recipe, node: FactoryNode): CardTipFacts {
+export function cardTipFacts(recipe: Recipe, node: FactoryNode, gameVersion: GameVersion): CardTipFacts {
   try {
-    return computeFacts(recipe, node);
+    return computeFacts(recipe, node, gameVersion);
   } catch {
     // A recipe the maths cannot read (a stub): the tips just have fewer rows.
     return {
@@ -54,15 +55,15 @@ export function cardTipFacts(recipe: Recipe, node: FactoryNode): CardTipFacts {
   }
 }
 
-function computeFacts(recipe: Recipe, node: FactoryNode): CardTipFacts {
-  const nodeRecipe = applyRecipeInputOverrides(recipe, node);
-  const effective = applyMachineHandlerToRecipe(nodeRecipe, node);
+function computeFacts(recipe: Recipe, node: FactoryNode, gameVersion: GameVersion): CardTipFacts {
+  const nodeRecipe = applyRecipeInputOverrides(recipe, node, gameVersion);
+  const effective = applyMachineHandlerToRecipe(nodeRecipe, node, gameVersion);
   const steam =
     isSteamMachineHandler(getSelectedMachineHandler(recipe, node)) || !(effective.eut > 0);
-  const stats = getOverclockedRecipeStats(nodeRecipe, node);
+  const stats = getOverclockedRecipeStats(nodeRecipe, node, gameVersion);
   const power =
-    !steam && hasPowerReport(nodeRecipe) ? getNodePowerReport(nodeRecipe, node) : undefined;
-  const steamReport = steam ? getNodeSteamReport(nodeRecipe, node) : undefined;
+    !steam && hasPowerReport(nodeRecipe) ? getNodePowerReport(nodeRecipe, node, gameVersion) : undefined;
+  const steamReport = steam ? getNodeSteamReport(nodeRecipe, node, gameVersion) : undefined;
   return {
     steam: steamReport !== undefined,
     seconds: stats.durationTicks / 20,
@@ -70,15 +71,15 @@ function computeFacts(recipe: Recipe, node: FactoryNode): CardTipFacts {
       ? steamReport.drawSteamPerTick * 20
       : (power?.drawEuT ?? Math.abs(stats.eut)),
     parallels:
-      power?.parallels ?? steamReport?.parallels ?? getMachineParallelMultiplier(effective, node),
+      power?.parallels ?? steamReport?.parallels ?? getMachineParallelMultiplier(effective, node, gameVersion),
     recipeTier: stats.minimumTier,
     shared: (node.extraRecipes?.length ?? 0) > 0,
     recipes: 1 + (node.extraRecipes?.length ?? 0),
   };
 }
 
-export function useCardTipFacts(recipe: Recipe, node: FactoryNode): CardTipFacts {
-  return useMemo(() => cardTipFacts(recipe, node), [recipe, node]);
+export function useCardTipFacts(recipe: Recipe, node: FactoryNode, gameVersion: GameVersion): CardTipFacts {
+  return useMemo(() => cardTipFacts(recipe, node, gameVersion), [recipe, node, gameVersion]);
 }
 
 const seconds = (s: number) => `${formatCompact(s)} s`;

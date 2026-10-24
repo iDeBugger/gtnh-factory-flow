@@ -3,9 +3,9 @@
  * about as much again once turbined. Mk II only rewards fuels over
  * 1,000 EU/L (its efficiency is fuelEU/1000, floored at 1).
  */
-import { findFuel, fuelOptions, powerPlannerData } from "../planner-data";
+import { findFuel, fuelOptions, type PowerTables } from "../planner-data";
 import type { PowerModel, PowerSourceDefinition } from "../types";
-import { formatAmount, liters, percent, stat } from "./helpers";
+import { formatAmount, liters, percent, stat, type PowerSourceBuilder } from "./helpers";
 
 interface SofcSpec {
   id: string;
@@ -43,7 +43,7 @@ const SPECS: SofcSpec[] = [
   },
 ];
 
-export const sofcSources: PowerSourceDefinition[] = SPECS.map((spec) => ({
+const buildSofc = (tables: PowerTables, spec: SofcSpec): PowerSourceDefinition => ({
   id: spec.id,
   name: spec.name,
   group: "engines",
@@ -54,12 +54,12 @@ export const sofcSources: PowerSourceDefinition[] = SPECS.map((spec) => ({
       type: "select",
       id: "fuel",
       label: "Fuel",
-      options: fuelOptions(powerPlannerData.gasFuels),
+      options: fuelOptions(tables.gasFuels),
       defaultKey: "Benzene",
     },
   ],
   compute(read): PowerModel {
-    const fuel = findFuel(powerPlannerData.gasFuels, read.select("fuel"));
+    const fuel = findFuel(tables.gasFuels, read.select("fuel"));
     const euPerLiter = fuel.euPerLiter ?? 0;
     const efficiency = spec.scalesWithFuel && euPerLiter > 1000 ? euPerLiter / 1000 : 1;
     const fuelPerSecond =
@@ -71,4 +71,8 @@ export const sofcSources: PowerSourceDefinition[] = SPECS.map((spec) => ({
       stats: [stat("Efficiency", percent(efficiency))],
     };
   },
-}));
+});
+
+export const buildSofcSources: PowerSourceBuilder = (tables) => {
+  return SPECS.map((spec) => buildSofc(tables, spec));
+};

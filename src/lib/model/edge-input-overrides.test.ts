@@ -54,7 +54,7 @@ const wire = {
 };
 function rails(p: FactoryProject) {
   const node = p.nodes[0]!;
-  const effective = applyRecipeInputOverrides(p.recipes[0]!, node);
+  const effective = applyRecipeInputOverrides(p.recipes[0]!, node, "2.9");
   const result = calculateThroughput(p);
   return buildRailPorts(p, result, node.id, effective, deriveNodeVerdict(p, result, node.id))
     .inputs;

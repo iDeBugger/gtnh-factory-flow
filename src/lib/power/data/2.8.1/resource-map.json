@@ -1,0 +1,4219 @@
+{
+ "datasetVersionId": "local-2.8.1",
+ "resources": {
+  "1080k Sp Coolant Cell": {
+   "kind": "item",
+   "id": "gregtech:gt.1080k_space_coolantcell",
+   "displayName": "1080k Sp Coolant Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/1080k_sp_coolant_cell-75adab6c823f.png",
+   "dominantColor": "#242c4f"
+  },
+  "10k Coolant Cell": {
+   "kind": "item",
+   "id": "ic2:reactorcoolantsimple@1",
+   "displayName": "10k Coolant Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/10k_coolant_cell-63b1b8353063.png",
+   "dominantColor": "#3e64c6"
+  },
+  "180k He Coolant Cell": {
+   "kind": "item",
+   "id": "gregtech:gt.180k_helium_coolantcell",
+   "displayName": "180k He Coolant Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/180k_he_coolant_cell-9da8d8216d51.png",
+   "dominantColor": "#dfdf00"
+  },
+  "180k NaK Coolant Cell": {
+   "kind": "item",
+   "id": "gregtech:gt.180k_nak_coolantcell",
+   "displayName": "180k NaK Coolant Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/180k_nak_coolant_cell-154a59e1c3d6.png",
+   "dominantColor": "#53d699"
+  },
+  "180k Sp Coolant Cell": {
+   "kind": "item",
+   "id": "gregtech:gt.180k_space_coolantcell",
+   "displayName": "180k Sp Coolant Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/180k_sp_coolant_cell-9c25fdb25802.png",
+   "dominantColor": "#222943"
+  },
+  "1G Neutronium Heat Capacitor": {
+   "kind": "item",
+   "id": "gregtech:gt.neutroniumheatcapacitor",
+   "displayName": "1G Neutronium Heat Capacitor",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/1g_neutronium_heat_capacitor-26e0d8c726b2.png",
+   "dominantColor": "#e4e4e4"
+  },
+  "30k Coolant Cell": {
+   "kind": "item",
+   "id": "ic2:reactorcoolanttriple@1",
+   "displayName": "30k Coolant Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/30k_coolant_cell-25d2b9c0eca5.png",
+   "dominantColor": "#4e79e4"
+  },
+  "360k He Coolant Cell": {
+   "kind": "item",
+   "id": "gregtech:gt.360k_helium_coolantcell",
+   "displayName": "360k He Coolant Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/360k_he_coolant_cell-d1c7ac2fd604.png",
+   "dominantColor": "#dddd00"
+  },
+  "360k NaK Coolant Cell": {
+   "kind": "item",
+   "id": "gregtech:gt.360k_nak_coolantcell",
+   "displayName": "360k NaK Coolant Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/360k_nak_coolant_cell-f290c748b308.png",
+   "dominantColor": "#52d397"
+  },
+  "360k Sp Coolant Cell": {
+   "kind": "item",
+   "id": "gregtech:gt.360k_space_coolantcell",
+   "displayName": "360k Sp Coolant Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/360k_sp_coolant_cell-63fd9412cbcf.png",
+   "dominantColor": "#262d4a"
+  },
+  "540k Sp Coolant Cell": {
+   "kind": "item",
+   "id": "gregtech:gt.540k_space_coolantcell",
+   "displayName": "540k Sp Coolant Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/540k_sp_coolant_cell-b9f19c958ae8.png",
+   "dominantColor": "#2c3354"
+  },
+  "60k Coolant Cell": {
+   "kind": "item",
+   "id": "ic2:reactorcoolantsix@1",
+   "displayName": "60k Coolant Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/60k_coolant_cell-82145717b4ba.png",
+   "dominantColor": "#868686"
+  },
+  "60k He Coolant Cell": {
+   "kind": "item",
+   "id": "gregtech:gt.60k_helium_coolantcell",
+   "displayName": "60k He Coolant Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/60k_he_coolant_cell-4c352f9c8e2d.png",
+   "dominantColor": "#d5d500"
+  },
+  "60k NaK Coolant Cell": {
+   "kind": "item",
+   "id": "gregtech:gt.60k_nak_coolantcell",
+   "displayName": "60k NaK Coolant Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/60k_nak_coolant_cell-de91c3e8c26c.png",
+   "dominantColor": "#4cc48c"
+  },
+  "Acetic Acid": {
+   "kind": "fluid",
+   "id": "aceticacid",
+   "displayName": "Acetic Acid",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/acetic_acid-2277caa51d32.png",
+   "dominantColor": "#a19281"
+  },
+  "Advanced Nitinol Plasma": {
+   "kind": "fluid",
+   "id": "plasma.advancednitinol",
+   "displayName": "Advanced Nitinol Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/advanced_nitinol_plasma-047632b7f431.png",
+   "dominantColor": "#c4b1f0"
+  },
+  "Aer Crystal Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17540",
+   "displayName": "Aer Crystal Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aer_crystal_plate-8f1944583452.png",
+   "dominantColor": "#d6d609"
+  },
+  "Aer Crystal Powder": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2540",
+   "displayName": "Aer Crystal Powder",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aer_crystal_powder-ebdab8b28005.png",
+   "dominantColor": "#dbdb09"
+  },
+  "Aer Shard": {
+   "kind": "item",
+   "id": "tgregworks:tgregtoolpartchunk@1563",
+   "displayName": "Aer Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aer_shard-72cfd3c0cc5f.png",
+   "dominantColor": "#898900"
+  },
+  "Air": {
+   "kind": "fluid",
+   "id": "air",
+   "displayName": "Air",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/air-279f284aa331.png",
+   "dominantColor": "#d8e6eb"
+  },
+  "Alumentum": {
+   "kind": "item",
+   "id": "thaumcraft:itemresource",
+   "displayName": "Alumentum",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/alumentum-cba730d27a8c.png",
+   "dominantColor": "#8daec5"
+  },
+  "Aluminium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.aluminium",
+   "displayName": "Aluminium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aluminium_plasma-a95ce52e5ba5.png",
+   "dominantColor": "#77c4eb"
+  },
+  "Am Pellet": {
+   "kind": "item",
+   "id": "miscutils:mu-metaitem.01@32044",
+   "displayName": "Am Pellet",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/am_pellet-2aca4f39e314.png",
+   "dominantColor": "#6c6c6c"
+  },
+  "Amber Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2514",
+   "displayName": "Amber Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/amber_dust-0a0d840d6fa3.png",
+   "dominantColor": "#e27609"
+  },
+  "Amber Gem": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@8514",
+   "displayName": "Amber",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/amber-94e614086c8c.png",
+   "dominantColor": "#a85500"
+  },
+  "Amber Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17514",
+   "displayName": "Amber Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/amber_plate-deef1c0bbaf1.png",
+   "dominantColor": "#e1760a"
+  },
+  "Americium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.americium",
+   "displayName": "Americium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/americium_plasma-23e85962b91f.png",
+   "dominantColor": "#bbc4c4"
+  },
+  "Antimony Plasma": {
+   "kind": "fluid",
+   "id": "plasma.antimony",
+   "displayName": "Antimony Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/antimony_plasma-4aa0a684b3e5.png",
+   "dominantColor": "#cdd8eb"
+  },
+  "Apple": {
+   "kind": "item",
+   "id": "minecraft:apple",
+   "displayName": "Apple",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/apple-1ca480cec4db.png",
+   "dominantColor": "#d21f2b"
+  },
+  "Aqua Crystal Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17543",
+   "displayName": "Aqua Crystal Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aqua_crystal_plate-f5d633dc7b7e.png",
+   "dominantColor": "#0909d6"
+  },
+  "Aqua Crystal Powder": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2543",
+   "displayName": "Aqua Crystal Powder",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aqua_crystal_powder-b95c8dc35508.png",
+   "dominantColor": "#0909db"
+  },
+  "Aqua Shard": {
+   "kind": "item",
+   "id": "tgregworks:tgregtoolpartchunk@1566",
+   "displayName": "Aqua Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aqua_shard-b3d10ec9e2c9.png",
+   "dominantColor": "#000089"
+  },
+  "Ardite Plasma": {
+   "kind": "fluid",
+   "id": "plasma.ardite",
+   "displayName": "Ardite Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ardite_plasma-50b5f57493a3.png",
+   "dominantColor": "#e97e00"
+  },
+  "Argon": {
+   "kind": "fluid",
+   "id": "argon",
+   "displayName": "Argon",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/argon-53396da5c90a.png",
+   "dominantColor": "#9500b3"
+  },
+  "Argon Plasma": {
+   "kind": "fluid",
+   "id": "plasma.argon",
+   "displayName": "Argon Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/argon_plasma-b151fb2a4f4a.png",
+   "dominantColor": "#00fa00"
+  },
+  "Arsenic Plasma": {
+   "kind": "fluid",
+   "id": "plasma.arsenic",
+   "displayName": "Arsenic Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/arsenic_plasma-1de236a45a2d.png",
+   "dominantColor": "#ebf7f7"
+  },
+  "Astral Titanium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.astraltitanium",
+   "displayName": "Astral Titanium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/astral_titanium_plasma-b72d1733fcfa.png",
+   "dominantColor": "#cd9deb"
+  },
+  "Awakened Draconium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.draconiumawakened",
+   "displayName": "Awakened Draconium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/awakened_draconium_plasma-bae162567931.png",
+   "dominantColor": "#e44c00"
+  },
+  "Balanced Shard": {
+   "kind": "item",
+   "id": "thaumcraft:itemshard@6",
+   "displayName": "Balanced Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/balanced_shard-2141361f834e.png",
+   "dominantColor": "#c7c7e6"
+  },
+  "Barium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.barium",
+   "displayName": "Barium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/barium_plasma-1de236a45a2d.png",
+   "dominantColor": "#ebf7f7"
+  },
+  "Beacon": {
+   "kind": "item",
+   "id": "minecraft:beacon",
+   "displayName": "Beacon",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/beacon-f8d9368d4aa5.png",
+   "dominantColor": "#53a7a2"
+  },
+  "Bedrockium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.bedrockium",
+   "displayName": "Bedrockium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/bedrockium_plasma-70e24f851539.png",
+   "dominantColor": "#3a4040"
+  },
+  "Benzene": {
+   "kind": "fluid",
+   "id": "benzene",
+   "displayName": "Benzene",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/benzene-ae81d264f4f7.png",
+   "dominantColor": "#151515"
+  },
+  "Beryllium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.beryllium",
+   "displayName": "Beryllium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/beryllium_plasma-5bd71ac9354c.png",
+   "dominantColor": "#5db062"
+  },
+  "Bio Diesel": {
+   "kind": "fluid",
+   "id": "biodiesel",
+   "displayName": "Bio Diesel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/bio_diesel-6caa8f728993.png",
+   "dominantColor": "#cf6800"
+  },
+  "Biofuel": {
+   "kind": "fluid",
+   "id": "biofuel",
+   "displayName": "Biofuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/biofuel-cd7a3169ab4c.png",
+   "dominantColor": "#2fe5f4"
+  },
+  "Biogas": {
+   "kind": "fluid",
+   "id": "ic2biogas",
+   "displayName": "Biogas",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/biogas-d56df3eb4e4e.png",
+   "dominantColor": "#a7984c"
+  },
+  "Biomass": {
+   "kind": "fluid",
+   "id": "biomass",
+   "displayName": "Biomass",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/biomass-e4729ce3f4dd.png",
+   "dominantColor": "#638429"
+  },
+  "Bismuth Plasma": {
+   "kind": "fluid",
+   "id": "plasma.bismuth",
+   "displayName": "Bismuth Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/bismuth_plasma-41b493b9f88c.png",
+   "dominantColor": "#5d9d9d"
+  },
+  "Blank Slate": {
+   "kind": "item",
+   "id": "awwayoftime:blankslate",
+   "displayName": "Blank Slate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/blank_slate-861cb828730c.png",
+   "dominantColor": "#343030"
+  },
+  "Blaze Rod": {
+   "kind": "item",
+   "id": "minecraft:blaze_rod",
+   "displayName": "Blaze Rod",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/blaze_rod-22b7aac2c61a.png",
+   "dominantColor": "#b24901"
+  },
+  "Blazing Pyrotheum": {
+   "kind": "fluid",
+   "id": "pyrotheum",
+   "displayName": "Blazing Pyrotheum",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/blazing_pyrotheum-6caa8f728993.png",
+   "dominantColor": "#cf6800"
+  },
+  "Block of Cactus Coke": {
+   "kind": "item",
+   "id": "miscutils:blockcactuscoke",
+   "displayName": "Cactus Coke",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/cactus_coke-c65432b083e3.png",
+   "dominantColor": "#23691a"
+  },
+  "Block of Charcoal": {
+   "kind": "item",
+   "id": "gregtech:gt.blockgem3@4",
+   "displayName": "Block of Charcoal",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/block_of_charcoal-be0dd4a3e30a.png",
+   "dominantColor": "#2e201d"
+  },
+  "Block of Coal": {
+   "kind": "item",
+   "id": "minecraft:coal_block",
+   "displayName": "Block of Coal",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/block_of_coal-8968f2b649f6.png",
+   "dominantColor": "#121212"
+  },
+  "Block of Coal Coke": {
+   "kind": "item",
+   "id": "railcraft:cube",
+   "displayName": "Block of Coal Coke",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/block_of_coal_coke-66b1529bcf18.png",
+   "dominantColor": "#373741"
+  },
+  "Block of Diamond": {
+   "kind": "item",
+   "id": "minecraft:diamond_block",
+   "displayName": "Block of Diamond",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/block_of_diamond-c2fcf9f7b1d0.png",
+   "dominantColor": "#369691"
+  },
+  "Block of Lignite Coal": {
+   "kind": "item",
+   "id": "gregtech:gt.blockgem2@1",
+   "displayName": "Block of Lignite Coal",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/block_of_lignite_coal-35b7e99a1535.png",
+   "dominantColor": "#2e201d"
+  },
+  "Block of Sugar Coke": {
+   "kind": "item",
+   "id": "miscutils:blocksugarcoke",
+   "displayName": "Sugar Coke",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/sugar_coke-2184a03b7112.png",
+   "dominantColor": "#5d5d5d"
+  },
+  "Boron Plasma": {
+   "kind": "fluid",
+   "id": "plasma.boron",
+   "displayName": "Boron Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/boron_plasma-e09ae76f4980.png",
+   "dominantColor": "#c4f5ce"
+  },
+  "Bottle o' Enchanting": {
+   "kind": "item",
+   "id": "minecraft:experience_bottle",
+   "displayName": "Bottle o' Enchanting",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/bottle_o_enchanting-523494e4478a.png",
+   "dominantColor": "#413003"
+  },
+  "Burned out TRISO Ball (Plutonium)": {
+   "kind": "item",
+   "id": "bartworks:bw.htgrmaterials@19",
+   "displayName": "Burned out TRISO Ball (Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/burned_out_triso_ball_plutonium-c405524106a5.png",
+   "dominantColor": "#d38989"
+  },
+  "Burned out TRISO Ball (Thorium)": {
+   "kind": "item",
+   "id": "bartworks:bw.htgrmaterials@5",
+   "displayName": "Burned out TRISO Ball (Thorium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/burned_out_triso_ball_thorium-515d54d1ed76.png",
+   "dominantColor": "#7b8d7b"
+  },
+  "Burned out TRISO Ball (Uranium)": {
+   "kind": "item",
+   "id": "bartworks:bw.htgrmaterials@12",
+   "displayName": "Burned out TRISO Ball (Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/burned_out_triso_ball_uranium-f09ebd87710d.png",
+   "dominantColor": "#88c789"
+  },
+  "Burned Out TRISO pebble": {
+   "kind": "item",
+   "id": "bartworks:bw.thtrmaterials@6",
+   "displayName": "Burned Out TRISO pebble",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/burned_out_triso_pebble-04e39fca2c67.png",
+   "dominantColor": "#5f5f5f"
+  },
+  "Burned out TRISO Pebble (Plutonium)": {
+   "kind": "item",
+   "id": "bartworks:bw.htgrmaterials@20",
+   "displayName": "Burned out TRISO Pebble (Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/burned_out_triso_pebble_plutonium-143d3f4234bf.png",
+   "dominantColor": "#d58c8c"
+  },
+  "Burned out TRISO Pebble (Thorium)": {
+   "kind": "item",
+   "id": "bartworks:bw.htgrmaterials@6",
+   "displayName": "Burned out TRISO Pebble (Thorium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/burned_out_triso_pebble_thorium-8a4af5b0584b.png",
+   "dominantColor": "#809180"
+  },
+  "Burned out TRISO Pebble (Uranium)": {
+   "kind": "item",
+   "id": "bartworks:bw.htgrmaterials@13",
+   "displayName": "Burned out TRISO Pebble (Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/burned_out_triso_pebble_uranium-0aa75316b50f.png",
+   "dominantColor": "#8bc98c"
+  },
+  "Burned Out TRISO pebble ball": {
+   "kind": "item",
+   "id": "bartworks:bw.thtrmaterials@5",
+   "displayName": "Burned Out TRISO pebble ball",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/burned_out_triso_pebble_ball-db08cbd0a30d.png",
+   "dominantColor": "#5f5f5f"
+  },
+  "Butadiene": {
+   "kind": "fluid",
+   "id": "butadiene",
+   "displayName": "Butadiene",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/butadiene-540ce2235e47.png",
+   "dominantColor": "#bc5500"
+  },
+  "Butane": {
+   "kind": "fluid",
+   "id": "butane",
+   "displayName": "Butane",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/butane-aae18f89456e.png",
+   "dominantColor": "#942d18"
+  },
+  "Butanol": {
+   "kind": "fluid",
+   "id": "butanol",
+   "displayName": "Butanol",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/butanol-e69a379facb0.png",
+   "dominantColor": "#812f2d"
+  },
+  "Butene": {
+   "kind": "fluid",
+   "id": "butene",
+   "displayName": "Butene",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/butene-58163a5d34c0.png",
+   "dominantColor": "#a84104"
+  },
+  "Cactus Coke": {
+   "kind": "item",
+   "id": "miscutils:itemcactuscoke",
+   "displayName": "Cactus Coke",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/cactus_coke-e93a08a5f02f.png",
+   "dominantColor": "#00b206"
+  },
+  "Cadmium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.cadmium",
+   "displayName": "Cadmium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/cadmium_plasma-2ed76b5e23da.png",
+   "dominantColor": "#2f313b"
+  },
+  "Caesium Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2062",
+   "displayName": "Caesium Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/caesium_dust-cedbe4033fc1.png",
+   "dominantColor": "#8695a9"
+  },
+  "Caesium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.caesium",
+   "displayName": "Caesium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/caesium_plasma-f801334c47db.png",
+   "dominantColor": "#a4c0da"
+  },
+  "Calcium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.calcium",
+   "displayName": "Calcium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/calcium_plasma-35341da0dc84.png",
+   "dominantColor": "#eef0f0"
+  },
+  "Carbon Dioxide": {
+   "kind": "fluid",
+   "id": "carbondioxide",
+   "displayName": "Carbon Dioxide",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/carbon_dioxide-370a32160179.png",
+   "dominantColor": "#595959"
+  },
+  "Carbon Monoxide": {
+   "kind": "fluid",
+   "id": "carbonmonoxide",
+   "displayName": "Carbon Monoxide",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/carbon_monoxide-2a06a7ab35b5.png",
+   "dominantColor": "#0b3a68"
+  },
+  "Carbon Plasma": {
+   "kind": "fluid",
+   "id": "plasma.carbon",
+   "displayName": "Carbon Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/carbon_plasma-2a5a25810ef6.png",
+   "dominantColor": "#131414"
+  },
+  "Celestial Tungsten Plasma": {
+   "kind": "fluid",
+   "id": "plasma.celestialtungsten",
+   "displayName": "Celestial Tungsten Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/celestial_tungsten_plasma-5bbffd898288.png",
+   "dominantColor": "#2f3131"
+  },
+  "Cerium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.cerium",
+   "displayName": "Cerium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/cerium_plasma-1eb993ad336a.png",
+   "dominantColor": "#73d08d"
+  },
+  "Cetane-Boosted Diesel": {
+   "kind": "fluid",
+   "id": "nitrofuel",
+   "displayName": "Cetane-Boosted Diesel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/cetane-boosted_diesel-0497fc4ad5db.png",
+   "dominantColor": "#d9ef01"
+  },
+  "Charcoal": {
+   "kind": "item",
+   "id": "minecraft:coal@1",
+   "displayName": "Charcoal",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/charcoal-7bf013b0a230.png",
+   "dominantColor": "#28241c"
+  },
+  "Chipped Amber": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.02@27514",
+   "displayName": "Chipped Amber",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/chipped_amber-99c7e6e96068.png",
+   "dominantColor": "#b15900"
+  },
+  "Chlorine": {
+   "kind": "fluid",
+   "id": "chlorine",
+   "displayName": "Chlorine",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/chlorine-443ab974ce5e.png",
+   "dominantColor": "#256f6f"
+  },
+  "Chlorine Plasma": {
+   "kind": "fluid",
+   "id": "plasma.chlorine",
+   "displayName": "Chlorine Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/chlorine_plasma-1de236a45a2d.png",
+   "dominantColor": "#ebf7f7"
+  },
+  "Chromatic Glass Plasma": {
+   "kind": "fluid",
+   "id": "plasma.chromaticglass",
+   "displayName": "Chromatic Glass Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/chromatic_glass_plasma-1de236a45a2d.png",
+   "dominantColor": "#ebf7f7"
+  },
+  "Chrome Plasma": {
+   "kind": "fluid",
+   "id": "plasma.chrome",
+   "displayName": "Chrome Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/chrome_plasma-5d7a3341bf14.png",
+   "dominantColor": "#eee2e2"
+  },
+  "CN3H703 (Purple)": {
+   "kind": "fluid",
+   "id": "fluid.rocketfuelmixc",
+   "displayName": "CN3H7O3 Rocket Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/cn3h7o3_rocket_fuel-a988ed0fe05d.png",
+   "dominantColor": "#653d92"
+  },
+  "Coal": {
+   "kind": "item",
+   "id": "minecraft:coal",
+   "displayName": "Coal",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/coal-9b326b424bbc.png",
+   "dominantColor": "#1c1c1c"
+  },
+  "Coal Coke": {
+   "kind": "item",
+   "id": "railcraft:fuel.coke",
+   "displayName": "Coal Coke",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/coal_coke-689cbccd995b.png",
+   "dominantColor": "#454554"
+  },
+  "Coal Gas": {
+   "kind": "fluid",
+   "id": "fluid.coalgas",
+   "displayName": "Coal Gas",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/coal_gas-5364f1fb5884.png",
+   "dominantColor": "#272727"
+  },
+  "Coal Tar": {
+   "kind": "fluid",
+   "id": "fluid.coaltar",
+   "displayName": "Coal Tar",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/coal_tar-18feb80de949.png",
+   "dominantColor": "#6b7280"
+  },
+  "Coal Tar Oil": {
+   "kind": "fluid",
+   "id": "fluid.coaltaroil",
+   "displayName": "Coal Tar Oil",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/coal_tar_oil-7ba8271c3bd4.png",
+   "dominantColor": "#c3c37a"
+  },
+  "Cobalt Plasma": {
+   "kind": "fluid",
+   "id": "plasma.cobalt",
+   "displayName": "Cobalt Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/cobalt_plasma-323446029630.png",
+   "dominantColor": "#4b4ef5"
+  },
+  "Cold Solar Salt": {
+   "kind": "fluid",
+   "id": "molten.solarsaltcold",
+   "displayName": "Solar Salt (Cold)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/solar_salt_cold-a11f1da17593.png",
+   "dominantColor": "#2361b2"
+  },
+  "Combustion Promoter": {
+   "kind": "fluid",
+   "id": "combustionpromotor",
+   "displayName": "Combustion Promoter",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/combustion_promoter-4294c3cf94d3.png",
+   "dominantColor": "#3bc1c3"
+  },
+  "Coolant": {
+   "kind": "fluid",
+   "id": "ic2coolant",
+   "displayName": "IC2 Coolant",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ic2_coolant-8179faf7485a.png",
+   "dominantColor": "#145a6b"
+  },
+  "Copper Plasma": {
+   "kind": "fluid",
+   "id": "plasma.copper",
+   "displayName": "Copper Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/copper_plasma-022e1afa3230.png",
+   "dominantColor": "#ee6200"
+  },
+  "Cosmic Neutronium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.cosmicneutronium",
+   "displayName": "Cosmic Neutronium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/cosmic_neutronium_plasma-fcfab3b407bf.png",
+   "dominantColor": "#3a3a3a"
+  },
+  "Creon Plasma": {
+   "kind": "fluid",
+   "id": "plasma.creon",
+   "displayName": "Creon Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/creon_plasma-ddde3a42d54c.png",
+   "dominantColor": "#410045"
+  },
+  "Creosote Oil": {
+   "kind": "fluid",
+   "id": "creosote",
+   "displayName": "Creosote Oil",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/creosote_oil-f85fef9f822a.png",
+   "dominantColor": "#6b6400"
+  },
+  "Cryotheum": {
+   "kind": "fluid",
+   "id": "cryotheum",
+   "displayName": "Gelid Cryotheum",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/gelid_cryotheum-3a7d3afc3d8e.png",
+   "dominantColor": "#5391cf"
+  },
+  "Cryotheum Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2898",
+   "displayName": "Cryotheum Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/cryotheum_dust-76f08ec11f67.png",
+   "dominantColor": "#0786b6"
+  },
+  "Curium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.curium",
+   "displayName": "Curium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/curium_plasma-aeadb21d0845.png",
+   "dominantColor": "#a3536c"
+  },
+  "Cyclopentadiene": {
+   "kind": "fluid",
+   "id": "cyclopentadiene",
+   "displayName": "Cyclopentadiene",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/cyclopentadiene-15c7d0c89c00.png",
+   "dominantColor": "#cfc89a"
+  },
+  "Degenerate Quark Gluon Plasma": {
+   "kind": "fluid",
+   "id": "quarkgluonplasma",
+   "displayName": "Degenerate Quark Gluon Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/degenerate_quark_gluon_plasma-395cfcd76a19.png",
+   "dominantColor": "#f1e8a8"
+  },
+  "Demonic Slate": {
+   "kind": "item",
+   "id": "awwayoftime:demonicslate",
+   "displayName": "Demonic Slate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/demonic_slate-c617767e6b9d.png",
+   "dominantColor": "#281e1e"
+  },
+  "Dense Hydrazine Fuel Mixture": {
+   "kind": "fluid",
+   "id": "fluid.rocketfuelmixd",
+   "displayName": "Dense Hydrazine Fuel Mixture",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dense_hydrazine_fuel_mixture-48d5f5e7d575.png",
+   "dominantColor": "#8e4161"
+  },
+  "Dense SC Steam": {
+   "kind": "fluid",
+   "id": "densesupercriticalsteam",
+   "displayName": "Dense Supercritical Steam",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dense_supercritical_steam-578c30908dc0.png",
+   "dominantColor": "#cfcfcf"
+  },
+  "Dense SH Steam": {
+   "kind": "fluid",
+   "id": "densesuperheatedsteam",
+   "displayName": "Dense Superheated Steam",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dense_superheated_steam-578c30908dc0.png",
+   "dominantColor": "#cfcfcf"
+  },
+  "Dense Steam": {
+   "kind": "fluid",
+   "id": "densesteam",
+   "displayName": "Dense Steam",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dense_steam-578c30908dc0.png",
+   "dominantColor": "#cfcfcf"
+  },
+  "Dense Supercritical Steam": {
+   "kind": "fluid",
+   "id": "densesupercriticalsteam",
+   "displayName": "Dense Supercritical Steam",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dense_supercritical_steam-578c30908dc0.png",
+   "dominantColor": "#cfcfcf"
+  },
+  "Dense Superheated Steam": {
+   "kind": "fluid",
+   "id": "densesuperheatedsteam",
+   "displayName": "Dense Superheated Steam",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dense_superheated_steam-578c30908dc0.png",
+   "dominantColor": "#cfcfcf"
+  },
+  "Desh Plasma": {
+   "kind": "fluid",
+   "id": "plasma.desh",
+   "displayName": "Desh Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/desh_plasma-722fcaecbab6.png",
+   "dominantColor": "#252727"
+  },
+  "Deuterium": {
+   "kind": "fluid",
+   "id": "deuterium",
+   "displayName": "Deuterium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/deuterium-2be9968fadef.png",
+   "dominantColor": "#feff8c"
+  },
+  "Deuterium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.deuterium",
+   "displayName": "Deuterium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/deuterium_plasma-9bbc1fcbfe5b.png",
+   "dominantColor": "#eefa00"
+  },
+  "Diamond": {
+   "kind": "item",
+   "id": "minecraft:diamond",
+   "displayName": "Diamond",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/diamond-cecaa9d58e2f.png",
+   "dominantColor": "#47a797"
+  },
+  "Diesel": {
+   "kind": "fluid",
+   "id": "fuel",
+   "displayName": "Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel-80dacffc74d1.png",
+   "dominantColor": "#959000"
+  },
+  "Diesel (Fuel)": {
+   "kind": "fluid",
+   "id": "fuel",
+   "displayName": "Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel-80dacffc74d1.png",
+   "dominantColor": "#959000"
+  },
+  "Diluted Hydrochloric Acid": {
+   "kind": "fluid",
+   "id": "dilutedhydrochloricacid_gt5u",
+   "displayName": "Diluted Hydrochloric Acid",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/diluted_hydrochloric_acid-7ef37e5497de.png",
+   "dominantColor": "#7c8784"
+  },
+  "Diluted Sulfuric Acid": {
+   "kind": "fluid",
+   "id": "dilutedsulfuricacid",
+   "displayName": "Diluted Sulfuric Acid",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/diluted_sulfuric_acid-4048774fa88c.png",
+   "dominantColor": "#9c611a"
+  },
+  "Distilled Water": {
+   "kind": "fluid",
+   "id": "ic2distilledwater",
+   "displayName": "Distilled Water",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/distilled_water-c28237774238.png",
+   "dominantColor": "#4151f5"
+  },
+  "Draconium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.draconium",
+   "displayName": "Draconium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/draconium_plasma-60f783dc2b9b.png",
+   "dominantColor": "#7243ac"
+  },
+  "Dragonblood Plasma": {
+   "kind": "fluid",
+   "id": "plasma.dragonblood",
+   "displayName": "Dragonblood Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dragonblood_plasma-7aef725077c3.png",
+   "dominantColor": "#cd2714"
+  },
+  "Dual Fuel Rod (Depleted Excited Plutonium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodexcitedplutonium2",
+   "displayName": "Dual Fuel Rod (Depleted Excited Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_depleted_excited_plutonium-f73a4254d7c7.png",
+   "dominantColor": "#1b7bb3"
+  },
+  "Dual Fuel Rod (Depleted Excited Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodexciteduranium2",
+   "displayName": "Dual Fuel Rod (Depleted Excited Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_depleted_excited_uranium-68bd08bc6497.png",
+   "dominantColor": "#686868"
+  },
+  "Dual Fuel Rod (Depleted High Density Plutonium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodhighdensityplutonium2",
+   "displayName": "Dual Fuel Rod (Depleted High Density Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_depleted_high_density_plutonium-f726abe83143.png",
+   "dominantColor": "#bb5e9c"
+  },
+  "Dual Fuel Rod (Depleted High Density Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodhighdensityuranium2",
+   "displayName": "Dual Fuel Rod (Depleted High Density Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_depleted_high_density_uranium-766105eb6821.png",
+   "dominantColor": "#229d80"
+  },
+  "Dual Fuel Rod (Depleted MOX)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodmox2",
+   "displayName": "Dual Fuel Rod (Depleted MOX)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_depleted_mox-98d7e6c1c38a.png",
+   "dominantColor": "#686868"
+  },
+  "Dual Fuel Rod (Depleted Naquadah)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodnaquadah2",
+   "displayName": "Dual Fuel Rod (Depleted Naquadah)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_depleted_naquadah-603c3a5724e9.png",
+   "dominantColor": "#353c6d"
+  },
+  "Dual Fuel Rod (Depleted Naquadria)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodnaquadria2",
+   "displayName": "Dual Fuel Rod (Depleted Naquadria)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_depleted_naquadria-3d202f450c54.png",
+   "dominantColor": "#353c6d"
+  },
+  "Dual Fuel Rod (Depleted Thorium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodthorium2",
+   "displayName": "Dual Fuel Rod (Depleted Thorium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_depleted_thorium-94df5b671174.png",
+   "dominantColor": "#656565"
+  },
+  "Dual Fuel Rod (Depleted Tiberium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodtiberium2",
+   "displayName": "Dual Fuel Rod (Depleted Tiberium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_depleted_tiberium-9dcab74f6b07.png",
+   "dominantColor": "#353c6d"
+  },
+  "Dual Fuel Rod (Depleted Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedroduranium2",
+   "displayName": "Dual Fuel Rod (Depleted Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_depleted_uranium-65fa8f9a17b1.png",
+   "dominantColor": "#7c7c7c"
+  },
+  "Dual Fuel Rod (Excited Plutonium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodexcitedplutonium2",
+   "displayName": "Dual Fuel Rod (Excited Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_excited_plutonium-ce3ce3146340.png",
+   "dominantColor": "#713c3c"
+  },
+  "Dual Fuel Rod (Excited Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodexciteduranium2",
+   "displayName": "Dual Fuel Rod (Excited Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_excited_uranium-83259ccba5fa.png",
+   "dominantColor": "#6d8d14"
+  },
+  "Dual Fuel Rod (High Density Plutonium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodhighdensityplutonium2",
+   "displayName": "Dual Fuel Rod (High Density Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_high_density_plutonium-1dfcc5a67dd3.png",
+   "dominantColor": "#bf4040"
+  },
+  "Dual Fuel Rod (High Density Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodhighdensityuranium2",
+   "displayName": "Dual Fuel Rod (High Density Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_high_density_uranium-ecb01c6807b3.png",
+   "dominantColor": "#2db41d"
+  },
+  "Dual Fuel Rod (MOX)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodmox2",
+   "displayName": "Dual Fuel Rod (Mox)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_mox-624373a80555.png",
+   "dominantColor": "#686868"
+  },
+  "Dual Fuel Rod (Naquadah)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodnaquadah2",
+   "displayName": "Dual Fuel Rod (Naquadah)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_naquadah-68006f3cb84b.png",
+   "dominantColor": "#353c6d"
+  },
+  "Dual Fuel Rod (Naquadria)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodnaquadria2",
+   "displayName": "Dual Fuel Rod (Naquadria)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_naquadria-a1f3728d744a.png",
+   "dominantColor": "#353c6d"
+  },
+  "Dual Fuel Rod (Thorium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodthorium2",
+   "displayName": "Dual Fuel Rod (Thorium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_thorium-9f38feed4158.png",
+   "dominantColor": "#656565"
+  },
+  "Dual Fuel Rod (Tiberium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodtiberium2",
+   "displayName": "Dual Fuel Rod (Tiberium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_tiberium-5f5bea39bb6a.png",
+   "dominantColor": "#353c6d"
+  },
+  "Dual Fuel Rod (Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.roduranium2",
+   "displayName": "Dual Fuel Rod (Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dual_fuel_rod_uranium-6015880cadee.png",
+   "dominantColor": "#538e19"
+  },
+  "Dysprosium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.dysprosium",
+   "displayName": "Dysprosium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/dysprosium_plasma-9953d87ee5e5.png",
+   "dominantColor": "#62cd4e"
+  },
+  "EIO Rocket Fuel": {
+   "kind": "fluid",
+   "id": "rocket_fuel",
+   "displayName": "Rocket Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/rocket_fuel-dea65d8543c6.png",
+   "dominantColor": "#707044"
+  },
+  "Ench. Golden Apple": {
+   "kind": "item",
+   "id": "minecraft:golden_apple@1",
+   "displayName": "Golden Apple",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/golden_apple-30f3496891a4.png",
+   "dominantColor": "#eaee57"
+  },
+  "Ender Shard": {
+   "kind": "item",
+   "id": "thaumictinkerer:kamiresource@7",
+   "displayName": "Ender Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ender_shard-3294f76ff261.png",
+   "dominantColor": "#145745"
+  },
+  "Endereye Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2533",
+   "displayName": "Endereye Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/endereye_dust-17897c5ea2c4.png",
+   "dominantColor": "#94e1d0"
+  },
+  "Endereye Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17533",
+   "displayName": "Endereye Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/endereye_plate-646c418ceae1.png",
+   "dominantColor": "#96e2d2"
+  },
+  "Enriched Naquadah Bolt (EV)": {
+   "kind": "item",
+   "id": "tconstruct:boltpart@1576",
+   "displayName": "Enriched Naquadah Bolt",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/enriched_naquadah_bolt-dd0bff6f1c8b.png",
+   "dominantColor": "#0d0f0d"
+  },
+  "Enriched Naquadah Rod (IV)": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@23326",
+   "displayName": "Enriched Naquadah Rod",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/enriched_naquadah_rod-49b297b43180.png",
+   "dominantColor": "#6b7280"
+  },
+  "Envy Shard": {
+   "kind": "item",
+   "id": "forbiddenmagic:nethershard@1",
+   "displayName": "Envy Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/envy_shard-acd796d9c8d9.png",
+   "dominantColor": "#0e8600"
+  },
+  "Erbium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.erbium",
+   "displayName": "Erbium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/erbium_plasma-eb4bc912674d.png",
+   "dominantColor": "#a4954f"
+  },
+  "Ethane": {
+   "kind": "fluid",
+   "id": "ethane",
+   "displayName": "Ethane",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ethane-dd224122734b.png",
+   "dominantColor": "#a3a3cf"
+  },
+  "Ethanol": {
+   "kind": "fluid",
+   "id": "bioethanol",
+   "displayName": "Ethanol",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ethanol-0395ca532614.png",
+   "dominantColor": "#ff6e00"
+  },
+  "Ethanol Gasoline": {
+   "kind": "fluid",
+   "id": "ethanol gasoline",
+   "displayName": "Ethanol Gasoline",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ethanol_gasoline-b37b5f25ee2b.png",
+   "dominantColor": "#b9a14f"
+  },
+  "Ether": {
+   "kind": "fluid",
+   "id": "ether",
+   "displayName": "Ether",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ether-0a2446b6ca12.png",
+   "dominantColor": "#bf9826"
+  },
+  "Ethereal Slate": {
+   "kind": "item",
+   "id": "awwayoftime:bloodmagicbaseitems@27",
+   "displayName": "Ethereal Slate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ethereal_slate-8990ec5299a3.png",
+   "dominantColor": "#641515"
+  },
+  "Ethylene": {
+   "kind": "fluid",
+   "id": "ethylene",
+   "displayName": "Ethylene",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ethylene-d58016c2fd1e.png",
+   "dominantColor": "#b7b7b7"
+  },
+  "Europium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.europium",
+   "displayName": "Europium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/europium_plasma-84b07827e909.png",
+   "dominantColor": "#e6b2fa"
+  },
+  "Exquisite Amber": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.02@30514",
+   "displayName": "Exquisite Amber",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/exquisite_amber-17dffddd4783.png",
+   "dominantColor": "#c96500"
+  },
+  "Eye of Ender": {
+   "kind": "item",
+   "id": "minecraft:ender_eye",
+   "displayName": "Eye of Ender",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/eye_of_ender-36034b272c07.png",
+   "dominantColor": "#20434d"
+  },
+  "Fermium": {
+   "kind": "fluid",
+   "id": "molten.fermium",
+   "displayName": "Fermium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fermium-b14631174f02.png",
+   "dominantColor": "#465317"
+  },
+  "Fermium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.fermium",
+   "displayName": "Fermium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fermium_plasma-5c42dee29232.png",
+   "dominantColor": "#465819"
+  },
+  "Fertile Manure Slurry": {
+   "kind": "fluid",
+   "id": "fluid.fertile.manure.slurry",
+   "displayName": "Fertile Manure Slurry",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fertile_manure_slurry-af05519c64a3.png",
+   "dominantColor": "#34280c"
+  },
+  "Fiery Blood": {
+   "kind": "item",
+   "id": "twilightforest:item.fieryblood",
+   "displayName": "Fiery Blood",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fiery_blood-d07c59eb558f.png",
+   "dominantColor": "#6c3636"
+  },
+  "Fiery Steel Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2346",
+   "displayName": "Fiery Steel Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fiery_steel_dust-8ac16d25ad62.png",
+   "dominantColor": "#340303"
+  },
+  "Fiery Steel Ingot": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@11346",
+   "displayName": "Fiery Steel Ingot",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fiery_steel_ingot-11159cdd42ed.png",
+   "dominantColor": "#290000"
+  },
+  "Fiery Steel Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17346",
+   "displayName": "Fiery Steel Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fiery_steel_plate-8b6f89044cb5.png",
+   "dominantColor": "#310000"
+  },
+  "Fiery Tears": {
+   "kind": "item",
+   "id": "twilightforest:item.fierytears",
+   "displayName": "Fiery Tears",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fiery_tears-f35ec5cb3e31.png",
+   "dominantColor": "#6e3737"
+  },
+  "Fire Water": {
+   "kind": "fluid",
+   "id": "fire_water",
+   "displayName": "Fire Water",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fire_water-6211c78f972e.png",
+   "dominantColor": "#8a490f"
+  },
+  "Fish Oil": {
+   "kind": "fluid",
+   "id": "fishoil",
+   "displayName": "Fish Oil",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fish_oil-9a190f974356.png",
+   "dominantColor": "#ffd746"
+  },
+  "Flawed Amber": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.02@28514",
+   "displayName": "Flawed Amber",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/flawed_amber-0598d4959056.png",
+   "dominantColor": "#c36200"
+  },
+  "Flawless Amber": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.02@29514",
+   "displayName": "Flawless Amber",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/flawless_amber-9a77f62a54a2.png",
+   "dominantColor": "#e07000"
+  },
+  "Flerovium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.flerovium_gt5u",
+   "displayName": "Flerovium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/flerovium_plasma-1de236a45a2d.png",
+   "dominantColor": "#ebf7f7"
+  },
+  "Fluorine": {
+   "kind": "fluid",
+   "id": "fluorine",
+   "displayName": "Fluorine",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fluorine-9f1c757a994e.png",
+   "dominantColor": "#569ad5"
+  },
+  "Fluorine Plasma": {
+   "kind": "fluid",
+   "id": "plasma.fluorine",
+   "displayName": "Fluorine Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fluorine_plasma-1de236a45a2d.png",
+   "dominantColor": "#ebf7f7"
+  },
+  "Fluxed Shard": {
+   "kind": "item",
+   "id": "taintedmagic:itemmaterial@4",
+   "displayName": "Fluxed Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fluxed_shard-7befddf16582.png",
+   "dominantColor": "#32093b"
+  },
+  "Force Plasma": {
+   "kind": "fluid",
+   "id": "plasma.force",
+   "displayName": "Force Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/force_plasma-b3d0293b6835.png",
+   "dominantColor": "#e9f514"
+  },
+  "Forestry Biomass": {
+   "kind": "fluid",
+   "id": "biomass",
+   "displayName": "Biomass",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/biomass-e4729ce3f4dd.png",
+   "dominantColor": "#638429"
+  },
+  "Formic Acid": {
+   "kind": "fluid",
+   "id": "formic acid",
+   "displayName": "Formic Acid",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/formic_acid-85c19cb90bc4.png",
+   "dominantColor": "#cf8a61"
+  },
+  "Fuel Rod (Depleted Excited Plutonium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodexcitedplutonium",
+   "displayName": "Fuel Rod (Depleted Excited Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_depleted_excited_plutonium-57a6d07c4b4c.png",
+   "dominantColor": "#1b7bb3"
+  },
+  "Fuel Rod (Depleted Excited Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodexciteduranium",
+   "displayName": "Fuel Rod (Depleted Excited Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_depleted_excited_uranium-b7e419d08638.png",
+   "dominantColor": "#7c7c7c"
+  },
+  "Fuel Rod (Depleted High Density Plutonium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodhighdensityplutonium",
+   "displayName": "Fuel Rod (Depleted High Density Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_depleted_high_density_plutonium-35c05c0845a8.png",
+   "dominantColor": "#bb5e9c"
+  },
+  "Fuel Rod (Depleted High Density Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodhighdensityuranium",
+   "displayName": "Fuel Rod (Depleted High Density Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_depleted_high_density_uranium-eca65a4d1096.png",
+   "dominantColor": "#229d80"
+  },
+  "Fuel Rod (Depleted MOX)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodmox",
+   "displayName": "Fuel Rod (Depleted MOX)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_depleted_mox-562dd415812b.png",
+   "dominantColor": "#676767"
+  },
+  "Fuel Rod (Depleted Naquadah)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodnaquadah",
+   "displayName": "Fuel Rod (Depleted Naquadah)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_depleted_naquadah-b6667486322f.png",
+   "dominantColor": "#353c6d"
+  },
+  "Fuel Rod (Depleted Naquadria)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodnaquadria",
+   "displayName": "Fuel Rod (Depleted Naquadria)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_depleted_naquadria-ba9e46092b2b.png",
+   "dominantColor": "#353c6d"
+  },
+  "Fuel Rod (Depleted Thorium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodthorium",
+   "displayName": "Fuel Rod (Depleted Thorium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_depleted_thorium-6e3cd2da78ec.png",
+   "dominantColor": "#646464"
+  },
+  "Fuel Rod (Depleted Tiberium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodtiberium",
+   "displayName": "Fuel Rod (Depleted Tiberium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_depleted_tiberium-6becc04c2064.png",
+   "dominantColor": "#353c6d"
+  },
+  "Fuel Rod (Depleted Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedroduranium",
+   "displayName": "Fuel Rod (Depleted Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_depleted_uranium-31b3d58f1a68.png",
+   "dominantColor": "#598a72"
+  },
+  "Fuel Rod (Excited Plutonium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodexcitedplutonium",
+   "displayName": "Fuel Rod (Excited Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_excited_plutonium-85d02bb994c0.png",
+   "dominantColor": "#703a3a"
+  },
+  "Fuel Rod (Excited Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodexciteduranium",
+   "displayName": "Fuel Rod (Excited Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_excited_uranium-e459c124ca95.png",
+   "dominantColor": "#6d8d14"
+  },
+  "Fuel Rod (High Density Plutonium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodhighdensityplutonium",
+   "displayName": "Fuel Rod (High Density Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_high_density_plutonium-bb7c1b60e8e0.png",
+   "dominantColor": "#c13f3f"
+  },
+  "Fuel Rod (High Density Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodhighdensityuranium",
+   "displayName": "Fuel Rod (High Density Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_high_density_uranium-506b02727ded.png",
+   "dominantColor": "#2db41d"
+  },
+  "Fuel Rod (MOX)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodmox",
+   "displayName": "Fuel Rod (Mox)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_mox-eea756992eae.png",
+   "dominantColor": "#676767"
+  },
+  "Fuel Rod (Naquadah)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodnaquadah",
+   "displayName": "Fuel Rod (Naquadah)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_naquadah-96ca8577432f.png",
+   "dominantColor": "#353c6d"
+  },
+  "Fuel Rod (Naquadria)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodnaquadria",
+   "displayName": "Fuel Rod (Naquadria)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_naquadria-68dd8a3439c1.png",
+   "dominantColor": "#353c6d"
+  },
+  "Fuel Rod (Thorium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodthorium",
+   "displayName": "Fuel Rod (Thorium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_thorium-684e1e765f01.png",
+   "dominantColor": "#646464"
+  },
+  "Fuel Rod (Tiberium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodtiberium",
+   "displayName": "Fuel Rod (Tiberium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_tiberium-fa1525f31a3e.png",
+   "dominantColor": "#353c6d"
+  },
+  "Fuel Rod (Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.roduranium",
+   "displayName": "Fuel Rod (Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fuel_rod_uranium-5487a64a8110.png",
+   "dominantColor": "#538e19"
+  },
+  "Gadolinium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.gadolinium",
+   "displayName": "Gadolinium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/gadolinium_plasma-5748e1445e06.png",
+   "dominantColor": "#37b61b"
+  },
+  "Gallium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.gallium",
+   "displayName": "Gallium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/gallium_plasma-e0fcede28ad3.png",
+   "dominantColor": "#ced8fa"
+  },
+  "Gasoline": {
+   "kind": "fluid",
+   "id": "gasoline",
+   "displayName": "Gasoline",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/gasoline-42e9575f6a68.png",
+   "dominantColor": "#cf8600"
+  },
+  "Germanium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.germanium",
+   "displayName": "Germanium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/germanium_plasma-23e85962b91f.png",
+   "dominantColor": "#bbc4c4"
+  },
+  "Ghast Tear": {
+   "kind": "item",
+   "id": "minecraft:ghast_tear",
+   "displayName": "Ghast Tear",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ghast_tear-8ff0c456685b.png",
+   "dominantColor": "#738484"
+  },
+  "Gluttony Shard": {
+   "kind": "item",
+   "id": "forbiddenmagic:gluttonyshard",
+   "displayName": "Gluttony Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/gluttony_shard-5fee1bfcf809.png",
+   "dominantColor": "#c40021"
+  },
+  "Glycerol": {
+   "kind": "fluid",
+   "id": "glycerol",
+   "displayName": "Glycerol",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/glycerol-c152675fa047.png",
+   "dominantColor": "#6eb46e"
+  },
+  "Gold Plasma": {
+   "kind": "fluid",
+   "id": "plasma.gold",
+   "displayName": "Gold Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/gold_plasma-319ceb5c2993.png",
+   "dominantColor": "#eefa1d"
+  },
+  "Greed Shard": {
+   "kind": "item",
+   "id": "forbiddenmagic:nethershard@6",
+   "displayName": "Greed Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/greed_shard-95c4612b2055.png",
+   "dominantColor": "#937100"
+  },
+  "H8N4C2O4 (Green)": {
+   "kind": "fluid",
+   "id": "fluid.rocketfuelmixa",
+   "displayName": "H8N4C2O4 Rocket Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/h8n4c2o4_rocket_fuel-1469b1c04033.png",
+   "dominantColor": "#29b229"
+  },
+  "Heavy Fuel": {
+   "kind": "fluid",
+   "id": "liquid_heavy_fuel",
+   "displayName": "Heavy Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/heavy_fuel-d864cf716267.png",
+   "dominantColor": "#ffedb0"
+  },
+  "Heavy Naquadah Fuel": {
+   "kind": "fluid",
+   "id": "heavy naquadah fuel",
+   "displayName": "Heavy Naquadah Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/heavy_naquadah_fuel-f788d0ad7f58.png",
+   "dominantColor": "#2ccf2c"
+  },
+  "Heavy Oil": {
+   "kind": "fluid",
+   "id": "liquid_heavy_oil",
+   "displayName": "Heavy Oil",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/heavy_oil-c65d4423951a.png",
+   "dominantColor": "#6b7280"
+  },
+  "Helium": {
+   "kind": "fluid",
+   "id": "helium",
+   "displayName": "Helium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/helium-1f1b4f3313df.png",
+   "dominantColor": "#9e2500"
+  },
+  "Helium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.helium",
+   "displayName": "Helium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/helium_plasma-9bbc1fcbfe5b.png",
+   "dominantColor": "#eefa00"
+  },
+  "Helium-3": {
+   "kind": "fluid",
+   "id": "helium-3",
+   "displayName": "Helium-3",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/helium-3-a06dc129a092.png",
+   "dominantColor": "#feffcd"
+  },
+  "High Octane Gasoline": {
+   "kind": "fluid",
+   "id": "highoctanegasoline",
+   "displayName": "High Octane Gasoline",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/high_octane_gasoline-42e9575f6a68.png",
+   "dominantColor": "#cf8600"
+  },
+  "Holmium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.holmium",
+   "displayName": "Holmium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/holmium_plasma-b3a30accaf4d.png",
+   "dominantColor": "#1508a3"
+  },
+  "Hootch": {
+   "kind": "fluid",
+   "id": "hootch",
+   "displayName": "Hootch",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/hootch-02df22a05ccb.png",
+   "dominantColor": "#6b7280"
+  },
+  "Hot Coolant": {
+   "kind": "fluid",
+   "id": "ic2hotcoolant",
+   "displayName": "IC2 Hot Coolant",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ic2_hot_coolant-1a01a9a5920c.png",
+   "dominantColor": "#b72a35"
+  },
+  "Hot Solar Salt": {
+   "kind": "fluid",
+   "id": "molten.solarsalthot",
+   "displayName": "Solar Salt (Hot)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/solar_salt_hot-1967871e375c.png",
+   "dominantColor": "#b91717"
+  },
+  "Hydrochloric Acid": {
+   "kind": "fluid",
+   "id": "hydrochloricacid_gt5u",
+   "displayName": "Hydrochloric Acid",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/hydrochloric_acid-ad6f84021c25.png",
+   "dominantColor": "#94a29f"
+  },
+  "Hydrofluoric Acid": {
+   "kind": "fluid",
+   "id": "hydrofluoricacid_gt5u",
+   "displayName": "Hydrofluoric Acid",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/hydrofluoric_acid-ca52416c18b1.png",
+   "dominantColor": "#006e8a"
+  },
+  "Hydrogen": {
+   "kind": "fluid",
+   "id": "hydrogen",
+   "displayName": "Hydrogen",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/hydrogen-c77805a4cf6b.png",
+   "dominantColor": "#ff6565"
+  },
+  "Hydrogen Plasma": {
+   "kind": "fluid",
+   "id": "plasma.hydrogen",
+   "displayName": "Hydrogen Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/hydrogen_plasma-d2c9993c6844.png",
+   "dominantColor": "#0000fa"
+  },
+  "Hypochlorous Acid": {
+   "kind": "fluid",
+   "id": "hypochlorousacid",
+   "displayName": "Hypochlorous Acid",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/hypochlorous_acid-ed250e9a57cd.png",
+   "dominantColor": "#5a7076"
+  },
+  "Hypogen Plasma": {
+   "kind": "fluid",
+   "id": "plasma.hypogen",
+   "displayName": "Hypogen Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/hypogen_plasma-b8c3b2f5f332.png",
+   "dominantColor": "#cd764a"
+  },
+  "Ichorium Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2978",
+   "displayName": "Ichorium Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ichorium_dust-4c9a81adb984.png",
+   "dominantColor": "#542207"
+  },
+  "Ichorium Ingot": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@11978",
+   "displayName": "Ichorium Ingot",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ichorium_ingot-a66c48e5ad1f.png",
+   "dominantColor": "#4c1d04"
+  },
+  "Ichorium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.ichorium",
+   "displayName": "Ichorium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ichorium_plasma-6e558010e91e.png",
+   "dominantColor": "#ba7010"
+  },
+  "Ichorium Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17978",
+   "displayName": "Ichorium Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ichorium_plate-d7ddce7019d8.png",
+   "dominantColor": "#572408"
+  },
+  "Ignis Crystal Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17541",
+   "displayName": "Ignis Crystal Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ignis_crystal_plate-356df7e5af95.png",
+   "dominantColor": "#d60909"
+  },
+  "Ignis Crystal Powder": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2541",
+   "displayName": "Ignis Crystal Powder",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ignis_crystal_powder-4bcc72a3a31f.png",
+   "dominantColor": "#db0909"
+  },
+  "Ignis Shard": {
+   "kind": "item",
+   "id": "tgregworks:tgregtoolpartchunk@1564",
+   "displayName": "Ignis Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ignis_shard-71e5a37db5b6.png",
+   "dominantColor": "#890000"
+  },
+  "Imbued Slate": {
+   "kind": "item",
+   "id": "awwayoftime:imbuedslate",
+   "displayName": "Imbued Slate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/imbued_slate-a41755eabca4.png",
+   "dominantColor": "#461b1b"
+  },
+  "Indium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.indium",
+   "displayName": "Indium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/indium_plasma-cc7c95054b0f.png",
+   "dominantColor": "#3c007d"
+  },
+  "Infinity Catalyst Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2394",
+   "displayName": "Infinity Catalyst Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/infinity_catalyst_dust-edfb54de993e.png",
+   "dominantColor": "#e1e1e1"
+  },
+  "Infinity Catalyst Ingot": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@11394",
+   "displayName": "Infinity Catalyst Ingot",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/infinity_catalyst_ingot-6b2aee07b655.png",
+   "dominantColor": "#a0a0a0"
+  },
+  "Infinity Catalyst Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17394",
+   "displayName": "Infinity Catalyst Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/infinity_catalyst_plate-f0e3716ed19e.png",
+   "dominantColor": "#cfcfcf"
+  },
+  "Infinity Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2397",
+   "displayName": "Infinity Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/infinity_dust-f5f5a7360517.png",
+   "dominantColor": "#784846"
+  },
+  "Infinity Ingot": {
+   "kind": "item",
+   "id": "avaritia:resource@6",
+   "displayName": "Infinity Ingot",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/infinity_ingot-b61989c44e8e.png",
+   "dominantColor": "#efd05b"
+  },
+  "Infinity Plasma": {
+   "kind": "fluid",
+   "id": "plasma.infinity",
+   "displayName": "Infinity Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/infinity_plasma-e6292d30f8d7.png",
+   "dominantColor": "#be5d5c"
+  },
+  "Infinity Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17397",
+   "displayName": "Infinity Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/infinity_plate-794ae7460126.png",
+   "dominantColor": "#ecd269"
+  },
+  "Iodine": {
+   "kind": "fluid",
+   "id": "iodine",
+   "displayName": "Iodine",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/iodine-5c801f52cee9.png",
+   "dominantColor": "#8b208e"
+  },
+  "Iodine Plasma": {
+   "kind": "fluid",
+   "id": "plasma.iodine",
+   "displayName": "Iodine Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/iodine_plasma-142405e27062.png",
+   "dominantColor": "#5a5e5e"
+  },
+  "Iridium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.iridium",
+   "displayName": "Iridium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/iridium_plasma-4eb8cdec4bf7.png",
+   "dominantColor": "#e1ecf1"
+  },
+  "Iron Plasma": {
+   "kind": "fluid",
+   "id": "plasma.iron",
+   "displayName": "Iron Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/iron_plasma-23e85962b91f.png",
+   "dominantColor": "#bbc4c4"
+  },
+  "Ironwood Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2338",
+   "displayName": "Ironwood Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ironwood_dust-55e065a7e9df.png",
+   "dominantColor": "#585240"
+  },
+  "Ironwood Ingot": {
+   "kind": "item",
+   "id": "twilightforest:item.ironwoodingot",
+   "displayName": "Ironwood Ingot",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ironwood_ingot-6ee7ac63a7cb.png",
+   "dominantColor": "#3f332b"
+  },
+  "Ironwood Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17338",
+   "displayName": "Ironwood Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ironwood_plate-794d011e8999.png",
+   "dominantColor": "#827a5f"
+  },
+  "Jet Fuel A": {
+   "kind": "fluid",
+   "id": "jet fuel a",
+   "displayName": "Jet Fuel A",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/jet_fuel_a-f0f38e8d33f2.png",
+   "dominantColor": "#cf7b00"
+  },
+  "Jet Fuel No.3": {
+   "kind": "fluid",
+   "id": "jet fuel no.3",
+   "displayName": "Jet Fuel No.3",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/jet_fuel_no.3-6747a5d95d26.png",
+   "dominantColor": "#7a004f"
+  },
+  "Knightmetal Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2362",
+   "displayName": "Knightmetal Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/knightmetal_dust-ff816cf31c6c.png",
+   "dominantColor": "#a0b798"
+  },
+  "Knightmetal Ingot": {
+   "kind": "item",
+   "id": "twilightforest:item.knightmetal",
+   "displayName": "Knightmetal Ingot",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/knightmetal_ingot-0c57f6b8c12a.png",
+   "dominantColor": "#adbd99"
+  },
+  "Knightmetal Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17362",
+   "displayName": "Knightmetal Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/knightmetal_plate-cfe1275fc2e0.png",
+   "dominantColor": "#a7bf9f"
+  },
+  "Krypton Plasma": {
+   "kind": "fluid",
+   "id": "plasma.krypton",
+   "displayName": "Krypton Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/krypton_plasma-a3f5db576dd6.png",
+   "dominantColor": "#05c4d7"
+  },
+  "Lanthanum Plasma": {
+   "kind": "fluid",
+   "id": "plasma.lanthanum",
+   "displayName": "Lanthanum Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/lanthanum_plasma-f126e416dec1.png",
+   "dominantColor": "#818787"
+  },
+  "Lava": {
+   "kind": "fluid",
+   "id": "lava",
+   "displayName": "Lava",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/lava-7ff6760f361a.png",
+   "dominantColor": "#d75f14"
+  },
+  "Lead Plasma": {
+   "kind": "fluid",
+   "id": "plasma.lead",
+   "displayName": "Lead Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/lead_plasma-97cc1b7415e4.png",
+   "dominantColor": "#836289"
+  },
+  "LFTR Fuel 1": {
+   "kind": "fluid",
+   "id": "molten.lftrfuel1",
+   "displayName": "LFTR Fuel 1",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/lftr_fuel_1-08b552113630.png",
+   "dominantColor": "#a9d7a5"
+  },
+  "LFTR Fuel 2": {
+   "kind": "fluid",
+   "id": "molten.lftrfuel2",
+   "displayName": "LFTR Fuel 2",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/lftr_fuel_2-42eb82aba92e.png",
+   "dominantColor": "#a8d1a6"
+  },
+  "LFTR Fuel 3": {
+   "kind": "fluid",
+   "id": "molten.lftrfuel3",
+   "displayName": "LFTR Fuel 3",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/lftr_fuel_3-4ec5f808f13d.png",
+   "dominantColor": "#7cae83"
+  },
+  "Li2BeF4": {
+   "kind": "fluid",
+   "id": "molten.lithiumtetrafluoroberyllatelftb",
+   "displayName": "Lithium Tetrafluoroberyllate (LFTB)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/lithium_tetrafluoroberyllate_lftb-3f1ee36abe1e.png",
+   "dominantColor": "#b4cbbd"
+  },
+  "Life Essence Cell": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@30694",
+   "displayName": "Life Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/life_cell-b81bc16ebf07.png",
+   "dominantColor": "#763434"
+  },
+  "Light Fuel": {
+   "kind": "fluid",
+   "id": "liquid_light_fuel",
+   "displayName": "Light Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/light_fuel-596998ac1ce8.png",
+   "dominantColor": "#fff000"
+  },
+  "Light Naquadah Fuel": {
+   "kind": "fluid",
+   "id": "light naquadah fuel",
+   "displayName": "Light Naquadah Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/light_naquadah_fuel-1016c19d5c85.png",
+   "dominantColor": "#4ba54b"
+  },
+  "Light Oil": {
+   "kind": "fluid",
+   "id": "liquid_light_oil",
+   "displayName": "Light Oil",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/light_oil-c65d4423951a.png",
+   "dominantColor": "#6b7280"
+  },
+  "Lignite Coal": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@8538",
+   "displayName": "Lignite Coal",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/lignite_coal-4fe74fdab13f.png",
+   "dominantColor": "#4d3636"
+  },
+  "Liquid Air": {
+   "kind": "fluid",
+   "id": "liquidair",
+   "displayName": "Liquid Air",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/liquid_air-def68c6cca7b.png",
+   "dominantColor": "#86beff"
+  },
+  "Liquid Hydrogen": {
+   "kind": "fluid",
+   "id": "fluid.liquidhydrogen",
+   "displayName": "Liquid Hydrogen",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/liquid_hydrogen-37cfa0a538ba.png",
+   "dominantColor": "#3d3db2"
+  },
+  "Liquid Oxygen": {
+   "kind": "fluid",
+   "id": "liquidoxygen",
+   "displayName": "Liquid Oxygen",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/liquid_oxygen-d007e1f6f8c6.png",
+   "dominantColor": "#00799e"
+  },
+  "Lithium Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2006",
+   "displayName": "Lithium Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/lithium_dust-6bdca04f9cad.png",
+   "dominantColor": "#797689"
+  },
+  "Lithium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.lithium",
+   "displayName": "Lithium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/lithium_plasma-5d02c1e89c34.png",
+   "dominantColor": "#d2d8fa"
+  },
+  "Liveroot Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2832",
+   "displayName": "Liveroot Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/liveroot_dust-b074fd475ad9.png",
+   "dominantColor": "#817500"
+  },
+  "Liveroots": {
+   "kind": "item",
+   "id": "twilightforest:tile.tfroots@1",
+   "displayName": "Liveroots",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/liveroots-30d5156c484c.png",
+   "dominantColor": "#37270a"
+  },
+  "Long Enriched Naquadah Rod (LuV)": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.02@22326",
+   "displayName": "Long Enriched Naquadah Rod",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/long_enriched_naquadah_rod-e7d0ae4317ff.png",
+   "dominantColor": "#6b7280"
+  },
+  "Long Naquadah Rod": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.02@22324",
+   "displayName": "Long Naquadah Rod",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/long_naquadah_rod-9ed35548cba7.png",
+   "dominantColor": "#6b7280"
+  },
+  "Long Tiberium Rod (LuV)": {
+   "kind": "item",
+   "id": "bartworks:gt.bwmetageneratedsticklong@89",
+   "displayName": "Long Tiberium Rod",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/long_tiberium_rod-bc1e1de78904.png",
+   "dominantColor": "#1dcd1d"
+  },
+  "LPG": {
+   "kind": "fluid",
+   "id": "liquid_lpg",
+   "displayName": "LPG",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/lpg-cd6daf9b4807.png",
+   "dominantColor": "#fffcb8"
+  },
+  "Lubricant": {
+   "kind": "fluid",
+   "id": "lubricant",
+   "displayName": "Lubricant",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/lubricant-d864cf716267.png",
+   "dominantColor": "#ffedb0"
+  },
+  "Lust Shard": {
+   "kind": "item",
+   "id": "forbiddenmagic:nethershard@4",
+   "displayName": "Lust Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/lust_shard-fd31aad8e36a.png",
+   "dominantColor": "#a3597f"
+  },
+  "Lutetium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.lutetium",
+   "displayName": "Lutetium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/lutetium_plasma-d247a7e1bcf6.png",
+   "dominantColor": "#af3dc3"
+  },
+  "Magic Solid Super Fuel": {
+   "kind": "item",
+   "id": "gregtech:gt.blockreinforced@7",
+   "displayName": "Magic Solid Super Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/magic_solid_super_fuel-5cdf1d1c0291.png",
+   "dominantColor": "#121212"
+  },
+  "Magic Tallow": {
+   "kind": "item",
+   "id": "thaumcraft:itemresource@4",
+   "displayName": "Magic Tallow",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/magic_tallow-91d825d8b44c.png",
+   "dominantColor": "#c39649"
+  },
+  "Magic Wax": {
+   "kind": "item",
+   "id": "magicbees:wax",
+   "displayName": "Magic Wax",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/magic_wax-f423be9179d5.png",
+   "dominantColor": "#5c1d62"
+  },
+  "Magnesium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.magnesium",
+   "displayName": "Magnesium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/magnesium_plasma-820273784d9c.png",
+   "dominantColor": "#eec4c4"
+  },
+  "Manganese Plasma": {
+   "kind": "fluid",
+   "id": "plasma.manganese",
+   "displayName": "Manganese Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/manganese_plasma-7ea8c4ba8340.png",
+   "dominantColor": "#e9f5f5"
+  },
+  "Manure Slurry": {
+   "kind": "fluid",
+   "id": "fluid.manure.slurry",
+   "displayName": "Manure Slurry",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/manure_slurry-fee8f35e5cfc.png",
+   "dominantColor": "#3c240c"
+  },
+  "Mercury": {
+   "kind": "fluid",
+   "id": "mercury",
+   "displayName": "Mercury",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/mercury-d31e002d4def.png",
+   "dominantColor": "#bfbfbf"
+  },
+  "Mercury Cell": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@30087",
+   "displayName": "Mercury Cell",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/mercury_cell-c04cb4a6876f.png",
+   "dominantColor": "#a99191"
+  },
+  "Mercury Plasma": {
+   "kind": "fluid",
+   "id": "plasma.mercury",
+   "displayName": "Mercury Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/mercury_plasma-83981ac5a61d.png",
+   "dominantColor": "#eed8d8"
+  },
+  "Meteoric Iron Plasma": {
+   "kind": "fluid",
+   "id": "plasma.meteoriciron",
+   "displayName": "Meteoric Iron Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/meteoric_iron_plasma-c7cc076ba937.png",
+   "dominantColor": "#5d314e"
+  },
+  "Methane": {
+   "kind": "fluid",
+   "id": "methane",
+   "displayName": "Methane",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/methane-8d59733b0991.png",
+   "dominantColor": "#777400"
+  },
+  "Methanol": {
+   "kind": "fluid",
+   "id": "methanol",
+   "displayName": "Methanol",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/methanol-1bbce278ff81.png",
+   "dominantColor": "#8a6e00"
+  },
+  "Molten Advanced Nitinol": {
+   "kind": "fluid",
+   "id": "molten.advancednitinol",
+   "displayName": "Molten Advanced Nitinol",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_advanced_nitinol-0b3d421dfcae.png",
+   "dominantColor": "#c4a8e5"
+  },
+  "Molten Aluminium": {
+   "kind": "fluid",
+   "id": "molten.aluminium",
+   "displayName": "Molten Aluminium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_aluminium-e1bed6772726.png",
+   "dominantColor": "#78bde2"
+  },
+  "Molten Americium": {
+   "kind": "fluid",
+   "id": "molten.americium",
+   "displayName": "Molten Americium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_americium-75bcea6a6617.png",
+   "dominantColor": "#bcbcbc"
+  },
+  "Molten Antimony": {
+   "kind": "fluid",
+   "id": "molten.antimony",
+   "displayName": "Molten Antimony",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_antimony-658e68bff094.png",
+   "dominantColor": "#d0d0e3"
+  },
+  "Molten Arcanite": {
+   "kind": "fluid",
+   "id": "molten.arcanite",
+   "displayName": "Molten Arcanite",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_arcanite-6b53620b1ab9.png",
+   "dominantColor": "#6e754d"
+  },
+  "Molten Ardite": {
+   "kind": "fluid",
+   "id": "molten.ardite",
+   "displayName": "Molten Ardite",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_ardite-925dcf3cdc16.png",
+   "dominantColor": "#ea7900"
+  },
+  "Molten Arsenic": {
+   "kind": "fluid",
+   "id": "molten.arsenic",
+   "displayName": "Molten Arsenic",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_arsenic-d6d87ffb1794.png",
+   "dominantColor": "#e7e7e7"
+  },
+  "Molten Astral Titanium": {
+   "kind": "fluid",
+   "id": "molten.astraltitanium",
+   "displayName": "Molten Astral Titanium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_astral_titanium-60dbc792e63c.png",
+   "dominantColor": "#cd95e0"
+  },
+  "Molten Atomic Separation Catalyst": {
+   "kind": "fluid",
+   "id": "molten.atomic separation catalyst",
+   "displayName": "Molten Atomic Separation Catalyst",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_atomic_separation_catalyst-bc3d0ca4a3e7.png",
+   "dominantColor": "#da580b"
+  },
+  "Molten Awakened Draconium": {
+   "kind": "fluid",
+   "id": "molten.draconiumawakened",
+   "displayName": "Molten Awakened Draconium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_awakened_draconium-f2a2a8d53418.png",
+   "dominantColor": "#e54900"
+  },
+  "Molten Barium": {
+   "kind": "fluid",
+   "id": "molten.barium",
+   "displayName": "Molten Barium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_barium-d6d87ffb1794.png",
+   "dominantColor": "#e7e7e7"
+  },
+  "Molten Bedrockium": {
+   "kind": "fluid",
+   "id": "molten.bedrockium",
+   "displayName": "Molten Bedrockium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_bedrockium-7e351f55628b.png",
+   "dominantColor": "#2d2d2d"
+  },
+  "Molten Beryllium": {
+   "kind": "fluid",
+   "id": "molten.beryllium",
+   "displayName": "Molten Beryllium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_beryllium-30d5164e5476.png",
+   "dominantColor": "#5ea95e"
+  },
+  "Molten Bismuth": {
+   "kind": "fluid",
+   "id": "molten.bismuth",
+   "displayName": "Molten Bismuth",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_bismuth-09d7313c53a2.png",
+   "dominantColor": "#5e9696"
+  },
+  "Molten Boron": {
+   "kind": "fluid",
+   "id": "molten.boron",
+   "displayName": "Molten Boron",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_boron-990a3c10af7e.png",
+   "dominantColor": "#c7edc7"
+  },
+  "Molten Caesium": {
+   "kind": "fluid",
+   "id": "molten.caesium",
+   "displayName": "Molten Caesium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_caesium-18a0f0096e55.png",
+   "dominantColor": "#a6b9d1"
+  },
+  "Molten Calcium": {
+   "kind": "fluid",
+   "id": "molten.calcium",
+   "displayName": "Molten Calcium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_calcium-ee0d8f9732d2.png",
+   "dominantColor": "#e8dfdf"
+  },
+  "Molten Californium": {
+   "kind": "fluid",
+   "id": "molten.californium",
+   "displayName": "Molten Californium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_californium-d8cfa997f9e9.png",
+   "dominantColor": "#4f66be"
+  },
+  "Molten Celestial Tungsten": {
+   "kind": "fluid",
+   "id": "molten.celestialtungsten",
+   "displayName": "Molten Celestial Tungsten",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_celestial_tungsten-d3270ca489c9.png",
+   "dominantColor": "#2e2e2e"
+  },
+  "Molten Cerium": {
+   "kind": "fluid",
+   "id": "molten.cerium",
+   "displayName": "Molten Cerium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_cerium-8d371075a342.png",
+   "dominantColor": "#74c887"
+  },
+  "Molten Chromatic Glass": {
+   "kind": "fluid",
+   "id": "molten.chromaticglass",
+   "displayName": "Molten Chromatic Glass",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_chromatic_glass-36af04a4d697.png",
+   "dominantColor": "#e3e3e3"
+  },
+  "Molten Chrome": {
+   "kind": "fluid",
+   "id": "molten.chrome",
+   "displayName": "Molten Chrome",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_chrome-78b524ceb476.png",
+   "dominantColor": "#f3dbdb"
+  },
+  "Molten Cobalt": {
+   "kind": "fluid",
+   "id": "molten.cobalt",
+   "displayName": "Molten Cobalt",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_cobalt-2cb1d27fe814.png",
+   "dominantColor": "#4b4beb"
+  },
+  "Molten Copper": {
+   "kind": "fluid",
+   "id": "molten.copper",
+   "displayName": "Molten Copper",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_copper-6204fcf03d8b.png",
+   "dominantColor": "#ef5e00"
+  },
+  "Molten Cosmic Neutronium": {
+   "kind": "fluid",
+   "id": "molten.cosmicneutronium",
+   "displayName": "Molten Cosmic Neutronium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_cosmic_neutronium-0413c761a2c9.png",
+   "dominantColor": "#373737"
+  },
+  "Molten Creon": {
+   "kind": "fluid",
+   "id": "molten.creon",
+   "displayName": "Molten Creon",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_creon-3d2f33e5f454.png",
+   "dominantColor": "#420042"
+  },
+  "Molten Curium": {
+   "kind": "fluid",
+   "id": "molten.curium",
+   "displayName": "Molten Curium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_curium-081d765687e4.png",
+   "dominantColor": "#a24f66"
+  },
+  "Molten Desh": {
+   "kind": "fluid",
+   "id": "molten.desh",
+   "displayName": "Molten Desh",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_desh-a803fce4b2d7.png",
+   "dominantColor": "#262626"
+  },
+  "Molten Draconium": {
+   "kind": "fluid",
+   "id": "molten.draconium",
+   "displayName": "Molten Draconium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_draconium-b3450f530e84.png",
+   "dominantColor": "#7340a5"
+  },
+  "Molten Dragonblood": {
+   "kind": "fluid",
+   "id": "molten.dragonblood",
+   "displayName": "Molten Dragonblood",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_dragonblood-a0e7e70fbe9a.png",
+   "dominantColor": "#cb2513"
+  },
+  "Molten Duranium": {
+   "kind": "fluid",
+   "id": "molten.duranium",
+   "displayName": "Molten Duranium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_duranium-d6d87ffb1794.png",
+   "dominantColor": "#e7e7e7"
+  },
+  "Molten Dysprosium": {
+   "kind": "fluid",
+   "id": "molten.dysprosium",
+   "displayName": "Molten Dysprosium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_dysprosium-f4887f747224.png",
+   "dominantColor": "#63c54b"
+  },
+  "Molten Enriched Naquadah Alloy": {
+   "kind": "fluid",
+   "id": "molten.enriched naquadah alloy",
+   "displayName": "Molten Enriched Naquadah Alloy",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_enriched_naquadah_alloy-20a053a08959.png",
+   "dominantColor": "#15063c"
+  },
+  "Molten Erbium": {
+   "kind": "fluid",
+   "id": "molten.erbium",
+   "displayName": "Molten Erbium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_erbium-7b1ca17eb1e3.png",
+   "dominantColor": "#a58e4c"
+  },
+  "Molten Europium": {
+   "kind": "fluid",
+   "id": "molten.europium",
+   "displayName": "Molten Europium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_europium-2775c150ad22.png",
+   "dominantColor": "#e9abf1"
+  },
+  "Molten Flerovium": {
+   "kind": "fluid",
+   "id": "molten.flerovium_gt5u",
+   "displayName": "Molten Flerovium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_flerovium-d6d87ffb1794.png",
+   "dominantColor": "#e7e7e7"
+  },
+  "Molten Force": {
+   "kind": "fluid",
+   "id": "molten.force",
+   "displayName": "Molten Force",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_force-cf53f85f16b4.png",
+   "dominantColor": "#c7c700"
+  },
+  "Molten Gadolinium": {
+   "kind": "fluid",
+   "id": "molten.gadolinium",
+   "displayName": "Molten Gadolinium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_gadolinium-fad47f45146c.png",
+   "dominantColor": "#37af1b"
+  },
+  "Molten Gallium": {
+   "kind": "fluid",
+   "id": "molten.gallium",
+   "displayName": "Molten Gallium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_gallium-4a48b46edfd0.png",
+   "dominantColor": "#d1d1f2"
+  },
+  "Molten Germanium": {
+   "kind": "fluid",
+   "id": "molten.germanium",
+   "displayName": "Molten Germanium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_germanium-167ca643baa6.png",
+   "dominantColor": "#b9b9b9"
+  },
+  "Molten Glowstone": {
+   "kind": "fluid",
+   "id": "molten.glowstone",
+   "displayName": "Molten Glowstone",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_glowstone-cf53f85f16b4.png",
+   "dominantColor": "#c7c700"
+  },
+  "Molten Gold": {
+   "kind": "fluid",
+   "id": "molten.gold",
+   "displayName": "Molten Gold",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_gold-22eb16534056.png",
+   "dominantColor": "#f0f01c"
+  },
+  "Molten Holmium": {
+   "kind": "fluid",
+   "id": "molten.holmium",
+   "displayName": "Molten Holmium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_holmium-0f9a064f12a6.png",
+   "dominantColor": "#15079b"
+  },
+  "Molten Hypogen": {
+   "kind": "fluid",
+   "id": "molten.hypogen",
+   "displayName": "Molten Hypogen",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_hypogen-091a3943347c.png",
+   "dominantColor": "#cc6f46"
+  },
+  "Molten Ichorium": {
+   "kind": "fluid",
+   "id": "molten.ichorium",
+   "displayName": "Molten Ichorium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_ichorium-f2ebb51c4fa1.png",
+   "dominantColor": "#bd6c0a"
+  },
+  "Molten Indium": {
+   "kind": "fluid",
+   "id": "molten.indium",
+   "displayName": "Molten Indium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_indium-cc347a531f40.png",
+   "dominantColor": "#3d0079"
+  },
+  "Molten Infinity": {
+   "kind": "fluid",
+   "id": "molten.infinity",
+   "displayName": "Molten Infinity",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_infinity-97a20da18279.png",
+   "dominantColor": "#d68b89"
+  },
+  "Molten Iodine": {
+   "kind": "fluid",
+   "id": "molten.iodine",
+   "displayName": "Molten Iodine",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_iodine-c973bb8d9065.png",
+   "dominantColor": "#595959"
+  },
+  "Molten Iridium": {
+   "kind": "fluid",
+   "id": "molten.iridium",
+   "displayName": "Molten Iridium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_iridium-0575d383cba7.png",
+   "dominantColor": "#e3e3e8"
+  },
+  "Molten Iron": {
+   "kind": "fluid",
+   "id": "molten.iron",
+   "displayName": "Molten Iron",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_iron-75bcea6a6617.png",
+   "dominantColor": "#bcbcbc"
+  },
+  "Molten Lanthanum": {
+   "kind": "fluid",
+   "id": "molten.lanthanum",
+   "displayName": "Molten Lanthanum",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_lanthanum-5668c15a93aa.png",
+   "dominantColor": "#828282"
+  },
+  "Molten Lead": {
+   "kind": "fluid",
+   "id": "molten.lead",
+   "displayName": "Molten Lead",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_lead-a5a18b8f83db.png",
+   "dominantColor": "#835e83"
+  },
+  "Molten Lithium": {
+   "kind": "fluid",
+   "id": "molten.lithium",
+   "displayName": "Molten Lithium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_lithium-723b75fe20db.png",
+   "dominantColor": "#d6d1f2"
+  },
+  "Molten Lutetium": {
+   "kind": "fluid",
+   "id": "molten.lutetium",
+   "displayName": "Molten Lutetium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_lutetium-3844544d7cb3.png",
+   "dominantColor": "#b13abb"
+  },
+  "Molten Magnesium": {
+   "kind": "fluid",
+   "id": "molten.magnesium",
+   "displayName": "Molten Magnesium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_magnesium-2a3163167f88.png",
+   "dominantColor": "#f2bebe"
+  },
+  "Molten Manganese": {
+   "kind": "fluid",
+   "id": "molten.manganese",
+   "displayName": "Molten Manganese",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_manganese-d5cdea951b00.png",
+   "dominantColor": "#e3e3e3"
+  },
+  "Molten Meteoric Iron": {
+   "kind": "fluid",
+   "id": "molten.meteoriciron",
+   "displayName": "Molten Meteoric Iron",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_meteoric_iron-1b9ddef2df37.png",
+   "dominantColor": "#5e2f4b"
+  },
+  "Molten Molybdenum": {
+   "kind": "fluid",
+   "id": "molten.molybdenum",
+   "displayName": "Molten Molybdenum",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_molybdenum-fbf2d489ab5b.png",
+   "dominantColor": "#aaaacf"
+  },
+  "Molten Naquadah": {
+   "kind": "fluid",
+   "id": "molten.naquadah",
+   "displayName": "Molten Naquadah",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_naquadah-43d483713b43.png",
+   "dominantColor": "#00ef00"
+  },
+  "Molten Naquadria": {
+   "kind": "fluid",
+   "id": "molten.naquadria",
+   "displayName": "Molten Naquadria",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_naquadria-459192d2a152.png",
+   "dominantColor": "#4cc34c"
+  },
+  "Molten Neodymium": {
+   "kind": "fluid",
+   "id": "molten.neodymium",
+   "displayName": "Molten Neodymium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_neodymium-d12b4489de48.png",
+   "dominantColor": "#5e5e5e"
+  },
+  "Molten Neptunium": {
+   "kind": "fluid",
+   "id": "molten.neptunium",
+   "displayName": "Molten Neptunium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_neptunium-0368496428c2.png",
+   "dominantColor": "#bacdbf"
+  },
+  "Molten Neutronium": {
+   "kind": "fluid",
+   "id": "molten.neutronium",
+   "displayName": "Molten Neutronium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_neutronium-d5cdea951b00.png",
+   "dominantColor": "#e3e3e3"
+  },
+  "Molten Nickel": {
+   "kind": "fluid",
+   "id": "molten.nickel",
+   "displayName": "Molten Nickel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_nickel-ffb8753cf8b6.png",
+   "dominantColor": "#bebeed"
+  },
+  "Molten Niobium": {
+   "kind": "fluid",
+   "id": "molten.niobium",
+   "displayName": "Molten Niobium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_niobium-e2952afad27a.png",
+   "dominantColor": "#b6adc0"
+  },
+  "Molten Oriharukon": {
+   "kind": "fluid",
+   "id": "molten.oriharukon",
+   "displayName": "Molten Oriharukon",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_oriharukon-edf7d6e730e4.png",
+   "dominantColor": "#617561"
+  },
+  "Molten Osmium": {
+   "kind": "fluid",
+   "id": "molten.osmium",
+   "displayName": "Molten Osmium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_osmium-63b32478462f.png",
+   "dominantColor": "#2f2ff0"
+  },
+  "Molten Palladium": {
+   "kind": "fluid",
+   "id": "molten.palladium",
+   "displayName": "Molten Palladium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_palladium-ed0d665b57d9.png",
+   "dominantColor": "#787878"
+  },
+  "Molten Platinum": {
+   "kind": "fluid",
+   "id": "molten.platinum",
+   "displayName": "Molten Platinum",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_platinum-267df9769a2d.png",
+   "dominantColor": "#f2f2be"
+  },
+  "Molten Plutonium-239": {
+   "kind": "fluid",
+   "id": "molten.plutonium",
+   "displayName": "Molten Plutonium 239",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_plutonium_239-0ec90ef07480.png",
+   "dominantColor": "#e22f2f"
+  },
+  "Molten Plutonium-241": {
+   "kind": "fluid",
+   "id": "molten.plutonium241",
+   "displayName": "Molten Plutonium 241",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_plutonium_241-597ac0a5578e.png",
+   "dominantColor": "#c41c1c"
+  },
+  "Molten Potassium": {
+   "kind": "fluid",
+   "id": "molten.potassium",
+   "displayName": "Molten Potassium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_potassium-5b170455285b.png",
+   "dominantColor": "#91a2d2"
+  },
+  "Molten Praseodymium": {
+   "kind": "fluid",
+   "id": "molten.praseodymium",
+   "displayName": "Molten Praseodymium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_praseodymium-fcdc20356a0e.png",
+   "dominantColor": "#6ec979"
+  },
+  "Molten Promethium": {
+   "kind": "fluid",
+   "id": "molten.promethium",
+   "displayName": "Molten Promethium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_promethium-1ef3a9eae067.png",
+   "dominantColor": "#22aa32"
+  },
+  "Molten Quantum": {
+   "kind": "fluid",
+   "id": "molten.quantum",
+   "displayName": "Molten Quantum",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_quantum-1276a4b5cb5e.png",
+   "dominantColor": "#88878a"
+  },
+  "Molten Raw Silicon": {
+   "kind": "fluid",
+   "id": "molten.silicon",
+   "displayName": "Molten Raw Silicon",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_raw_silicon-0aece2d221d6.png",
+   "dominantColor": "#38384b"
+  },
+  "Molten Redstone": {
+   "kind": "fluid",
+   "id": "molten.redstone",
+   "displayName": "Molten Redstone",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_redstone-ebd508092601.png",
+   "dominantColor": "#a40c0c"
+  },
+  "Molten Rhenium": {
+   "kind": "fluid",
+   "id": "molten.rhenium",
+   "displayName": "Molten Rhenium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_rhenium-5f1cd3fb1eab.png",
+   "dominantColor": "#8b8b8b"
+  },
+  "Molten Rhugnor": {
+   "kind": "fluid",
+   "id": "molten.rhugnor",
+   "displayName": "Molten Rhugnor",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_rhugnor-8540cc7841c8.png",
+   "dominantColor": "#af00ec"
+  },
+  "Molten Rubidium": {
+   "kind": "fluid",
+   "id": "molten.rubidium",
+   "displayName": "Molten Rubidium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_rubidium-5726da7be26e.png",
+   "dominantColor": "#e11c1c"
+  },
+  "Molten Runite": {
+   "kind": "fluid",
+   "id": "molten.runite",
+   "displayName": "Molten Runite",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_runite-05b04e3bff49.png",
+   "dominantColor": "#37b9b0"
+  },
+  "Molten Samarium": {
+   "kind": "fluid",
+   "id": "molten.samarium",
+   "displayName": "Molten Samarium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_samarium-76a981179797.png",
+   "dominantColor": "#f2f2c1"
+  },
+  "Molten Selenium": {
+   "kind": "fluid",
+   "id": "molten.selenium",
+   "displayName": "Molten Selenium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_selenium-12e86d59cd40.png",
+   "dominantColor": "#afafaf"
+  },
+  "Molten Shirabon": {
+   "kind": "fluid",
+   "id": "molten.shirabon",
+   "displayName": "Molten Shirabon",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_shirabon-8b96281cc983.png",
+   "dominantColor": "#d21466"
+  },
+  "Molten Silver": {
+   "kind": "fluid",
+   "id": "molten.silver",
+   "displayName": "Molten Silver",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_silver-4a48b46edfd0.png",
+   "dominantColor": "#d1d1f2"
+  },
+  "Molten Six-Phased Copper": {
+   "kind": "fluid",
+   "id": "molten.sixphasedcopper",
+   "displayName": "Molten Six-Phased Copper",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_six-phased_copper-883999ada470.png",
+   "dominantColor": "#f07113"
+  },
+  "Molten SpaceTime": {
+   "kind": "fluid",
+   "id": "molten.spacetime",
+   "displayName": "Molten SpaceTime",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_spacetime-c5592eca3bd6.png",
+   "dominantColor": "#31153f"
+  },
+  "Molten Strontium": {
+   "kind": "fluid",
+   "id": "molten.strontium",
+   "displayName": "Molten Strontium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_strontium-75bcea6a6617.png",
+   "dominantColor": "#bcbcbc"
+  },
+  "Molten Superconductor Base UMV": {
+   "kind": "fluid",
+   "id": "molten.superconductorumvbase",
+   "displayName": "Molten Superconductor Base UMV",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_superconductor_base_umv-0a223e5a1e28.png",
+   "dominantColor": "#aa24c0"
+  },
+  "Molten Tantalum": {
+   "kind": "fluid",
+   "id": "molten.tantalum",
+   "displayName": "Molten Tantalum",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_tantalum-41d4c27a6652.png",
+   "dominantColor": "#63adf0"
+  },
+  "Molten Tartarite": {
+   "kind": "fluid",
+   "id": "molten.tartarite",
+   "displayName": "Molten Tartarite",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_tartarite-ac83cba33e0c.png",
+   "dominantColor": "#ec6d37"
+  },
+  "Molten Tellurium": {
+   "kind": "fluid",
+   "id": "molten.tellurium",
+   "displayName": "Molten Tellurium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_tellurium-bc0a2b505c45.png",
+   "dominantColor": "#c2f051"
+  },
+  "Molten Tengam": {
+   "kind": "fluid",
+   "id": "molten.tengampurified",
+   "displayName": "Molten Purified Tengam",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_purified_tengam-087a3ab90f5f.png",
+   "dominantColor": "#afd26a"
+  },
+  "Molten Terbium": {
+   "kind": "fluid",
+   "id": "molten.terbium",
+   "displayName": "Molten Terbium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_terbium-d6d87ffb1794.png",
+   "dominantColor": "#e7e7e7"
+  },
+  "Molten Thallium": {
+   "kind": "fluid",
+   "id": "molten.thallium",
+   "displayName": "Molten Thallium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_thallium-b377b944a801.png",
+   "dominantColor": "#a2a2a2"
+  },
+  "Molten Thorium": {
+   "kind": "fluid",
+   "id": "molten.thorium",
+   "displayName": "Molten Thorium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_thorium-87fa637b9bad.png",
+   "dominantColor": "#001c00"
+  },
+  "Molten Thulium": {
+   "kind": "fluid",
+   "id": "molten.thulium",
+   "displayName": "Molten Thulium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_thulium-994c49f9dff5.png",
+   "dominantColor": "#5465b7"
+  },
+  "Molten Tin": {
+   "kind": "fluid",
+   "id": "molten.tin",
+   "displayName": "Molten Tin",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_tin-8d696079964e.png",
+   "dominantColor": "#cecece"
+  },
+  "Molten Titanium": {
+   "kind": "fluid",
+   "id": "molten.titanium",
+   "displayName": "Molten Titanium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_titanium-bba94c79d481.png",
+   "dominantColor": "#d097e2"
+  },
+  "Molten Titansteel": {
+   "kind": "fluid",
+   "id": "molten.titansteel",
+   "displayName": "Molten Titansteel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_titansteel-a9abc67b81cd.png",
+   "dominantColor": "#5d5439"
+  },
+  "Molten Tritanium": {
+   "kind": "fluid",
+   "id": "molten.tritanium",
+   "displayName": "Molten Tritanium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_tritanium-aec8a01c68ec.png",
+   "dominantColor": "#5a0000"
+  },
+  "Molten Tungsten": {
+   "kind": "fluid",
+   "id": "molten.tungsten",
+   "displayName": "Molten Tungsten",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_tungsten-04652fdef48b.png",
+   "dominantColor": "#2f2f2f"
+  },
+  "Molten Uranium-235": {
+   "kind": "fluid",
+   "id": "molten.uranium235",
+   "displayName": "Molten Uranium 235",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_uranium_235-2cf23765296b.png",
+   "dominantColor": "#16be16"
+  },
+  "Molten Uranium-238": {
+   "kind": "fluid",
+   "id": "molten.uranium",
+   "displayName": "Molten Uranium 238",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_uranium_238-1bd3f2ef16cc.png",
+   "dominantColor": "#2fe22f"
+  },
+  "Molten Vanadium": {
+   "kind": "fluid",
+   "id": "molten.vanadium",
+   "displayName": "Molten Vanadium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_vanadium-04652fdef48b.png",
+   "dominantColor": "#2f2f2f"
+  },
+  "Molten Ytterbium": {
+   "kind": "fluid",
+   "id": "molten.ytterbium",
+   "displayName": "Molten Ytterbium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_ytterbium-b23d95cecbf1.png",
+   "dominantColor": "#29bb4b"
+  },
+  "Molten Yttrium": {
+   "kind": "fluid",
+   "id": "molten.yttrium",
+   "displayName": "Molten Yttrium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_yttrium-c094f733fa95.png",
+   "dominantColor": "#d1edd1"
+  },
+  "Molten Zinc": {
+   "kind": "fluid",
+   "id": "molten.zinc",
+   "displayName": "Molten Zinc",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_zinc-2c9cd6c33d4c.png",
+   "dominantColor": "#ebe1e1"
+  },
+  "Molybdenum Plasma": {
+   "kind": "fluid",
+   "id": "plasma.molybdenum",
+   "displayName": "Molybdenum Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molybdenum_plasma-bb7b8278b141.png",
+   "dominantColor": "#a8b0d8"
+  },
+  "Naphtha": {
+   "kind": "fluid",
+   "id": "liquid_naphtha",
+   "displayName": "Naphtha",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naphtha-596998ac1ce8.png",
+   "dominantColor": "#fff000"
+  },
+  "Naphthenic Acid": {
+   "kind": "fluid",
+   "id": "naphthenicacid",
+   "displayName": "Naphthenic Acid",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naphthenic_acid-578c30908dc0.png",
+   "dominantColor": "#cfcfcf"
+  },
+  "Naq Fuel Mk-I": {
+   "kind": "fluid",
+   "id": "naquadah based liquid fuel mki",
+   "displayName": "Naquadah Based Liquid Fuel MkI",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_based_liquid_fuel_mki-23814b95633b.png",
+   "dominantColor": "#504b4a"
+  },
+  "Naq Fuel Mk-II": {
+   "kind": "fluid",
+   "id": "naquadah based liquid fuel mkii",
+   "displayName": "Naquadah Based Liquid Fuel MkII",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_based_liquid_fuel_mkii-79d4877daa40.png",
+   "dominantColor": "#433f3e"
+  },
+  "Naq Fuel Mk-III": {
+   "kind": "fluid",
+   "id": "naquadah based liquid fuel mkiii",
+   "displayName": "Naquadah Based Liquid Fuel MkIII",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_based_liquid_fuel_mkiii-8f38b57eea84.png",
+   "dominantColor": "#211c1b"
+  },
+  "Naq Fuel Mk-IV": {
+   "kind": "fluid",
+   "id": "naquadah based liquid fuel mkiv",
+   "displayName": "Naquadah Based Liquid Fuel MkIV",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_based_liquid_fuel_mkiv-d22e0f4c11b8.png",
+   "dominantColor": "#6b7280"
+  },
+  "Naq Fuel Mk-V": {
+   "kind": "fluid",
+   "id": "naquadah based liquid fuel mkv",
+   "displayName": "Naquadah Based Liquid Fuel MkV",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_based_liquid_fuel_mkv-368474fd0ffe.png",
+   "dominantColor": "#6b7280"
+  },
+  "Naq Fuel Mk-VI": {
+   "kind": "fluid",
+   "id": "naquadah based liquid fuel mkvi",
+   "displayName": "Naquadah Based Liquid Fuel MkVI",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_based_liquid_fuel_mkvi-d89375561a97.png",
+   "dominantColor": "#270000"
+  },
+  "Naquadah Based Liquid Fuel MkI (Depleted)": {
+   "kind": "fluid",
+   "id": "naquadah based liquid fuel mki (depleted)",
+   "displayName": "Naquadah Based Liquid Fuel MkI (Depleted)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_based_liquid_fuel_mki_depleted-16521f276ecd.png",
+   "dominantColor": "#a59e9d"
+  },
+  "Naquadah Based Liquid Fuel MkII (Depleted)": {
+   "kind": "fluid",
+   "id": "naquadah based liquid fuel mkii (depleted)",
+   "displayName": "Naquadah Based Liquid Fuel MkII (Depleted)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_based_liquid_fuel_mkii_depleted-41751d221a3d.png",
+   "dominantColor": "#928d8c"
+  },
+  "Naquadah Based Liquid Fuel MkIII (Depleted)": {
+   "kind": "fluid",
+   "id": "naquadah based liquid fuel mkiii (depleted)",
+   "displayName": "Naquadah Based Liquid Fuel MkIII (Depleted)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_based_liquid_fuel_mkiii_depleted-95988c7a132c.png",
+   "dominantColor": "#53342d"
+  },
+  "Naquadah Based Liquid Fuel MkIV (Depleted)": {
+   "kind": "fluid",
+   "id": "naquadah based liquid fuel mkiv (depleted)",
+   "displayName": "Naquadah Based Liquid Fuel MkIV (Depleted)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_based_liquid_fuel_mkiv_depleted-d4e81cb74f18.png",
+   "dominantColor": "#732a1b"
+  },
+  "Naquadah Based Liquid Fuel MkV (Depleted)": {
+   "kind": "fluid",
+   "id": "naquadah based liquid fuel mkv (depleted)",
+   "displayName": "Naquadah Based Liquid Fuel MkV (Depleted)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_based_liquid_fuel_mkv_depleted-578c30908dc0.png",
+   "dominantColor": "#cfcfcf"
+  },
+  "Naquadah Based Liquid Fuel MkVI (Depleted)": {
+   "kind": "fluid",
+   "id": "naquadah based liquid fuel mkvi (depleted)",
+   "displayName": "Naquadah Based Liquid Fuel MkVI (Depleted)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_based_liquid_fuel_mkvi_depleted-814c9cb2fa80.png",
+   "dominantColor": "#7c2929"
+  },
+  "Naquadah Bolt": {
+   "kind": "item",
+   "id": "tconstruct:boltpart@1574",
+   "displayName": "Naquadah Bolt",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_bolt-ad90e52848c9.png",
+   "dominantColor": "#0d0f0d"
+  },
+  "Naquadah Gas": {
+   "kind": "fluid",
+   "id": "naquadah gas",
+   "displayName": "Naquadah Gas",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_gas-c932ccbb6372.png",
+   "dominantColor": "#4cb200"
+  },
+  "Naquadah Plasma": {
+   "kind": "fluid",
+   "id": "plasma.naquadah",
+   "displayName": "Naquadah Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_plasma-b151fb2a4f4a.png",
+   "dominantColor": "#00fa00"
+  },
+  "Naquadah Rod": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@23324",
+   "displayName": "Naquadah Rod",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_rod-d6b4d066be7c.png",
+   "dominantColor": "#6b7280"
+  },
+  "Naquadria Bolt (ZPM)": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@26327",
+   "displayName": "Naquadria Bolt",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadria_bolt-298d02980240.png",
+   "dominantColor": "#6b7280"
+  },
+  "Naquadria Plasma": {
+   "kind": "fluid",
+   "id": "plasma.naquadria",
+   "displayName": "Naquadria Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadria_plasma-7fc1c0f6df1a.png",
+   "dominantColor": "#51d155"
+  },
+  "Naquadria Rod (UV)": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@23327",
+   "displayName": "Naquadria Rod",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadria_rod-6950cd746829.png",
+   "dominantColor": "#141414"
+  },
+  "Natural Gas": {
+   "kind": "fluid",
+   "id": "gas_natural_gas",
+   "displayName": "Natural Gas",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/natural_gas-808f65430df7.png",
+   "dominantColor": "#dddddd"
+  },
+  "Nefarious Gas": {
+   "kind": "fluid",
+   "id": "nefariousgas",
+   "displayName": "Nefarious Gas",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nefarious_gas-0dd614e37317.png",
+   "dominantColor": "#270804"
+  },
+  "Nefarious Oil": {
+   "kind": "fluid",
+   "id": "nefariousoil",
+   "displayName": "Nefarious Oil",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nefarious_oil-00e7ba68e36a.png",
+   "dominantColor": "#2e1212"
+  },
+  "Neodymium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.neodymium",
+   "displayName": "Neodymium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/neodymium_plasma-6048b62b8734.png",
+   "dominantColor": "#5d6262"
+  },
+  "Neon": {
+   "kind": "fluid",
+   "id": "neon",
+   "displayName": "Neon",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/neon-ab78ef691e99.png",
+   "dominantColor": "#c39218"
+  },
+  "Neon Plasma": {
+   "kind": "fluid",
+   "id": "plasma.neon",
+   "displayName": "Neon Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/neon_plasma-8e70f4e642f1.png",
+   "dominantColor": "#e0b01d"
+  },
+  "Neptunium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.neptunium",
+   "displayName": "Neptunium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/neptunium_plasma-e8b2ef924fc9.png",
+   "dominantColor": "#bbd8c9"
+  },
+  "Nether Shard": {
+   "kind": "item",
+   "id": "thaumictinkerer:kamiresource@6",
+   "displayName": "Nether Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nether_shard-853d5323aa44.png",
+   "dominantColor": "#550519"
+  },
+  "Nether Star": {
+   "kind": "item",
+   "id": "minecraft:nether_star",
+   "displayName": "Nether Star",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nether_star-a5e5f334a88d.png",
+   "dominantColor": "#96a8a8"
+  },
+  "Nether Star Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2506",
+   "displayName": "Nether Star Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nether_star_dust-66c98cd86339.png",
+   "dominantColor": "#a0a0a0"
+  },
+  "Nether Star Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17506",
+   "displayName": "Nether Star Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nether_star_plate-313cb2de0865.png",
+   "dominantColor": "#a6a6a6"
+  },
+  "Neutronium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.neutronium",
+   "displayName": "Neutronium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/neutronium_plasma-7ea8c4ba8340.png",
+   "dominantColor": "#e9f5f5"
+  },
+  "Nickel Plasma": {
+   "kind": "fluid",
+   "id": "plasma.nickel",
+   "displayName": "Nickel Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nickel_plasma-798848a30267.png",
+   "dominantColor": "#bbc4f5"
+  },
+  "Niobium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.niobium",
+   "displayName": "Niobium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/niobium_plasma-63279ea653cf.png",
+   "dominantColor": "#b1b0c4"
+  },
+  "Nitric Acid": {
+   "kind": "fluid",
+   "id": "nitricacid",
+   "displayName": "Nitric Acid",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nitric_acid-dd82d1073e63.png",
+   "dominantColor": "#f2f221"
+  },
+  "Nitrobenzene": {
+   "kind": "fluid",
+   "id": "nitrobenzene",
+   "displayName": "Nitrobenzene",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nitrobenzene-60701f111b8c.png",
+   "dominantColor": "#392920"
+  },
+  "Nitrogen": {
+   "kind": "fluid",
+   "id": "nitrogen",
+   "displayName": "Nitrogen",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nitrogen-e19841ba5179.png",
+   "dominantColor": "#bb0000"
+  },
+  "Nitrogen Plasma": {
+   "kind": "fluid",
+   "id": "plasma.nitrogen",
+   "displayName": "Nitrogen Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nitrogen_plasma-fa3832a63a74.png",
+   "dominantColor": "#0093c4"
+  },
+  "Obsidian": {
+   "kind": "item",
+   "id": "minecraft:obsidian",
+   "displayName": "Obsidian",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/obsidian-ac73b9e8484a.png",
+   "dominantColor": "#0e0e16"
+  },
+  "Octane": {
+   "kind": "fluid",
+   "id": "octane",
+   "displayName": "Octane",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/octane-578c30908dc0.png",
+   "dominantColor": "#cfcfcf"
+  },
+  "Oganesson": {
+   "kind": "fluid",
+   "id": "oganesson",
+   "displayName": "Oganesson",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/oganesson-1599af6afe59.png",
+   "dominantColor": "#102e67"
+  },
+  "Oil": {
+   "kind": "fluid",
+   "id": "oil",
+   "displayName": "Oil",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/oil-ff2f698f4727.png",
+   "dominantColor": "#141414"
+  },
+  "Ordo Crystal Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17545",
+   "displayName": "Ordo Crystal Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ordo_crystal_plate-378277dd0691.png",
+   "dominantColor": "#c8c8c8"
+  },
+  "Ordo Crystal Powder": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2545",
+   "displayName": "Ordo Crystal Powder",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ordo_crystal_powder-36922238abeb.png",
+   "dominantColor": "#d1d1d1"
+  },
+  "Ordo Shard": {
+   "kind": "item",
+   "id": "tgregworks:tgregtoolpartchunk@1568",
+   "displayName": "Ordo Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ordo_shard-77b72f22699e.png",
+   "dominantColor": "#7b7b7b"
+  },
+  "Oriharukon Plasma": {
+   "kind": "fluid",
+   "id": "plasma.oriharukon",
+   "displayName": "Oriharukon Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/oriharukon_plasma-58dd83d43dfb.png",
+   "dominantColor": "#607b66"
+  },
+  "Osmium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.osmium",
+   "displayName": "Osmium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/osmium_plasma-fa82c4666565.png",
+   "dominantColor": "#2f31fa"
+  },
+  "Oxygen": {
+   "kind": "fluid",
+   "id": "oxygen",
+   "displayName": "Oxygen",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/oxygen-db4ce49a39d6.png",
+   "dominantColor": "#00799e"
+  },
+  "Oxygen Plasma": {
+   "kind": "fluid",
+   "id": "plasma.oxygen",
+   "displayName": "Oxygen Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/oxygen_plasma-efc2115eb9b6.png",
+   "dominantColor": "#0062c4"
+  },
+  "Pahoehoe Lava": {
+   "kind": "fluid",
+   "id": "ic2pahoehoelava",
+   "displayName": "Pahoehoe Lava",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/pahoehoe_lava-33ae3eb3725a.png",
+   "dominantColor": "#737373"
+  },
+  "Palladium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.palladium",
+   "displayName": "Palladium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/palladium_plasma-bed9086baa0f.png",
+   "dominantColor": "#777d7d"
+  },
+  "Pellets of RTG Fuel": {
+   "kind": "item",
+   "id": "ic2:itemrtgpellet",
+   "displayName": "Pellets of RTG Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/pellets_of_rtg_fuel-c58022107549.png",
+   "dominantColor": "#8b231d"
+  },
+  "Perditio Crystal Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17544",
+   "displayName": "Perditio Crystal Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/perditio_crystal_plate-2ea13abaaecd.png",
+   "dominantColor": "#151515"
+  },
+  "Perditio Crystal Powder": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2544",
+   "displayName": "Perditio Crystal Powder",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/perditio_crystal_powder-719fcc5e5656.png",
+   "dominantColor": "#131313"
+  },
+  "Perditio Shard": {
+   "kind": "item",
+   "id": "tgregworks:tgregtoolpartchunk@1567",
+   "displayName": "Perditio Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/perditio_shard-15ed3894ec56.png",
+   "dominantColor": "#131313"
+  },
+  "Phenol": {
+   "kind": "fluid",
+   "id": "phenol",
+   "displayName": "Phenol",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/phenol-668724296165.png",
+   "dominantColor": "#61371b"
+  },
+  "Phosphoric Acid": {
+   "kind": "fluid",
+   "id": "phosphoricacid_gt5u",
+   "displayName": "Phosphoric Acid",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/phosphoric_acid-9f827b3e1757.png",
+   "dominantColor": "#b2b200"
+  },
+  "Phosphorus Plasma": {
+   "kind": "fluid",
+   "id": "plasma.phosphorus",
+   "displayName": "Phosphorus Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/phosphorus_plasma-9bbc1fcbfe5b.png",
+   "dominantColor": "#eefa00"
+  },
+  "Platinum Plasma": {
+   "kind": "fluid",
+   "id": "plasma.platinum",
+   "displayName": "Platinum Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/platinum_plasma-d03f4d281731.png",
+   "dominantColor": "#eefac4"
+  },
+  "Plutonium Based Liquid Fuel (Depleted)": {
+   "kind": "fluid",
+   "id": "plutonium based liquid fuel (depleted)",
+   "displayName": "Plutonium Based Liquid Fuel (Depleted)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/plutonium_based_liquid_fuel_depleted-4e8ce72bcc73.png",
+   "dominantColor": "#541414"
+  },
+  "Plutonium Fuel (Excited)": {
+   "kind": "fluid",
+   "id": "plutonium based liquid fuel (excited state)",
+   "displayName": "Plutonium Based Liquid Fuel (Excited State)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/plutonium_based_liquid_fuel_excited_state-065be44ec25c.png",
+   "dominantColor": "#c21111"
+  },
+  "Plutonium-239 Plasma": {
+   "kind": "fluid",
+   "id": "plasma.plutonium",
+   "displayName": "Plutonium 239 Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/plutonium_239_plasma-c39ceb10b5a3.png",
+   "dominantColor": "#e03131"
+  },
+  "Plutonium-241 Plasma": {
+   "kind": "fluid",
+   "id": "plasma.plutonium241",
+   "displayName": "Plutonium 241 Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/plutonium_241_plasma-d8de27db9e00.png",
+   "dominantColor": "#c31c1c"
+  },
+  "Po Pellet": {
+   "kind": "item",
+   "id": "miscutils:mu-metaitem.01@32043",
+   "displayName": "Po Pellet",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/po_pellet-6e669ef1a6bc.png",
+   "dominantColor": "#005f5f"
+  },
+  "Poop Juice": {
+   "kind": "fluid",
+   "id": "fluid.raw.waste",
+   "displayName": "Raw Animal Waste",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/raw_animal_waste-a9aa6a425e9b.png",
+   "dominantColor": "#513918"
+  },
+  "Potassium Hydroxide Dust": {
+   "kind": "item",
+   "id": "dreamcraft:item.potassiumhydroxidedust",
+   "displayName": "Potassium Hydroxide Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/potassium_hydroxide_dust-244a3e9d5f2a.png",
+   "dominantColor": "#bebebe"
+  },
+  "Potassium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.potassium",
+   "displayName": "Potassium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/potassium_plasma-9c670d58fe88.png",
+   "dominantColor": "#90a9db"
+  },
+  "Praseodymium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.praseodymium",
+   "displayName": "Praseodymium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/praseodymium_plasma-7f1cd6a4f397.png",
+   "dominantColor": "#6dd27e"
+  },
+  "Pride Shard": {
+   "kind": "item",
+   "id": "forbiddenmagic:nethershard@3",
+   "displayName": "Pride Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/pride_shard-d14cfeb594ee.png",
+   "dominantColor": "#930000"
+  },
+  "Promethium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.promethium",
+   "displayName": "Promethium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/promethium_plasma-3d1bf7e4b689.png",
+   "dominantColor": "#22b134"
+  },
+  "Propane": {
+   "kind": "fluid",
+   "id": "propane",
+   "displayName": "Propane",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/propane-24f40715daec.png",
+   "dominantColor": "#cbb841"
+  },
+  "Propene": {
+   "kind": "fluid",
+   "id": "propene",
+   "displayName": "Propene",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/propene-5791147b1706.png",
+   "dominantColor": "#cfb445"
+  },
+  "Protomatter": {
+   "kind": "fluid",
+   "id": "protomatter",
+   "displayName": "Protomatter",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/protomatter-1c2c7152be8e.png",
+   "dominantColor": "#6a798d"
+  },
+  "Pu Pellet": {
+   "kind": "item",
+   "id": "miscutils:mu-metaitem.01@32041",
+   "displayName": "Pu Pellet",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/pu_pellet-e4d67938fef2.png",
+   "dominantColor": "#5f0000"
+  },
+  "Pyrotheum Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2843",
+   "displayName": "Pyrotheum Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/pyrotheum_dust-b55a688bab36.png",
+   "dominantColor": "#e27206"
+  },
+  "Quad Fuel Rod (Depleted Excited Plutonium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodexcitedplutonium4",
+   "displayName": "Quad Fuel Rod (Depleted Excited Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_depleted_excited_plutonium-e48326f10c5f.png",
+   "dominantColor": "#1e7eb6"
+  },
+  "Quad Fuel Rod (Depleted Excited Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodexciteduranium4",
+   "displayName": "Quad Fuel Rod (Depleted Excited Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_depleted_excited_uranium-850e5f1dbbdc.png",
+   "dominantColor": "#6e6e6e"
+  },
+  "Quad Fuel Rod (Depleted High Density Plutonium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodhighdensityplutonium4",
+   "displayName": "Quad Fuel Rod (Depleted High Density Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_depleted_high_density_plutonium-298554da5b45.png",
+   "dominantColor": "#b55a97"
+  },
+  "Quad Fuel Rod (Depleted High Density Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodhighdensityuranium4",
+   "displayName": "Quad Fuel Rod (Depleted High Density Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_depleted_high_density_uranium-a0902847d863.png",
+   "dominantColor": "#249f83"
+  },
+  "Quad Fuel Rod (Depleted MOX)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodmox4",
+   "displayName": "Quad Fuel Rod (Depleted MOX)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_depleted_mox-7dd9cfd2b9b1.png",
+   "dominantColor": "#5f5f5f"
+  },
+  "Quad Fuel Rod (Depleted Naquadah)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodnaquadah4",
+   "displayName": "Quad Fuel Rod (Depleted Naquadah)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_depleted_naquadah-404819fd85d8.png",
+   "dominantColor": "#2f3561"
+  },
+  "Quad Fuel Rod (Depleted Naquadria)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodnaquadria4",
+   "displayName": "Quad Fuel Rod (Depleted Naquadria)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_depleted_naquadria-33f121ccb929.png",
+   "dominantColor": "#2f3561"
+  },
+  "Quad Fuel Rod (Depleted Thorium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodthorium4",
+   "displayName": "Quad Fuel Rod (Depleted Thorium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_depleted_thorium-60d1725a33df.png",
+   "dominantColor": "#5d5d5d"
+  },
+  "Quad Fuel Rod (Depleted Tiberium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodtiberium4",
+   "displayName": "Quad Fuel Rod (Depleted Tiberium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_depleted_tiberium-c8cb2590de26.png",
+   "dominantColor": "#2f3561"
+  },
+  "Quad Fuel Rod (Depleted Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedroduranium4",
+   "displayName": "Quad Fuel Rod (Depleted Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_depleted_uranium-3fb150a05608.png",
+   "dominantColor": "#6e6e6e"
+  },
+  "Quad Fuel Rod (Excited Plutonium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodexcitedplutonium4",
+   "displayName": "Quad Fuel Rod (Excited Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_excited_plutonium-91f7cbcf5f5c.png",
+   "dominantColor": "#6f3838"
+  },
+  "Quad Fuel Rod (Excited Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodexciteduranium4",
+   "displayName": "Quad Fuel Rod (Excited Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_excited_uranium-d27206c07b99.png",
+   "dominantColor": "#6c8c14"
+  },
+  "Quad Fuel Rod (High Density Plutonium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodhighdensityplutonium4",
+   "displayName": "Quad Fuel Rod (High Density Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_high_density_plutonium-bb2cce03bad8.png",
+   "dominantColor": "#b53e3e"
+  },
+  "Quad Fuel Rod (High Density Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodhighdensityuranium4",
+   "displayName": "Quad Fuel Rod (High Density Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_high_density_uranium-4a414b0fbffd.png",
+   "dominantColor": "#2db61d"
+  },
+  "Quad Fuel Rod (MOX)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodmox4",
+   "displayName": "Quad Fuel Rod (Mox)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_mox-e6d081ee2242.png",
+   "dominantColor": "#5f5f5f"
+  },
+  "Quad Fuel Rod (Naquadah)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodnaquadah4",
+   "displayName": "Quad Fuel Rod (Naquadah)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_naquadah-3a82fc498b06.png",
+   "dominantColor": "#2f3561"
+  },
+  "Quad Fuel Rod (Naquadria)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodnaquadria4",
+   "displayName": "Quad Fuel Rod (Naquadria)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_naquadria-d1094192b02c.png",
+   "dominantColor": "#2f3561"
+  },
+  "Quad Fuel Rod (Thorium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodthorium4",
+   "displayName": "Quad Fuel Rod (Thorium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_thorium-d91417a4f68e.png",
+   "dominantColor": "#5d5d5d"
+  },
+  "Quad Fuel Rod (Tiberium)": {
+   "kind": "item",
+   "id": "gregtech:gt.rodtiberium4",
+   "displayName": "Quad Fuel Rod (Tiberium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_tiberium-56bd460169d4.png",
+   "dominantColor": "#2f3561"
+  },
+  "Quad Fuel Rod (Uranium)": {
+   "kind": "item",
+   "id": "gregtech:gt.roduranium4",
+   "displayName": "Quad Fuel Rod (Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quad_fuel_rod_uranium-47bf8d6634d7.png",
+   "dominantColor": "#4b8015"
+  },
+  "Quicksilver": {
+   "kind": "item",
+   "id": "thaumcraft:itemresource@3",
+   "displayName": "Quicksilver",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/quicksilver-cb98393c2528.png",
+   "dominantColor": "#b9b8dd"
+  },
+  "Radon": {
+   "kind": "fluid",
+   "id": "radon",
+   "displayName": "Radon",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/radon-bc98e2ec6315.png",
+   "dominantColor": "#ff62ff"
+  },
+  "Radon Plasma": {
+   "kind": "fluid",
+   "id": "plasma.radon",
+   "displayName": "Radon Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/radon_plasma-567b1a839521.png",
+   "dominantColor": "#ee00fa"
+  },
+  "Raw Oil": {
+   "kind": "fluid",
+   "id": "liquid_medium_oil",
+   "displayName": "Raw Oil",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/raw_oil-c65d4423951a.png",
+   "dominantColor": "#6b7280"
+  },
+  "Raw Silicon Plasma": {
+   "kind": "fluid",
+   "id": "plasma.silicon",
+   "displayName": "Raw Silicon Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/raw_silicon_plasma-7664f20ac61f.png",
+   "dominantColor": "#383b4e"
+  },
+  "Refinery Gas": {
+   "kind": "fluid",
+   "id": "gas_gas",
+   "displayName": "Refinery Gas",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/refinery_gas-808f65430df7.png",
+   "dominantColor": "#dddddd"
+  },
+  "Reinforced Slate": {
+   "kind": "item",
+   "id": "awwayoftime:reinforcedslate",
+   "displayName": "Reinforced Slate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/reinforced_slate-29d6e0c3ec9c.png",
+   "dominantColor": "#484646"
+  },
+  "Rhenium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.rhenium",
+   "displayName": "Rhenium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/rhenium_plasma-1a322cf4d7a8.png",
+   "dominantColor": "#8c9393"
+  },
+  "Rhugnor Plasma": {
+   "kind": "fluid",
+   "id": "plasma.rhugnor",
+   "displayName": "Rhugnor Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/rhugnor_plasma-c9a488eee5fe.png",
+   "dominantColor": "#b100fa"
+  },
+  "RP-1 (red)": {
+   "kind": "fluid",
+   "id": "fluid.rocketfuelmixb",
+   "displayName": "Rp-1 Rocket Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/rp-1_rocket_fuel-19e791d83bc5.png",
+   "dominantColor": "#cb2929"
+  },
+  "Rubidium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.rubidium",
+   "displayName": "Rubidium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/rubidium_plasma-4dd1df515500.png",
+   "dominantColor": "#e01d1d"
+  },
+  "Runite Plasma": {
+   "kind": "fluid",
+   "id": "plasma.runite",
+   "displayName": "Runite Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/runite_plasma-52eaabaac96e.png",
+   "dominantColor": "#38c4ba"
+  },
+  "Samarium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.samarium",
+   "displayName": "Samarium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/samarium_plasma-ac13f785af12.png",
+   "dominantColor": "#eefac8"
+  },
+  "SC Steam": {
+   "kind": "fluid",
+   "id": "supercriticalsteam",
+   "displayName": "Supercritical Steam",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/supercritical_steam-74546842f711.png",
+   "dominantColor": "#6d6d6d"
+  },
+  "Seed Oil": {
+   "kind": "fluid",
+   "id": "seedoil",
+   "displayName": "Seed Oil",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/seed_oil-65574b06bec6.png",
+   "dominantColor": "#ffffa7"
+  },
+  "SH Steam": {
+   "kind": "fluid",
+   "id": "ic2superheatedsteam",
+   "displayName": "Superheated Steam",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/superheated_steam-541de2967dda.png",
+   "dominantColor": "#cad1d1"
+  },
+  "Shard of Creation": {
+   "kind": "item",
+   "id": "taintedmagic:itemmaterial@5",
+   "displayName": "Shard of Creation",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/shard_of_creation-6769f704df44.png",
+   "dominantColor": "#962196"
+  },
+  "Short Mead": {
+   "kind": "fluid",
+   "id": "short.mead",
+   "displayName": "Short Mead",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/short_mead-00c766248655.png",
+   "dominantColor": "#ef9900"
+  },
+  "Silver Plasma": {
+   "kind": "fluid",
+   "id": "plasma.silver",
+   "displayName": "Silver Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/silver_plasma-e0fcede28ad3.png",
+   "dominantColor": "#ced8fa"
+  },
+  "Six-Phased Copper Plasma": {
+   "kind": "fluid",
+   "id": "plasma.sixphasedcopper",
+   "displayName": "Six-Phased Copper Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/six-phased_copper_plasma-d8e03f9f56fa.png",
+   "dominantColor": "#ee7614"
+  },
+  "Sloth Shard": {
+   "kind": "item",
+   "id": "forbiddenmagic:nethershard@5",
+   "displayName": "Sloth Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/sloth_shard-3c38ad8772ba.png",
+   "dominantColor": "#808080"
+  },
+  "Sodium Hydroxide Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2685",
+   "displayName": "Sodium Hydroxide Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/sodium_hydroxide_dust-944cd19a2d10.png",
+   "dominantColor": "#001b45"
+  },
+  "Sodium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.sodium",
+   "displayName": "Sodium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/sodium_plasma-dc64c2142897.png",
+   "dominantColor": "#000093"
+  },
+  "Solid Super Fuel": {
+   "kind": "item",
+   "id": "gregtech:gt.blockreinforced@6",
+   "displayName": "Solid Super Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/solid_super_fuel-34379c63e308.png",
+   "dominantColor": "#121212"
+  },
+  "Spatially Enlarged Fluid": {
+   "kind": "fluid",
+   "id": "spatialfluid",
+   "displayName": "Spatially Enlarged Fluid",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/spatially_enlarged_fluid-5c9699be6781.png",
+   "dominantColor": "#22122d"
+  },
+  "Sr Pellet": {
+   "kind": "item",
+   "id": "miscutils:mu-metaitem.01@32042",
+   "displayName": "Sr Pellet",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/sr_pellet-7d33e4e3747b.png",
+   "dominantColor": "#5f5f00"
+  },
+  "Steam": {
+   "kind": "fluid",
+   "id": "steam",
+   "displayName": "Steam",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/steam-ff3e8c69dcdf.png",
+   "dominantColor": "#b1b1b1"
+  },
+  "Steeleaf": {
+   "kind": "item",
+   "id": "twilightforest:item.steeleafingot",
+   "displayName": "Steeleaf",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/steeleaf-b63999c5c173.png",
+   "dominantColor": "#304f22"
+  },
+  "Steeleaf Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2339",
+   "displayName": "Steeleaf Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/steeleaf_dust-5ba7b396141f.png",
+   "dominantColor": "#1d4a1d"
+  },
+  "Steeleaf Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17339",
+   "displayName": "Steeleaf Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/steeleaf_plate-a9708eba3a3a.png",
+   "dominantColor": "#173917"
+  },
+  "Stick": {
+   "kind": "item",
+   "id": "minecraft:stick",
+   "displayName": "Stick",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/stick-a52eda84b444.png",
+   "dominantColor": "#4c3916"
+  },
+  "Strontium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.strontium",
+   "displayName": "Strontium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/strontium_plasma-23e85962b91f.png",
+   "dominantColor": "#bbc4c4"
+  },
+  "Sugar Coke": {
+   "kind": "item",
+   "id": "miscutils:itemsugarcoke",
+   "displayName": "Sugar Coke",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/sugar_coke-d640971a5271.png",
+   "dominantColor": "#a3a3a2"
+  },
+  "Sulfur Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2022",
+   "displayName": "Sulfur Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/sulfur_dust-e2599a7ff98a.png",
+   "dominantColor": "#6b6b00"
+  },
+  "Sulfur Plasma": {
+   "kind": "fluid",
+   "id": "plasma.sulfur",
+   "displayName": "Sulfur Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/sulfur_plasma-359713c29dd0.png",
+   "dominantColor": "#bbc400"
+  },
+  "Sulfuric Acid": {
+   "kind": "fluid",
+   "id": "sulfuricacid",
+   "displayName": "Sulfuric Acid",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/sulfuric_acid-b2bd468e2f92.png",
+   "dominantColor": "#ff5200"
+  },
+  "Sulfuric Coal Tar Oil": {
+   "kind": "fluid",
+   "id": "fluid.sulfuriccoaltaroil",
+   "displayName": "Sulfuric Coal Tar Oil",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/sulfuric_coal_tar_oil-db1993c2e37b.png",
+   "dominantColor": "#cb8a0a"
+  },
+  "Sulfuric Gas": {
+   "kind": "fluid",
+   "id": "gas_sulfuricgas",
+   "displayName": "Sulfuric Gas",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/sulfuric_gas-808f65430df7.png",
+   "dominantColor": "#dddddd"
+  },
+  "Sulfuric Heavy Fuel": {
+   "kind": "fluid",
+   "id": "liquid_sulfuricheavy_fuel",
+   "displayName": "Sulfuric Heavy Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/sulfuric_heavy_fuel-d864cf716267.png",
+   "dominantColor": "#ffedb0"
+  },
+  "Sulfuric Light Fuel": {
+   "kind": "fluid",
+   "id": "liquid_sufluriclight_fuel",
+   "displayName": "Sulfuric Light Fuel",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/sulfuric_light_fuel-596998ac1ce8.png",
+   "dominantColor": "#fff000"
+  },
+  "Sulfuric Naphta": {
+   "kind": "fluid",
+   "id": "liquid_sulfuricnaphtha",
+   "displayName": "Sulfuric Naphtha",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/sulfuric_naphtha-596998ac1ce8.png",
+   "dominantColor": "#fff000"
+  },
+  "Super Coolant": {
+   "kind": "fluid",
+   "id": "supercoolant",
+   "displayName": "Super Coolant",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/super_coolant-828c44d97031.png",
+   "dominantColor": "#024a5a"
+  },
+  "Supercritical Steam": {
+   "kind": "fluid",
+   "id": "supercriticalsteam",
+   "displayName": "Supercritical Steam",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/supercritical_steam-74546842f711.png",
+   "dominantColor": "#6d6d6d"
+  },
+  "Superheated Steam": {
+   "kind": "fluid",
+   "id": "ic2superheatedsteam",
+   "displayName": "Superheated Steam",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/superheated_steam-541de2967dda.png",
+   "dominantColor": "#cad1d1"
+  },
+  "T-Salt": {
+   "kind": "fluid",
+   "id": "molten.thoriumdepletedmoltensalttsalt",
+   "displayName": "Thorium Depleted Molten Salt (T Salt)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/thorium_depleted_molten_salt_t_salt-6cffc73e161c.png",
+   "dominantColor": "#99a5a2"
+  },
+  "Tachyon Rich Temporal Fluid": {
+   "kind": "fluid",
+   "id": "temporalfluid",
+   "displayName": "Tachyon Rich Temporal Fluid",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/tachyon_rich_temporal_fluid-c9f2aa520fbf.png",
+   "dominantColor": "#6a0c32"
+  },
+  "Taint Shard": {
+   "kind": "item",
+   "id": "forbiddenmagic:nethershard@2",
+   "displayName": "Taint Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/taint_shard-1b7c38f92528.png",
+   "dominantColor": "#3e00a2"
+  },
+  "Tantalum Plasma": {
+   "kind": "fluid",
+   "id": "plasma.tantalum",
+   "displayName": "Tantalum Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/tantalum_plasma-e874be64ba02.png",
+   "dominantColor": "#62b3fa"
+  },
+  "TB-Salt": {
+   "kind": "fluid",
+   "id": "molten.thoriumberylliumdepletedmoltensalttbsalt",
+   "displayName": "Thorium-Beryllium Depleted Molten Salt (TB Salt)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/thorium-beryllium_depleted_molten_salt_tb_salt-afe4a21d50b7.png",
+   "dominantColor": "#89a591"
+  },
+  "Tellurium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.tellurium",
+   "displayName": "Tellurium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/tellurium_plasma-90fa4e854c02.png",
+   "dominantColor": "#c0fa54"
+  },
+  "Terbium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.terbium",
+   "displayName": "Terbium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/terbium_plasma-1de236a45a2d.png",
+   "dominantColor": "#ebf7f7"
+  },
+  "Terra Crystal Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17542",
+   "displayName": "Terra Crystal Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/terra_crystal_plate-66dd1937de75.png",
+   "dominantColor": "#09d609"
+  },
+  "Terra Crystal Powder": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2542",
+   "displayName": "Terra Crystal Powder",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/terra_crystal_powder-6518eefbaf0e.png",
+   "dominantColor": "#09db09"
+  },
+  "Terra Shard": {
+   "kind": "item",
+   "id": "tgregworks:tgregtoolpartchunk@1565",
+   "displayName": "Terra Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/terra_shard-546cf4f85b04.png",
+   "dominantColor": "#008900"
+  },
+  "Thallium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.thallium",
+   "displayName": "Thallium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/thallium_plasma-d7b3a05315f0.png",
+   "dominantColor": "#a3abab"
+  },
+  "The Core": {
+   "kind": "item",
+   "id": "gregtech:gt.rodnaquadah32",
+   "displayName": "The Core",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/the_core-b13e2fd1dee7.png",
+   "dominantColor": "#313866"
+  },
+  "The Core (Depleted)": {
+   "kind": "item",
+   "id": "gregtech:gt.depletedrodnaquadah32",
+   "displayName": "The Core (Depleted)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/the_core_depleted-8d2f82f86191.png",
+   "dominantColor": "#313866"
+  },
+  "Thorium Based Liquid Fuel (Depleted)": {
+   "kind": "fluid",
+   "id": "thorium based liquid fuel (depleted)",
+   "displayName": "Thorium Based Liquid Fuel (Depleted)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/thorium_based_liquid_fuel_depleted-a4962e808c04.png",
+   "dominantColor": "#655870"
+  },
+  "Thorium Fuel (Excited)": {
+   "kind": "fluid",
+   "id": "thorium based liquid fuel (excited state)",
+   "displayName": "Thorium Based Liquid Fuel (Excited State)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/thorium_based_liquid_fuel_excited_state-20235356c0fa.png",
+   "dominantColor": "#412953"
+  },
+  "Thorium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.thorium",
+   "displayName": "Thorium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/thorium_plasma-1628d80cbdba.png",
+   "dominantColor": "#001d00"
+  },
+  "Thulium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.thulium",
+   "displayName": "Thulium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/thulium_plasma-f52e84a1f3fe.png",
+   "dominantColor": "#5369be"
+  },
+  "Tiberium Bolt (EV)": {
+   "kind": "item",
+   "id": "tconstruct:boltpart@1709",
+   "displayName": "Tiberium Bolt",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/tiberium_bolt-4ef96c34c46d.png",
+   "dominantColor": "#1b981b"
+  },
+  "Tiberium Rod (IV)": {
+   "kind": "item",
+   "id": "bartworks:gt.bwmetageneratedstick@89",
+   "displayName": "Tiberium Rod",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/tiberium_rod-423773e38546.png",
+   "dominantColor": "#2dd42d"
+  },
+  "Tin Plasma": {
+   "kind": "fluid",
+   "id": "plasma.tin",
+   "displayName": "Tin Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/tin_plasma-af775f1961bb.png",
+   "dominantColor": "#cdd8d8"
+  },
+  "Titanium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.titanium",
+   "displayName": "Titanium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/titanium_plasma-b72d1733fcfa.png",
+   "dominantColor": "#cd9deb"
+  },
+  "Toluene": {
+   "kind": "fluid",
+   "id": "liquid_toluene",
+   "displayName": "Toluene",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/toluene-7c88a152a2d7.png",
+   "dominantColor": "#702400"
+  },
+  "TRISO pebble": {
+   "kind": "item",
+   "id": "bartworks:bw.thtrmaterials@4",
+   "displayName": "TRISO pebble",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/triso_pebble-40a4bdc147d4.png",
+   "dominantColor": "#585858"
+  },
+  "TRISO pebble (Plutonium)": {
+   "kind": "item",
+   "id": "bartworks:bw.htgrmaterials@18",
+   "displayName": "TRISO pebble (Plutonium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/triso_pebble_plutonium-7e36e6ffe3c4.png",
+   "dominantColor": "#6b4f4f"
+  },
+  "TRISO pebble (Thorium)": {
+   "kind": "item",
+   "id": "bartworks:bw.htgrmaterials@4",
+   "displayName": "TRISO pebble (Thorium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/triso_pebble_thorium-ca0d79ef0861.png",
+   "dominantColor": "#535853"
+  },
+  "TRISO pebble (Uranium)": {
+   "kind": "item",
+   "id": "bartworks:bw.htgrmaterials@11",
+   "displayName": "TRISO pebble (Uranium)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/triso_pebble_uranium-97c97038d998.png",
+   "dominantColor": "#516751"
+  },
+  "Tritanium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.tritanium",
+   "displayName": "Tritanium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/tritanium_plasma-5ca26ca43f97.png",
+   "dominantColor": "#5a0000"
+  },
+  "Tritium": {
+   "kind": "fluid",
+   "id": "tritium",
+   "displayName": "Tritium",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/tritium-6720eecf7fc0.png",
+   "dominantColor": "#ff4d4d"
+  },
+  "Tritium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.tritium",
+   "displayName": "Tritium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/tritium_plasma-5eb818318f15.png",
+   "dominantColor": "#ee0000"
+  },
+  "Tungsten Plasma": {
+   "kind": "fluid",
+   "id": "plasma.tungsten",
+   "displayName": "Tungsten Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/tungsten_plasma-5bbffd898288.png",
+   "dominantColor": "#2f3131"
+  },
+  "U-Salt": {
+   "kind": "fluid",
+   "id": "molten.uraniumdepletedmoltensaltusalt",
+   "displayName": "Uranium Depleted Molten Salt (U Salt)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/uranium_depleted_molten_salt_u_salt-6b35a157611d.png",
+   "dominantColor": "#96b699"
+  },
+  "UF6": {
+   "kind": "fluid",
+   "id": "molten.uraniumhexafluoride",
+   "displayName": "Uranium Hexafluoride",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/uranium_hexafluoride-6584d3f368ae.png",
+   "dominantColor": "#99dd9d"
+  },
+  "Uranium Based Liquid Fuel (Depleted)": {
+   "kind": "fluid",
+   "id": "uranium based liquid fuel (depleted)",
+   "displayName": "Uranium Based Liquid Fuel (Depleted)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/uranium_based_liquid_fuel_depleted-760edd97b9ac.png",
+   "dominantColor": "#597131"
+  },
+  "Uranium Fuel (Excited)": {
+   "kind": "fluid",
+   "id": "uranium based liquid fuel (excited state)",
+   "displayName": "Uranium Based Liquid Fuel (Excited State)",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/uranium_based_liquid_fuel_excited_state-4204504ce09b.png",
+   "dominantColor": "#00cf00"
+  },
+  "Uranium-233": {
+   "kind": "fluid",
+   "id": "molten.uranium233",
+   "displayName": "Molten Uranium 233",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_uranium_233-bc98b392e2be.png",
+   "dominantColor": "#44cc4d"
+  },
+  "Uranium-235 Plasma": {
+   "kind": "fluid",
+   "id": "plasma.uranium235",
+   "displayName": "Uranium 235 Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/uranium_235_plasma-2d66beb08133.png",
+   "dominantColor": "#16c717"
+  },
+  "Uranium-238 Plasma": {
+   "kind": "fluid",
+   "id": "plasma.uranium",
+   "displayName": "Uranium 238 Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/uranium_238_plasma-cedde69d21a9.png",
+   "dominantColor": "#2feb31"
+  },
+  "Vanadium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.vanadium",
+   "displayName": "Vanadium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/vanadium_plasma-5bbffd898288.png",
+   "dominantColor": "#2f3131"
+  },
+  "Very Heavy Oil": {
+   "kind": "fluid",
+   "id": "liquid_extra_heavy_oil",
+   "displayName": "Very Heavy Oil",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/very_heavy_oil-c65d4423951a.png",
+   "dominantColor": "#6b7280"
+  },
+  "Vinteum Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2529",
+   "displayName": "Vinteum Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/vinteum_dust-848d75957166.png",
+   "dominantColor": "#4692bb"
+  },
+  "Vinteum Gem": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@8529",
+   "displayName": "Vinteum",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/vinteum-9a16a857b181.png",
+   "dominantColor": "#53a7d5"
+  },
+  "Vinteum Ingot": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@11529",
+   "displayName": "Vinteum Ingot",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/vinteum_ingot-105b8a834d63.png",
+   "dominantColor": "#346b89"
+  },
+  "Vinteum Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17529",
+   "displayName": "Vinteum Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/vinteum_plate-d76f61187131.png",
+   "dominantColor": "#4595bf"
+  },
+  "Void Metal Dust": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@2970",
+   "displayName": "Void Dust",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/void_dust-30af982708df.png",
+   "dominantColor": "#15052a"
+  },
+  "Void Metal Ingot": {
+   "kind": "item",
+   "id": "thaumcraft:itemresource@16",
+   "displayName": "Void Metal Ingot",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/void_metal_ingot-e6428427057d.png",
+   "dominantColor": "#23103b"
+  },
+  "Void Metal Plate": {
+   "kind": "item",
+   "id": "gregtech:gt.metaitem.01@17970",
+   "displayName": "Void Plate",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/void_plate-358264bbb792.png",
+   "dominantColor": "#16052d"
+  },
+  "Warped Shard": {
+   "kind": "item",
+   "id": "taintedmagic:itemmaterial@3",
+   "displayName": "Warped Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/warped_shard-96ec2a2b6e3e.png",
+   "dominantColor": "#041257"
+  },
+  "Water": {
+   "kind": "fluid",
+   "id": "water",
+   "displayName": "Water",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/water-496e39419600.png",
+   "dominantColor": "#2c3ef4"
+  },
+  "Wood Gas": {
+   "kind": "fluid",
+   "id": "woodgas",
+   "displayName": "Wood Gas",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/wood_gas-5742f3cbbf81.png",
+   "dominantColor": "#b4a66e"
+  },
+  "Wrath Shard": {
+   "kind": "item",
+   "id": "forbiddenmagic:nethershard",
+   "displayName": "Wrath Shard",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/wrath_shard-d5edea877445.png",
+   "dominantColor": "#3b0000"
+  },
+  "Xenon Plasma": {
+   "kind": "fluid",
+   "id": "plasma.xenon",
+   "displayName": "Xenon Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/xenon_plasma-62964830e104.png",
+   "dominantColor": "#0567ce"
+  },
+  "Ytterbium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.ytterbium",
+   "displayName": "Ytterbium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ytterbium_plasma-ebc4bb755131.png",
+   "dominantColor": "#29c34e"
+  },
+  "Yttrium Plasma": {
+   "kind": "fluid",
+   "id": "plasma.yttrium",
+   "displayName": "Yttrium Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/yttrium_plasma-cc2618b284b2.png",
+   "dominantColor": "#cef5d8"
+  },
+  "Zinc Plasma": {
+   "kind": "fluid",
+   "id": "plasma.zinc",
+   "displayName": "Zinc Plasma",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/zinc_plasma-69db2c67ae74.png",
+   "dominantColor": "#e9ebeb"
+  }
+ }
+}

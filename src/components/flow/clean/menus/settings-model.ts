@@ -9,6 +9,7 @@ import {
 import { rememberSetting, settingMemoryMachine } from "@/lib/model/setting-memory";
 import { getMachineBehaviour } from "@/lib/machines/machine-table";
 import { isHeatOverclockMachine } from "@/lib/solver/heat";
+import type { GameVersion } from "@/lib/model/game-version";
 
 /**
  * A card's settings as the gear sheet lists them and the strip shows them (the mod's `SettingControls` and
@@ -39,21 +40,21 @@ export interface SettingControl {
 
 export const COIL_ID = "heatingCoil";
 
-export function settingControls(recipe: Recipe, node: FactoryNode): SettingControl[] {
+export function settingControls(recipe: Recipe, node: FactoryNode, gameVersion: GameVersion): SettingControl[] {
   try {
-    return computeControls(recipe, node);
+    return computeControls(recipe, node, gameVersion);
   } catch {
     return [];
   }
 }
 
-function computeControls(recipe: Recipe, node: FactoryNode): SettingControl[] {
-  const effective = applyMachineHandlerToRecipe(applyRecipeInputOverrides(recipe, node), node);
+function computeControls(recipe: Recipe, node: FactoryNode, gameVersion: GameVersion): SettingControl[] {
+  const effective = applyMachineHandlerToRecipe(applyRecipeInputOverrides(recipe, node, gameVersion), node, gameVersion);
   const out: SettingControl[] = [];
-  const coil = getRecipeCoilTierControl(effective, node);
+  const coil = getRecipeCoilTierControl(effective, node, gameVersion);
   if (coil) {
     const special = getRecipeSpecialValue(effective);
-    const behaviour = getMachineBehaviour(effective.machineType);
+    const behaviour = getMachineBehaviour(effective.machineType, gameVersion);
     const heat = (coil.current.heat ?? 0) * (behaviour?.heat?.coilHeatMultiplier ?? 1);
     out.push({
       id: COIL_ID,
@@ -61,13 +62,13 @@ function computeControls(recipe: Recipe, node: FactoryNode): SettingControl[] {
       label: coil.label,
       value: coil.current.label,
       icon: coil.current.resource?.iconPath,
-      warn: isHeatOverclockMachine(effective.machineType) && special !== undefined && special >= 0 && heat < special,
+      warn: isHeatOverclockMachine(effective.machineType, gameVersion) && special !== undefined && special >= 0 && heat < special,
       options: coil.tiers.map((tier) => ({ key: tier.key, label: tier.label, icon: tier.resource?.iconPath })),
       currentKey: coil.current.key,
       pinDefault: true,
     });
   }
-  for (const control of getRecipeMachineConfigTierControls(effective, node)) {
+  for (const control of getRecipeMachineConfigTierControls(effective, node, gameVersion)) {
     if (control.id === COIL_ID || /^(machineParallel|voltageParallel)/.test(control.id)) continue;
     if (control.tiers.length <= 1) continue;
     out.push({
@@ -86,18 +87,18 @@ function computeControls(recipe: Recipe, node: FactoryNode): SettingControl[] {
 }
 
 /** The heat the recipe asks of the coil, in kelvin, when the machine reads it. */
-export function recipeHeatNeed(recipe: Recipe, node: FactoryNode): number | undefined {
+export function recipeHeatNeed(recipe: Recipe, node: FactoryNode, gameVersion: GameVersion): number | undefined {
   try {
-    return computeHeatNeed(recipe, node);
+    return computeHeatNeed(recipe, node, gameVersion);
   } catch {
     return undefined;
   }
 }
 
-function computeHeatNeed(recipe: Recipe, node: FactoryNode): number | undefined {
-  const effective = applyMachineHandlerToRecipe(applyRecipeInputOverrides(recipe, node), node);
+function computeHeatNeed(recipe: Recipe, node: FactoryNode, gameVersion: GameVersion): number | undefined {
+  const effective = applyMachineHandlerToRecipe(applyRecipeInputOverrides(recipe, node, gameVersion), node, gameVersion);
   const special = getRecipeSpecialValue(effective);
-  return isHeatOverclockMachine(effective.machineType) && special !== undefined && special > 0 ? special : undefined;
+  return isHeatOverclockMachine(effective.machineType, gameVersion) && special !== undefined && special > 0 ? special : undefined;
 }
 
 /** The key a machine's pins are kept under (the mod keys them by machine name). */

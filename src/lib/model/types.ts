@@ -378,6 +378,12 @@ export interface Recipe {
   maximumTier?: MachineTier | string;
   /** Actual registered tiers carried from the selected singleblock handler. */
   availableTiers?: string[];
+  /**
+   * The recipe map's amperage when a singleblock runs it (above 1 only), set by
+   * `applyMachineHandlerToRecipe`: the minimum tier is the one whose voltage
+   * times this covers the EU/t. Never stored in a dataset.
+   */
+  recipeMapAmperage?: number;
   durationTicks: number;
   eut: number;
   inputs: RecipeInput[];

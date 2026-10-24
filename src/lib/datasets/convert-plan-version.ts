@@ -7,9 +7,12 @@ import { FLUID_TANK_EMPTY_MAP } from "@/lib/model/fluid-tank";
 import { CROP_FARM_PLACEHOLDER_RECIPE_ID, CROP_FARM_RECIPE_MAP } from "@/lib/model/passive-production";
 import { getRecipeMachineHandlers } from "@/lib/model/recipe-rules";
 import { isPowerRecipe, resynthesizePowerRecipes } from "@/lib/power/power-recipe";
+import { ABSENT_POWER_SOURCES } from "@/lib/power/registry";
+import { convertPowerSettings } from "@/lib/power/version-settings";
 import { hasSameRecipeNumbers, recipeContentRef } from "@/lib/import-export/recipe-ref-match";
 import { remapMigratedRecipeReferences } from "@/lib/import-export/recipe-migration";
 import { getRecipeDatasetRecipe, resolveRecipeDatasetRecipes } from "./browser-loader";
+import { cropsNhAvailable } from "./crops-availability";
 import type { DatasetVersion } from "./types";
 
 export type { UnconvertedRecipe };
@@ -23,16 +26,19 @@ export interface ConversionTarget {
 const PLAN_NAME_LIMIT = 80;
 
 /**
- * Cards the target version cannot run at all: a power source or a recipe map it lacks. They are not looked for
- * there: each is marked with the reason, so the player reads "not in this version" rather than "no match". Keyed
- * by the target; a machine only the source version has and that is not listed here is simply unmatched.
+ * Whether the target cannot run this recipe at all: a power source its version lacks (`ABSENT_POWER_SOURCES`), or a
+ * Crop Farm crop on a dataset with no CropsNH crops (the dataset decides, as the picker does). Such cards are not
+ * looked for there: each is marked with the reason, so the player reads "not in this version" rather than "no
+ * match". A machine only the source version has that is neither is simply unmatched.
  */
-const ABSENT_IN_VERSION: Record<GameVersion, { powerSources: Set<string>; recipeMaps: Set<string> }> = {
-  "2.8.1": {
-    powerSources: new Set(["large-neutralization-engine"]),
-    recipeMaps: new Set([CROP_FARM_RECIPE_MAP]),
-  },
-};
+function absentInTarget(recipe: Recipe, toGameVersion: GameVersion, targetHasCropsNh: boolean): boolean {
+  if (isPowerRecipe(recipe)) return ABSENT_POWER_SOURCES[toGameVersion]?.includes(recipe.power.sourceId) ?? false;
+  return isCropFarmCrop(recipe) && !targetHasCropsNh;
+}
+
+function isCropFarmCrop(recipe: Recipe): boolean {
+  return (recipe.source?.recipeMap ?? recipe.machineType) === CROP_FARM_RECIPE_MAP;
+}
 
 /**
  * Machine handler ids renamed between 2.8.1 and 2.9 whose names differ by more than a tier mark, so the family
@@ -214,17 +220,17 @@ export async function convertProjectToVersion(
   const source = structuredClone(project);
   const fromGameVersion = planGameVersion(source);
   const toGameVersion = gameVersionOfDataset(target.version);
-  const absent = ABSENT_IN_VERSION[toGameVersion];
   const notInTarget = `Not in ${gameVersionLabel(toGameVersion)}.`;
+  // Asked only when the plan has a crop to place: the crop list is the picker's own, cached per dataset version.
+  const targetHasCropsNh = source.recipes.some((recipe) => !isPlanOwnRecipe(recipe) && isCropFarmCrop(recipe))
+    ? await cropsNhAvailable(target.manifestUrl, target.version)
+    : true;
 
   const absentRecipes = new Set<string>();
   const toMatch: Recipe[] = [];
   for (const recipe of source.recipes) {
     if (isPlanOwnRecipe(recipe)) continue;
-    const isAbsent = isPowerRecipe(recipe)
-      ? absent?.powerSources.has(recipe.power.sourceId)
-      : absent?.recipeMaps.has(recipe.source?.recipeMap ?? recipe.machineType);
-    if (isAbsent) {
+    if (absentInTarget(recipe, toGameVersion, targetHasCropsNh)) {
       absentRecipes.add(recipe.id);
     } else if (!isPowerRecipe(recipe)) {
       toMatch.push(recipe);
@@ -288,6 +294,9 @@ export async function convertProjectToVersion(
     const handlerId = handlerChoice.get(node.id);
     if (!handlerId || marks.get(node.id)?.has(0)) return node;
     const body = bodies.get(node.recipeId);
+    // The raw list's first: on a fusion recipe that is Mark I even when the recipe needs a higher mark (the picker
+    // drops marks below it). Harmless while an unpinned card stays unpinned on it, since its twin is the target's
+    // first too; a rule that pinned the default would put a fusion card on a reactor the recipe cannot run on.
     const defaultId = body && handlersOf(body)[0]?.id;
     if (node.machineHandlerId === undefined && handlerId === defaultId) return node;
     return { ...node, machineHandlerId: handlerId };
@@ -365,5 +374,16 @@ export async function convertProjectToVersion(
     };
   });
 
-  return { project: resynthesizePowerRecipes({ ...remapped, nodes, edges }), unconverted };
+  // A power card's settings carry the source version's meaning, its defaults included (`convertPowerSettings`).
+  const withPowerSettings = nodes.map((node): FactoryNode => {
+    const recipe = sourceById.get(node.recipeId);
+    if (!recipe || !isPowerRecipe(recipe) || absentRecipes.has(recipe.id)) return node;
+    const settings = convertPowerSettings(recipe.power.sourceId, node.machineConfigTiers, fromGameVersion, toGameVersion);
+    return settings === node.machineConfigTiers ? node : { ...node, machineConfigTiers: settings };
+  });
+
+  return {
+    project: resynthesizePowerRecipes({ ...remapped, nodes: withPowerSettings, edges }, toGameVersion),
+    unconverted,
+  };
 }

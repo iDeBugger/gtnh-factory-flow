@@ -21,6 +21,7 @@ import { getMachineStructuralParallels } from "@/lib/solver/machine-effects";
 import { applyMachineHandlerToRecipe } from "@/lib/model/recipe-rules";
 import { GT_TIER_COLORS } from "./tier-colors";
 import { useBoardMotion } from "./board-motion";
+import type { GameVersion } from "@/lib/model/game-version";
 
 type Tier = NonNullable<FactoryNode["hatchVoltageTier"]>;
 
@@ -120,33 +121,34 @@ type Consumption = {
 export function PowerReadout({
   recipe,
   node,
+  gameVersion,
   mode,
   plannedEuT,
   utilization,
   sharedAverageEuT,
   shared,
   compact = false,
-}: { recipe: Recipe; node: FactoryNode; compact?: boolean } & Consumption) {
+}: { recipe: Recipe; node: FactoryNode; gameVersion: GameVersion; compact?: boolean } & Consumption) {
   useRateDisplayUnits();
   const displayPower = (euT: number) => `${formatPowerValue(powerDisplayFromEuT(euT))} ${powerDisplaySuffix()}`;
-  const report = getNodePowerReport(recipe, node);
+  const report = getNodePowerReport(recipe, node, gameVersion);
   const working = useMemo(
-    () => describePowerWorking(recipe, node, report.poolEuT),
-    [recipe, node, report.poolEuT],
+    () => describePowerWorking(recipe, node, report.poolEuT, gameVersion),
+    [recipe, node, report.poolEuT, gameVersion],
   );
-  const wins = useMemo(() => listPowerWinsCached(recipe, node), [recipe, node]);
+  const wins = useMemo(() => listPowerWinsCached(recipe, node, gameVersion), [recipe, node, gameVersion]);
   const hasOverclocks = wins.some((win) => win.overclockSteps > 0);
   const hasParallels = wins.some((win) => win.parallels > 1);
-  const stats = getOverclockedRecipeStats(recipe, node);
+  const stats = getOverclockedRecipeStats(recipe, node, gameVersion);
   const voltage = getVoltageTierMaxEuT(report.tier);
-  const parallelTarget = useMemo(() => fullParallelPowerWin(recipe, node, wins), [recipe, node, wins]);
+  const parallelTarget = useMemo(() => fullParallelPowerWin(recipe, node, wins, gameVersion), [recipe, node, wins, gameVersion]);
   const next = parallelTarget ?? working.nextWin;
   const targetLabel = parallelTarget ? "Max parallels" : "Next improvement";
   const { valueMotion } = useBoardMotion();
   const barTransition = valueMotion ? "width 240ms ease-out, left 240ms ease-out, transform 240ms ease-out" : undefined;
   const nextNode = next ? powerNodeAtBudget(node, next.euT) : undefined;
-  const nextReport = nextNode ? getNodePowerReport(recipe, nextNode) : undefined;
-  const nextStats = nextNode ? getOverclockedRecipeStats(recipe, nextNode) : undefined;
+  const nextReport = nextNode ? getNodePowerReport(recipe, nextNode, gameVersion) : undefined;
+  const nextStats = nextNode ? getOverclockedRecipeStats(recipe, nextNode, gameVersion) : undefined;
   // Round thresholds upward so typing the displayed amount actually reaches them.
   const extraAmps = next ? Math.ceil(((next.euT - report.poolEuT) / voltage) * 100) / 100 : 0;
   const ampsPerHatch = report.amps === 1 ? 1 : 2;
@@ -155,7 +157,7 @@ export function PowerReadout({
   const scaleEuT = next?.euT ?? 1;
   const progress = Math.max(0, Math.min(1, report.poolEuT / scaleEuT));
   const raw = node.powerInputMode === "eut";
-  const capacity = getMachineStructuralParallels(applyMachineHandlerToRecipe(recipe, node), node);
+  const capacity = getMachineStructuralParallels(applyMachineHandlerToRecipe(recipe, node, gameVersion), node, gameVersion);
   const running = report.state === "ok" ? report.parallels : 0;
   const nextRunning = nextReport?.state === "ok" ? nextReport.parallels : running;
   const suppliedText = raw ? `${formatCompact(report.poolEuT)} EU/t` : `${number(report.amps)}A`;
@@ -199,7 +201,7 @@ export function PowerReadout({
       {!raw ? (
         <div className={`mt-1 flex shrink-0 ${compact ? "flex-wrap gap-1" : "h-6 gap-3"} items-center justify-between whitespace-nowrap`}>
           <div className="flex min-w-0 items-center gap-1 font-medium tabular-nums text-fg">
-            <span>{number(report.amps)}A ×</span>
+            <span>{number(report.workingAmps)}A ×</span>
             <TierBadge tier={report.tier} />
             <span className="truncate">= {number(report.poolEuT)} EU/t</span>
           </div>
@@ -212,7 +214,9 @@ export function PowerReadout({
               maximumFractionDigits: 1,
             })}{" "}
             <TierBadge tier={report.tier} /> hatches
-            <span className="ml-1 text-fg-muted">({ampsPerHatch}A per hatch)</span>
+            <span className="ml-1 text-fg-muted">
+              {report.workingAmps !== report.amps ? "(one hatch works at 1A)" : `(${ampsPerHatch}A per hatch)`}
+            </span>
           </span>
         </div>
       ) : null}
@@ -405,6 +409,7 @@ export function PowerControlsGuide({ raw = false, active }: { raw?: boolean; act
 export function HatchPowerControls({
   recipe,
   node,
+  gameVersion,
   onChange,
   locked,
   mode,
@@ -415,10 +420,11 @@ export function HatchPowerControls({
 }: {
   recipe: Recipe;
   node: FactoryNode;
+  gameVersion: GameVersion;
   onChange: (tier: Tier, amps: number, mode: "amps" | "eut") => void;
   locked: () => boolean;
 } & Consumption) {
-  const { tier, amps, poolEuT } = getNodePowerReport(recipe, node);
+  const { tier, amps, poolEuT } = getNodePowerReport(recipe, node, gameVersion);
   const raw = node.powerInputMode === "eut";
   const [draft, setDraft] = useState<string>();
   const [touchOpen, setTouchOpen] = useState(false);
@@ -507,7 +513,7 @@ export function HatchPowerControls({
           </select>
         </label>
       </div>
-      <PowerReadout compact recipe={recipe} node={node} mode={mode}
+      <PowerReadout compact recipe={recipe} node={node} gameVersion={gameVersion} mode={mode}
         plannedEuT={plannedEuT} utilization={utilization} sharedAverageEuT={sharedAverageEuT} shared={shared} />
     </TouchPowerPanel> : null}
     <MinecraftTooltip
@@ -517,6 +523,7 @@ export function HatchPowerControls({
         <PowerReadout
           recipe={recipe}
           node={node}
+          gameVersion={gameVersion}
           mode={mode}
           plannedEuT={plannedEuT}
           utilization={utilization}

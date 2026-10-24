@@ -629,9 +629,11 @@ describe("live editing in the store", () => {
   });
 
   it("a joiner's opened shared plan reads 2.8.1", async () => {
-    // Nothing open yet: the joiner opens bob's plan from Shared with me.
+    // Nothing open yet: the joiner opens bob's plan from Shared with me. The
+    // live snapshot claims another version, so only the opened copy can be
+    // where 2.8.1 comes from: the snapshot never changes a plan's version.
     service.plan = JSON.parse(
-      JSON.stringify({ ...planWith(annotation("n1", "live")), gameVersion: "2.8.1" }),
+      JSON.stringify({ ...planWith(annotation("n1", "live")), gameVersion: "2.9" }),
     ) as LivePlan;
     useFactoryStore.getState().markHydratedProject(createNewProject());
     useDesignStore.setState({ designs: [], activeDesignId: undefined, isHydrated: true });

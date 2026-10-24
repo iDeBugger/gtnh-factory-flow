@@ -1,5 +1,20 @@
-import { powerPlannerData } from "../planner-data";
-import type { PowerFlowLine, PowerSelectOption, PowerStatLine } from "../types";
+import type { GameVersion } from "@/lib/model/game-version";
+import type { PowerTables } from "../planner-data";
+import type {
+  PowerFlowLine,
+  PowerSelectOption,
+  PowerSourceDefinition,
+  PowerStatLine,
+} from "../types";
+
+/**
+ * One source module's cards, built from a version's tables. A difference with no table behind
+ * it branches here on `gameVersion`, at the point of difference.
+ */
+export type PowerSourceBuilder = (
+  tables: PowerTables,
+  gameVersion: GameVersion,
+) => PowerSourceDefinition[];
 
 export function liters(name: string, perSecond: number): PowerFlowLine {
   return { name, perSecond, unit: "L" };
@@ -33,25 +48,28 @@ export function percent(value: number): string {
 }
 
 /** Voltage and per-amp packet loss for a tier name, from the workbook's own ladder. */
-export function tierPower(tier: string): { voltage: number; ampLoss: number } {
-  const entry = powerPlannerData.singleblockTiers.find((row) => row.tier === tier);
+export function tierPower(tier: string, tables: PowerTables): { voltage: number; ampLoss: number } {
+  const entry = tables.singleblockTiers.find((row) => row.tier === tier);
   return entry ? { voltage: entry.voltage, ampLoss: entry.ampLoss } : { voltage: 32, ampLoss: 1 };
 }
 
 /** Tier options for a singleblock family: the tiers its efficiency ladder covers. */
-export function familyTierOptions(family: string): {
+export function familyTierOptions(
+  family: string,
+  tables: PowerTables,
+): {
   options: PowerSelectOption[];
   efficiencyFor(tier: string): number;
 } {
-  const ladder = powerPlannerData.singleblockEfficiency[family] ?? [];
-  const options = powerPlannerData.singleblockTiers
+  const ladder = tables.singleblockEfficiency[family] ?? [];
+  const options = tables.singleblockTiers
     .map((row, index) => ({ row, index }))
     .filter(({ index }) => typeof ladder[index] === "number")
     .map(({ row }) => ({ key: row.tier, label: row.tier }));
   return {
     options,
     efficiencyFor(tier) {
-      const index = powerPlannerData.singleblockTiers.findIndex((row) => row.tier === tier);
+      const index = tables.singleblockTiers.findIndex((row) => row.tier === tier);
       const value = ladder[index];
       return typeof value === "number" ? value : 1;
     },

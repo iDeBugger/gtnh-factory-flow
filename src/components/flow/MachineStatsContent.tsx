@@ -5,6 +5,7 @@ import { useFactoryStore } from "@/store/factory-store";
 import { RecipeTooltip } from "./RecipeTooltip";
 import { tooltipMode } from "./recipe-tooltip-data";
 import { buildMachineTooltip } from "./machine-tooltip-data";
+import { planGameVersion } from "@/lib/model/game-version";
 import {
   cropsNhCropsPerMachine,
   cropsNhEnvironmentFromTiers,
@@ -129,10 +130,11 @@ export function MachineStatsContent({
 }) {
   const mode = useFactoryStore((state) => tooltipMode(state.project));
   const upTo = useFactoryStore((state) => state.lastResult.plan?.upTo?.[node.id]);
+  const gameVersion = useFactoryStore((state) => planGameVersion(state.project));
   if (getCropsNhStats(recipe)) {
     return <CropSourceStatsContent recipe={recipe} handler={handler} node={node} title={title} />;
   }
   return (
-    <RecipeTooltip view={buildMachineTooltip(recipe, handler, node, mode, result, title, upTo)} />
+    <RecipeTooltip view={buildMachineTooltip(recipe, handler, node, mode, gameVersion, { result, title, upTo })} />
   );
 }
