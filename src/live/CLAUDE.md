@@ -35,7 +35,9 @@ the game is `docs/design/cloud-live.md` in the game's repository: frames and ops
   (`isModAndCommunityOn`, read at runtime here); off, that upgrade, a `client:"game"` hello and `/live/nearby` are
   refused. Tests of the game paths turn it on with `withModAndCommunityOn()` (`src/test-support/`). Limits that
   need no database come before any lookup (upgrades per address and account, sockets per account); accounts are
-  cached a minute. The client address is `X-Client-Ip` only on requests from loopback (Caddy).
+  cached a minute. The client address is read by the site's shared rule (`src/lib/server/client-address.ts`:
+  `X-Client-Ip`, else `CF-Connecting-IP`, IP literals only, IPv6 on its /64) only on requests from loopback
+  (Caddy); any other peer is its own address. Exam: `service.test.ts` "where a request came from".
 - Every cost an account can cause has a limit charged before the cost: frames by size before decoding (the intake
   budget), plan opens per minute before the membership query, plan bytes held across open rooms
   (`LIVE_MAX_PLAN_BYTES`; memory is about four times it) before a room opens, and the rooms an account left to

@@ -18,6 +18,7 @@ import {
   type LiveMember,
   type ServerFrame,
 } from "@/lib/live/protocol";
+import { addressFromHeaders, NO_ADDRESS } from "@/lib/server/client-address";
 import { sameSecret } from "@/lib/server/cloud-plans";
 import { readSessionCookie, verifySessionToken, type SessionClaims } from "@/lib/server/session";
 import { FlushQueue } from "./flush-queue";
@@ -300,20 +301,23 @@ const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 
 /**
  * Where a request came from. Behind Caddy (the service listens on loopback)
- * that is the X-Client-Ip header Caddy sets from Cloudflare's client address,
- * overwriting whatever the client sent; CF-Connecting-IP when it is missing.
- * A request not from loopback came straight to the service: its own address.
+ * that is what the site's one address rule reads (client-address.ts): the
+ * X-Client-Ip header Caddy sets from Cloudflare's client address, overwriting
+ * whatever the client sent, else CF-Connecting-IP, IP literals only, IPv6 on
+ * its /64; with neither, the loopback peer itself. A request not from
+ * loopback came straight to the service: its own address, whatever headers
+ * it carries.
  */
-function clientAddress(req: IncomingMessage): string {
+export function clientAddress(req: Pick<IncomingMessage, "headers" | "socket">): string {
   const peer = req.socket.remoteAddress ?? "unknown";
   if (!LOOPBACK.has(peer)) {
     return peer;
   }
-  const header = (name: string) => {
+  const address = addressFromHeaders((name) => {
     const value = req.headers[name];
-    return (Array.isArray(value) ? value[0] : value)?.split(",")[0]?.trim() || undefined;
-  };
-  return header("x-client-ip") ?? header("cf-connecting-ip") ?? peer;
+    return Array.isArray(value) ? value[0] : value;
+  });
+  return address === NO_ADDRESS ? peer : address;
 }
 
 interface Connection extends RoomPeer {

@@ -16,7 +16,7 @@ import * as designRoute from "@/app/api/library/designs/[designId]/route";
 import * as memberRoute from "@/app/api/library/designs/[designId]/members/[userId]/route";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 import { Journal } from "./journal";
-import { LiveService, type LiveServiceOptions } from "./service";
+import { clientAddress, LiveService, type LiveServiceOptions } from "./service";
 import { supabasePlanStore, type PlanStore } from "./store";
 
 /** The real store, counting each kind of call. */
@@ -1495,5 +1495,32 @@ describe("the live service", { timeout: 30_000 }, () => {
     expect(await bob.next("error", (frame) => frame.cid === "many")).toMatchObject({
       code: "too_big",
     });
+  });
+});
+
+describe("where a request came from", () => {
+  const request = (remoteAddress: string, headers: Record<string, string | string[]> = {}) =>
+    ({ headers, socket: { remoteAddress } }) as unknown as Parameters<typeof clientAddress>[0];
+
+  it("trusts Caddy's header only from a loopback peer, through the site's one rule", () => {
+    expect(clientAddress(request("127.0.0.1", { "x-client-ip": "203.0.113.9" }))).toBe("203.0.113.9");
+    expect(clientAddress(request("::1", { "cf-connecting-ip": "198.51.100.7" }))).toBe("198.51.100.7");
+    expect(clientAddress(request("::ffff:127.0.0.1", { "x-client-ip": ["203.0.113.9, 10.0.0.1"] }))).toBe(
+      "203.0.113.9",
+    );
+    expect(clientAddress(request("127.0.0.1", { "x-client-ip": "2001:db8:abcd:1234:5678::1" }))).toBe(
+      "2001:db8:abcd:1234::",
+    );
+  });
+
+  it("falls back to the loopback peer when the headers say nothing it can trust", () => {
+    expect(clientAddress(request("127.0.0.1"))).toBe("127.0.0.1");
+    expect(clientAddress(request("127.0.0.1", { "x-forwarded-for": "203.0.113.9" }))).toBe("127.0.0.1");
+    expect(clientAddress(request("127.0.0.1", { "x-client-ip": "not-an-ip" }))).toBe("127.0.0.1");
+  });
+
+  it("keys a peer that is not loopback on itself, whatever it sends", () => {
+    expect(clientAddress(request("198.51.100.20", { "x-client-ip": "203.0.113.9" }))).toBe("198.51.100.20");
+    expect(clientAddress(request("198.51.100.20", { "cf-connecting-ip": "203.0.113.9" }))).toBe("198.51.100.20");
   });
 });
