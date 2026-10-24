@@ -10,10 +10,11 @@ export async function register() {
     return;
   }
 
-  const { prewarmLatestDatasetVersions } = await import("@/lib/server/dataset-query");
+  const { prewarmDatasetVersions } = await import("@/lib/server/dataset-query");
   try {
-    await prewarmLatestDatasetVersions();
-    console.info("GTNH dataset cache prewarmed.");
+    // Resolves once the default version is warm; the others follow in the background.
+    await prewarmDatasetVersions();
+    console.info("GTNH default dataset prewarmed; other versions load in the background.");
   } catch (error) {
     console.error("GTNH dataset cache prewarm failed.", error);
   }

@@ -1,6 +1,9 @@
 import { parseDatasetManifestJson } from "../import-export";
 import { gameVersionOfDataset, type GameVersion } from "../model/game-version";
+import { HIDDEN_DATASET_VERSION_IDS } from "./hidden-versions";
 import type { DatasetManifest, DatasetVersion } from "./types";
+
+export { HIDDEN_DATASET_VERSION_IDS };
 
 export const DEFAULT_DATASET_MANIFEST_URL =
   process.env.NEXT_PUBLIC_GTNH_DATASET_MANIFEST_URL ?? "/datasets/gtnh/datasets.manifest.json";
@@ -20,12 +23,6 @@ export async function fetchDatasetManifest(
 
   return parseDatasetManifestJson(await response.text());
 }
-
-/**
- * Dataset versions never offered in the picker or loaded for a plan, even if a
- * manifest still lists them. 2.8.4 is no longer supported; 2.9 and 2.8.1 are.
- */
-export const HIDDEN_DATASET_VERSION_IDS = new Set(["local-2.8.4"]);
 
 export function listSelectableDatasetVersions(manifest: DatasetManifest): DatasetVersion[] {
   const selectable = manifest.versions.filter(

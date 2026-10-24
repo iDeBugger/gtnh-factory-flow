@@ -55,11 +55,34 @@ export function buildTextSearchIndex(
   searchText: string[],
   entryIndexes: number[],
 ): TextSearchIndex {
+  const intern = createTokenInterner();
   const tokensByEntry: string[][] = [];
   for (const entryIndex of entryIndexes) {
-    tokensByEntry[entryIndex] = [...new Set(splitSearchTokens(searchText[entryIndex] ?? ""))];
+    tokensByEntry[entryIndex] = intern([...new Set(splitSearchTokens(searchText[entryIndex] ?? ""))]);
   }
   return buildTokenSearchIndex(tokensByEntry, entryIndexes);
+}
+
+/**
+ * Makes every equal word one string. Splitting gives each occurrence its own
+ * copy: the recipe corpus holds 5.8 million words but only 38 thousand distinct
+ * ones, so a big index keeps hundreds of MB of duplicates without this. The
+ * array is changed in place and returned; the interner is dropped with the build.
+ */
+export function createTokenInterner(): (tokens: string[]) => string[] {
+  const kept = new Map<string, string>();
+  return (tokens) => {
+    for (let index = 0; index < tokens.length; index += 1) {
+      const token = tokens[index];
+      const existing = kept.get(token);
+      if (existing === undefined) {
+        kept.set(token, token);
+      } else {
+        tokens[index] = existing;
+      }
+    }
+    return tokens;
+  };
 }
 
 /** The same index over entries already split into words. */

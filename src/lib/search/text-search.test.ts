@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSearchVocabulary,
   buildTextSearchIndex,
+  createTokenInterner,
   queryTextSearchIndex,
   resolveSearchPhases,
   searchCorrector,
@@ -193,5 +194,21 @@ describe("trigram narrowing", () => {
 
   it("says so when nothing can match", () => {
     expect(queryTextSearchIndex(index, parseSearchQuery("naquadah"))).toEqual([]);
+  });
+});
+
+describe("one copy of each word", () => {
+  it("keeps every word and its order, across every list it interns", () => {
+    const intern = createTokenInterner();
+    const first = ["steel", "plate", "steel"];
+    expect(intern(first)).toBe(first);
+    expect(first).toEqual(["steel", "plate", "steel"]);
+    expect(intern(["plate", "ingot"])).toEqual(["plate", "ingot"]);
+    expect(intern([])).toEqual([]);
+  });
+
+  it("leaves the index's words as the text splits them", () => {
+    const index = buildTextSearchIndex(["Steel Plate", "steel ingot", "Plate"], [0, 1, 2]);
+    expect(index.tokensByEntry).toEqual([["steel", "plate"], ["steel", "ingot"], ["plate"]]);
   });
 });

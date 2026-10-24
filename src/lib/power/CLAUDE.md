@@ -16,9 +16,9 @@
 - On load, `resynthesizePowerRecipes` must run before `dropCrossFormConnections`, or power
   cards lose their fuel wires. A cloned power card remints its owned recipe.
 - The closed-plan rule waives unwired power outputs, or old generators load dead.
-- The Java to check against is GT5U tag `5.09.54.20`, not the newer local clone. Table
-  fixes where it beats the workbook go in the extractor's "Java corrections" section;
-  never hand-edit `power-planner-data.json`. Regenerate from
+- The Java to check against is GT5U tag `5.09.54.20` for 2.9 and `5.09.51.476` for 2.8.1,
+  not the newer local clone. Table fixes where it beats the workbook go in the extractor's
+  "Java corrections" section; never hand-edit `power-planner-data.json`. Regenerate from
   `~/Downloads/Copy of GTNH Power Planner 2.9.xlsx` (the copy whose EOH sheet is "13. EOH").
 - New flow names resolve through `tools/power-resource-map.mjs` (`AUX_NAMES`); an
   unresolved name shows as a stat, not a port. A name a pack shows differently ("Amber" for the

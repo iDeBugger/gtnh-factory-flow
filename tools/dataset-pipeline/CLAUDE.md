@@ -1,6 +1,6 @@
 # Dataset pipeline (tools/dataset-pipeline)
 
-A Forge mod (`gtnh-calc-oracle`) running inside a real GTNH 2.9 client exports every
+A Forge mod (`gtnh-calc-oracle`) running inside a real GTNH client (2.9 or 2.8.1) exports every
 recipe map, NEI layout, catalyst, multiblock config and rendered icon. Node scripts in
 `scripts/` normalize that into the `RecipeDataset` the app reads:
 `normalize-oracle-export.mjs`, `machine-configs.mjs`, `build-resource-index.mjs`,
@@ -17,7 +17,7 @@ The GitHub "GTNH dataset pipeline" workflow is a decoy (no runner). Never dispat
    export with `GTNH_RENDER_STACK_ICONS=false`: the export stamps icon filenames, and a
    run without them broke live search.
 3. `~/run-both.sh` (fuller: `~/rebuild-cokeoven.sh`) normalizes, indexes and gzips into
-   `~/gtnh-export/datasets/gtnh/<id>`. Only 2.9 is supported; 2.8.4 is retired.
+   `~/gtnh-export/datasets/gtnh/<id>`. 2.9 and 2.8.1 are supported; 2.8.4 is retired.
 4. `~/copy-datasets.sh` copies results into the Windows repo's `public/datasets/gtnh`.
 5. Publish, in this order, to the droplet's `/opt/shared/gtnh-datasets/<id>/`:
    1. Textures first, additively, straight into the live directory:
@@ -59,6 +59,13 @@ Every rebuild runs `normalize-fluid-icon-alpha.mjs --rename` after the index bui
 repaints fluids under 20% mean opacity under a NEW content name and patches whole basenames
 only; a fluid it leaves alone already has its content name, so the pass changes nothing on a
 dataset with no faint fluid.
+
+`rebuild-manifest.mjs` lists every complete dataset under the root, newest pack first. Its
+`latestStableVersion` (the app's default) is `GTNH_LATEST_STABLE_VERSION` when set (it must name
+a dataset there), else the previous manifest's while that dataset remains, else the newest
+`stable-*` build. Local builds are all "experimental", so the default survives a rebuild only
+through the previous manifest. A new `stable-*` build therefore never takes the default from a
+previous one still present: set `GTNH_LATEST_STABLE_VERSION` to switch. Exam: `scripts/rebuild-manifest.test.mjs`.
 
 Recipe ids come from what a recipe is, never from the export: `recipeContentKey` in
 `normalize-oracle-export.mjs` hashes the map (GT++'s `gtpp.recipe.*` read as

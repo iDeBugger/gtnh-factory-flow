@@ -42,7 +42,7 @@ Scratch harnesses are `*.local.test.ts` (excluded from the suite); run one with
 - `main` is the only working branch; never start another. Commit and push finished work
   unless told otherwise. Never reset or revert changes you did not make. Unmerged
   experiments survive as `archive/*` tags.
-- Push only to `origin` (`jackwrichards/gtnh-factory-flow`). `upstream` (Samiracle64, the
+- Push only to `origin` (`iDeBugger/gtnh-factory-flow`). `upstream` (Samiracle64, the
   original fork, long diverged) and `kewaii` are not push targets.
 - CI runs typecheck, the full suite and a Chromium/Firefox icon-sizing check on every PR
   and push to main. No tolerated failures. A test that pins player-facing copy changes in
@@ -83,7 +83,7 @@ Scratch harnesses are `*.local.test.ts` (excluded from the suite); run one with
 - The server prewarms datasets on start when `GTNH_PREWARM_ON_STARTUP=1`
   (`src/instrumentation.ts`). A slow first API call means prewarm or deploy regressed;
   don't make the client wait longer.
-- Only GTNH 2.9 datasets are supported.
+- GTNH 2.9 and 2.8.1 datasets are supported; a plan belongs to one of them (src/store/CLAUDE.md, Plan version).
 
 ## Invariants across the app
 

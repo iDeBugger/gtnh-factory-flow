@@ -32,6 +32,8 @@ import {
   isVirtualChoiceResource,
   resourceMatchesInput,
 } from "@/lib/model";
+import { HIDDEN_DATASET_VERSION_IDS } from "@/lib/datasets/hidden-versions";
+import { BoundedLru } from "./bounded-lru";
 import { machineTableControlResourceIds } from "@/lib/machines/machine-table";
 import { EEC_MACHINE_TYPE } from "@/lib/machines/extreme-entity-crusher";
 import { pickRecipeRefMatch, type RecipeContentRef } from "@/lib/import-export/recipe-ref-match";
@@ -46,6 +48,7 @@ import {
   buildSearchVocabulary,
   buildTextSearchIndex,
   buildTokenSearchIndex,
+  createTokenInterner,
   matchSearchEntry,
   matchSearchTokens,
   parseSearchQuery,
@@ -102,6 +105,11 @@ interface LoadedRecipeIndex {
   hydratedRecipeSummaries?: Map<number, RecipeSummary>;
   /** Resources a crop or a bee can produce; see getPassiveSourceResourceKeys. */
   passiveSourceKeys?: Partial<Record<ResourceSourceFilter, Set<string>>>;
+  /** The item list with nothing typed, per kind, mod, sort and source; see queryDatasetResources. */
+  blankResourceSearches?: BoundedLru<
+    string,
+    { popularity?: Map<string, number>; value: ResourceSearch }
+  >;
 }
 
 export type DatasetRecipeRef = RecipeContentRef;
@@ -142,7 +150,10 @@ interface LoadedRecipeLookupIndex {
   recipeIndexesById?: Map<string, number>;
   tierIndexes: number[];
   iconScores: number[];
-  searchText: string[];
+  /** Whether the file carried search text; the text itself is gone once the index is built. */
+  hasSearchText: boolean;
+  /** Read once, by ensureLookupSearchIndex, then released (about 150 MB on 2.9). */
+  searchText?: string[];
   searchIndex?: TextSearchIndex;
   entries: Map<string, Map<number, number[]>>;
 }
@@ -195,19 +206,87 @@ const BEE_RECIPE_MAPS = new Set(["Bee Produce"]);
 export type ResourceSourceFilter = "plants" | "bees";
 
 const datasetRoot = path.join(process.cwd(), "public", "datasets", "gtnh");
-const loadedCatalogs = new Map<string, LoadedRecipeIndex>();
-const pendingCatalogLoads = new Map<string, Promise<LoadedRecipeIndex>>();
-const pendingRecipeIndexLoads = new Map<string, Promise<LoadedRecipeIndex>>();
-const loadedRecipeLookupIndexes = new Map<string, LoadedRecipeLookupIndex>();
-const pendingRecipeLookupLoads = new Map<string, Promise<LoadedRecipeLookupIndex>>();
-const loadedShards = new Map<string, Recipe[]>();
-const pendingShardLoads = new Map<string, Promise<Recipe[]>>();
-const pendingRawRecipeIdIndexLoads = new Map<string, Promise<Map<string, number[]>>>();
-const pendingPrewarmLoads = new Map<string, Promise<void>>();
-let manifestCache: DatasetManifest | undefined;
-let manifestCacheStamp: string | undefined;
+/**
+ * The parsed-shard cache's ceiling, in estimated heap bytes, shared by every
+ * loaded version. A parsed shard takes about 2.5 bytes of heap per byte of its
+ * unzipped JSON (measured over 2.9 and 2.8.1 shards). A typical shard is 1-6 MB
+ * of heap and a Blast Furnace shard 30-57 MB. 128 MB is the smallest of 128,
+ * 160 and 192 that keeps the Blast Furnace shards one browse just read for the
+ * next one ("makes steel" after "takes oxygen": 1 ms, against 88 ms at 64 MB),
+ * where a count bound of 8 could hold about 300 MB of them. Both versions sit at
+ * about 1.2 GB live after the probe's browse set with it.
+ */
+export const SHARD_CACHE_BYTES =
+  positiveIntEnv("GTNH_MAX_LOADED_RECIPE_SHARD_MB", 128) * 1024 * 1024;
+export const SHARD_HEAP_BYTES_PER_JSON_BYTE = 2.5;
+
+/** The parsed-shard cache: shard key -> recipes, sized by `shardHeapBytes`. */
+export function createShardCache(): BoundedLru<string, Recipe[]> {
+  return new BoundedLru(SHARD_CACHE_BYTES);
+}
+
+/** A parsed shard's estimated heap bytes, from its unzipped JSON length. */
+export function shardHeapBytes(jsonBytes: number): number {
+  return Math.ceil(jsonBytes * SHARD_HEAP_BYTES_PER_JSON_BYTE);
+}
+/**
+ * How many shards one request reads at once. A wide browse can touch over a
+ * hundred shards; reading them all at the same moment held every read buffer
+ * together. Measured on the 120-shard circuit browse with cold caches (median
+ * of 9): 4 at a time 1.20 s and 124 MB of peak buffers, 6 1.23 s / 137 MB,
+ * 8 1.27 s / 134 MB, all at once 1.41 s / 244 MB.
+ */
+const SHARD_LOAD_CONCURRENCY = 4;
+/**
+ * The loaded datasets, shared by every copy of this module in the process.
+ * Next.js bundles `instrumentation.ts` apart from the route handlers, so each
+ * gets its own instance of this module: with module-level maps the startup
+ * prewarm filled a copy no request reads, the first request loaded the
+ * dataset again, and the heap held every dataset twice.
+ */
+interface DatasetQueryCaches {
+  loadedCatalogs: Map<string, LoadedRecipeIndex>;
+  pendingCatalogLoads: Map<string, Promise<LoadedRecipeIndex>>;
+  pendingRecipeIndexLoads: Map<string, Promise<LoadedRecipeIndex>>;
+  loadedRecipeLookupIndexes: Map<string, LoadedRecipeLookupIndex>;
+  pendingRecipeLookupLoads: Map<string, Promise<LoadedRecipeLookupIndex>>;
+  /** Parsed shards, bounded by their estimated heap bytes; see SHARD_CACHE_BYTES. */
+  shardCache: BoundedLru<string, Recipe[]>;
+  pendingShardLoads: Map<string, Promise<Recipe[]>>;
+  pendingRawRecipeIdIndexLoads: Map<string, Promise<Map<string, number[]>>>;
+  pendingPrewarmLoads: Map<string, Promise<void>>;
+  manifest: { value?: DatasetManifest; stamp?: string };
+}
+const DATASET_QUERY_CACHES = Symbol.for("gtnh-factory-flow.dataset-query.caches");
+const cacheHost = globalThis as { [DATASET_QUERY_CACHES]?: Partial<DatasetQueryCaches> };
+// Filled field by field, in place: a dev reload of newer code finds the old
+// object and adds what it lacks, and every module copy keeps one object.
+// Loaded datasets survive a dev reload, so restart the dev server after
+// changing how a dataset is loaded or indexed.
+const sharedCaches = (cacheHost[DATASET_QUERY_CACHES] ??= {});
+sharedCaches.loadedCatalogs ??= new Map();
+sharedCaches.pendingCatalogLoads ??= new Map();
+sharedCaches.pendingRecipeIndexLoads ??= new Map();
+sharedCaches.loadedRecipeLookupIndexes ??= new Map();
+sharedCaches.pendingRecipeLookupLoads ??= new Map();
+sharedCaches.shardCache ??= createShardCache();
+sharedCaches.pendingShardLoads ??= new Map();
+sharedCaches.pendingRawRecipeIdIndexLoads ??= new Map();
+sharedCaches.pendingPrewarmLoads ??= new Map();
+sharedCaches.manifest ??= {};
+const caches = sharedCaches as DatasetQueryCaches;
+const {
+  loadedCatalogs,
+  pendingCatalogLoads,
+  pendingRecipeIndexLoads,
+  loadedRecipeLookupIndexes,
+  pendingRecipeLookupLoads,
+  shardCache,
+  pendingShardLoads,
+  pendingRawRecipeIdIndexLoads,
+  pendingPrewarmLoads,
+} = caches;
 const gunzipAsync = promisify(gunzip);
-const maxLoadedShardCount = positiveIntEnv("GTNH_MAX_LOADED_RECIPE_SHARDS", 8);
 const maxHydratedRecipeSummaryCount = positiveIntEnv("GTNH_MAX_HYDRATED_RECIPE_SUMMARIES", 8000);
 
 export async function getDatasetCatalog(versionId: string) {
@@ -610,13 +689,12 @@ export async function queryDatasetResources(
     request.query.trim() === ""
       ? JSON.stringify([request.kind ?? "", request.mod ?? "", request.sort ?? "relevance", request.source ?? null])
       : undefined;
-  const kept = blankKey === undefined ? undefined : blankResourceSearches.get(catalog)?.get(blankKey);
+  const kept = blankKey === undefined ? undefined : catalog.blankResourceSearches?.get(blankKey);
   const blank =
     kept && kept.popularity === request.popularity ? kept.value : await searchDatasetResources(catalog, request);
   if (blankKey !== undefined && blank !== kept?.value) {
-    const byKey = blankResourceSearches.get(catalog) ?? new Map();
-    byKey.set(blankKey, { popularity: request.popularity, value: blank });
-    blankResourceSearches.set(catalog, byKey);
+    catalog.blankResourceSearches ??= createBlankResourceSearchCache();
+    catalog.blankResourceSearches.set(blankKey, { popularity: request.popularity, value: blank });
   }
   const { matches, modCounts, resolved } = blank;
 
@@ -637,10 +715,19 @@ export async function queryDatasetResources(
 }
 
 type ResourceSearch = Awaited<ReturnType<typeof searchDatasetResources>>;
-const blankResourceSearches = new WeakMap<
-  LoadedRecipeIndex,
-  Map<string, { popularity?: Map<string, number>; value: ResourceSearch }>
->();
+/**
+ * How many blank item lists each loaded version keeps. One holds every match
+ * of its kind, mod, sort and source: about 2 MB on 2.9 unfiltered, far less for
+ * one mod. Unbounded, every kind, sort and source alone came to about 130 MB
+ * per version, and each mod opened added more. 24 covers every sort of every
+ * kind (21) and a few filters: at most about 50 MB per version. An evicted
+ * list is recomputed in 20-400 ms (the unfiltered ones are the slow ones).
+ */
+export const BLANK_RESOURCE_SEARCH_KEYS = 24;
+
+export function createBlankResourceSearchCache<V>(): BoundedLru<string, V> {
+  return new BoundedLru(BLANK_RESOURCE_SEARCH_KEYS);
+}
 
 async function searchDatasetResources(
   catalog: LoadedRecipeIndex,
@@ -1588,7 +1675,7 @@ async function getRecipeSearchIndex(
   catalog: LoadedRecipeIndex,
   lookup: LoadedRecipeLookupIndex,
 ): Promise<{ index: TextSearchIndex; entryCount: number }> {
-  if (lookup.searchText.length) {
+  if (lookup.hasSearchText) {
     return { index: ensureLookupSearchIndex(lookup), entryCount: lookup.recipeCount };
   }
 
@@ -1629,24 +1716,63 @@ export async function prewarmDatasetVersion(
   return promise;
 }
 
-export async function prewarmLatestDatasetVersions(): Promise<void> {
+/**
+ * Prewarms every dataset this site serves. The default (`latestStableVersion`)
+ * is awaited: `register()` holds requests until it resolves, and the version
+ * most players open must be warm when the site answers. Every other version
+ * not in `HIDDEN_DATASET_VERSION_IDS` then loads in the background, one after
+ * another so two big loads never share the heap, without holding the site up
+ * for a version most players never open. `GTNH_PREWARM_FULL_DATASETS=1` loads
+ * the shards too. A version that fails to load is logged and skipped: one bad
+ * dataset must not keep the others cold or stop the server.
+ */
+export async function prewarmDatasetVersions(): Promise<void> {
   const manifest = await loadManifest();
-  const versionIds =
-    process.env.GTNH_PREWARM_ALL_DATASETS === "1"
-      ? [
-          manifest.latestStableVersion,
-          manifest.latestDailyVersion,
-          manifest.versions[0]?.id,
-        ].filter((versionId, index, versionIds): versionId is string => {
-          return Boolean(versionId) && versionIds.indexOf(versionId) === index;
-        })
-      : [
-          manifest.latestStableVersion ?? manifest.latestDailyVersion ?? manifest.versions[0]?.id,
-        ].filter((versionId): versionId is string => Boolean(versionId));
-
   const includeShards = process.env.GTNH_PREWARM_FULL_DATASETS === "1";
-  for (const versionId of versionIds) {
+  await prewarmFirstThenRest(datasetPrewarmOrder(manifest), async (versionId) => {
+    const started = Date.now();
     await prewarmDatasetVersion(versionId, { includeShards });
+    console.info(`GTNH dataset ${versionId} prewarmed in ${Date.now() - started} ms.`);
+  });
+}
+
+/** Resolves once the first version is warm; the rest keep loading after it. */
+export async function prewarmFirstThenRest(
+  versionIds: readonly string[],
+  prewarm: (versionId: string) => Promise<void>,
+  logError: (message: string, error: unknown) => void = console.error,
+): Promise<void> {
+  const [first, ...rest] = versionIds;
+  if (first !== undefined) {
+    await prewarmInOrder([first], prewarm, logError);
+  }
+  // prewarmInOrder catches every failure, so this never rejects unhandled.
+  void prewarmInOrder(rest, prewarm, logError);
+}
+
+export function datasetPrewarmOrder(
+  manifest: Pick<DatasetManifest, "latestStableVersion" | "latestDailyVersion" | "versions">,
+): string[] {
+  const served = manifest.versions
+    .map((version) => version.id)
+    .filter((versionId) => !HIDDEN_DATASET_VERSION_IDS.has(versionId));
+  const preferred = [manifest.latestStableVersion, manifest.latestDailyVersion].find(
+    (versionId): versionId is string => versionId !== undefined && served.includes(versionId),
+  );
+  return preferred ? [preferred, ...served.filter((versionId) => versionId !== preferred)] : served;
+}
+
+export async function prewarmInOrder(
+  versionIds: readonly string[],
+  prewarm: (versionId: string) => Promise<void>,
+  logError: (message: string, error: unknown) => void = console.error,
+): Promise<void> {
+  for (const versionId of versionIds) {
+    try {
+      await prewarm(versionId);
+    } catch (error) {
+      logError(`GTNH dataset ${versionId} prewarm failed.`, error);
+    }
   }
 }
 
@@ -1717,13 +1843,12 @@ async function loadManifest(): Promise<DatasetManifest> {
   const manifestPath = path.join(datasetRoot, "datasets.manifest.json");
   const stat = await fs.stat(manifestPath);
   const stamp = `${stat.mtimeMs}:${stat.size}`;
-  if (manifestCache && manifestCacheStamp === stamp) {
-    return manifestCache;
+  if (caches.manifest.value && caches.manifest.stamp === stamp) {
+    return caches.manifest.value;
   }
 
   const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as DatasetManifest;
-  manifestCache = manifest;
-  manifestCacheStamp = stamp;
+  caches.manifest = { value: manifest, stamp };
   return manifest;
 }
 
@@ -1842,6 +1967,7 @@ async function loadRecipeLookupIndex(version: DatasetVersion): Promise<LoadedRec
       recipeIds: payload.recipeIds ?? [],
       tierIndexes: payload.tierIndexes,
       iconScores: payload.iconScores ?? [],
+      hasSearchText: (payload.searchText?.length ?? 0) > 0,
       searchText: payload.searchText ?? [],
       entries: new Map(payload.entries.map(([key, recipesByMap]) => [key, new Map(recipesByMap)])),
     };
@@ -1894,7 +2020,7 @@ function buildLookupRecipeMapIdsByRecipeIndex(
 
 async function loadShard(version: DatasetVersion, shard: RecipeIndexShard): Promise<Recipe[]> {
   const key = `${datasetVersionCacheKey(version)}:${shard.id}`;
-  const cached = getCachedShard(key);
+  const cached = shardCache.get(key);
   if (cached) {
     return cached;
   }
@@ -1904,10 +2030,10 @@ async function loadShard(version: DatasetVersion, shard: RecipeIndexShard): Prom
     return pending;
   }
 
-  const promise = readGzipJson<RecipeShardPayload>(publicPathToFile(shard.path))
-    .then((payload) => {
+  const promise = readGzipJsonSized<RecipeShardPayload>(publicPathToFile(shard.path))
+    .then(({ value: payload, jsonBytes }) => {
       const recipes = payload.recipes.map(enrichPassiveProductionRecipe);
-      setCachedShard(key, recipes);
+      shardCache.set(key, recipes, shardHeapBytes(jsonBytes));
       return recipes;
     })
     .finally(() => {
@@ -1987,31 +2113,30 @@ async function prewarmRecipeShards(catalog: LoadedRecipeIndex): Promise<void> {
 }
 
 async function readGzipJson<T>(filePath: string): Promise<T> {
+  return (await readGzipJsonSized<T>(filePath)).value;
+}
+
+async function readGzipJsonSized<T>(filePath: string): Promise<{ value: T; jsonBytes: number }> {
   const data = await fs.readFile(filePath);
   const unzipped = await gunzipAsync(data);
-  return JSON.parse(unzipped.toString("utf8")) as T;
+  return { value: JSON.parse(unzipped.toString("utf8")) as T, jsonBytes: unzipped.length };
 }
 
-function getCachedShard(key: string): Recipe[] | undefined {
-  const cached = loadedShards.get(key);
-  if (!cached) {
-    return undefined;
-  }
-
-  loadedShards.delete(key);
-  loadedShards.set(key, cached);
-  return cached;
-}
-
-function setCachedShard(key: string, recipes: Recipe[]) {
-  loadedShards.set(key, recipes);
-  while (loadedShards.size > maxLoadedShardCount) {
-    const oldestKey = loadedShards.keys().next().value;
-    if (oldestKey === undefined) {
-      return;
+/** Runs `run` over every item, at most `limit` at a time, in order of starting. */
+async function forEachConcurrently<T>(
+  items: readonly T[],
+  limit: number,
+  run: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const item = items[next];
+      next += 1;
+      await run(item);
     }
-    loadedShards.delete(oldestKey);
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
 }
 
 function positiveIntEnv(name: string, defaultValue: number): number {
@@ -2143,11 +2268,20 @@ async function getPassiveSourceResourceKeys(
   return keys;
 }
 
-function ensureLookupSearchIndex(lookup: LoadedRecipeLookupIndex): TextSearchIndex {
-  lookup.searchIndex ??= buildTextSearchIndex(
-    lookup.searchText,
-    lookup.searchText.map((_, index) => index),
-  );
+/**
+ * Built once per loaded dataset. The search text is read only here, so it is
+ * released as soon as the index holds its words: nothing builds the index again
+ * while the dataset stays loaded.
+ */
+export function ensureLookupSearchIndex(lookup: LoadedRecipeLookupIndex): TextSearchIndex {
+  if (!lookup.searchIndex) {
+    const searchText = lookup.searchText ?? [];
+    lookup.searchIndex = buildTextSearchIndex(
+      searchText,
+      searchText.map((_, index) => index),
+    );
+    lookup.searchText = undefined;
+  }
   return lookup.searchIndex;
 }
 
@@ -2192,8 +2326,10 @@ async function getRecipeSummariesByIndexMap(
     }
   }
 
-  await Promise.all(
-    [...shardRequests.entries()].map(async ([shard, indexes]) => {
+  await forEachConcurrently(
+    [...shardRequests.entries()],
+    SHARD_LOAD_CONCURRENCY,
+    async ([shard, indexes]) => {
       const recipes = await loadShard(catalog.version, shard);
       for (const recipeIndex of indexes) {
         const recipe = recipes[recipeIndex - shard.start];
@@ -2207,7 +2343,7 @@ async function getRecipeSummariesByIndexMap(
           summariesByIndex.set(recipeIndex, summary);
         }
       }
-    }),
+    },
   );
 
   return summariesByIndex;
@@ -2772,9 +2908,10 @@ function ensureResourceIndexes(catalog: LoadedRecipeIndex): ResourceQueryIndexes
 
   const fields: SearchEntryFields[] = [];
   const tokensByEntry: string[][] = [];
+  const intern = createTokenInterner();
   const sortedResourceIndexes = catalog.resourceIndex
     .map((resource, index) => {
-      fields[index] = resourceSearchFields(resource);
+      fields[index] = resourceSearchFields(resource, intern);
       tokensByEntry[index] = [
         ...new Set([
           ...(fields[index].name ?? []),
@@ -2814,12 +2951,15 @@ function ensureResourceIndexes(catalog: LoadedRecipeIndex): ResourceQueryIndexes
   return resourceIndexes;
 }
 
-function resourceSearchFields(resource: DatasetResourceIndexEntry): SearchEntryFields {
+function resourceSearchFields(
+  resource: DatasetResourceIndexEntry,
+  intern: (tokens: string[]) => string[],
+): SearchEntryFields {
   return {
     nameText: normalizeText(resource.displayName ?? resource.id),
-    name: splitSearchTokens(resource.displayName ?? ""),
-    id: splitSearchTokens(`${resource.id} ${(resource.oreDictionary ?? []).join(" ")}`),
-    text: splitSearchTokens((resource.tooltip ?? []).join(" ")),
+    name: intern(splitSearchTokens(resource.displayName ?? "")),
+    id: intern(splitSearchTokens(`${resource.id} ${(resource.oreDictionary ?? []).join(" ")}`)),
+    text: intern(splitSearchTokens((resource.tooltip ?? []).join(" "))),
   };
 }
 

@@ -62,7 +62,11 @@ versions.sort(
     b.publishedAt.localeCompare(a.publishedAt),
 );
 
-const latestStableVersion = versions.find((version) => version.channel === "stable")?.id;
+const latestStableVersion = chooseLatestStableVersion(
+  versions,
+  process.env.GTNH_LATEST_STABLE_VERSION,
+  await readPreviousManifest(),
+);
 const manifest = {
   schemaVersion: 1,
   ...(latestStableVersion ? { latestStableVersion } : {}),
@@ -75,6 +79,34 @@ await fs.writeFile(
   path.join(rootDir, "datasets.manifest.json"),
   `${JSON.stringify(manifest, null, 2)}\n`,
 );
+
+/**
+ * The app's default dataset. An explicit GTNH_LATEST_STABLE_VERSION wins (it
+ * must name a dataset here). Otherwise a rebuild keeps the previous manifest's
+ * choice while that dataset is still here: local builds are all "experimental",
+ * so the channel rule alone would drop a hand-picked default on every rebuild.
+ */
+function chooseLatestStableVersion(versions, requestedId, previousManifest) {
+  const present = (id) => Boolean(id) && versions.some((version) => version.id === id);
+  if (requestedId) {
+    if (!present(requestedId)) {
+      throw new Error(`GTNH_LATEST_STABLE_VERSION=${requestedId} names no dataset in ${rootDir}.`);
+    }
+    return requestedId;
+  }
+  if (present(previousManifest?.latestStableVersion)) {
+    return previousManifest.latestStableVersion;
+  }
+  return versions.find((version) => version.channel === "stable")?.id;
+}
+
+async function readPreviousManifest() {
+  try {
+    return JSON.parse(await fs.readFile(path.join(rootDir, "datasets.manifest.json"), "utf8"));
+  } catch {
+    return undefined;
+  }
+}
 
 function inferChannel(versionId) {
   if (versionId.startsWith("daily-")) {

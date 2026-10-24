@@ -1,11 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildTextSearchIndex, queryTextSearchIndex } from "@/lib/search";
 import { matchSearchTokens, parseSearchQuery } from "@/lib/search";
+import type { DatasetVersion } from "@/lib/datasets/types";
 import {
   applyUsesResourceContext,
+  BLANK_RESOURCE_SEARCH_KEYS,
+  createBlankResourceSearchCache,
+  createShardCache,
+  datasetPrewarmOrder,
+  ensureLookupSearchIndex,
   getChoiceAlternativesByKey,
   getWildcardResource,
   orderByRecipeMap,
+  prewarmFirstThenRest,
+  prewarmInOrder,
+  SHARD_CACHE_BYTES,
+  shardHeapBytes,
   withTankMapFace,
 } from "./dataset-query";
 
@@ -218,5 +228,178 @@ describe("a search for an item that has NBT variants", () => {
   it("leaves a slot that is the item with its own name, picture and tooltip", () => {
     const [box] = (applyUsesResourceContext(recipe, catalog, white) as { inputs: Record<string, unknown>[] }).inputs;
     expect(box).toMatchObject({ displayName: "Shulker Box", iconPath: "box.png", tooltip: ["NBT: {Type:0b}"] });
+  });
+});
+
+describe("which datasets the server prewarms", () => {
+  const version = (id: string) => ({ id }) as DatasetVersion;
+  const manifest = {
+    latestStableVersion: "local-2.9.0-rc-2",
+    // Newest pack first, as rebuild-manifest writes it; 2.8.4 is retired.
+    versions: [version("local-2.9.0-rc-2"), version("local-2.8.4"), version("local-2.8.1")],
+  };
+
+  it("warms the default first, then every other served version, never 2.8.4", () => {
+    expect(datasetPrewarmOrder(manifest)).toEqual(["local-2.9.0-rc-2", "local-2.8.1"]);
+  });
+
+  it("puts the default first wherever the manifest lists it", () => {
+    expect(
+      datasetPrewarmOrder({ ...manifest, versions: [version("local-2.8.1"), version("local-2.9.0-rc-2")] }),
+    ).toEqual(["local-2.9.0-rc-2", "local-2.8.1"]);
+  });
+
+  it("never warms a hidden version even when it is the default", () => {
+    expect(datasetPrewarmOrder({ ...manifest, latestStableVersion: "local-2.8.4" })).toEqual([
+      "local-2.9.0-rc-2",
+      "local-2.8.1",
+    ]);
+  });
+
+  it("logs a failed 2.8.1 prewarm and carries on", async () => {
+    const warmed: string[] = [];
+    const errors: string[] = [];
+    await expect(
+      prewarmInOrder(
+        ["local-2.8.1", "local-2.9.0-rc-2"],
+        async (versionId) => {
+          if (versionId === "local-2.8.1") throw new Error("missing resource index");
+          warmed.push(versionId);
+        },
+        (message) => errors.push(message),
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(errors).toEqual(["GTNH dataset local-2.8.1 prewarm failed."]);
+    expect(warmed).toEqual(["local-2.9.0-rc-2"]);
+  });
+});
+
+describe("what the startup prewarm waits for", () => {
+  it("resolves once the default is warm, before the next version settles", async () => {
+    let releaseSecond: () => void = () => {};
+    const started: string[] = [];
+    const settled: string[] = [];
+    const prewarm = (versionId: string) => {
+      started.push(versionId);
+      if (versionId === "local-2.9.0-rc-2") {
+        settled.push(versionId);
+        return Promise.resolve();
+      }
+      return new Promise<void>((resolve) => {
+        releaseSecond = () => {
+          settled.push(versionId);
+          resolve();
+        };
+      });
+    };
+
+    await prewarmFirstThenRest(["local-2.9.0-rc-2", "local-2.8.1"], prewarm, () => {});
+
+    expect(settled).toEqual(["local-2.9.0-rc-2"]);
+    await Promise.resolve();
+    expect(started).toEqual(["local-2.9.0-rc-2", "local-2.8.1"]);
+    releaseSecond();
+    await Promise.resolve();
+    expect(settled).toEqual(["local-2.9.0-rc-2", "local-2.8.1"]);
+  });
+
+  it("still returns when the default fails, and warms the rest", async () => {
+    const warmed: string[] = [];
+    const errors: string[] = [];
+    await prewarmFirstThenRest(
+      ["local-2.9.0-rc-2", "local-2.8.1"],
+      async (versionId) => {
+        if (versionId === "local-2.9.0-rc-2") throw new Error("missing");
+        warmed.push(versionId);
+      },
+      (message) => errors.push(message),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(errors).toEqual(["GTNH dataset local-2.9.0-rc-2 prewarm failed."]);
+    expect(warmed).toEqual(["local-2.8.1"]);
+  });
+});
+
+describe("the loaded datasets", () => {
+  it("are one set for the whole process, however many copies of the module load", async () => {
+    // instrumentation.ts and the route handlers are separate bundles: the
+    // startup prewarm must fill the caches the routes read.
+    const key = Symbol.for("gtnh-factory-flow.dataset-query.caches");
+    const host = globalThis as Record<symbol, unknown>;
+    const first = host[key];
+    expect(first).toBeDefined();
+
+    vi.resetModules();
+    await import("./dataset-query");
+
+    expect(host[key]).toBe(first);
+  });
+});
+
+describe("the recipe search text", () => {
+  it("is released once the index holds its words, and the index still answers", () => {
+    const lookup = {
+      hasSearchText: true,
+      searchText: ["Hydrogen Sulfide", "Steel Plate"],
+    } as unknown as Parameters<typeof ensureLookupSearchIndex>[0];
+
+    const index = ensureLookupSearchIndex(lookup);
+
+    expect(lookup.searchText).toBeUndefined();
+    expect(lookup.hasSearchText).toBe(true);
+    expect(index.tokensByEntry[1]).toEqual(["steel", "plate"]);
+    expect(queryTextSearchIndex(index, parseSearchQuery("steel"))).toEqual([1]);
+    expect(ensureLookupSearchIndex(lookup)).toBe(index);
+  });
+});
+
+describe("the bounded dataset caches", () => {
+  const MB = 1024 * 1024;
+
+  it("hold parsed shards up to 128 MB of estimated heap, oldest out first", () => {
+    expect(SHARD_CACHE_BYTES).toBe(128 * MB);
+    // 2.5 bytes of heap per byte of unzipped JSON.
+    expect(shardHeapBytes(4 * MB)).toBe(10 * MB);
+
+    const cache = createShardCache();
+    for (let shard = 0; shard < 14; shard += 1) {
+      cache.set(`2.9:shard-${shard}`, [], shardHeapBytes(4 * MB));
+    }
+    // Twelve 10 MB shards fit in 128 MB; the two oldest went.
+    expect(cache.keys()).toEqual(
+      [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map((shard) => `2.9:shard-${shard}`),
+    );
+    expect(cache.totalSize).toBeLessThanOrEqual(SHARD_CACHE_BYTES);
+  });
+
+  it("keep the two largest Blast Furnace shards together", () => {
+    const cache = createShardCache();
+    cache.set("2.9:shard-0130", [], shardHeapBytes(21 * MB));
+    cache.set("2.9:shard-0136", [], shardHeapBytes(22 * MB));
+    expect(cache.keys()).toEqual(["2.9:shard-0130", "2.9:shard-0136"]);
+  });
+
+  it("keep a shard bigger than the ceiling alone until the next shard arrives", () => {
+    const cache = createShardCache();
+    cache.set("2.9:shard-0000", [], shardHeapBytes(1 * MB));
+    cache.set("2.9:huge", [], shardHeapBytes(60 * MB));
+    expect(cache.keys()).toEqual(["2.9:huge"]);
+    cache.set("2.8.1:shard-0001", [], shardHeapBytes(1 * MB));
+    expect(cache.keys()).toEqual(["2.8.1:shard-0001"]);
+  });
+
+  it("keep 24 blank item lists per version, the least recently read out first", () => {
+    expect(BLANK_RESOURCE_SEARCH_KEYS).toBe(24);
+    const cache = createBlankResourceSearchCache<number>();
+    for (let key = 0; key < 24; key += 1) {
+      cache.set(`list-${key}`, key);
+    }
+    expect(cache.get("list-0")).toBe(0);
+    cache.set("list-24", 24);
+    expect(cache.count).toBe(24);
+    expect(cache.get("list-1")).toBeUndefined();
+    expect(cache.get("list-0")).toBe(0);
   });
 });

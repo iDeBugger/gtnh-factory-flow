@@ -37,11 +37,29 @@ vi.mock("@/components/FactoryPlannerApp", () => ({ FactoryPlannerApp: () => null
 import sitemap from "./sitemap";
 import robots from "./robots";
 import { GET as llms } from "./llms.txt/route";
-import { generateMetadata } from "./page";
+import Home, { generateMetadata } from "./page";
+import { renderToStaticMarkup } from "react-dom/server";
 import CommunityRedirect from "./community/page";
 import { siteMetadata } from "./site-metadata";
 
 const planSearch = { searchParams: Promise.resolve({ plan: "plan-1" }) };
+
+describe("copy names both served versions", () => {
+  withModAndCommunityUnset();
+
+  it("the page metadata, the noscript paragraph and llms.txt name GTNH 2.9 and 2.8.1", async () => {
+    const layoutMetadata = siteMetadata();
+    expect(layoutMetadata.description).toContain("Full recipe data for GTNH 2.9 and 2.8.1,");
+    expect(layoutMetadata.openGraph?.description).toContain("full recipe data for GTNH 2.9 and 2.8.1.");
+    expect(layoutMetadata.twitter?.description).toContain("full recipe data for GTNH 2.9 and 2.8.1.");
+    expect(String(layoutMetadata.description).toLowerCase()).not.toContain("community");
+    const noscript = renderToStaticMarkup(Home());
+    expect(noscript).toContain("full recipe data for GTNH 2.9 and 2.8.1,");
+    expect(noscript.toLowerCase()).not.toContain("community");
+    const text = await (await llms()).text();
+    expect(text).toContain("- Carries full recipe data for GTNH 2.9 and 2.8.1, exported from the game itself");
+  });
+});
 
 describe("with the setting unset", () => {
   withModAndCommunityUnset();

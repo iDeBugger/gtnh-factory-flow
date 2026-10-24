@@ -20,6 +20,56 @@
   site: check the heap first.
 - The OG card route reads fonts through `process.cwd()` (non-standalone build).
 
+## Prewarm (instrumentation.ts, `prewarmDatasetVersions`)
+
+- With `GTNH_PREWARM_ON_STARTUP=1`, `register()` awaits only `latestStableVersion`'s prewarm (Next.js holds
+  requests until it resolves), then every other manifest version not in `HIDDEN_DATASET_VERSION_IDS`
+  (`src/lib/datasets/hidden-versions.ts`) loads in the background, one at a time. A version that fails is
+  logged and skipped; the server still starts. `GTNH_PREWARM_FULL_DATASETS=1` loads the recipe shards too.
+  Measured on `next start`: the first answer comes at 8.8-11.6 s, against 15.5-17.3 s when both were
+  awaited (`scratch/probes/first-response.mjs`). Exam: `dataset-query.test.ts`.
+- The loaded datasets live on `globalThis` (`Symbol.for("gtnh-factory-flow.dataset-query.caches")`), never in
+  module-level maps: Next.js bundles `instrumentation.ts` apart from the routes, so a module-level cache is
+  filled by the prewarm, unread by every request, loaded again by the first search, and held twice. That
+  doubling put two datasets over the 3 GB heap on the first 2.8.1 search. The object survives a dev reload:
+  restart the dev server after changing how a dataset is loaded or indexed.
+- An HTTP prewarm after start (`/api/datasets/<id>/prewarm`, e.g. a unit's `ExecStartPost`) now joins the
+  startup load or finds it done: with `GTNH_PREWARM_ON_STARTUP=1` it is only a readiness wait.
+- Memory, measured on `next start` with the 3 GB heap cap (`scratch/probes/t74-memory.mjs`, median of 5 starts,
+  heapUsed after a full GC, process RSS in brackets): 2.9 prewarmed 533 MB; 2.9 and 2.8.1 prewarmed 985 MB
+  (2.0 GB); after a fixed browse set on each (searches, the Blast Furnace and wide clause browses, blank item
+  lists) 1,210 MB (2.1 GB) with the 128 MB shard cap. Before a GC heapUsed reaches about 1.5 GB. Each version takes about 7 s to prewarm.
+- Where the heap goes, per version on 2.9 (2.8.1 is about 85% of it): the recipe text index about 255 MB, the
+  lookup index about 80 MB, the catalog and its merged resources about 80 MB, item search about 50 MB. What keeps
+  it there, each pinned by `dataset-query.test.ts` or `src/lib/search/text-search.test.ts`:
+  - the lookup index's search text is released once the text index is built (`ensureLookupSearchIndex`);
+  - the search indexes keep one copy of each word (`createTokenInterner`): 5.8 million words, 38 thousand distinct;
+  - parsed shards are bounded by estimated heap, 2.5 bytes per byte of unzipped JSON, 128 MB across every version
+    (`SHARD_CACHE_BYTES`, `GTNH_MAX_LOADED_RECIPE_SHARD_MB`): typical shards are 1-6 MB, a Blast Furnace shard
+    30-57 MB. 128 MB is the smallest that keeps the shards one Blast Furnace browse read for the next (1 ms, 88 ms
+    at 64 MB). A request reads at most 4 shards at a time (`SHARD_LOAD_CONCURRENCY`: faster than 6, 8 or all at
+    once on a 120-shard browse, with half the read buffers of all at once);
+  - each version keeps at most 24 blank item lists (`BLANK_RESOURCE_SEARCH_KEYS`, about 2 MB each unfiltered);
+  - hydrated summaries: 8,000 (`GTNH_MAX_HYDRATED_RECIPE_SUMMARIES`), about 50 MB when full.
+  `GTNH_PREWARM_FULL_DATASETS=1` reads every shard once but keeps only the last 128 MB of them: it warms the disk,
+  not the heap.
+- A memory change to these caches must leave every answer byte for byte. Check it with a golden harness: the
+  sha256 of every dataset response over a fixed request set, on every installed version, recorded before the
+  change and compared after (the set is run twice so cached and evicted answers are held to the same hash):
+  `src/lib/server/dataset-responses.local.test.ts`, run with `GOLDEN_RECORD=1` before the change and without it
+  after. It needs the installed datasets (`public/datasets/gtnh`), so it is local only, never in the suite; its
+  baseline goes to `scratch/golden`, keyed by each version's manifest checksum. It does not cover the legacy
+  path for a dataset without a lookup index (`loadRecipeIndex`): no served dataset takes it, because the manifest
+  rebuild skips a dataset without `recipe-lookup-index.json.gz`.
+- `GTNH_MAX_LOADED_RECIPE_SHARDS` (the old count bound) is no longer read; the server warns at start when it is
+  set (`startup-checks.ts`). Use `GTNH_MAX_LOADED_RECIPE_SHARD_MB`.
+- The rule has two checks, both with every served version loaded:
+  - the live heap stays under 2 GB (two thirds of the heap cap);
+  - process RSS stays under about 80% of the server's RAM, counting what else runs there (the live service,
+    Caddy). Check the owner's server before a deploy that adds a version; these numbers are from a dev machine.
+  Both hold: both versions are prewarmed in full. If one fails, 2.8.1 is prewarmed second with its catalog
+  only. Measure again when a dataset grows or a third version is served.
+
 ## Supabase (community.ts, resource-popularity.ts)
 
 The instance is small and has gone down under load. Rules:

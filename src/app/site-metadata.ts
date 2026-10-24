@@ -18,7 +18,7 @@ export function siteMetadata(): Metadata {
     applicationName: "GTNH Planner",
     title: "GTNH Planner | GregTech New Horizons Factory Calculator",
     description:
-      `Plan and optimize GregTech: New Horizons factories on an interactive flowchart. Full recipe data for GTNH 2.9, throughput and power calculation, ${community ? "machine ratios, and community-shared plans." : "and machine ratios."}`,
+      `Plan and optimize GregTech: New Horizons factories on an interactive flowchart. Full recipe data for GTNH 2.9 and 2.8.1, throughput and power calculation, ${community ? "machine ratios, and community-shared plans." : "and machine ratios."}`,
     alternates: {
       canonical: "/",
     },
@@ -44,7 +44,7 @@ export function siteMetadata(): Metadata {
     openGraph: {
       title: "GTNH Planner | GregTech New Horizons Factory Calculator",
       description:
-        `Free factory planner for GregTech: New Horizons with full recipe data for GTNH 2.9. Draw production chains, ${shareClause}`,
+        `Free factory planner for GregTech: New Horizons with full recipe data for GTNH 2.9 and 2.8.1. Draw production chains, ${shareClause}`,
       siteName: "GTNH Planner",
       type: "website",
       url: "/",
@@ -53,7 +53,7 @@ export function siteMetadata(): Metadata {
       card: "summary_large_image",
       title: "GTNH Planner | GregTech New Horizons Factory Calculator",
       description:
-        `Free factory planner for GregTech: New Horizons with full recipe data for GTNH 2.9. Draw production chains, ${shareClause}`,
+        `Free factory planner for GregTech: New Horizons with full recipe data for GTNH 2.9 and 2.8.1. Draw production chains, ${shareClause}`,
     },
     icons: {
       icon: [
