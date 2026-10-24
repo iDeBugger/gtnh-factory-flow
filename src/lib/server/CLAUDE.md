@@ -95,6 +95,16 @@ The instance is small and has gone down under load. Rules:
 - The dashboard (restarts, disk IO, memory) needs the repo owner; there is no management
   token here.
 
+## Sessions and secrets (session.ts)
+
+- `sessionSecret()` is the one owner of `COMMUNITY_HASH_SALT`: the session HMAC, `saltedKey` (rate-limit, feedback
+  and voter keys) and nothing else read it. In production a missing, blank or development value throws
+  "Sign-in is not set up on this server." at the call, so a server without the secret has no sign-in, library or
+  blueprints while the planner keeps serving; outside production the public development secret applies, so a
+  checkout signs in with no setup. Never add a second read of the variable or a second default. The live service
+  exits without it (`src/live/main.ts`); the two must carry the same value.
+- The startup checks warn about a missing or short secret and never throw for it (`startup-checks.ts`).
+
 ## The mod and community switch (deployment-features.ts)
 
 - `isModAndCommunityOn()` is true only when `NEXT_PUBLIC_MOD_AND_COMMUNITY` is `on`; unset or anything else is off.

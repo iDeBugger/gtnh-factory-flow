@@ -4,6 +4,12 @@ import { makeSessionToken, readSessionCookie, verifySessionToken } from "./sessi
 
 const userId = "11111111-1111-4111-8111-111111111111";
 
+/** A token signed offline with the development secret, as anyone reading this repository could make. */
+function forgedWithDevelopmentSecret(): string {
+  const payload = `${userId}.${Date.now() + 60_000}`;
+  return `${payload}.${createHmac("sha256", "gtnh-factory-hub").update(payload).digest("hex")}`;
+}
+
 afterEach(() => {
   vi.unstubAllEnvs();
 });
@@ -40,5 +46,26 @@ describe("session tokens", () => {
     vi.stubEnv("COMMUNITY_HASH_SALT", "salt-a");
     const old = makeSessionToken(userId, Date.now() - 200 * 24 * 60 * 60 * 1000);
     expect(verifySessionToken(old)).toBeUndefined();
+  });
+
+  it("refuse to sign or verify without a real secret in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const forged = forgedWithDevelopmentSecret();
+    for (const salt of [undefined, "", "  ", "gtnh-factory-hub"]) {
+      vi.stubEnv("COMMUNITY_HASH_SALT", salt);
+      expect(() => makeSessionToken(userId), `salt ${JSON.stringify(salt)}`).toThrow(/Sign-in is not set up/);
+      expect(() => verifySessionToken(forged), `salt ${JSON.stringify(salt)}`).toThrow(/Sign-in is not set up/);
+    }
+    vi.stubEnv("COMMUNITY_HASH_SALT", "a real secret");
+    expect(verifySessionToken(forged)).toBeUndefined();
+    expect(verifySessionToken(makeSessionToken(userId))?.userId).toBe(userId);
+  });
+
+  it("sign with the development secret outside production, so a checkout needs no setup", () => {
+    // This is why production must refuse: the development secret is public.
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("COMMUNITY_HASH_SALT", undefined);
+    expect(verifySessionToken(makeSessionToken(userId))?.userId).toBe(userId);
+    expect(verifySessionToken(forgedWithDevelopmentSecret())?.userId).toBe(userId);
   });
 });

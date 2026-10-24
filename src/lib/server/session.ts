@@ -13,8 +13,25 @@ export const SESSION_DAYS = 180;
 
 const SESSION_USER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function sessionSecret(): string {
-  return process.env.COMMUNITY_HASH_SALT ?? "gtnh-factory-hub";
+/** Development only: a checkout signs in with no setup. Never a production key. */
+const DEVELOPMENT_SECRET = "gtnh-factory-hub";
+
+/**
+ * The secret behind sessions and the hashed keys: COMMUNITY_HASH_SALT. In
+ * production a missing, blank or development value refuses, so a server
+ * without it has no sign-in rather than forgeable sign-in (the value is in
+ * this public repository). The value is used untrimmed: trimming would
+ * change an existing key and sign everyone out.
+ */
+export function sessionSecret(): string {
+  const value = process.env.COMMUNITY_HASH_SALT;
+  if (value !== undefined && value.trim() !== "" && value !== DEVELOPMENT_SECRET) {
+    return value;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Sign-in is not set up on this server.");
+  }
+  return DEVELOPMENT_SECRET;
 }
 
 function sign(payload: string): string {

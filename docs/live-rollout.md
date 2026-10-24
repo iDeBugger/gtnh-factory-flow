@@ -154,9 +154,9 @@ Note in particular the `gtnh-flow` unit's `User=`, its env file (the rest of thi
 `X-Client-Ip` and its TLS. If memory is short, give staging a smaller heap (`--max-old-space-size=1536`) for the test
 period.
 
-Confirm the session secret is set for the running site, without printing it: the website signs sessions with a
-public fallback secret when `COMMUNITY_HASH_SALT` is missing (and now warns about it at startup), and the live service
-refuses to start without it.
+Confirm the session secret is set for the running site, without printing it: without `COMMUNITY_HASH_SALT` the
+website in production refuses to sign or check any session (sign-in, the library and blueprints answer errors while
+the planner keeps serving, and it warns at startup), and the live service refuses to start.
 
 ```bash
 sudo grep -c '^COMMUNITY_HASH_SALT=..*' /opt/shared/env.local      # 1 (0: stop here and set it first)

@@ -25,7 +25,7 @@ others built, vote, and open any shared plan directly in the editor.
 3. In **Project Settings → API**, copy:
    - the project URL → `SUPABASE_URL`
    - the `service_role` secret → `SUPABASE_SERVICE_ROLE_KEY`
-4. Pick any random string for `COMMUNITY_HASH_SALT`.
+4. Make a long random secret for `COMMUNITY_HASH_SALT` (`openssl rand -hex 32`; the server warns under 16 characters, and in production refuses to sign in without one).
 5. Add all three to `.env.local` (dev) and the production host's environment.
 
 Without these variables the rest of the app works normally; the community

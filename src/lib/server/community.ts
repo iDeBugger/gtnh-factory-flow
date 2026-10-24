@@ -9,7 +9,14 @@ import {
   localDbFetch,
   localDbUrl,
 } from "./local-db/client";
-import { makeSessionToken, readSessionCookie, SESSION_COOKIE, SESSION_DAYS, verifySessionToken } from "./session";
+import {
+  makeSessionToken,
+  readSessionCookie,
+  SESSION_COOKIE,
+  SESSION_DAYS,
+  sessionSecret,
+  verifySessionToken,
+} from "./session";
 
 export { makeSessionToken, SESSION_COOKIE };
 
@@ -183,10 +190,13 @@ export function clientAddress(request: Request): string {
   );
 }
 
-/** A salted hash, so keys never hold raw addresses or ids. */
+/**
+ * A salted hash, so keys never hold raw addresses or ids. The salt is the
+ * session secret (one variable, one rule: a production server without it
+ * refuses here too).
+ */
 export function saltedKey(text: string): string {
-  const salt = process.env.COMMUNITY_HASH_SALT ?? "gtnh-factory-hub";
-  return createHash("sha256").update(`${salt}:${text}`).digest("hex").slice(0, 32);
+  return createHash("sha256").update(`${sessionSecret()}:${text}`).digest("hex").slice(0, 32);
 }
 
 /**
@@ -207,9 +217,7 @@ export function makeActorKey(request: Request, deviceId?: string): string {
  */
 export async function makeVoterKey(request: Request, deviceId: string): Promise<string> {
   const user = await getSessionUser(request);
-  const salt = process.env.COMMUNITY_HASH_SALT ?? "gtnh-factory-hub";
-  const identity = user ? `user:${user.id}` : `device:${deviceId}`;
-  return createHash("sha256").update(`${salt}:${identity}`).digest("hex").slice(0, 32);
+  return saltedKey(user ? `user:${user.id}` : `device:${deviceId}`);
 }
 
 // ---------------------------------------------------------------------------

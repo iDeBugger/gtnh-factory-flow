@@ -3,21 +3,30 @@ import { assertLocalDbAllowed } from "./local-db/client";
 /**
  * What the website's server checks as it starts (src/instrumentation.ts):
  *
- * - LOCAL_DB=1 never runs in production: it throws, and the server does not
- *   start.
- * - Without COMMUNITY_HASH_SALT, sessions are signed with the fallback secret
- *   in session.ts, which anyone can read in this public repository: it warns,
- *   loudly. The live service refuses to start without it; the website keeps
- *   its fallback so a development checkout signs in with no setup.
+ * - LOCAL_DB=1 never runs in production: it throws.
+ * - COMMUNITY_HASH_SALT missing or blank: it warns. The secret accessor in
+ *   session.ts refuses to sign or check anything in production without it, so
+ *   sign-in, the library and blueprints are off while the planner keeps
+ *   serving; a throw here would take the planner down with them. A short
+ *   value gets its own warning but is not refused: refusing would stop a
+ *   running deployment, and rotating the value signs everyone out, which is
+ *   the owner's call.
  * - GTNH_MAX_LOADED_RECIPE_SHARDS is no longer read (the shard cache is bounded
  *   by bytes): it warns and names GTNH_MAX_LOADED_RECIPE_SHARD_MB, so a unit
  *   that still sets it does not believe it is in effect.
  */
+export const SHORT_SECRET_LENGTH = 16;
+
 export function checkServerSetup(warn: (message: string) => void = console.warn): void {
   assertLocalDbAllowed();
-  if (!process.env.COMMUNITY_HASH_SALT) {
+  const salt = process.env.COMMUNITY_HASH_SALT;
+  if (salt === undefined || salt.trim() === "") {
     warn(
-      "[auth] COMMUNITY_HASH_SALT is not set: sessions are signed with the public fallback secret. Set it in production.",
+      "[auth] COMMUNITY_HASH_SALT is not set: sign-in, the library and blueprints are off until it is set.",
+    );
+  } else if (salt.length < SHORT_SECRET_LENGTH) {
+    warn(
+      `[auth] COMMUNITY_HASH_SALT is shorter than ${SHORT_SECRET_LENGTH} characters: use a long random value (openssl rand -hex 32).`,
     );
   }
   if (process.env.GTNH_MAX_LOADED_RECIPE_SHARDS) {
