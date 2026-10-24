@@ -1,7 +1,9 @@
 import { assertLocalDbAllowed } from "./local-db/client";
 
 /**
- * What the website's server checks as it starts (src/instrumentation.ts):
+ * What the website's server checks as it starts (src/instrumentation.ts,
+ * which exits the process when a check throws, so nothing serves
+ * half-configured and systemd sees the failure):
  *
  * - LOCAL_DB=1 never runs in production: it throws.
  * - COMMUNITY_HASH_SALT missing or blank: it warns. The secret accessor in
