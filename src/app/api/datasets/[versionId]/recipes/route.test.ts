@@ -197,8 +197,8 @@ describe("recipe dataset API route", () => {
       { params: Promise.resolve({ versionId: "stable" }) },
     );
     expect(response.status).toBe(200);
-    // 1 unit up front and one more per 10 ms of the 120 ms answer.
-    expect(datasetBudgetSpent("203.0.113.9")).toBeGreaterThanOrEqual(13);
+    // 1 unit up front and one more per 10 ms of the 120 ms answer past the free 50 ms.
+    expect(datasetBudgetSpent("203.0.113.9")).toBeGreaterThanOrEqual(8);
     expect(datasetBudgetSpent("203.0.113.9")).toBeLessThanOrEqual(40);
   });
 

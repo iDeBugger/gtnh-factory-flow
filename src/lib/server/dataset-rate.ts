@@ -36,6 +36,14 @@ export const BUDGET_PER_MINUTE = 3000;
 export const HEAVY_REQUEST_COST = 25;
 /** One unit of the budget per this much of the answer's measured time. */
 export const MS_PER_WORK_UNIT = 10;
+/**
+ * Measured time is wall time, which holds the wait behind other requests: a
+ * 4 ms body fetch queued behind a search must not be billed as a search, or a
+ * plan open would wait on 429s exactly when the server is busiest. This much
+ * of every answer is free: 120 heavy requests a minute make 6 s of free
+ * thread, and the 270 ms corrector shape still pays 22 units.
+ */
+export const FREE_MS_PER_REQUEST = 50;
 const WINDOW_MS = 60_000;
 const MAX_KEYS = 10_000;
 
@@ -140,9 +148,10 @@ export async function meteredDatasetWork<T>(request: Request, work: () => Promis
   try {
     return await work();
   } finally {
+    const elapsed = performance.now() - started;
     spendDatasetBudget(
       clientAddress(request),
-      Math.ceil((performance.now() - started) / MS_PER_WORK_UNIT),
+      Math.ceil(Math.max(0, elapsed - FREE_MS_PER_REQUEST) / MS_PER_WORK_UNIT),
     );
   }
 }

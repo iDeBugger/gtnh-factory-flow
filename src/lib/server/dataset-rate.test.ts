@@ -7,6 +7,7 @@ import {
   datasetBudgetAddressCount,
   datasetBudgetRefusal,
   datasetBudgetSpent,
+  FREE_MS_PER_REQUEST,
   HEAVY_REQUEST_COST,
   meteredDatasetWork,
   MS_PER_WORK_UNIT,
@@ -50,8 +51,9 @@ describe("the dataset work budget", () => {
     expect(takeDatasetBudget("a", HEAVY_REQUEST_COST, now)).toBe(false);
   });
 
-  it("charges the measured time of an answer on top, one unit per 10 ms", async () => {
+  it("charges the measured time of an answer on top, one unit per 10 ms past a free 50 ms", async () => {
     expect(MS_PER_WORK_UNIT).toBe(10);
+    expect(FREE_MS_PER_REQUEST).toBe(50);
     const now = 1_000_000;
     spendDatasetBudget("a", 2990, now);
     // The measured part is never refused: the work is already done.
@@ -63,20 +65,27 @@ describe("the dataset work budget", () => {
     await expect(
       meteredDatasetWork(
         request,
-        () => new Promise((resolve) => setTimeout(() => resolve("x"), 55)),
+        () => new Promise((resolve) => setTimeout(() => resolve("x"), 120)),
       ),
     ).resolves.toBe("x");
-    expect(datasetBudgetSpent("203.0.113.9")).toBeGreaterThanOrEqual(6);
+    expect(datasetBudgetSpent("203.0.113.9")).toBeGreaterThanOrEqual(7);
     expect(datasetBudgetSpent("203.0.113.9")).toBeLessThanOrEqual(30);
+
+    // A quick answer, even one queued a little, costs nothing beyond its base.
+    await meteredDatasetWork(
+      from("203.0.113.11"),
+      () => new Promise((resolve) => setTimeout(() => resolve("x"), 20)),
+    );
+    expect(datasetBudgetSpent("203.0.113.11")).toBe(0);
 
     // Charged when the work throws too.
     await expect(
       meteredDatasetWork(from("203.0.113.10"), async () => {
-        await new Promise((resolve) => setTimeout(resolve, 25));
+        await new Promise((resolve) => setTimeout(resolve, 90));
         throw new Error("boom");
       }),
     ).rejects.toThrow("boom");
-    expect(datasetBudgetSpent("203.0.113.10")).toBeGreaterThanOrEqual(3);
+    expect(datasetBudgetSpent("203.0.113.10")).toBeGreaterThanOrEqual(4);
   });
 
   it("forgets the oldest address past 10,000, on refusals too", () => {
