@@ -136,7 +136,7 @@ export async function getRecipeDatasetRecipe(
   if (options.signal) {
     // An abortable request is one caller's alone; caching it would let that
     // caller's abort reject everyone else's hit.
-    return fetchJson<Recipe>(key, { signal: options.signal });
+    return fetchJson<Recipe>(key, { signal: options.signal }, { retryWhenBusy: true });
   }
 
   const cached = recipeFetchCache.get(key);
@@ -144,7 +144,7 @@ export async function getRecipeDatasetRecipe(
     return cached;
   }
 
-  const promise = fetchJson<Recipe>(key).catch((error) => {
+  const promise = fetchJson<Recipe>(key, undefined, { retryWhenBusy: true }).catch((error) => {
     recipeFetchCache.delete(key);
     throw error;
   });
@@ -167,7 +167,9 @@ export async function getRecipeDatasetRecipeIds(
     window.location.origin,
   );
   addDatasetCacheKey(url, version);
-  const result = await fetchJson<{ recipeIds: string[] }>(url.toString());
+  const result = await fetchJson<{ recipeIds: string[] }>(url.toString(), undefined, {
+    retryWhenBusy: true,
+  });
   return result.recipeIds;
 }
 
@@ -181,10 +183,11 @@ export async function resolveRecipeDatasetRecipes(
     window.location.origin,
   );
   addDatasetCacheKey(url, version);
-  return fetchJson<RecipeDatasetResolveResult>(url.toString(), {
-    method: "POST",
-    body: JSON.stringify({ recipes }),
-  });
+  return fetchJson<RecipeDatasetResolveResult>(
+    url.toString(),
+    { method: "POST", body: JSON.stringify({ recipes }) },
+    { retryWhenBusy: true },
+  );
 }
 
 export async function queryRecipeDatasetRecipes(
@@ -289,17 +292,41 @@ export async function queryRecipeDatasetResources(
   return fetchJson<RecipeDatasetResourceQueryResult>(url.toString(), { signal: options.signal });
 }
 
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+/**
+ * The server refuses an address that has spent its minute's dataset budget
+ * with a 429 and a Retry-After. A search shows that refusal in its pane. A
+ * plan open or import fetches one body per recipe and must never fail whole
+ * on one refusal, so those wait and ask again, this many times.
+ */
+const BUSY_RETRIES = 6;
+const BUSY_RETRY_DEFAULT_MS = 10_000;
+const BUSY_RETRY_MAX_MS = 30_000;
+
+async function fetchJson<T>(
+  url: string,
+  init?: RequestInit,
+  options: { retryWhenBusy?: boolean } = {},
+): Promise<T> {
   // No cache mode: every GET here carries the dataset checksum in its URL, so
   // the browser's HTTP cache can legally reuse responses across reloads and
   // sessions. The server marks fingerprinted responses immutable to match.
-  const response = await fetch(url, {
+  const request: RequestInit = {
     headers: {
       Accept: "application/json",
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
     },
     ...init,
-  });
+  };
+  let response = await fetch(url, request);
+  for (
+    let retry = 0;
+    response.status === 429 && options.retryWhenBusy && retry < BUSY_RETRIES;
+    retry += 1
+  ) {
+    await response.text();
+    await waitToRetry(retryAfterMs(response), init?.signal);
+    response = await fetch(url, request);
+  }
 
   const contentType = response.headers.get("content-type") ?? "";
   const body = await response.text();
@@ -326,6 +353,31 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   }
 
   return payload as T;
+}
+
+function retryAfterMs(response: Response): number {
+  const seconds = Number.parseInt(response.headers.get("retry-after") ?? "", 10);
+  return Number.isInteger(seconds) && seconds > 0
+    ? Math.min(seconds * 1000, BUSY_RETRY_MAX_MS)
+    : BUSY_RETRY_DEFAULT_MS;
+}
+
+function waitToRetry(ms: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("The request was aborted.", "AbortError"));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("The request was aborted.", "AbortError"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 function addDatasetCacheKey(url: URL, version: DatasetVersion) {
