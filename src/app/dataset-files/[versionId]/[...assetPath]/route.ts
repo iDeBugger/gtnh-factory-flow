@@ -12,13 +12,13 @@ export const dynamic = "force-dynamic";
 
 /**
  * The dataset files that may be downloaded: the index gzips and the recipe
- * shards. next.config.ts rewrites their public paths here before Next's own
- * public handler can answer, because that handler serves everything under
+ * shards. src/proxy.ts sends their public paths here (dataset-path-gate.ts),
+ * because Next's own public handler serves everything under
  * public/datasets/gtnh with a cache policy set by path alone (a 404 would
  * carry the same day's cache as the file) and could not refuse the raw
  * recipes.json, about 2 GB per download. Here a file is served for a day,
  * never immutable (gzips and shards are replaced in place on a republish),
- * and a refusal or a miss says no-store.
+ * with ETag and byte ranges, and a refusal or a miss says no-store.
  */
 const INDEX_FILES = new Set([
   "recipes.json.gz",
@@ -31,7 +31,7 @@ const SHARD_FILE = /^shard-\d{4}\.json\.gz$/;
 const uncached = { "Cache-Control": "no-store" };
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ versionId: string; assetPath: string[] }> },
 ) {
   const { versionId, assetPath } = await params;
@@ -55,6 +55,7 @@ export async function GET(
     return await serveDatasetFile(filePath, {
       cacheControl: DATASET_FILE_CACHE_CONTROL,
       contentType: "application/gzip",
+      requestHeaders: request.headers,
     });
   } catch {
     return NextResponse.json(

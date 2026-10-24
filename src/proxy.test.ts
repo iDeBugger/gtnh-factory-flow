@@ -17,7 +17,9 @@ describe("the API proxy", () => {
     expect(await answer.json()).toEqual({ error: "Cross-site request refused." });
     expect(proxy(request("PUT", { origin: "https://evil.example" })).status).toBe(403);
     expect(proxy(request("DELETE", { origin: "https://evil.example" })).status).toBe(403);
-    expect(proxy(request("POST", { origin: "https://gtnhplanner.com.evil.example" })).status).toBe(403);
+    expect(proxy(request("POST", { origin: "https://gtnhplanner.com.evil.example" })).status).toBe(
+      403,
+    );
     expect(proxy(request("POST", { origin: "https://new.gtnhplanner.com" })).status).toBe(403);
   });
 
@@ -28,7 +30,9 @@ describe("the API proxy", () => {
   });
 
   it("passes a write from the site itself, and one with no Origin", () => {
-    const sameSite = proxy(request("POST", { origin: "https://gtnhplanner.com", "sec-fetch-site": "same-origin" }));
+    const sameSite = proxy(
+      request("POST", { origin: "https://gtnhplanner.com", "sec-fetch-site": "same-origin" }),
+    );
     expect(sameSite.status).toBe(200);
     expect(sameSite.headers.get("x-middleware-next")).toBe("1");
     expect(proxy(request("POST", { origin: "HTTPS://GTNHPLANNER.COM" })).status).toBe(200);
@@ -46,12 +50,72 @@ describe("the API proxy", () => {
   it("lets reads through whatever their Origin", () => {
     expect(proxy(request("GET", { origin: "https://evil.example" })).status).toBe(200);
     expect(proxy(request("HEAD", { origin: "https://evil.example" })).status).toBe(200);
-    expect(proxy(request("OPTIONS", { origin: "https://evil.example", "sec-fetch-site": "cross-site" })).status).toBe(
-      200,
+    expect(
+      proxy(request("OPTIONS", { origin: "https://evil.example", "sec-fetch-site": "cross-site" }))
+        .status,
+    ).toBe(200);
+  });
+
+  it("checks cross-site writes on the API only, and runs on every path but the framework's", () => {
+    expect(config.matcher).toEqual(["/((?!_next/).*)"]);
+    const page = new NextRequest("https://gtnhplanner.com/plans", {
+      method: "POST",
+      headers: { host: "gtnhplanner.com", origin: "https://evil.example" },
+    });
+    expect(proxy(page).status).toBe(200);
+  });
+});
+
+describe("the dataset gate in the proxy", () => {
+  const V = "local-2.9.0-rc-2";
+  const get = (pathname: string) =>
+    proxy(
+      new NextRequest(`https://gtnhplanner.com${pathname}`, {
+        headers: { host: "gtnhplanner.com" },
+      }),
+    );
+
+  it("refuses an encoded dataset path before any file is looked up", async () => {
+    for (const pathname of [
+      `/datasets/gtnh/${V}/recipes%2Ejson`,
+      `/datasets/gtnh/${V}/%72ecipes.json`,
+      `/datasets/gtnh/${V}%2Frecipes.json`,
+      `/datasets/gtnh/${V}/recipes%252Ejson`,
+      `/%64atasets/gtnh/${V}/recipes.json.gz`,
+      `/datasets/gtnh/${V}/recipes-shards%2Fshard-0000.json.gz`,
+    ]) {
+      const answer = get(pathname);
+      expect(answer.status, pathname).toBe(400);
+      expect(answer.headers.get("Cache-Control")).toBe("no-store");
+      expect(await answer.json()).toEqual({ error: "Invalid dataset path." });
+    }
+  });
+
+  it("rewrites the index gzips, the shards and the raw recipes file to the dataset-files route", () => {
+    const gz = get(`/datasets/gtnh/${V}/recipes.json.gz`);
+    expect(gz.headers.get("x-middleware-rewrite")).toBe(
+      `https://gtnhplanner.com/dataset-files/${V}/recipes.json.gz`,
+    );
+    const shard = get(`/datasets/gtnh/${V}/recipes-shards/shard-0001.json.gz`);
+    expect(shard.headers.get("x-middleware-rewrite")).toBe(
+      `https://gtnhplanner.com/dataset-files/${V}/recipes-shards/shard-0001.json.gz`,
+    );
+    const raw = get(`/datasets/gtnh/${V}/recipes.json`);
+    expect(raw.headers.get("x-middleware-rewrite")).toBe(
+      `https://gtnhplanner.com/dataset-files/${V}/recipes.json`,
     );
   });
 
-  it("guards the API routes only", () => {
-    expect(config.matcher).toEqual(["/api/:path*"]);
+  it("passes textures, the manifest and the rest of the site", () => {
+    for (const pathname of [
+      `/datasets/gtnh/${V}/textures/rendered/copper-a50d21cdeb41.png`,
+      "/datasets/gtnh/datasets.manifest.json",
+      "/",
+      "/plans",
+    ]) {
+      const answer = get(pathname);
+      expect(answer.status, pathname).toBe(200);
+      expect(answer.headers.get("x-middleware-next")).toBe("1");
+    }
   });
 });

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { decideDatasetPath } from "@/lib/server/dataset-path-gate";
 
 /**
  * Cross-site writes to the API are refused before any route runs. Sessions
@@ -13,10 +14,22 @@ import { NextResponse, type NextRequest } from "next/server";
  * The live socket keeps its own origin allow-list in the live service.
  */
 export function proxy(request: NextRequest): NextResponse {
-  if (!isCrossSiteWrite(request)) {
-    return NextResponse.next();
+  // The dataset files first, on the raw path: see dataset-path-gate.ts for
+  // why only a request-level look at the decoded path can gate them.
+  const dataset = decideDatasetPath(new URL(request.url).pathname);
+  if (dataset.kind === "refuse") {
+    return NextResponse.json(
+      { error: "Invalid dataset path." },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
   }
-  return NextResponse.json({ error: "Cross-site request refused." }, { status: 403 });
+  if (dataset.kind === "rewrite") {
+    return NextResponse.rewrite(new URL(dataset.pathname, request.url));
+  }
+  if (request.nextUrl.pathname.startsWith("/api/") && isCrossSiteWrite(request)) {
+    return NextResponse.json({ error: "Cross-site request refused." }, { status: 403 });
+  }
+  return NextResponse.next();
 }
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -43,6 +56,9 @@ export function isCrossSiteWrite(request: {
   }
 }
 
+// Every path but the framework's own: the dataset gate must see any spelling
+// of a dataset path, and an encoded letter in "datasets" would slip past a
+// prefix matcher. The cross-site check applies to the API only (above).
 export const config = {
-  matcher: ["/api/:path*"],
+  matcher: ["/((?!_next/).*)"],
 };

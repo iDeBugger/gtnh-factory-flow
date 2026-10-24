@@ -16,7 +16,10 @@ function get(assetPath: string[], versionId = "local-2.9.0-rc-2") {
 const served = () =>
   vi
     .mocked(serveDatasetFile)
-    .mock.calls.map(([filePath, options]) => [filePath.split("/").slice(-3).join("/"), options]);
+    .mock.calls.map(([filePath, options]) => [
+      filePath.split("/").slice(-3).join("/"),
+      options.cacheControl,
+    ]);
 
 describe("the dataset file route", () => {
   beforeEach(() => {
@@ -28,19 +31,12 @@ describe("the dataset file route", () => {
     expect((await get(["recipe-lookup-index.json.gz"])).status).toBe(200);
     expect((await get(["recipes-shards", "shard-0136.json.gz"])).status).toBe(200);
     expect(served()).toEqual([
-      [
-        "gtnh/local-2.9.0-rc-2/recipes.json.gz",
-        { cacheControl: "public, max-age=86400", contentType: "application/gzip" },
-      ],
-      [
-        "gtnh/local-2.9.0-rc-2/recipe-lookup-index.json.gz",
-        { cacheControl: "public, max-age=86400", contentType: "application/gzip" },
-      ],
-      [
-        "local-2.9.0-rc-2/recipes-shards/shard-0136.json.gz",
-        { cacheControl: "public, max-age=86400", contentType: "application/gzip" },
-      ],
+      ["gtnh/local-2.9.0-rc-2/recipes.json.gz", "public, max-age=86400"],
+      ["gtnh/local-2.9.0-rc-2/recipe-lookup-index.json.gz", "public, max-age=86400"],
+      ["local-2.9.0-rc-2/recipes-shards/shard-0136.json.gz", "public, max-age=86400"],
     ]);
+    // The request's headers reach the file, for ETag and Range.
+    expect(vi.mocked(serveDatasetFile).mock.calls[0]?.[1].requestHeaders).toBeInstanceOf(Headers);
   });
 
   it("refuses the raw recipes file and every other name, uncached", async () => {

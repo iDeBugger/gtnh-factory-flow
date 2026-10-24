@@ -66,44 +66,23 @@ const nextConfig: NextConfig = {
       },
     ];
 
+    // Dataset data files are not gated here: a rewrite matches the path as
+    // sent and is bypassed by percent-encoding. src/proxy.ts does that on the
+    // decoded path; it runs before these rules, so the dev proxy below never
+    // sees the gzips, the shards or recipes.json.
     return {
-      beforeFiles: [
-        // Next serves everything under public/datasets/gtnh itself, before any
-        // route, with a cache policy it can only set by path (a 404 would be
-        // cached like the file), and it cannot refuse the raw recipes.json,
-        // about 2 GB per download. Only a rewrite here runs before the public
-        // files: the index gzips, the shards and the raw file go to the
-        // dataset-files route, which serves the first two for a day (they are
-        // replaced in place on a republish, so never immutable; the manifest
-        // stays max-age=0) and refuses the raw file. Every rule here runs in
-        // order on the already rewritten path, so these stay ahead of the
-        // dataset proxy below, which then never sees them.
-        {
-          source: "/datasets/gtnh/:version/recipes.json",
-          destination: "/dataset-files/:version/recipes.json",
-        },
-        {
-          source:
-            "/datasets/gtnh/:version/:file(recipes\\.json\\.gz|recipe-index\\.json\\.gz|recipe-lookup-index\\.json\\.gz|resource-index\\.json\\.gz)",
-          destination: "/dataset-files/:version/:file",
-        },
-        {
-          source: "/datasets/gtnh/:version/recipes-shards/:file",
-          destination: "/dataset-files/:version/recipes-shards/:file",
-        },
-        ...(datasetBackendUrl
-          ? [
-              {
-                source: "/api/datasets/:path*",
-                destination: `${datasetBackendUrl}/api/datasets/:path*`,
-              },
-              {
-                source: "/datasets/gtnh/:path*",
-                destination: `${datasetBackendUrl}/datasets/gtnh/:path*`,
-              },
-            ]
-          : []),
-      ],
+      beforeFiles: datasetBackendUrl
+        ? [
+            {
+              source: "/api/datasets/:path*",
+              destination: `${datasetBackendUrl}/api/datasets/:path*`,
+            },
+            {
+              source: "/datasets/gtnh/:path*",
+              destination: `${datasetBackendUrl}/datasets/gtnh/:path*`,
+            },
+          ]
+        : [],
       afterFiles: appRewrites,
     };
   },

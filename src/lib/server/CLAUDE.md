@@ -17,13 +17,18 @@
 - Dataset files other than textures may be replaced in place; textures are
   cache-immutable, so a changed icon needs a new name. The index gzips and the shards are therefore served for a
   day (`DATASET_FILE_CACHE_CONTROL`), never `immutable`; the manifest stays `max-age=0`.
-- Next's public handler serves everything under `public/datasets/gtnh` before any route, with a cache policy it can
-  only set by path (a 404 would be cached like the file). So `next.config.ts` rewrites the four index gzips, the
-  shards and the raw `recipes.json` (`beforeFiles`, ahead of the dev proxy) to
-  `src/app/dataset-files/[versionId]/[...assetPath]/route.ts`, the only thing that serves them: a day's cache on
-  200, `no-store` on 400 and 404, and `recipes.json` (about 2 GB) refused. Anything else beside the data
-  (`oracle/`, stray copies) is still served by the public handler at `max-age=0`. Exam: `next-config.test.ts`,
-  `dataset-files/[versionId]/[...assetPath]/route.test.ts`.
+- Next's public handler serves everything under `public/datasets/gtnh` before any route, by the DECODED path, with
+  a cache policy it can only set by path (a 404 would be cached like the file). A rewrite matches the path as
+  sent, so a rewrite alone is bypassed by percent-encoding (`recipes%2Ejson`). The gate is `src/proxy.ts`
+  (`decideDatasetPath`, `dataset-path-gate.ts`), which runs on every request path but `/_next/`: under
+  `/datasets/gtnh/` (decoded) it refuses a path that is percent-encoded at all or holds a `.` or `..` segment
+  (400 `no-store`), sends the four index gzips, the shards and `recipes.json` to
+  `src/app/dataset-files/[versionId]/[...assetPath]/route.ts` (a day's cache, ETag, Last-Modified and one byte
+  range on a file; `no-store` on 400 and 404; `recipes.json`, about 2 GB, refused), and lets everything else
+  through to the public handler: textures (`immutable` by `next.config.ts` header rule), `oracle/`, stray copies,
+  at `max-age=0`. The gate is one process's view of a path: the raw `recipes.json` must still not exist on the
+  droplet, and the publish must not copy it. Exam: `dataset-path-gate.test.ts`, `proxy.test.ts`,
+  `dataset-files/[versionId]/[...assetPath]/route.test.ts`, `dataset-static-file.test.ts`.
 - Every server cache is bounded or index-sized (the Node heap is capped at 3 GB). A slow
   site: check the heap first.
 - The OG card route reads fonts through `process.cwd()` (non-standalone build).
@@ -33,8 +38,9 @@
 - Every dataset route except `prewarm` spends an in-memory work budget per client address (`dataset-rate.ts`):
   3000 units a minute. A base cost goes before any dataset work (1 unit; 25 for a heavy request: a text search
   with a word under three characters or more than three words, `recipe-ids`, `crops`, `resolve-recipes`), then
-  one unit per 10 ms the answer took (`meteredDatasetWork`), so the measured units alone keep one address under
-  30 s of the server thread a minute whatever a query costs. Past the budget the route answers 429 `Too many
+  one unit per 10 ms the answer took past a free 50 ms (`meteredDatasetWork`; wall time holds the wait behind
+  other requests, so a quick answer queued behind a search is not billed as one), so the measured units alone
+  keep one address under 30 s of the server thread a minute whatever a query costs. Past the budget the route answers 429 `Too many
   requests. Wait a moment and try again.` with `Retry-After: 10`: the search panes show it, the import path
   (`browser-loader.ts` `retryWhenBusy`: recipe bodies, the id list, recipe resolution) waits and asks again, up
   to six times. The budget is sized against the client: a plan open or import is one body per recipe (about 200
@@ -46,10 +52,12 @@
   `recipes/route.test.ts`, `src/lib/datasets/browser-loader.test.ts`.
 - A text search matches at most six words and at most two of them under three characters
   (`MAX_SEARCH_TERMS`, `MAX_SHORT_SEARCH_TERMS` in `src/lib/search/text-search.ts`): a word that short cannot use
-  the trigram index and walks every recipe. The partial phase (entries with ANY of the words) never walks the
-  corpus: it runs only when the index narrows it to at most `PARTIAL_PHASE_CANDIDATE_LIMIT` candidates, else the
-  exact or corrected answer stands. Worst measured query shapes are in `scratch/probes/sec-data-p5.mjs`. Exam:
-  `text-search.test.ts`, `dataset-query.test.ts` "the partial search phase".
+  the trigram index and walks every recipe. The partial phase (entries with ANY of the words) runs in full on
+  the item pane (60k entries, 40-60 ms); on recipes it narrows by the words the index can see (a tier word still
+  scores but adds no candidates) and is skipped when the union exceeds `PARTIAL_PHASE_CANDIDATE_LIMIT` (30,000:
+  a list of six metals answers nothing rather than "anything with one of these words"). Worst measured query
+  shapes are in `scratch/probes/sec-data-p5.mjs`. Exam: `text-search.test.ts`, `dataset-query.test.ts` "the
+  recipe partial search phase".
 
 ## Prewarm (instrumentation.ts, `prewarmDatasetVersions`)
 
