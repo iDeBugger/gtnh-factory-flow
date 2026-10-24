@@ -66,6 +66,10 @@ a dataset there), else the previous manifest's while that dataset remains, else 
 `stable-*` build. Local builds are all "experimental", so the default survives a rebuild only
 through the previous manifest. A new `stable-*` build therefore never takes the default from a
 previous one still present: set `GTNH_LATEST_STABLE_VERSION` to switch. Exam: `scripts/rebuild-manifest.test.mjs`.
+Every published file and directory name under a version stays within `[A-Za-z0-9._-]`: the site's request gate
+(`src/proxy.ts`) refuses any dataset path a browser would percent-encode, so a name with a space, `#`, `%`, `?` or a
+character outside ASCII would be unreachable. `rebuild-manifest.mjs` refuses a version directory holding one
+(`scripts/publishable-names.mjs`). Exam: `scripts/publishable-names.test.mjs`.
 
 Recipe ids come from what a recipe is, never from the export: `recipeContentKey` in
 `normalize-oracle-export.mjs` hashes the map (GT++'s `gtpp.recipe.*` read as

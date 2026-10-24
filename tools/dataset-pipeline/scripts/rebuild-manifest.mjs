@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { computeDatasetChecksum } from "./dataset-checksum.mjs";
+import { assertPublishableNames } from "./publishable-names.mjs";
 import readline from "node:readline";
 import { createGunzip } from "node:zlib";
 
@@ -21,6 +22,9 @@ for (const entry of entries) {
     console.warn(`Skipping incomplete dataset ${entry.name}; required compressed dataset indexes are missing.`);
     continue;
   }
+
+  // A name the site's request gate would refuse must never reach the manifest.
+  await assertPublishableNames(path.join(rootDir, entry.name));
 
   const { recipeIndexPath, recipeLookupIndexPath, recipesPath, resourceIndexPath } = datasetFiles;
   const dataset = await readRecipeDatasetMetadata(recipesPath);
