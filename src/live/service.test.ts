@@ -249,6 +249,11 @@ async function until(check: () => Promise<boolean> | boolean, timeoutMs = 10_000
   throw new Error("condition not met in time");
 }
 
+/** A store call answered after a while, as a plan read from a far database is. */
+function slow<T>(call: () => Promise<T>, ms = 300): Promise<T> {
+  return new Promise((resolve) => setTimeout(() => resolve(call()), ms));
+}
+
 const taskPatch = (id: string, f: Record<string, unknown>): LiveOp => ({
   o: "patch",
   c: "tasks",
@@ -1095,6 +1100,54 @@ describe("the live service", { timeout: 30_000 }, () => {
     bob.send({ t: "leave", doc: big.doc });
     await until(() => service.stats.rooms === 0);
     expect((await bob.join(small.doc)).doc).toBe(small.doc);
+  });
+
+  it("counts the plans an account is still opening against its share", async () => {
+    const real = supabasePlanStore();
+    const { port, service } = await startService({
+      store: { ...real, lease: (...args) => slow(() => real.lease(...args)) },
+      limits: { roomsPerAccount: 2 },
+    });
+    const plans = await Promise.all([makeDesign(), makeDesign(), makeDesign(), makeDesign()]);
+    const ann = await TestClient.open(port, { who: "ann" });
+    await ann.hello();
+    // Four joins at once, each plan read taking a while: the two past the
+    // share are refused while the first two are still opening.
+    for (const plan of plans) {
+      ann.send({ t: "join", doc: plan.doc });
+    }
+    const refused = [await ann.next("error"), await ann.next("error")];
+    expect(refused.map((frame) => frame.code)).toEqual(["rate", "rate"]);
+    expect(refused.map((frame) => frame.doc)).toEqual([plans[2]!.doc, plans[3]!.doc]);
+    await ann.next("snapshot", (frame) => frame.doc === plans[0]!.doc);
+    await ann.next("snapshot", (frame) => frame.doc === plans[1]!.doc);
+    expect(ann.frames.filter((frame) => frame.t === "snapshot")).toEqual([]);
+    expect(service.stats.rooms).toBe(2);
+  });
+
+  it("reserves a whole plan's bytes for a room still opening", async () => {
+    const real = supabasePlanStore();
+    // Room for one plan's reservation, not two: the third join fired while
+    // two plans are being read is refused, whoever sends it.
+    const { port, service } = await startService({
+      store: { ...real, lease: (...args) => slow(() => real.lease(...args)) },
+      maxPlanChars: 1024,
+      limits: { maxOpenPlanBytes: 2000 },
+    });
+    const plans = await Promise.all([makeDesign(), makeDesign(), makeDesign()]);
+    const ann = await TestClient.open(port, { who: "ann" });
+    const bob = await TestClient.open(port, { who: "bob" });
+    await ann.hello();
+    await bob.hello();
+    ann.send({ t: "join", doc: plans[0]!.doc });
+    ann.send({ t: "join", doc: plans[1]!.doc });
+    bob.send({ t: "join", doc: plans[2]!.doc });
+    expect(await bob.next("error")).toMatchObject({ code: "rate", doc: plans[2]!.doc });
+    await ann.next("snapshot", (frame) => frame.doc === plans[0]!.doc);
+    await ann.next("snapshot", (frame) => frame.doc === plans[1]!.doc);
+    expect(service.stats.rooms).toBe(2);
+    // Open, the two small plans leave room: the refused join goes through.
+    expect((await bob.join(plans[2]!.doc)).doc).toBe(plans[2]!.doc);
   });
 
   it("limits how many plans an account may open a minute", async () => {

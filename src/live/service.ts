@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
+import { COMMUNITY_UPLOAD_MAX_BYTES } from "@/lib/community/types";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { readOps } from "@/lib/live/ops";
 import {
@@ -74,9 +75,10 @@ export const SERVICE_LIMITS = {
   /**
    * Plan JSON held in open rooms, in characters as `Room.size` counts them
    * (LIVE_MAX_PLAN_BYTES). Past it, joins that would open a room are refused
-   * as `rate` like a full `maxRooms`. A plan's size is known only once it is
-   * read, so one room may overshoot by one plan (3 MB at most): resident
-   * memory is about four times this, plus the baseline.
+   * as `rate` like a full `maxRooms`. A room still opening counts as a whole
+   * plan (`maxPlanChars`) until its size is known. Resident memory is about
+   * four times this, plus the baseline, plus what rooms already open grow by
+   * through edits before the next open checks the budget.
    */
   maxOpenPlanBytes: 64 * 1024 * 1024,
   /** Plans one account may open (a join of a plan not open, membership query included) in a minute. */
@@ -209,6 +211,70 @@ class RateLimiter {
   }
 }
 
+/**
+ * Joins that passed the open checks and have not finished: their membership
+ * query or lease read is pending, so their room is in no count yet. Every
+ * check adds them in (a whole plan's worth of bytes per doc, as the size is
+ * not known), or a burst of joins fired together would each see nothing held
+ * and open together past every limit.
+ */
+class OpensInFlight {
+  /** Per doc, the accounts opening it and how many of their joins are. */
+  private readonly byDoc = new Map<string, Map<string, number>>();
+
+  /** Docs being opened. */
+  get docs(): number {
+    return this.byDoc.size;
+  }
+
+  /** Docs being opened that `rooms` does not hold yet (the query before the open is pending). */
+  docsNotIn(rooms: ReadonlyMap<string, unknown>): number {
+    let count = 0;
+    for (const doc of this.byDoc.keys()) {
+      if (!rooms.has(doc)) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  /** Docs the account is opening, other than those `except` names. */
+  countFor(userId: string, except: (doc: string) => boolean): number {
+    let count = 0;
+    for (const [doc, users] of this.byDoc) {
+      if (users.has(userId) && !except(doc)) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  add(doc: string, userId: string): void {
+    let users = this.byDoc.get(doc);
+    if (!users) {
+      users = new Map();
+      this.byDoc.set(doc, users);
+    }
+    users.set(userId, (users.get(userId) ?? 0) + 1);
+  }
+
+  remove(doc: string, userId: string): void {
+    const users = this.byDoc.get(doc);
+    if (!users) {
+      return;
+    }
+    const left = (users.get(userId) ?? 0) - 1;
+    if (left > 0) {
+      users.set(userId, left);
+    } else {
+      users.delete(userId);
+    }
+    if (users.size === 0) {
+      this.byDoc.delete(doc);
+    }
+  }
+}
+
 const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 
 /**
@@ -282,6 +348,7 @@ export class LiveService {
   private readonly nearbyByAccount: RateLimiter;
   private readonly nearbyByAddress: RateLimiter;
   private readonly opensByAccount: RateLimiter;
+  private readonly opening = new OpensInFlight();
   /** Accounts looked up for sessions, each kept `accountCacheMs`. */
   private readonly accounts = new Map<string, { at: number; account: Promise<Account | undefined> }>();
   private heartbeat?: ReturnType<typeof setInterval>;
@@ -1010,54 +1077,84 @@ export class LiveService {
       this.error(conn, "rate", "Too many plans open at once.", { doc });
       return;
     }
+    // The account's plans: those its connections are in, and those it is
+    // opening right now (not this one, nor one it is already in).
     const held = this.plansOpenBy(conn.userId);
-    if (!held.has(doc) && held.size >= this.limits.roomsPerAccount) {
+    const opening = this.opening.countFor(
+      conn.userId,
+      (other) => other === doc || held.has(other),
+    );
+    if (!held.has(doc) && held.size + opening >= this.limits.roomsPerAccount) {
       this.error(conn, "rate", "Too many plans open at once.", { doc });
       return;
     }
-    if (!this.rooms.has(doc)) {
-      if (
-        this.rooms.size >= this.limits.maxRooms ||
-        this.openPlanBytes() >= this.limits.maxOpenPlanBytes
-      ) {
-        // Full, in rooms or in plan bytes: a plan nobody is in makes room,
-        // and the client asks again.
-        this.closeOneIdleRoom();
-        this.error(conn, "rate", "The live service is busy. Try again shortly.", { doc });
-        return;
-      }
-      // Opening a plan costs a membership query and a plan read: so many a
-      // minute per account, counted before the query. A client whose join is
-      // refused asks again in a few seconds.
-      if (!this.opensByAccount.take(conn.userId)) {
-        this.error(conn, "rate", "Too many plans opened in a minute. Try again shortly.", { doc });
-        return;
-      }
-      // Not open: the database says whether it may be, before anything is
-      // opened for it. An open room answers from its own members below.
-      let role: Awaited<ReturnType<PlanStore["role"]>>;
-      try {
-        role = await this.options.store.role(conn.userId, key.ownerId, key.designId);
-      } catch (error) {
-        this.log(`${doc}: membership check failed: ${String(error)}`);
-        this.error(conn, "rate", "The plan could not be opened. Try again shortly.", { doc });
-        return;
-      }
-      if (!role) {
-        this.error(conn, "forbidden", "This plan is not shared with you.", { doc });
-        return;
-      }
-      // The rooms this account opened and left to linger hold their plans in
-      // memory while the account is in none of them, uncounted by its plans
-      // open at once: past its share, the oldest closes as another opens.
-      // Nothing is refused; paging through plans closes one's own empty rooms.
-      const lingering = [...this.openRooms].filter(
-        (room) => room.idle && room.openedBy === conn.userId,
-      );
-      if (lingering.length >= this.limits.roomsPerAccount) {
-        void lingering[0]!.closeIfEmpty();
-      }
+    if (this.rooms.has(doc)) {
+      await this.joinRoom(conn, doc);
+      return;
     }
+    // Rooms being opened count as whole plans until their size is known.
+    const reserve = this.options.maxPlanChars ?? COMMUNITY_UPLOAD_MAX_BYTES;
+    if (
+      this.rooms.size + this.opening.docsNotIn(this.rooms) >= this.limits.maxRooms ||
+      this.openPlanBytes() + this.opening.docs * reserve >= this.limits.maxOpenPlanBytes
+    ) {
+      // Full, in rooms or in plan bytes: a plan nobody is in makes room,
+      // and the client asks again.
+      this.closeOneIdleRoom();
+      this.error(conn, "rate", "The live service is busy. Try again shortly.", { doc });
+      return;
+    }
+    // Opening a plan costs a membership query and a plan read: so many a
+    // minute per account, counted before the query. A client whose join is
+    // refused asks again in a few seconds.
+    if (!this.opensByAccount.take(conn.userId)) {
+      this.error(conn, "rate", "Too many plans opened in a minute. Try again shortly.", { doc });
+      return;
+    }
+    // Counted as opening from here until the join is over, whatever its end.
+    this.opening.add(doc, conn.userId);
+    try {
+      await this.openRoom(conn, key, doc);
+    } finally {
+      this.opening.remove(doc, conn.userId);
+    }
+  }
+
+  /** Opens a plan nobody has open and joins it, once the database says the account may. */
+  private async openRoom(
+    conn: Connection,
+    key: { ownerId: string; designId: string },
+    doc: string,
+  ): Promise<void> {
+    // Not open: the database says whether it may be, before anything is
+    // opened for it. An open room answers from its own members in joinRoom.
+    let role: Awaited<ReturnType<PlanStore["role"]>>;
+    try {
+      role = await this.options.store.role(conn.userId, key.ownerId, key.designId);
+    } catch (error) {
+      this.log(`${doc}: membership check failed: ${String(error)}`);
+      this.error(conn, "rate", "The plan could not be opened. Try again shortly.", { doc });
+      return;
+    }
+    if (!role) {
+      this.error(conn, "forbidden", "This plan is not shared with you.", { doc });
+      return;
+    }
+    // The rooms this account opened and left to linger hold their plans in
+    // memory while the account is in none of them, uncounted by its plans
+    // open at once: past its share, the oldest closes as another opens.
+    // Nothing is refused; paging through plans closes one's own empty rooms.
+    const lingering = [...this.openRooms].filter(
+      (room) => room.idle && room.openedBy === conn.userId,
+    );
+    if (lingering.length >= this.limits.roomsPerAccount) {
+      void lingering[0]!.closeIfEmpty();
+    }
+    await this.joinRoom(conn, doc);
+  }
+
+  /** Joins the room for `doc`, open or opening, in the room's own turn. */
+  private async joinRoom(conn: Connection, doc: string): Promise<void> {
     // A room closing as we arrive is replaced by a fresh one.
     for (let attempt = 0; attempt < 3; attempt += 1) {
       let opened: Room | undefined;
