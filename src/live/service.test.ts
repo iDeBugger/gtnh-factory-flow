@@ -1087,6 +1087,21 @@ describe("the live service", { timeout: 30_000 }, () => {
     expect(ann.closeCode).toBe(1013);
   });
 
+  it("refuses every upgrade, and stays up, while the secret is one production refuses", async () => {
+    const { port } = await startService();
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("COMMUNITY_HASH_SALT", "gtnh-factory-hub");
+    try {
+      await expect(TestClient.open(port, { who: "ann" })).rejects.toThrow("HTTP 503");
+      const health = await fetch(`http://127.0.0.1:${port}/live/health`);
+      expect(health.status).toBe(200);
+    } finally {
+      vi.stubEnv("NODE_ENV", "test");
+      vi.stubEnv("COMMUNITY_HASH_SALT", "live-service-test-salt");
+    }
+    await (await TestClient.open(port, { who: "ann" })).hello();
+  });
+
   it("refuses a token made under another session epoch, as a sign-in to redo", async () => {
     const { port } = await startService();
     const ws = new WebSocket(`ws://127.0.0.1:${port}/live`, {

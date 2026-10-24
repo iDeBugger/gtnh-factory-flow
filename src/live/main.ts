@@ -17,6 +17,7 @@
 import path from "node:path";
 import { isCommunityConfigured } from "@/lib/server/community";
 import { assertLocalDbAllowed } from "@/lib/server/local-db/client";
+import { sessionSecret } from "@/lib/server/session";
 import { LiveService } from "./service";
 import { supabasePlanStore } from "./store";
 
@@ -31,6 +32,8 @@ async function main() {
     fatal("COMMUNITY_HASH_SALT is not set: sessions could not be checked.");
   }
   try {
+    // The website's rule: in production a blank or development value refuses every token.
+    sessionSecret();
     assertLocalDbAllowed();
   } catch (error) {
     fatal((error as Error).message);

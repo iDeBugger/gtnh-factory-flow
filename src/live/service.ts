@@ -614,7 +614,16 @@ export class LiveService {
       refuse(429, "Too Many Requests");
       return;
     }
-    const session = this.session(req);
+    let session: SessionClaims | undefined;
+    try {
+      session = this.session(req);
+    } catch (error) {
+      // The secret is refused (main.ts stops this at start; a changed environment could not): no
+      // session can be checked, and the socket must not take the process down with it.
+      this.log(`session check failed: ${String(error)}`);
+      refuse(503, "Service Unavailable");
+      return;
+    }
     if (session && !this.upgradesByAccount.take(session.userId)) {
       refuse(429, "Too Many Requests");
       return;
