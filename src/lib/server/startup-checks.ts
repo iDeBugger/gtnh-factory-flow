@@ -19,6 +19,22 @@ import { assertLocalDbAllowed } from "./local-db/client";
  */
 export const SHORT_SECRET_LENGTH = 16;
 
+/**
+ * The checks as the server runs them: a failure ends the process. A throw left
+ * inside the instrumentation hook keeps the port bound and answers 500 to
+ * every request, and a restart policy never notices a live process. Here
+ * rather than in instrumentation.ts, which Next.js also compiles for the Edge
+ * runtime, where process.exit does not exist.
+ */
+export function checkServerSetupOrExit(): void {
+  try {
+    checkServerSetup();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  }
+}
+
 export function checkServerSetup(warn: (message: string) => void = console.warn): void {
   assertLocalDbAllowed();
   const salt = process.env.COMMUNITY_HASH_SALT;

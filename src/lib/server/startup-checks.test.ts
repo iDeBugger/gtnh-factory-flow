@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkServerSetup } from "./startup-checks";
+import { checkServerSetup, checkServerSetupOrExit } from "./startup-checks";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -16,6 +16,26 @@ function warnings(): string[] {
 }
 
 describe("the server's startup checks", () => {
+  it("end the process when one fails, rather than leaving a server that answers 500", () => {
+    vi.stubEnv("COMMUNITY_HASH_SALT", "a real secret of some length");
+    vi.stubEnv("LOCAL_DB", "1");
+    vi.stubEnv("NODE_ENV", "production");
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      checkServerSetupOrExit();
+      expect(exit).toHaveBeenCalledWith(1);
+      expect(error).toHaveBeenCalledWith(expect.stringMatching(/LOCAL_DB=1/));
+      vi.stubEnv("LOCAL_DB", "");
+      vi.stubEnv("GTNH_MAX_LOADED_RECIPE_SHARDS", "");
+      checkServerSetupOrExit();
+      expect(exit).toHaveBeenCalledTimes(1);
+    } finally {
+      exit.mockRestore();
+      error.mockRestore();
+    }
+  });
+
   it("refuse the local database in production", () => {
     vi.stubEnv("COMMUNITY_HASH_SALT", "set");
     vi.stubEnv("LOCAL_DB", "1");

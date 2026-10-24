@@ -3,17 +3,9 @@ export async function register() {
     return;
   }
 
-  const { checkServerSetup } = await import("@/lib/server/startup-checks");
-  try {
-    checkServerSetup();
-  } catch (error) {
-    // A throw left here keeps the port bound and answers 500 to every request,
-    // and systemd sees a healthy unit. Exit instead: nothing serves
-    // half-configured, and the unit's restart policy or its failed state
-    // tells the operator.
-    console.error(error instanceof Error ? error.message : error);
-    process.exit(1);
-  }
+  // A failed check ends the process (startup-checks.ts explains why).
+  const { checkServerSetupOrExit } = await import("@/lib/server/startup-checks");
+  checkServerSetupOrExit();
 
   if (process.env.GTNH_PREWARM_ON_STARTUP !== "1") {
     return;
