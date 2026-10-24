@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useCommunityAuthStore } from "@/store/community-auth-store";
 import { useDesignStore } from "@/store/design-store";
@@ -13,12 +13,14 @@ vi.mock("@/lib/library/cloud-library", () => ({
 }));
 vi.mock("@/lib/library/library-sync", () => ({ syncLibraryNow: vi.fn() }));
 
+import { searchAccounts } from "@/lib/library/cloud-library";
 import { PlanShareDialog } from "./PlanShareDialog";
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 });
 beforeEach(() => {
+  vi.mocked(searchAccounts).mockClear();
   useCommunityAuthStore.setState({ user: { username: "ann_smith" }, hasHydrated: true });
   useDesignStore.setState({
     designs: [
@@ -66,5 +68,24 @@ describe("the share-with-people dialog with the community switched off (unset)",
       "Everyone here can edit the plan with you, live.",
     );
     expect(document.body.textContent).not.toContain("Community");
+  });
+
+  it("asks for two letters before it searches, and says so after one", async () => {
+    await renderDialog();
+    const box = screen.getByLabelText("Add someone");
+    fireEvent.change(box, { target: { value: "b" } });
+    expect(screen.getByText("Type two letters at least.")).toBeTruthy();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 320));
+    });
+    expect(searchAccounts).not.toHaveBeenCalled();
+    expect(screen.queryByText("No one by that name.")).toBeNull();
+    fireEvent.change(box, { target: { value: "bo" } });
+    expect(screen.queryByText("Type two letters at least.")).toBeNull();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 320));
+    });
+    expect(searchAccounts).toHaveBeenCalledWith("bo", expect.anything());
+    expect(screen.getByText("No one by that name.")).toBeTruthy();
   });
 });

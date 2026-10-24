@@ -268,8 +268,10 @@ function AccountSearch({
 
   useEffect(() => {
     const prefix = query.trim();
-    // The server answers one typed character with nothing; asking would only show an empty "no accounts".
+    // The server answers one typed character with nothing: the box says so
+    // instead of asking, and an earlier answer does not stay listed.
     if (prefix.length < 2) {
+      setResults(undefined);
       return;
     }
     const controller = new AbortController();
@@ -312,7 +314,7 @@ function AccountSearch({
         value={query}
         onChange={(event) => {
           setQuery(event.target.value);
-          setSearching(Boolean(event.target.value.trim()));
+          setSearching(event.target.value.trim().length >= 2);
         }}
         placeholder="Search by name"
         autoComplete="off"
@@ -320,6 +322,7 @@ function AccountSearch({
         className="h-8 w-full rounded border border-line-strong bg-surface-sunken px-2 text-sm outline-none focus:border-cyan-600"
       />
       {error ? <p className="text-xs text-red-400">{error}</p> : null}
+      {typed.length === 1 ? <p className="text-xs text-fg-muted">Type two letters at least.</p> : null}
       {typed && !searching && results && shown.length === 0 ? (
         <p className="text-xs text-fg-muted">No one by that name.</p>
       ) : null}
