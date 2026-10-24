@@ -2,6 +2,15 @@ import type { NextConfig } from "next";
 
 const datasetBackendUrl = process.env.GTNH_DATASET_BACKEND_URL?.replace(/\/+$/, "");
 
+/**
+ * Dataset gzips and shards are replaced in place on a republish, under the same
+ * names (only textures are content-named), so a day at the edge and in a
+ * browser, never `immutable`. Nothing in the app fetches them: they are read
+ * from disk by the server. Not the manifest, which the client reads on load and
+ * which must show a publish at once.
+ */
+const DATASET_FILE_CACHE_CONTROL = "public, max-age=86400";
+
 const nextConfig: NextConfig = {
   // Always defined at build, so `process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY` is inlined in the browser AND the
   // server bundles as the build's value (unset at build inlines ""). The server then compares it with the
@@ -48,6 +57,15 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        source: "/datasets/gtnh/:version/recipes-shards/:file",
+        headers: [{ key: "Cache-Control", value: DATASET_FILE_CACHE_CONTROL }],
+      },
+      {
+        source:
+          "/datasets/gtnh/:version/:file(recipes\\.json\\.gz|recipe-index\\.json\\.gz|recipe-lookup-index\\.json\\.gz|resource-index\\.json\\.gz)",
+        headers: [{ key: "Cache-Control", value: DATASET_FILE_CACHE_CONTROL }],
+      },
     ];
   },
   async rewrites() {
@@ -66,20 +84,30 @@ const nextConfig: NextConfig = {
       },
     ];
 
-    if (!datasetBackendUrl) {
-      return appRewrites;
-    }
-
     return {
       beforeFiles: [
+        // Next serves everything under public/datasets/gtnh itself, before any
+        // route, and the raw recipes.json is about 2 GB per download. Only a
+        // rewrite here runs before the public files: the target exists on no
+        // disk, so the request falls through to the [assetFile] route, which
+        // refuses it. It must stay ahead of the dataset proxy below, or a dev
+        // proxy would forward it.
         {
-          source: "/api/datasets/:path*",
-          destination: `${datasetBackendUrl}/api/datasets/:path*`,
+          source: "/datasets/gtnh/:version/recipes.json",
+          destination: "/datasets/gtnh/:version/recipes.json.raw",
         },
-        {
-          source: "/datasets/gtnh/:path*",
-          destination: `${datasetBackendUrl}/datasets/gtnh/:path*`,
-        },
+        ...(datasetBackendUrl
+          ? [
+              {
+                source: "/api/datasets/:path*",
+                destination: `${datasetBackendUrl}/api/datasets/:path*`,
+              },
+              {
+                source: "/datasets/gtnh/:path*",
+                destination: `${datasetBackendUrl}/datasets/gtnh/:path*`,
+              },
+            ]
+          : []),
       ],
       afterFiles: appRewrites,
     };

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import {
+  DATASET_FILE_CACHE_CONTROL,
   isSafePathSegment,
   resolveDatasetChildPath,
   serveDatasetFile,
@@ -9,8 +10,13 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * The dataset files a request may download when Next's public handler did not
+ * answer first (it serves everything under public/datasets/gtnh itself). The
+ * raw recipes.json is not one: about 2 GB per download, nothing reads it over
+ * HTTP, and next.config.ts rewrites it here so this list refuses it.
+ */
 const datasetFiles = new Set([
-  "recipes.json",
   "recipes.json.gz",
   "recipe-index.json.gz",
   "recipe-lookup-index.json.gz",
@@ -33,7 +39,8 @@ export async function GET(
 
   try {
     return await serveDatasetFile(filePath, {
-      contentType: assetFile.endsWith(".gz") ? "application/gzip" : "application/json",
+      cacheControl: DATASET_FILE_CACHE_CONTROL,
+      contentType: "application/gzip",
     });
   } catch {
     return NextResponse.json({ error: "Dataset file not found." }, { status: 404 });

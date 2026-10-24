@@ -5,6 +5,13 @@ import { Readable } from "node:stream";
 
 export const datasetRoot = path.join(process.cwd(), "public", "datasets", "gtnh");
 
+/**
+ * What a served dataset file says about caching, the same as next.config.ts
+ * says for the public handler: a day, never immutable, because gzips and
+ * shards are replaced in place under the same names on a republish.
+ */
+export const DATASET_FILE_CACHE_CONTROL = "public, max-age=86400";
+
 export async function serveDatasetFile(
   filePath: string,
   options: {
