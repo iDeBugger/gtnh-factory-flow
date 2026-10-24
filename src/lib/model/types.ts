@@ -457,10 +457,27 @@ export interface TargetRate {
 /** Which way a custom rate card faces: it makes the resource, or it drinks it. */
 export type CustomRateMode = "supply" | "request";
 
+/**
+ * A recipe a plan conversion to another game version could not find there
+ * (`convert-plan-version.ts`). Its body is gone from the plan; the card keeps
+ * its id, count, pins, tier, config and wires, and this says what it was. The
+ * id is the source plan's, shown to the player and never looked up.
+ */
+export interface UnconvertedRecipe {
+  fromGameVersion: string;
+  recipeId: string;
+  recipeName: string;
+  machineType: string;
+  /** Why, when it is more than "no match": the machine is not in that version. */
+  reason?: string;
+}
+
 /** One more recipe on a card's machine; see `FactoryNode.extraRecipes`. */
 export interface FactoryNodeRecipeSection {
   recipeId: string;
   recipeInputOverrides?: Record<string, RecipeInput>;
+  /** This section's recipe was not found when the plan was converted to another version. */
+  unconverted?: UnconvertedRecipe;
 }
 
 export interface FactoryNode {
@@ -519,6 +536,8 @@ export interface FactoryNode {
    * wear an `r<n>:` prefix. Absent or empty means an ordinary one-recipe card.
    */
   extraRecipes?: FactoryNodeRecipeSection[];
+  /** Section 0's recipe was not found when the plan was converted to another version. */
+  unconverted?: UnconvertedRecipe;
   /**
    * The machine count the player set. By default it is an Up to count
    * (docs/up-to.md): the machines run as hard as the plan lets them, never
@@ -1029,6 +1048,11 @@ export interface NodeThroughputResult {
    * node at 0%, exactly like a machine stopped by a bare slot.
    */
   powerStalled?: boolean;
+  /**
+   * The card (or section) holds a recipe that was not converted to the plan's version (`FactoryNode.unconverted`).
+   * It is out of the solve (`status: "missing-recipe"`), and its wires are outside inputs and outputs of the plan.
+   */
+  unconverted?: true;
   /**
    * How hard this node COULD run given only its own input supply (1 when
    * nothing upstream limits it). Solver-internal: `utilization` is demand-

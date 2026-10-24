@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { FactoryNode, MachineConfigTierOption, Recipe } from "@/lib/model/types";
+import type { FactoryNode, FactoryProject, MachineConfigTierOption, Recipe } from "@/lib/model/types";
 import {
   GT_OVERCLOCK_TIERS,
   applyMachineHandlerToRecipe,
@@ -63,6 +63,15 @@ import { cardLoop, LOOP_WORD, type LoopTone } from "./loops";
 import { glanceBar, type GlanceBar } from "./glance";
 import { isPinned, pinMachineKey, settingControls } from "./menus/settings-model";
 import { mcTextWidth, measureClean, measureRowFigure, measureRowName, useFontEpoch } from "./text-measure";
+import type { TipSpec } from "./interaction/tip-spec";
+import {
+  firstUnconvertedTarget,
+  markedSections,
+  sectionMarker,
+  unconvertedWiresRule,
+  unconvertedCardLine,
+  unconvertedVersionOf,
+} from "@/lib/model/unconverted-card";
 
 type VoltageTier = Parameters<typeof getVoltageTierIndex>[0];
 
@@ -229,6 +238,42 @@ export interface CleanCardView {
   selected: boolean;
   cannotRun: boolean;
   unset: boolean;
+  /** The card's recipe (or one of a shared card's) is not in the plan's version: an amber frame and its line. */
+  unconverted?: CleanUnconvertedView;
+}
+
+/** A marked card's line, `Not in GTNH 2.9. Pick a recipe.`, and what a press on it picks a recipe for. */
+export interface CleanUnconvertedView {
+  line: string;
+  /** The solve id the recipe search replaces: the card, or `card#rN` for a shared card's section. */
+  target: string;
+  tip: TipSpec;
+}
+
+/** What a card says when a recipe on it was not converted (lib/model/unconverted-card.ts); undefined when none was. */
+export function unconvertedView(
+  project: Pick<FactoryProject, "gameVersion">,
+  node: FactoryNode,
+): CleanUnconvertedView | undefined {
+  const target = firstUnconvertedTarget(node);
+  if (!target) return undefined;
+  const version = unconvertedVersionOf(project);
+  const markers = markedSections(node).map((section) => sectionMarker(node, section)!);
+  const first = markers[0]!;
+  return {
+    line: unconvertedCardLine(version),
+    target,
+    tip: {
+      id: `${node.id}|unconverted`,
+      title: markers.map((marker) => marker.recipeName).join(", "),
+      sub: first.machineType,
+      notes: [
+        { text: `Not in GTNH ${version}, so the card is left out of the solve.` },
+        { text: unconvertedWiresRule(1) },
+        { text: "Click to pick a recipe for it." },
+      ],
+    },
+  };
 }
 
 export interface CleanCardActions {
@@ -1002,7 +1047,9 @@ export function useCleanCardModel(
   const { selectedMachineHandler, machineHandlers, tierControl, powerReport, steamReport } =
     derived;
   const { machineIcon, art } = cardPicture(recipe, projectNode, derived, machineIcons, mapIcons);
-  const name = machineIcon?.displayName ?? selectedMachineHandler.label;
+  const unconverted = unconvertedView(liveProject, projectNode);
+  // A marked card is named by its marker: the machine it ran in the version it came from.
+  const name = projectNode.unconverted?.machineType ?? machineIcon?.displayName ?? selectedMachineHandler.label;
 
   const hasPicker = machineHandlers.length > 1;
   const tierLabel = powerReport?.isMultiblock ? powerReport.tier : tierControl?.current;
@@ -1137,7 +1184,8 @@ export function useCleanCardModel(
     art,
     glanceArt: art ?? machineIcon?.iconPath,
     count,
-    foot,
+    // A marked card is out of the solve: its line says so instead of a bar, and its count asks for nothing.
+    foot: unconverted ? undefined : foot,
     loop,
     glance: glanceBar(countState.upTo, loop),
     circuit: derived.circuit,
@@ -1145,7 +1193,8 @@ export function useCleanCardModel(
     stripHeight: strip.height,
     selected,
     cannotRun: powerReport !== undefined && powerReport.state !== "ok",
-    unset,
+    unset: unconverted ? false : unset,
+    unconverted,
   };
 
   const actions: CleanCardActions = {

@@ -364,6 +364,15 @@ export const targetRateSchema = z.object({
   displayName: z.string().optional(),
 });
 
+// A recipe a version conversion could not find; display only, so every field is bounded.
+const unconvertedRecipeSchema = z.object({
+  fromGameVersion: z.string().trim().min(1).max(32),
+  recipeId: z.string().min(1).max(512),
+  recipeName: z.string().max(256),
+  machineType: z.string().max(256),
+  reason: z.string().min(1).max(256).optional(),
+});
+
 export const factoryNodeSchema = z.object({
   productionGroupId: z.string().min(1).optional(),
   id: z.string().min(1),
@@ -418,9 +427,11 @@ export const factoryNodeSchema = z.object({
       z.object({
         recipeId: z.string().min(1),
         recipeInputOverrides: z.record(z.string().min(1), recipeInputSchema).optional(),
+        unconverted: unconvertedRecipeSchema.optional(),
       }),
     )
     .optional(),
+  unconverted: unconvertedRecipeSchema.optional(),
   // The machine count the player set: Up to by default, Exactly with solvePinExact; absent = the solver's choice,
   // shown as Up to waiting for a count, or as Any with solvePinAny.
   solvePin: z.number().nonnegative().optional(),
@@ -822,6 +833,8 @@ export const factoryProjectSchema = z.object({
  * smuggle malformed cards into every design that later pastes it.
  */
 export const boardSelectionPayloadSchema = z.object({
+  // The game version the cards were copied on; absent (saved before payloads carried one) reads 2.9.
+  gameVersion: factoryProjectSchema.shape.gameVersion,
   productionGroups: factoryProjectSchema.shape.productionGroups,
   nodes: z.array(factoryNodeSchema),
   storages: z.array(factoryStorageSchema),

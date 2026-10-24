@@ -248,6 +248,7 @@ export function CardShell({
       data-unset={face.unset ? "" : undefined}
       data-tone={face.tone}
       data-loop={face.loop}
+      data-unconverted={face.unconverted ? "" : undefined}
       style={style}
     >
       <div

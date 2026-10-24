@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Recipe } from "@/lib/model/types";
-import { pickRecipeRefMatch, recipeContentRef, scoreRecipeRefCandidate } from "./recipe-ref-match";
+import { hasSameRecipeNumbers, pickRecipeRefMatch, recipeContentRef, scoreRecipeRefCandidate } from "./recipe-ref-match";
 
 function slot(kind: "item" | "fluid", id: string, amount: number) {
   return { kind, id, amount };
@@ -165,6 +165,15 @@ describe("finding an arcane recipe a plan saved before the grid was exported", (
     expect(match?.candidate.id).toBe("oracle:thaumcraft:arcane:4b2a36407c59a55f");
     expect(match?.exact).toBe(false);
     expect(match?.score).toBeGreaterThanOrEqual(300);
+  });
+
+  it("counts the gridless recipe and the one with its grid as the same content, a cheaper one not", () => {
+    const cheaper = arcane("oracle:thaumcraft:arcane:cheaper", "Vis Reader", [
+      ["item", "minecraft:quartz", 1],
+      ...visCost.map(([kind, id]): Slot => [kind, id, 2]),
+    ], [VIS_READER]);
+    expect(hasSameRecipeNumbers(oldVisReader, newVisReader)).toBe(true);
+    expect(hasSameRecipeNumbers(oldVisReader, cheaper)).toBe(false);
   });
 
   it("a shapeless recipe saved with one wrong item finds its recipe", () => {

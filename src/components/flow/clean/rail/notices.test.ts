@@ -6,7 +6,8 @@ import { unservedPlanVersion } from "@/lib/datasets/dataset-cache";
 import { servedGameVersions } from "@/lib/datasets/new-plan-version";
 import { startLandingRefresh } from "@/lib/datasets/refresh-project-recipes";
 import type { PlanNote, PlanSolveExtras } from "@/lib/solver/plan/types";
-import { buildNotices, byUrgency, planVersionNotice } from "./notices";
+import { buildNotices, byUrgency, planVersionNotice, unconvertedNotice } from "./notices";
+import type { FactoryNode, UnconvertedRecipe } from "@/lib/model/types";
 
 const withExtras = (
   mock: typeof mockForced,
@@ -237,7 +238,7 @@ describe("a plan for a version this site has no recipes for", () => {
       // Read in full: the row wraps instead of fading its rule out.
       wrap: true,
     });
-    // The Convert key waits for conversion: no key that does nothing.
+    // No Convert action handed over, no key: never a key that does nothing.
     expect(notice?.action).toBeUndefined();
 
     // Whatever dataset is active, the plan's stored bodies are never asked about.
@@ -278,5 +279,64 @@ describe("a plan for a version this site has no recipes for", () => {
     expect(unservedPlanVersion({ datasetManifest: manifest, project: { gameVersion: "2.8.1" } })).toBeUndefined();
     expect(unservedPlanVersion({ datasetManifest: undefined, project: { gameVersion: "2.10" } })).toBeUndefined();
     expect(planVersionNotice(undefined, ["2.9"])).toBeUndefined();
+  });
+});
+
+describe("the unconverted cards' notice", () => {
+  const marker = (recipeName: string, machineType: string): UnconvertedRecipe => ({
+    fromGameVersion: "2.9",
+    recipeId: `id-${recipeName}`,
+    recipeName,
+    machineType,
+  });
+  const card = (id: string, extra: Partial<FactoryNode> = {}) =>
+    ({ id, recipeId: `r-${id}`, machineCount: 1, parallel: 1, overclockTier: "LV", enabled: true, position: { x: 0, y: 0 }, ...extra }) as FactoryNode;
+
+  it("is absent on a plan with no marked card", () => {
+    expect(unconvertedNotice({ gameVersion: "2.8.1", nodes: [card("a")] })).toBeUndefined();
+  });
+
+  it("says one card in the singular and lists it", () => {
+    const notice = unconvertedNotice({
+      gameVersion: "2.8.1",
+      nodes: [card("a"), card("b", { unconverted: marker("Raw Silicon Ingot", "Electric Blast Furnace") })],
+    });
+    expect(notice).toMatchObject({
+      id: "unconverted",
+      severity: "warn",
+      text: "1 card has no recipe in GTNH 2.8.1. Its wires count as outside inputs and outputs.",
+      focus: ["b"],
+      cards: [{ id: "b", label: "Electric Blast Furnace: Raw Silicon Ingot" }],
+    });
+  });
+
+  it("a recipe name carrying its map (as dataset names do) is listed once after the machine", () => {
+    const notice = unconvertedNotice({
+      nodes: [card("a", { unconverted: marker("Blast Furnace: Raw Silicon Ingot", "Blast Furnace") })],
+    });
+    expect(notice?.cards).toEqual([{ id: "a", label: "Blast Furnace: Raw Silicon Ingot" }]);
+    // Another name with ": " in it is kept whole.
+    const other = unconvertedNotice({ nodes: [card("b", { unconverted: marker("Tier 2: Circuit", "Assembler") })] });
+    expect(other?.cards).toEqual([{ id: "b", label: "Assembler: Tier 2: Circuit" }]);
+  });
+
+  it("says several cards in the plural and lists every one, a shared card's sections on its line", () => {
+    const notice = unconvertedNotice({
+      nodes: [
+        card("a", { unconverted: marker("Raw Silicon Ingot", "Electric Blast Furnace") }),
+        card("b"),
+        card("c", {
+          extraRecipes: [
+            { recipeId: "x", unconverted: marker("Steel Ingot", "Exothermic Hearth") },
+            { recipeId: "y", unconverted: marker("Iron Ingot", "Exothermic Hearth") },
+          ],
+        }),
+      ],
+    });
+    expect(notice?.text).toBe("2 cards have no recipe in GTNH 2.9. Their wires count as outside inputs and outputs.");
+    expect(notice?.cards).toEqual([
+      { id: "a", label: "Electric Blast Furnace: Raw Silicon Ingot" },
+      { id: "c", label: "Exothermic Hearth: Steel Ingot, Iron Ingot" },
+    ]);
   });
 });

@@ -144,6 +144,7 @@ import { PlanVersionNotice } from "./PlanVersionNotice";
 import { dropFilesOnPlanBoard } from "@/lib/import-export/open-plan-file";
 import { getStorageRoles } from "@/lib/model/storage-role";
 import { useBlueprintStore } from "@/store/blueprint-store";
+import { pastePayloadIntoPlan } from "./paste-payload";
 import {
   playBoardSound,
 } from "@/lib/board-sounds";
@@ -224,6 +225,7 @@ import {
 } from "./board-camera";
 import { type RecipeFlowNode } from "./RecipeNode";
 import { RecipeNodeSwitch } from "./clean/CleanRecipeNode";
+import { unconvertedCardRecipes } from "@/lib/model/unconverted-card";
 import { StorageNodeSwitch } from "./clean/drawer/CleanStorageNode";
 import { CleanDrawerFace } from "./clean/drawer/CleanDrawer";
 import { PlanNoticeSwitch, PlanTopNotices } from "./clean/rail/NoticeBar";
@@ -1919,7 +1921,6 @@ export function FactoryFlow() {
   const selectNode = useFactoryStore((state) => state.selectNode);
   const moveBoardItems = useFactoryStore((state) => state.moveBoardItems);
   const deleteBoardSelection = useFactoryStore((state) => state.deleteBoardSelection);
-  const pasteBoardItems = useFactoryStore((state) => state.pasteBoardItems);
   // Blueprint overwrite picker mode: a shelf row is waiting for the user to
   // click a pocket (banner up top, pockets ringed).
   const overwritePicking = useBlueprintStore((state) => state.overwritePicking);
@@ -2057,6 +2058,18 @@ export function FactoryFlow() {
     [project, result, averageMachineDraw],
   );
 
+  // A card whose recipe was not converted is drawn from its marker and its wires (lib/model/unconverted-card.ts). Only
+  // marked cards pay for it; with none on the plan this is one shared empty map and nothing rebuilds.
+  const unconvertedRecipes = useMemo(
+    () =>
+      unconvertedCardRecipes({
+        nodes: project.nodes,
+        edges: project.edges,
+        recipes: project.recipes,
+        storages: project.storages,
+      }),
+    [project.edges, project.nodes, project.recipes, project.storages],
+  );
   const nodesFromProject = useMemo<BoardFlowNode[]>(() => {
     // An item inside an open board is a React Flow CHILD of the frame: its
     // stored position is already frame-relative, so handing the owner over
@@ -2119,7 +2132,11 @@ export function FactoryFlow() {
       ...project.nodes
         .filter((node) => pocketView.isLevelShown(node.pocketId))
         .map((node): BoardFlowNode => {
-        const recipe = recipesById.get(node.recipeId) ?? getMissingRecipePlaceholder(node.recipeId);
+        // A marked card never shows a body under its id: that body is another card's, of the plan's version.
+        const recipe =
+          (node.unconverted ? unconvertedRecipes.get(node.id) : undefined) ??
+          recipesById.get(node.recipeId) ??
+          getMissingRecipePlaceholder(node.recipeId);
         // Trash cans get their own compact card; a distinct node TYPE (not a
         // branch inside RecipeNode) so the hook order of the big machine card
         // never depends on what recipe a node holds.
@@ -2245,6 +2262,7 @@ export function FactoryFlow() {
     recipesById,
     result.nodes,
     result.storages,
+    unconvertedRecipes,
   ]);
   const [flowNodes, setFlowNodes] = useState<BoardFlowNode[]>(() => nodesFromProject);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
@@ -2828,7 +2846,10 @@ export function FactoryFlow() {
     // recompute against what was just published, including nodes that grew
     // as icons or NEI layout resolved.
     setLayoutVersion((version) => version + 1);
-  }, [obstacleGeometryFingerprint, publishBoardGeometry]);
+    // Another plan on the board publishes too: `boardVirtualizer.useBoard` forgot every box when it landed, and a
+    // plan with the same cards in the same places (a converted copy, the same file opened twice) has the same
+    // fingerprint. Without its boxes no wire is picked to be drawn.
+  }, [obstacleGeometryFingerprint, project.id, publishBoardGeometry]);
   useLayoutEffect(() => {
     // Annotation geometry changed and nothing else: refresh the published
     // maps and touch nothing routing owns. Quiet mid-drag: the drop's
@@ -4920,18 +4941,20 @@ export function FactoryFlow() {
 
     boardClipboard.pasteCount += 1;
     const offset = BOARD_GRID * 2 * boardClipboard.pasteCount;
-    const pastedIds = pasteBoardItems(boardClipboard.payload, { x: offset, y: offset });
-    if (pastedIds.length === 0) {
-      return;
-    }
+    // Cards copied on another game version are converted for this plan's first.
+    void pastePayloadIntoPlan(boardClipboard.payload, { x: offset, y: offset }).then((pastedIds) => {
+      if (pastedIds.length === 0) {
+        return;
+      }
 
-    // The paste takes the selection, so the new cards can be dragged into
-    // place immediately; the store field carries it through the flowNodes
-    // rebuild.
-    setPendingBoardSelection(pastedIds);
-    setSelectedNodeIds(pastedIds);
-    setSelectedEdgeIds([]);
-  }, [pasteBoardItems, setPendingBoardSelection]);
+      // The paste takes the selection, so the new cards can be dragged into
+      // place immediately; the store field carries it through the flowNodes
+      // rebuild.
+      setPendingBoardSelection(pastedIds);
+      setSelectedNodeIds(pastedIds);
+      setSelectedEdgeIds([]);
+    });
+  }, [setPendingBoardSelection]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

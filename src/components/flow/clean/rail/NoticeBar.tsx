@@ -12,7 +12,14 @@ import {
 } from "react";
 import { useFactoryStore } from "@/store/factory-store";
 import { startPromptClock } from "../../virtual/prompt-phase";
-import { buildNotices, byUrgency, type BoardNotice, type NoticeSeverity } from "./notices";
+import {
+  buildNotices,
+  byUrgency,
+  unconvertedNotice,
+  type BoardNotice,
+  type NoticeSeverity,
+} from "./notices";
+import { centreBoardCard } from "@/lib/tasks/open-link";
 import { usePlanVersionNotice } from "../../PlanVersionNotice";
 import { framesReadably } from "./rail-actions";
 import { SparePopupHost } from "./SparePopup";
@@ -70,6 +77,7 @@ export function useBoardNotices(): BoardNotice[] {
     () => undefined,
   );
   const solved = useMemo(() => buildNotices(project, result), [project, result]);
+  const unconverted = useMemo(() => unconvertedNotice(project), [project]);
   return useMemo(() => {
     // What a conversion did to an older plan, on one line, until it is dismissed.
     const converted: BoardNotice[] = conversion
@@ -85,8 +93,16 @@ export function useBoardNotices(): BoardNotice[] {
       : [];
     // A plan for a version this site has no recipes for is said while it is open (PlanVersionNotice).
     // A flash answers what the player just did, so it stays on top; the rest go most pressing first.
-    return [...(flashed ? [flashed] : []), ...byUrgency([...(version ? [version] : []), ...converted, ...solved])];
-  }, [conversion, dismissConversion, flashed, solved, version]);
+    return [
+      ...(flashed ? [flashed] : []),
+      ...byUrgency([
+        ...(version ? [version] : []),
+        ...converted,
+        ...(unconverted ? [unconverted] : []),
+        ...solved,
+      ]),
+    ];
+  }, [conversion, dismissConversion, flashed, solved, unconverted, version]);
 }
 
 export function NoticeRow({
@@ -113,6 +129,7 @@ export function NoticeRow({
       data-severity={notice.severity}
       data-alarm={alarm ? (notice.loop ?? "") : undefined}
       data-wrap={notice.wrap ? "" : undefined}
+      data-cards={notice.cards ? "" : undefined}
       role={alarm ? "alert" : "status"}
     >
       {notice.tag ? <span className="rail-notice-tag">{notice.tag}</span> : null}
@@ -144,6 +161,24 @@ export function NoticeRow({
         >
           {notice.action.label}
         </span>
+      ) : null}
+      {notice.cards ? (
+        <div className="rail-notice-cards nowheel">
+          {notice.cards.map((card) => (
+            <span
+              key={card.id}
+              role="button"
+              tabIndex={0}
+              className="rail-notice-card"
+              onClick={() => centreBoardCard(card.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") centreBoardCard(card.id);
+              }}
+            >
+              {card.label}
+            </span>
+          ))}
+        </div>
       ) : null}
       {notice.dismiss ? (
         <span

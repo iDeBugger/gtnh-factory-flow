@@ -1,5 +1,6 @@
 "use client";
 
+import { pastePayloadIntoPlan } from "./paste-payload";
 import { useDropdownDismiss } from "@/lib/hooks/use-dropdown-dismiss";
 
 import { Position, type Node, type NodeProps, useReactFlow } from "@xyflow/react";
@@ -445,10 +446,11 @@ function BoardNodeComponent({
     if (!payload) {
       return;
     }
-    const pastedIds = state.pasteBoardItems(payload, { x: frameWidth + 40, y: 0 });
-    if (pastedIds.length > 0) {
-      state.setPendingBoardSelection(pastedIds);
-    }
+    void pastePayloadIntoPlan(payload, { x: frameWidth + 40, y: 0 }).then((pastedIds) => {
+      if (pastedIds.length > 0) {
+        useFactoryStore.getState().setPendingBoardSelection(pastedIds);
+      }
+    });
   };
 
   const beginResize = useBoardResize(pocket, frameWidth, frameHeight);

@@ -64,7 +64,23 @@ Every save goes through `persistCanvas` in design-store.ts:
 - A version this site serves no dataset for (`unservedPlanVersion`: a file stamped "2.10") opens with its stored recipe
   bodies, is never refreshed, and shows `PlanVersionNotice` ("This plan is for GTNH <v>. This site has recipes
   for ..."); the recipe browser, the item list and the crop and mob lists say "Recipes for GTNH <v> are not on this
-  site." The notice's Convert key shows only once conversion hands it an action.
+  site." The notice's key, Convert to GTNH 2.9, shows while this site serves 2.9.
+- Convert (`src/lib/datasets/convert-action.ts`: the notice's key, and a tab menu's "Convert to GTNH <v>" row for every
+  served version but the plan's, outside the community rows) loads the target's dataset (`ensureDatasetFor`),
+  converts a clone (`convertProjectToVersion`) and opens it with `importProjectAsDesign`. The source tab is not
+  opened, switched or written: the open tab converts what is on the board, another tab its stored record. One
+  conversion runs at a time: while it runs the source tab shows the working mark and the key and row read
+  "Converting to GTNH <v>...". A failure flashes "Couldn't convert the plan. Try again.", opens nothing and leaves
+  Welcome or the library where they were.
+- Paste, blueprints and duplicated boards: a `BoardClipboardPayload` carries the version it was copied on
+  (`captureBoardSelection` stamps it; absent, as in a blueprint saved before, reads 2.9). Every path that pastes runs
+  `preparePayloadForPlan` (`src/lib/datasets/convert-payload-version.ts`) first: Ctrl+V and board duplicates through
+  `pastePayloadIntoPlan` (`components/flow/paste-payload.ts`, which pastes nothing if the plan changed meanwhile),
+  blueprints in `useBlueprintStore.load` / `downloadPublic` for the plan on the board at call time. Another
+  version's payload converts like a plan (matched bodies swapped, the rest marked `unconverted`); a plan whose
+  version is not served gets every dataset card marked. `pasteBoardItems` refuses a payload of another version as a
+  safety net and says "Those cards are from GTNH <v> and could not be pasted." Exam:
+  `convert-payload-version.test.ts`, the "pasting across game versions" block of `factory-store.test.ts`.
 - New plans: every `addDesign` / `addTaskBoard` caller passes `readNewPlanVersion(manifest)`
   (`src/lib/datasets/new-plan-version.ts`), and so do the blank plans the library makes itself (the seed after the
   last plan is deleted, the first-run seed). The tour's sandbox plan stays unstamped on purpose: it is a scratch 2.9

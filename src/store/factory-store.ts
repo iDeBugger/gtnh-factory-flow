@@ -23,14 +23,14 @@ import {
   pickDatasetVersionFor,
 } from "@/lib/datasets/remote";
 import { DatasetCache, datasetServesPlan, refusesRecipeOnPlan } from "@/lib/datasets/dataset-cache";
-import { DEFAULT_GAME_VERSION, planGameVersion, type GameVersion } from "@/lib/model/game-version";
+import { DEFAULT_GAME_VERSION, gameVersionLabel, planGameVersion, type GameVersion } from "@/lib/model/game-version";
 import {
   canonicalizeResourceHandleId,
   dedupeEdgeWires,
   findDuplicateEdge,
 } from "@/lib/model/edge-identity";
 import { applySettingMemory } from "@/lib/model/setting-memory";
-import { recipeMapName } from "@/lib/model/recipe-rules";
+import { getRecipeMachineHandlers, recipeMapName } from "@/lib/model/recipe-rules";
 import {
   edgeSectionAt,
   getSharedMachineHandlers,
@@ -41,8 +41,10 @@ import {
   sectionHandleId,
   sectionNodeView,
   sharedHandlersWith,
+  parseSectionNodeId,
   splitSectionHandleId,
 } from "@/lib/model/shared-machine";
+import { sectionMarker, unconvertedPlaceholderRecipe } from "@/lib/model/unconverted-card";
 import {
   convertCellWiresWithNotice,
   normalizeLoadedProjectWithNotice,
@@ -857,6 +859,16 @@ export interface BoardClipboardPayload {
   pockets: FactoryPocket[];
   edges: FactoryEdge[];
   recipes: Recipe[];
+  /**
+   * The game version the recipes were copied on; absent (a blueprint saved before payloads carried one) reads 2.9.
+   * A payload pastes only into a plan of its version: `preparePayloadForPlan` converts one from another first.
+   */
+  gameVersion?: GameVersion;
+}
+
+/** What a paste of another version's cards says when they reach the board unconverted. */
+export function otherVersionPasteText(version: GameVersion): string {
+  return `Those cards are from ${gameVersionLabel(version)} and could not be pasted.`;
 }
 
 /**
@@ -887,6 +899,7 @@ export function captureBoardSelection(
   // Snapshotted, not referenced: the capture must not change when the
   // originals are edited or deleted afterwards.
   return structuredClone({
+    gameVersion: planGameVersion(project),
     productionGroups: project.productionGroups?.filter((group) => groupIds.has(group.id)),
     nodes,
     storages,
@@ -1586,13 +1599,20 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
   },
   beginRecipeRefactor: (nodeId) => {
     set((state) => {
-      const node = state.project.nodes.find((entry) => entry.id === nodeId);
-      const recipe = state.project.recipes.find((entry) => entry.id === node?.recipeId);
+      // A recipe that was not converted (lib/model/unconverted-card.ts) has no body of the plan's version: the search
+      // asks for what its wires carry instead, and `nodeId` may name a shared card's section (`card#rN`).
+      const { nodeId: cardId, section } = parseSectionNodeId(nodeId);
+      const card = state.project.nodes.find((entry) => entry.id === cardId);
+      const marked = card ? sectionMarker(card, section) !== undefined : false;
+      const node = card && marked ? sectionNodeView(card, section) : state.project.nodes.find((entry) => entry.id === nodeId);
+      const recipe = marked
+        ? unconvertedPlaceholderRecipe(state.project, card!, section)
+        : state.project.recipes.find((entry) => entry.id === node?.recipeId);
       if (!node || !recipe) {
         return state;
       }
 
-      const effectiveRecipe = applyRecipeInputOverrides(recipe, node);
+      const effectiveRecipe = marked ? recipe : applyRecipeInputOverrides(recipe, node);
       const seed: RecipeSeedClause[] = [];
       const seen = new Set<string>();
       const push = (role: RecipeSeedClause["role"], resource: ResourceAmount) => {
@@ -1658,7 +1678,7 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
           iconPath: primary.iconPath,
           iconAtlas: primary.iconAtlas,
           dominantColor: primary.dominantColor,
-          anchorNodeId: nodeId,
+          anchorNodeId: cardId,
         },
         recipeBrowserMode: "recipes" as const,
         recipeBrowserSeed: seed,
@@ -1669,7 +1689,7 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
         // was open) is one step back.
         recipeBrowserBack: pushBrowserPage(state.recipeBrowserBack, currentBrowserPage(state)),
         recipeBrowserForward: [],
-        selectedNodeId: nodeId,
+        selectedNodeId: cardId,
       };
     });
   },
@@ -3698,6 +3718,13 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
     });
   },
   pasteBoardItems: (clipboard, offset) => {
+    // The safety net: a payload from another game version would land its bodies on this plan. Every paste path
+    // converts first (`preparePayloadForPlan`); one that did not pastes nothing.
+    const copiedOn = planGameVersion(clipboard);
+    if (copiedOn !== planGameVersion(get().project)) {
+      set({ planNotice: { origin: "plan", text: otherVersionPasteText(copiedOn), details: [] } });
+      return [];
+    }
     const pastedIds: string[] = [];
     set((state) => {
       // Plan mode has no buffers, ratios, pool sides or groups, and cells meet
@@ -3746,8 +3773,9 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
         const recipe =
           payloadRecipesById.get(node.recipeId) ??
           state.project.recipes.find((entry) => entry.id === node.recipeId);
-        // A node whose recipe survived nowhere would paste as a broken card.
-        if (!recipe) {
+        // A node whose recipe survived nowhere would paste as a broken card. A card marked unconverted has no
+        // body on purpose: it is drawn from its marker and its wires.
+        if (!recipe && !node.unconverted) {
           continue;
         }
         const clone = structuredClone(node);
@@ -3759,15 +3787,23 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
         clone.position = placeAt(node.position, clone.pocketId);
         // Custom rate nodes own their recipe (the dialed rate lives on it) -
         // same rule as duplicateNode, or both cards would share one dial.
-        if (isCustomRateRecipe(recipe)) {
+        if (recipe && isCustomRateRecipe(recipe)) {
           const recipeClone = { ...structuredClone(recipe), id: createId("recipe") };
           clone.recipeId = recipeClone.id;
           addedRecipes.push(recipeClone);
-        } else if (!projectRecipeIds.has(recipe.id)) {
+        } else if (recipe && !projectRecipeIds.has(recipe.id)) {
           // Pasting into a design that has never seen this recipe: the
           // clipboard carries the copy, exactly like plan import does.
           addedRecipes.push(structuredClone(recipe));
           projectRecipeIds.add(recipe.id);
+        }
+        // A shared card's other sections need their bodies too.
+        for (const extra of node.extraRecipes ?? []) {
+          const body = payloadRecipesById.get(extra.recipeId);
+          if (body && !projectRecipeIds.has(body.id)) {
+            addedRecipes.push(structuredClone(body));
+            projectRecipeIds.add(body.id);
+          }
         }
         nodes.push(clone);
       }
@@ -5461,15 +5497,16 @@ function nodeSectionForHandle(
 }
 
 /**
- * The wires on a card's first recipe, and which of them the new recipe can
- * still serve, re-docked onto its matching slot. A shared machine's other
+ * The wires on one recipe of a card (its first, unless `section` names a
+ * shared machine's other one), and which of them the new recipe can still
+ * serve, re-docked onto its matching slot under the same section. The other
  * sections and their wires are not touched.
  */
-function carryWiresOntoRecipe(edges: FactoryEdge[], nodeId: string, recipe: Recipe) {
+function carryWiresOntoRecipe(edges: FactoryEdge[], nodeId: string, recipe: Recipe, section = 0) {
   const touching = edges.filter(
     (edge) =>
-      (edge.source === nodeId && edgeSectionAt(edge, nodeId, "source") === 0) ||
-      (edge.target === nodeId && edgeSectionAt(edge, nodeId, "target") === 0),
+      (edge.source === nodeId && edgeSectionAt(edge, nodeId, "source") === section) ||
+      (edge.target === nodeId && edgeSectionAt(edge, nodeId, "target") === section),
   );
   const carried: FactoryEdge[] = [];
   for (const edge of touching) {
@@ -5482,7 +5519,10 @@ function carryWiresOntoRecipe(edges: FactoryEdge[], nodeId: string, recipe: Reci
       if (outputIndex >= 0) {
         carried.push({
           ...edge,
-          sourceHandle: makeResourceHandleId("output", recipe.outputs[outputIndex], outputIndex),
+          sourceHandle: sectionHandleId(
+            section,
+            makeResourceHandleId("output", recipe.outputs[outputIndex], outputIndex),
+          ),
         });
       }
     } else {
@@ -5492,7 +5532,10 @@ function carryWiresOntoRecipe(edges: FactoryEdge[], nodeId: string, recipe: Reci
       if (inputIndex >= 0) {
         carried.push({
           ...edge,
-          targetHandle: makeResourceHandleId("input", recipe.inputs[inputIndex], inputIndex),
+          targetHandle: sectionHandleId(
+            section,
+            makeResourceHandleId("input", recipe.inputs[inputIndex], inputIndex),
+          ),
         });
       }
     }
@@ -5558,11 +5601,20 @@ function refactorNodeToState(
   options?: { machineHandlerId?: string; machineConfigTiers?: Record<string, string> },
 ): Partial<FactoryStore> {
   if (refusesDatasetRecipe(state, recipe)) return state;
-  const node = state.project.nodes.find((entry) => entry.id === nodeId);
+  // A shared card's section (`card#rN`): only a recipe that was not converted is picked for one.
+  // A shared card's own recipe takes the same care: the machine runs the card's other recipes too.
+  const { nodeId: cardId, section } = parseSectionNodeId(nodeId);
+  const card = state.project.nodes.find((entry) => entry.id === cardId);
+  if (card && (section > 0 || (card.unconverted && isSharedMachineNode(card)))) {
+    return refactorSectionToState(state, card, section, recipe, options);
+  }
+  if (section > 0) return state;
+  const node = card;
   if (!node) {
     return addRecipeNodeToState(state, recipe, undefined, { ...options, focusCamera: true });
   }
-  if (node.recipeId === recipe.id) {
+  // A card whose recipe was not converted takes even the same id: the pick is the body of the plan's version.
+  if (node.recipeId === recipe.id && !node.unconverted) {
     return state;
   }
 
@@ -5581,7 +5633,10 @@ function refactorNodeToState(
     return addConnectedRecipeNodeToState(state, recipe, nodeId, context, options);
   }
 
-  const oldRecipe = state.project.recipes.find((entry) => entry.id === node.recipeId);
+  // A marked card's id may still hold another card's body; it was never this card's recipe.
+  const oldRecipe = node.unconverted
+    ? undefined
+    : state.project.recipes.find((entry) => entry.id === node.recipeId);
   const recipeAlreadyInProject = state.project.recipes.some((entry) => entry.id === recipe.id);
   const projectBase: FactoryProject = {
     ...state.project,
@@ -5593,7 +5648,7 @@ function refactorNodeToState(
     nodes: state.project.nodes.map((entry) =>
       entry.id === nodeId
         ? {
-            ...entry,
+            ...withoutUnconverted(entry),
             recipeId: recipe.id,
             machineHandlerId: spawnHandler?.id,
             overclockTier: spawnHandler?.minimumTier ?? recipe.minimumTier,
@@ -5639,6 +5694,90 @@ function refactorNodeToState(
       nodeIds: [nodeId],
       token: (state.boardFocusRequest?.token ?? 0) + 1,
     },
+    lastResult: solveBooks(project),
+  });
+}
+
+/** The card with its own marker gone: the pick is a recipe of the plan's version. */
+function withoutUnconverted(node: FactoryNode): FactoryNode {
+  if (!node.unconverted) return node;
+  const { unconverted: _marker, ...rest } = node;
+  void _marker;
+  return rest;
+}
+
+/**
+ * The pick for a shared card's recipe that was not converted (any section): it takes that section's place on the
+ * machine, which must run it and every other recipe on the card (a marked one has no body to ask, so it is not
+ * asked); the section's wires that still fit re-dock and the marker goes. When the machine cannot run it, or none of
+ * the section's wires would survive, the pick lands beside the card instead, as any refactor's does.
+ */
+function refactorSectionToState(
+  state: FactoryStore,
+  card: FactoryNode,
+  section: number,
+  recipe: Recipe,
+  options?: { machineHandlerId?: string; machineConfigTiers?: Record<string, string> },
+): Partial<FactoryStore> {
+  const extra = section === 0 ? card : card.extraRecipes?.[section - 1];
+  // Only a marked recipe is picked for this way; any other section stays as it is.
+  if (!extra?.unconverted) {
+    return state;
+  }
+  let handlers = getRecipeMachineHandlers(recipe);
+  for (const { section: other, node: view } of listNodeSections(card)) {
+    if (other === section || view.unconverted) continue;
+    const otherRecipe = state.project.recipes.find((entry) => entry.id === view.recipeId);
+    if (!otherRecipe) continue;
+    const ids = new Set(getRecipeMachineHandlers(otherRecipe).map((handler) => handler.id));
+    handlers = handlers.filter((handler) => ids.has(handler.id));
+  }
+  const { touching, carried } = carryWiresOntoRecipe(state.project.edges, card.id, recipe, section);
+  if (handlers.length === 0 || (touching.length > 0 && carried.length === 0)) {
+    const context: RecipeInputContextResource = {
+      kind: recipe.outputs[0]?.kind ?? "item",
+      id: recipe.outputs[0]?.id ?? recipe.id,
+      mode: "uses",
+    };
+    return addConnectedRecipeNodeToState(state, recipe, card.id, context, options);
+  }
+  const handler =
+    handlers.find((entry) => entry.id === card.machineHandlerId) ??
+    handlers.find((entry) => entry.id === options?.machineHandlerId) ??
+    handlers[0]!;
+  const recipeAlreadyInProject = state.project.recipes.some((entry) => entry.id === recipe.id);
+  const projectBase: FactoryProject = {
+    ...state.project,
+    recipes: recipeAlreadyInProject
+      ? state.project.recipes.map((entry) =>
+          entry.id === recipe.id ? mergeRecipe(entry, recipe) : entry,
+        )
+      : [...state.project.recipes, recipe],
+    nodes: state.project.nodes.map((entry) =>
+      entry.id === card.id
+        ? section === 0
+          ? {
+              ...withoutUnconverted(entry),
+              recipeId: recipe.id,
+              recipeInputOverrides: undefined,
+              ...(handler.id !== card.machineHandlerId ? { machineHandlerId: handler.id } : {}),
+            }
+          : {
+              ...entry,
+              ...(handler.id !== card.machineHandlerId ? { machineHandlerId: handler.id } : {}),
+              extraRecipes: (entry.extraRecipes ?? []).map((other, index) =>
+                index === section - 1 ? { recipeId: recipe.id } : other,
+              ),
+            }
+        : entry,
+    ),
+    edges: [...state.project.edges.filter((edge) => !touching.includes(edge)), ...carried],
+  };
+  const project = touchProject(pruneOrphanStorages(applyEdgeInputOverrides(projectBase, carried)));
+  return withProjectHistory(state, {
+    project,
+    selectedNodeId: card.id,
+    selectedRecipeId: recipe.id,
     lastResult: solveBooks(project),
   });
 }
@@ -5975,6 +6114,32 @@ function isFactoryEdgeStillValid(project: FactoryProject, edge: FactoryEdge): bo
 
   if ((!sourceNode && !sourceStorage) || (!targetNode && !targetStorage)) {
     return false;
+  }
+
+  // A recipe that was not converted has no body: its wires ARE its ports (lib/model/unconverted-card.ts), so its end
+  // of a wire always holds, and the wire stands while the other end still makes or takes what it carries.
+  if (sourceNode?.unconverted || targetNode?.unconverted) {
+    const wired = { kind: edge.resourceKind, id: edge.resourceId };
+    const sourceHolds =
+      sourceNode?.unconverted !== undefined ||
+      (sourceStorage
+        ? wired.kind === sourceStorage.kind && wired.id === sourceStorage.resourceId
+        : sourceNode !== undefined &&
+          sourceRecipe !== undefined &&
+          applyRecipeInputOverrides(sourceRecipe, sourceNode).outputs.some((output) =>
+            resourceMatchesInput(wired, output),
+          ));
+    const targetHolds =
+      targetNode?.unconverted !== undefined ||
+      (targetStorage
+        ? wired.kind === targetStorage.kind && wired.id === targetStorage.resourceId
+        : targetNode !== undefined &&
+          targetRecipe !== undefined &&
+          (isTrashRecipe(targetRecipe) ||
+            applyRecipeInputOverrides(targetRecipe, targetNode).inputs.some(
+              (input) => isRecipeInputConsumed(input) && resourceMatchesInput(wired, input),
+            )));
+    return sourceHolds && targetHolds;
   }
 
   // Trash cans have no recipe slots to match: a line into one stays valid as

@@ -1904,6 +1904,129 @@ describe("recipe search wiring and refactor", () => {
     expect(useFactoryStore.getState().recipeBrowserRefactorNodeId).toBe("mid");
     expect(useFactoryStore.getState().recipeBrowserSeed?.length).toBeGreaterThan(0);
   });
+
+  // A card whose recipe was not converted to the plan's version: no body, a marker, its wires.
+  const UNCONVERTED_PROJECT = (): FactoryProject => {
+    const project = REFACTOR_PROJECT();
+    project.gameVersion = "2.9";
+    project.recipes = project.recipes.filter((recipe) => recipe.id !== "macerator");
+    project.nodes = project.nodes.map((node) =>
+      node.id === "mid"
+        ? {
+            ...node,
+            unconverted: {
+              fromGameVersion: "2.8.1",
+              recipeId: "macerator",
+              recipeName: "Macerate",
+              machineType: "Macerator",
+            },
+          }
+        : node,
+    );
+    return project;
+  };
+  const MACERATE_29: Recipe = {
+    id: "macerator",
+    name: "Macerate",
+    machineType: "Macerator",
+    minimumTier: "LV",
+    durationTicks: 80,
+    eut: 8,
+    inputs: [{ kind: "item", id: "ore", amount: 1 }],
+    outputs: [{ kind: "item", id: "dust", amount: 2 }],
+  };
+
+  it("seeds the refactor of an unconverted card with no recipe body from its wires", () => {
+    useFactoryStore.getState().clearResourceBrowser();
+    useFactoryStore.getState().setProject(UNCONVERTED_PROJECT());
+    useFactoryStore.getState().beginRecipeRefactor("mid");
+    const state = useFactoryStore.getState();
+    expect(state.recipeBrowserRefactorNodeId).toBe("mid");
+    expect(state.recipeBrowserResource?.anchorNodeId).toBe("mid");
+    // What comes in is taken, what goes out is made: the old body's lube has no wire, so it is not asked for.
+    expect(state.recipeBrowserSeed).toEqual([
+      expect.objectContaining({ role: "takes", kind: "item", id: "ore" }),
+      expect.objectContaining({ role: "makes", kind: "item", id: "dust" }),
+    ]);
+  });
+
+  it("an edit elsewhere keeps an unconverted card's wires: they are its ports", () => {
+    useFactoryStore.getState().setProject(UNCONVERTED_PROJECT());
+    useFactoryStore.getState().updateNode("sink", { machineCount: 2 });
+    expect(useFactoryStore.getState().project.edges.map((edge) => edge.id).sort()).toEqual(["e-dust", "e-ore"]);
+  });
+
+  it("the pick clears the marker, keeps the wires and the card joins the solve, even under the same id", () => {
+    useFactoryStore.getState().setProject(UNCONVERTED_PROJECT());
+    expect(useFactoryStore.getState().lastResult?.nodes["mid"]?.unconverted).toBe(true);
+
+    useFactoryStore.getState().refactorNodeWithRecipe("mid", MACERATE_29);
+
+    const state = useFactoryStore.getState();
+    const mid = state.project.nodes.find((entry) => entry.id === "mid")!;
+    expect(mid.recipeId).toBe("macerator");
+    expect("unconverted" in mid).toBe(false);
+    expect(mid.position).toEqual({ x: 440, y: 0 });
+    expect(state.project.recipes.find((entry) => entry.id === "macerator")?.durationTicks).toBe(80);
+    expect(state.project.edges.map((edge) => edge.id).sort()).toEqual(["e-dust", "e-ore"]);
+    const result = state.lastResult?.nodes["mid"];
+    expect(result?.unconverted).toBeUndefined();
+    expect(result?.status).not.toBe("missing-recipe");
+    expect(result?.recipeName).toBe("Macerate");
+  });
+
+  it("picks a recipe for a shared card's unconverted section in its place", () => {
+    const project = REFACTOR_PROJECT();
+    project.gameVersion = "2.9";
+    // "mid" runs the macerator and, on section 1, a recipe that was not converted, wired by its r1: handles.
+    project.nodes = project.nodes.map((node) =>
+      node.id === "mid"
+        ? {
+            ...node,
+            extraRecipes: [
+              {
+                recipeId: "old-grind",
+                unconverted: {
+                  fromGameVersion: "2.8.1",
+                  recipeId: "old-grind",
+                  recipeName: "Grind",
+                  machineType: "Macerator",
+                },
+              },
+            ],
+          }
+        : node,
+    );
+    project.edges.push({
+      id: "e-ore-r1",
+      source: "src",
+      target: "mid",
+      targetHandle: "r1:input:item:ore",
+      resourceKind: "item",
+      resourceId: "ore",
+    });
+    useFactoryStore.getState().clearResourceBrowser();
+    useFactoryStore.getState().setProject(project);
+
+    useFactoryStore.getState().beginRecipeRefactor("mid#r1");
+    expect(useFactoryStore.getState().recipeBrowserRefactorNodeId).toBe("mid#r1");
+    expect(useFactoryStore.getState().recipeBrowserSeed).toEqual([
+      expect.objectContaining({ role: "takes", kind: "item", id: "ore" }),
+    ]);
+
+    const grind: Recipe = { ...MACERATE_29, id: "grind-29", name: "Grind", outputs: [{ kind: "item", id: "grit", amount: 1 }] };
+    useFactoryStore.getState().refactorNodeWithRecipe("mid#r1", grind);
+
+    const state = useFactoryStore.getState();
+    const mid = state.project.nodes.find((entry) => entry.id === "mid")!;
+    expect(mid.recipeId).toBe("macerator");
+    expect(mid.extraRecipes).toHaveLength(1);
+    expect(mid.extraRecipes![0]!.recipeId).toBe("grind-29");
+    expect(mid.extraRecipes![0]!.unconverted).toBeUndefined();
+    const wire = state.project.edges.find((edge) => edge.id === "e-ore-r1");
+    expect(wire?.targetHandle).toBe("r1:input:item:ore:0");
+    expect(state.lastResult?.nodes["mid#r1"]?.unconverted).toBeUndefined();
+  });
 });
 
 describe("factory machine count optimization", () => {
@@ -5040,5 +5163,79 @@ describe("the active dataset follows the open plan", () => {
       "/m.json",
     );
     expect(useFactoryStore.getState().selectedDatasetVersionId).toBe("local-2.9.0-rc-2");
+  });
+});
+
+describe("pasting across game versions", () => {
+  const recipe = (datasetVersionId: string): Recipe => ({
+    id: "oracle:gregtech:gt-recipe-macerator:aaaa000011112222",
+    name: "Macerator: Silicon Dust",
+    machineType: "Macerator",
+    minimumTier: "LV",
+    durationTicks: 100,
+    eut: 2,
+    inputs: [{ kind: "item", id: "ore", amount: 1 }],
+    outputs: [{ kind: "item", id: "dust", amount: 2 }],
+    source: { datasetVersionId, recipeMap: "Macerator" },
+  });
+  const plan = (gameVersion: string | undefined, datasetVersionId: string): FactoryProject => ({
+    schemaVersion: PROJECT_SCHEMA_VERSION,
+    id: `plan-${gameVersion ?? "old"}`,
+    name: "plan",
+    ...(gameVersion ? { gameVersion } : {}),
+    planMode: true,
+    fuelProfiles: [],
+    recipes: [recipe(datasetVersionId)],
+    nodes: [{ id: "n1", recipeId: recipe(datasetVersionId).id, position: { x: 0, y: 0 }, machineCount: 1, parallel: 1, overclockTier: "LV", enabled: true }],
+    edges: [],
+  });
+
+  beforeEach(() => {
+    useFactoryStore.setState({ planNotice: null });
+  });
+
+  it("captures the plan's version with the cards", () => {
+    expect(captureBoardSelection(plan(undefined, "local-2.9.0-rc-2"), ["n1"])?.gameVersion).toBe("2.9");
+    expect(captureBoardSelection(plan("2.8.1", "local-2.8.1"), ["n1"])?.gameVersion).toBe("2.8.1");
+  });
+
+  it("pasteBoardItems refuses an unprepared payload from another family", () => {
+    const copied = captureBoardSelection(plan("2.9", "local-2.9.0-rc-2"), ["n1"])!;
+    const { gameVersion: _stamp, ...old } = copied;
+    const target = { ...plan("2.8.1", "local-2.8.1"), recipes: [], nodes: [] };
+    useFactoryStore.getState().setProject(target);
+    const before = useFactoryStore.getState().project;
+    expect(useFactoryStore.getState().pasteBoardItems(copied, { x: 40, y: 40 })).toEqual([]);
+    // A payload with no field reads 2.9 and is refused the same way.
+    expect(useFactoryStore.getState().pasteBoardItems(old, { x: 40, y: 40 })).toEqual([]);
+    expect(useFactoryStore.getState().project).toBe(before);
+    expect(useFactoryStore.getState().undoHistory).toHaveLength(0);
+  });
+
+  it("the safety-net refusal shows its notice", () => {
+    const copied = captureBoardSelection(plan("2.9", "local-2.9.0-rc-2"), ["n1"])!;
+    useFactoryStore.getState().setProject({ ...plan("2.8.1", "local-2.8.1"), recipes: [], nodes: [] });
+    useFactoryStore.getState().pasteBoardItems(copied, { x: 0, y: 0 });
+    expect(useFactoryStore.getState().planNotice?.text).toBe("Those cards are from GTNH 2.9 and could not be pasted.");
+  });
+
+  it("a shared card pasted into another plan brings every section's recipe", () => {
+    const second = { ...recipe("local-2.8.1"), id: "second-recipe", name: "Macerator: Other" };
+    const board = plan("2.8.1", "local-2.8.1");
+    board.recipes.push(second);
+    board.nodes[0]!.extraRecipes = [{ recipeId: second.id }];
+    const copied = captureBoardSelection(board, ["n1"])!;
+    useFactoryStore.getState().setProject({ ...plan("2.8.1", "local-2.8.1"), id: "other", recipes: [], nodes: [] });
+    expect(useFactoryStore.getState().pasteBoardItems(copied, { x: 0, y: 0 })).toHaveLength(1);
+    expect(useFactoryStore.getState().project.recipes.map((entry) => entry.id).sort()).toEqual(
+      [recipe("local-2.8.1").id, second.id].sort(),
+    );
+  });
+
+  it("a paste of the plan's own version lands, an unstamped one on an unstamped plan too", () => {
+    useFactoryStore.getState().setProject(plan(undefined, "local-2.9.0-rc-2"));
+    const { gameVersion: _stamp, ...old } = captureBoardSelection(plan("2.9", "local-2.9.0-rc-2"), ["n1"])!;
+    expect(useFactoryStore.getState().pasteBoardItems(old, { x: 40, y: 40 })).toHaveLength(1);
+    expect(useFactoryStore.getState().planNotice).toBeNull();
   });
 });

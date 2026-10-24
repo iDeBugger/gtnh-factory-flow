@@ -403,9 +403,6 @@ function helpEntries({
     { label: "Controls and shortcuts", onSelect: openControls },
     { label: "Welcome", ruleAbove: true, onSelect: () => HelpLinks.openWelcome() },
     { label: unreadNotes ? "What's new *" : "What's new", detail: HelpLinks.version, onSelect: onChangelog },
-    ...(isModAndCommunityOn()
-      ? [{ label: "Download the mod", detail: "GTNH 2.9", onSelect: () => HelpLinks.open(HelpLinks.mod) }]
-      : []),
     { label: "Source on GitHub", onSelect: () => HelpLinks.open(HelpLinks.github) },
     { label: "Discord thread", onSelect: () => HelpLinks.open(HelpLinks.discord) },
     { label: "Support on Ko-fi", onSelect: () => HelpLinks.open(HelpLinks.kofi) },

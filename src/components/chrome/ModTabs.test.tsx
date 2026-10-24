@@ -12,6 +12,12 @@ import { writeNewPlanVersion } from "@/lib/datasets/new-plan-version";
 import type { DatasetManifest } from "@/lib/datasets/types";
 import { ModTabs } from "./ModTabs";
 
+const convertPlan = vi.hoisted(() => vi.fn(async () => true));
+vi.mock("@/lib/datasets/convert-action", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/datasets/convert-action")>()),
+  convertPlan,
+}));
+
 const viewport = vi.hoisted(() => ({ compact: false }));
 vi.mock("@/lib/compact-view", () => ({ isCompactViewport: () => viewport.compact, useIsCompactViewport: () => viewport.compact }));
 
@@ -391,5 +397,48 @@ describe("plans on two game versions", () => {
     render(<ModTabs {...props} />);
     fireEvent.click(screen.getByLabelText("New plan"));
     expect(rows().some((row) => row?.startsWith("New plans"))).toBe(false);
+  });
+
+  it("a tab's menu converts its plan to the other served version, with the community switched off", async () => {
+    useFactoryStore.setState({ datasetManifest: bothVersions });
+    useDesignStore.setState({ designs: [design("a", "Benzene"), design("b", "Old steel", { gameVersion: "2.8.1" })], activeDesignId: "a" });
+    const stored = { ...useFactoryStore.getState().project, gameVersion: "2.8.1", name: "Old steel" };
+    vi.spyOn(await import("@/lib/designs/design-storage"), "readDesign").mockResolvedValue({ ...design("b", "Old steel"), project: stored } as never);
+    render(<ModTabs {...props} />);
+    fireEvent.contextMenu(screen.getByText("Old steel"));
+    expect(rows()).toContain("Convert to GTNH 2.9as a new plan");
+    expect(rows().some((row) => row?.startsWith("Convert to GTNH 2.8.1"))).toBe(false);
+    await act(async () => {
+      fireEvent.click(menuItem("Convert to GTNH 2.9"));
+    });
+    // Another tab is converted from its stored plan, without opening it.
+    expect(convertPlan).toHaveBeenCalledWith(stored, "2.9", "b");
+    expect(actions.switchToDesign).not.toHaveBeenCalled();
+    fireEvent.contextMenu(screen.getByText("Benzene"));
+    expect(rows()).toContain("Convert to GTNH 2.8.1as a new plan");
+  });
+
+  it("a conversion that opens nothing leaves the library where it was", async () => {
+    useFactoryStore.setState({ datasetManifest: bothVersions });
+    useDesignStore.setState({ designs: [design("a", "Benzene"), design("b", "Old steel", { gameVersion: "2.8.1" })], activeDesignId: "b" });
+    convertPlan.mockResolvedValueOnce(false);
+    openLibrary();
+    render(<ModTabs {...props} />);
+    fireEvent.contextMenu(screen.getByText("Old steel"));
+    await act(async () => {
+      fireEvent.click(menuItem("Convert to GTNH 2.9"));
+    });
+    expect(convertPlan).toHaveBeenCalled();
+    expect(readLibraryTabState().active).toBe(true);
+  });
+
+  it("a site with one version has no Convert row on its plans; a plan for a version it does not serve converts to it", () => {
+    useFactoryStore.setState({ datasetManifest: { ...bothVersions, versions: [bothVersions.versions[0]!] } });
+    useDesignStore.setState({ designs: [design("a", "Benzene"), design("b", "Old steel", { gameVersion: "2.8.1" })] });
+    render(<ModTabs {...props} />);
+    fireEvent.contextMenu(screen.getByText("Benzene"));
+    expect(rows().some((row) => row?.startsWith("Convert"))).toBe(false);
+    fireEvent.contextMenu(screen.getByText("Old steel"));
+    expect(rows().filter((row) => row?.startsWith("Convert"))).toEqual(["Convert to GTNH 2.9as a new plan"]);
   });
 });

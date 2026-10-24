@@ -121,6 +121,50 @@ export function readAnswer(model: PlanModel, answer: Answer): PlanReading {
     flowOf.set(link.edgeId, flow);
   }
 
+  // A wire between an unconverted card and a buffer: its outside drawer sits on the buffer's takers (or makers), and
+  // at each such port it moves what the port takes (or makes) beyond its wires, the buffer and any other drawer. That
+  // passes through the buffer on the board, so it is on the buffer's wire at the port and on the card's wire.
+  const drawerIns = new Map(model.input.drawers.map((drawer) => [drawer.id, drawer]));
+  const outside = [...model.outsideWires].sort(([a], [b]) => compareIds(a, b));
+  // Looked up by port, not scanned: a buffer's wire at a port (the first in the model's order, as one port has one
+  // drawer) and what the buffer passes there. Built only when the plan has such a wire.
+  const portKey = (bufferId: Id, node: Id, port: number, input: boolean) => `${bufferId}|${node}|${port}|${input ? "i" : "o"}`;
+  const bufferWireAt = new Map<string, string>();
+  const passedAt = new Map<string, number>();
+  if (outside.length > 0) {
+    for (const wire of model.drawerEdges.values()) {
+      const key = portKey(wire.drawerId, wire.ref.node, wire.ref.port, wire.ref.input);
+      if (!bufferWireAt.has(key)) bufferWireAt.set(key, wire.edgeId);
+    }
+    for (const bufferId of new Set(outside.map(([, entry]) => entry.bufferId))) {
+      for (const e of bufferPorts[bufferId] ?? []) {
+        const key = portKey(bufferId, e.port.node, e.port.port, e.port.input);
+        if (!passedAt.has(key)) passedAt.set(key, Math.max(0, e.ratePerSecond ?? 0));
+      }
+    }
+  }
+  for (const [edgeId, { drawerId, bufferId }] of outside) {
+    const drawer = drawerIns.get(drawerId);
+    const input = drawer?.kind === "SOURCE";
+    let total = 0;
+    for (const link of drawer?.links ?? []) {
+      const entry = model.machines.get(link.node)!;
+      const row = (input ? entry.inputs : entry.outputs)[link.port]!;
+      const rate = (solution.extentsPerSecond[entry.id] ?? 0) * row.amount * entry.throughputFactor;
+      const portId = `${entry.id}|${input ? "i" : "o"}|${link.port}`;
+      const at = portKey(bufferId, link.node, link.port, input);
+      const passed = passedAt.get(at) ?? 0;
+      const rest = rate - (wired.get(portId) ?? 0) - (taken.get(portId) ?? 0) - passed;
+      const flow = rest > DUST * Math.max(1, rate) ? rest : 0;
+      if (flow === 0) continue;
+      taken.set(portId, (taken.get(portId) ?? 0) + flow);
+      total += flow;
+      const bufferWire = bufferWireAt.get(at);
+      if (bufferWire !== undefined) flowOf.set(bufferWire, (flowOf.get(bufferWire) ?? 0) + flow);
+    }
+    flowOf.set(edgeId, total);
+  }
+
   // Each of the player's wires carries what the (joined) wires it stands for carry.
   for (const [flatId, flow] of flowOf) {
     for (const original of model.covers.get(flatId) ?? [flatId]) {

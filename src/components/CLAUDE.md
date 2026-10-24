@@ -63,6 +63,11 @@ The board has its own notes in `flow/CLAUDE.md`, the Pool worksheet in `pool/CLA
   port wires only the clicked resource (`addConnectedRecipeNodeToState`). Refactor
   (`beginRecipeRefactor` -> `refactorNodeWithRecipe`) replaces the card in place,
   re-docking wires whose resource survives; if none would survive, it lands beside instead.
+  A card whose recipe was not converted (`lib/model/unconverted-card.ts`) is drawn from its marker and its wires (amber
+  frame, the line `Not in GTNH <v>. Pick a recipe.`, one port per wired resource) and is listed by the notices bar. Its
+  line refactors it: the stencil is what its wires carry, the pick (even under the same id) clears the marker, and a
+  shared card's marked section is picked for as `card#rN` on a machine that runs the card's other recipes. Its wires
+  never read invalid: they are its ports.
 - The tier ceiling also filters generator cards by their `unlock` chip, client side
   (`powerUnlockWithinTier`); a source with no chip is never filtered.
 - A machine pin (`recipeBrowserMachinePin`, a card's "Add another recipe") scopes the maps to one machine and adds the
@@ -213,7 +218,7 @@ in `src/store/CLAUDE.md` (Live plans, Task boards).
   unset or any other value is off, the default. Tests run off; a test of a mod or community feature opts in with
   `withModAndCommunityOn()`, and a test that pins the off side uses `withModAndCommunityUnset()`
   (`src/test-support/mod-and-community.ts`).
-- Off hides: Open in the game and Download the mod; the game probe on 127.0.0.1; "(in game)" on faces; the mod
+- Off hides: Open in the game; the game probe on 127.0.0.1; "(in game)" on faces; the mod
   announcement; every Community row (`libraryRows()` returns none), Browse Community, the COMMUNITY, Community and
   Saved shelves, post marks, links, visibility keys and "Post as a public setup"; the post dialog; Welcome's Browse
   shared setups and New from the community; the overview's right click for public plans; the help card's community

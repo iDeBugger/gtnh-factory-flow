@@ -35,8 +35,9 @@ import { isLiveConfigured } from "@/lib/live/live-config";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { ChecklistIcon } from "./pixel-icons";
 import { useIsCompactViewport } from "@/lib/compact-view";
-import { readNewPlanVersion, servedGameVersions, useNewPlanVersion, writeNewPlanVersion } from "@/lib/datasets/new-plan-version";
-import { DEFAULT_GAME_VERSION, gameVersionLabel, planGameVersion } from "@/lib/model/game-version";
+import { convertToLabel, readNewPlanVersion, servedGameVersions, useNewPlanVersion, writeNewPlanVersion } from "@/lib/datasets/new-plan-version";
+import { convertingLabel, convertPlan, convertTargets, usePendingConversion } from "@/lib/datasets/convert-action";
+import { DEFAULT_GAME_VERSION, gameVersionLabel, planGameVersion, type GameVersion } from "@/lib/model/game-version";
 
 /** What the tab strip asks of the bar: the dialogs it does not own. */
 export interface ModTabsActions {
@@ -91,6 +92,7 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
   const designs = openDesigns(allDesigns);
   const linkedPostId = useFactoryStore((state) => state.project.metadata?.communityPlanId);
   const solving = useSolvingBooks();
+  const converting = usePendingConversion();
   const manifest = useFactoryStore((state) => state.datasetManifest);
   const newPlanVersion = useNewPlanVersion(manifest);
   const servedVersions = servedGameVersions(manifest);
@@ -320,6 +322,16 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
     }
   };
 
+  /** A copy of the tab's plan for `version` opens as a new tab; the tab itself is not opened or written. */
+  const convert = async (id: string, version: GameVersion) => {
+    // The open tab's board may hold edits not saved yet; another tab (or one under a public view) is read as stored.
+    const onBoard = id === activeDesignId && !publicView;
+    const project = onBoard ? useFactoryStore.getState().project : (await readDesign(id))?.project;
+    if (!project) return;
+    // The copy's landing leaves Welcome and the library; a failure stays where the player is and says so.
+    if (await convertPlan(project, version, id)) playSfx("ui.page");
+  };
+
   const activate = async (id: string) => {
     // A tab switched turns a page; its cards are not landing, they were there.
     if (id !== activeDesignId) playSfx("ui.page");
@@ -387,9 +399,22 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
         { label: "Keep it", onSelect: () => undefined },
       ];
     }
+    const tabVersion = planGameVersion(designs.find((design) => design.id === m.id) ?? {});
     const rows: MenuEntry[] = [
       { label: "Rename", onSelect: () => setRenaming(m.id) },
       { label: "Copy plan code", detail: "to paste or share", onSelect: () => void copyCode(m.id) },
+      // Outside the library rows: converting is not a community feature and shows with it switched off.
+      ...convertTargets(manifest, tabVersion).map(
+        (version): MenuEntry =>
+          converting?.target === version && converting.sourceDesignId === m.id
+            ? { label: convertingLabel(version), disabled: true, onSelect: () => undefined }
+            : {
+                label: convertToLabel(version),
+                detail: "as a new plan",
+                disabled: Boolean(converting),
+                onSelect: () => void convert(m.id, version),
+              },
+      ),
       ...libraryRows(
         Boolean(m.id === activeDesignId ? linkedPostId : designs.find((design) => design.id === m.id)?.communityPlanId),
         (mode) => {
@@ -578,7 +603,11 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
                     ) : null}
                   </>
                 )}
-                {active && solving ? <span className="mt-solving" aria-label="Still working out this plan's numbers" /> : null}
+                {converting?.sourceDesignId === design.id ? (
+                  <span className="mt-solving" aria-label={convertingLabel(converting.target)} />
+                ) : active && solving ? (
+                  <span className="mt-solving" aria-label="Still working out this plan's numbers" />
+                ) : null}
                 {canClose && !isRenaming ? (
                   <span
                     className="mt-close"

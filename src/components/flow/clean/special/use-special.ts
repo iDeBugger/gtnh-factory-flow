@@ -95,6 +95,7 @@ import {
   type SpecialView,
 } from "./special-model";
 import type { SheetRow } from "./SpecialSheets";
+import { unconvertedPlaceholderRecipe } from "@/lib/model/unconverted-card";
 
 /** What a special card does beyond the plain card's actions. */
 export interface SpecialActions extends CleanCardActions {
@@ -186,13 +187,37 @@ export function useSharedCardModel(data: RecipeNodeData, selected: boolean): Spe
   const moveRecipeSection = useFactoryStore((state) => state.moveRecipeSection);
   const { project: liveProject, lastResult } = useFactoryStore.getState();
   const plan = lastResult?.plan;
+  // A marked section is drawn from its wires (lib/model/unconverted-card.ts). Only a card with one subscribes to them,
+  // and the stand-in keeps its identity while the section's wires keep their resources.
+  const hasMarkedExtra = projectNode.extraRecipes?.some((extra) => extra.unconverted) === true;
+  // Plain field picks (identity only, nothing built per store update); a card with no marked section picks nothing.
+  const planEdges = useFactoryStore((state) => (hasMarkedExtra ? state.project.edges : undefined));
+  const planNodes = useFactoryStore((state) => (hasMarkedExtra ? state.project.nodes : undefined));
+  const planStorages = useFactoryStore((state) => (hasMarkedExtra ? state.project.storages : undefined));
+  const markedExtras = useMemo(
+    () =>
+      planEdges && planNodes
+        ? listNodeSections(projectNode)
+            .slice(1)
+            .map(({ section }) =>
+              unconvertedPlaceholderRecipe(
+                { edges: planEdges, nodes: planNodes, recipes: liveRecipes, storages: planStorages },
+                projectNode,
+                section,
+              ),
+            )
+        : undefined,
+    [liveRecipes, planEdges, planNodes, planStorages, projectNode],
+  );
 
   const extras = useMemo(
     () =>
       listNodeSections(projectNode)
         .slice(1)
         .map(({ section, node }) => {
-          const sectionRecipe = liveRecipes.find((entry) => entry.id === node.recipeId);
+          const sectionRecipe = node.unconverted
+            ? markedExtras?.[section - 1]
+            : liveRecipes.find((entry) => entry.id === node.recipeId);
           if (!sectionRecipe) return undefined;
           const nodeRecipe = applyRecipeInputOverrides(sectionRecipe, node);
           const effective = applyMachineHandlerToRecipe(nodeRecipe, node);
@@ -206,7 +231,7 @@ export function useSharedCardModel(data: RecipeNodeData, selected: boolean): Spe
           };
         })
         .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined),
-    [liveRecipes, projectNode],
+    [liveRecipes, markedExtras, projectNode],
   );
 
   // The forced entries of every section (spills into buffers among them), filed under the card and the section's
@@ -366,7 +391,8 @@ export function useSharedCardModel(data: RecipeNodeData, selected: boolean): Spe
     warnings: [],
     selected,
     cannotRun: base.view.cannotRun,
-    unset,
+    unset: base.view.unconverted ? false : unset,
+    unconverted: base.view.unconverted,
     handleIds: sections.flatMap((entry) => [
       ...entry.inputs.filter((p) => !p.port.free).map((p) => p.handleId),
       ...entry.outputs.map((p) => p.handleId),

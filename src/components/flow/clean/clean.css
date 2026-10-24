@@ -121,6 +121,39 @@
   stroke: #b49cf0;
 }
 
+/* A card whose recipe is not in the plan's game version (lib/model/unconverted-card.ts): a steady two-pixel amber frame,
+   and its line (`.cc-unconverted`) under the rails. After the loop ring, so the marker wins: the card is out of the
+   solve, so it is in no ring. */
+.cc-card[data-unconverted] {
+  --cc-frame: var(--cc-amber);
+  box-shadow:
+    inset 0 0 0 2px var(--cc-frame),
+    6px 8px 7px rgba(0, 0, 0, 0.36);
+}
+.cc-unconverted {
+  grid-column: 1 / -1;
+  box-sizing: border-box;
+  height: 16px;
+  margin: 1px 0 3px;
+  padding: 0 7px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-radius: 3px;
+  font-size: 8px;
+  line-height: 10px;
+  color: var(--cc-amber);
+  background: color-mix(in srgb, var(--cc-amber) 14%, #17191d);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cc-amber) 45%, #0d0e11);
+  cursor: pointer;
+}
+.cc-unconverted:hover {
+  background: color-mix(in srgb, var(--cc-amber) 24%, #17191d);
+}
+
 /* Selection and "cannot run" rings, outside the edge. */
 .cc-card::before {
   content: "";
@@ -1095,6 +1128,14 @@
 .factory-flow-board[data-detail-level="glance"] .cc-card {
   box-shadow:
     inset 0 0 0 max(2px, calc(1px / var(--board-zoom, 1))) var(--cc-frame, var(--cc-edge)),
+    6px 8px 7px rgba(0, 0, 0, 0.36);
+}
+
+/* Zoomed out, a card whose recipe is not in the plan's version keeps a frame three screen pixels thick, so it can be
+   found on a large board (the card and its shell both wear data-unconverted). */
+.factory-flow-board[data-detail-level="glance"] .cc-card[data-unconverted] {
+  box-shadow:
+    inset 0 0 0 min(max(3px, calc(3px / var(--board-zoom, 1))), 24px) var(--cc-amber),
     6px 8px 7px rgba(0, 0, 0, 0.36);
 }
 

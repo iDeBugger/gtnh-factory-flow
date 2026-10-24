@@ -90,6 +90,11 @@ export interface PlanModel {
   groups: Map<string, string[]>;
   /** Ports that a drawer sits on, as PortKeys. */
   drawerPorts: Set<PortKey>;
+  /**
+   * Wires between an unconverted card and a buffer, by edge id: the outside drawer that stands for each (on the
+   * buffer's takers, or on its makers). The wire carries what that drawer moves.
+   */
+  outsideWires: Map<string, { drawerId: Id; bufferId: Id }>;
   /** Ids that are hidden helpers (never shown to the player). */
   hidden: Set<Id>;
   /** Recipes and drawers in a part of the plan nothing sets. */
@@ -99,6 +104,9 @@ export interface PlanModel {
 }
 
 const MISSING = "missing";
+
+/** The id of the outside drawer that stands for one wire of an unconverted card. */
+export const UNCONVERTED_DRAWER_PREFIX = "unconverted:";
 
 function plainUnit(): PlanUnit {
   return { durationTicks: TICKS_PER_SECOND, throughputFactor: 1 };
@@ -223,9 +231,52 @@ export function buildPlanModel(args: PlanSolveArgs): PlanModel {
       : undefined;
   };
 
+  // A card whose recipe was not converted is out of the solve, and every wire of it is the plan's edge, whatever the
+  // other end is. Into a machine, an outside input (a SOURCE taking anything); out of one, an outside output (a PRODUCT
+  // taking anything). Into a buffer, a SOURCE on the buffer's takers; out of one, a PRODUCT on its makers: the buffer
+  // itself stays a buffer, and what passes through it is unchanged. A source, product, byproduct or trash drawer wired
+  // to the card has no machine on it, so it is left out like any drawer with no machine wired. So the machines on the
+  // other side are fed, or have somewhere to put their output, and ask nothing of the card. These drawers exist only
+  // here, never on the board. A card switched off stays off: its wires carry nothing.
+  const unconvertedIds = new Set(
+    project.nodes.filter((entry) => entry.enabled && nodes[entry.id]?.unconverted).map((entry) => entry.id),
+  );
+  const outsideDrawers = new Map<Id, DrawerKind>();
+  const outsideBuffers: Array<{ edgeId: string; drawerId: Id; bufferId: Id; kind: DrawerKind }> = [];
+
   for (const edge of [...flat.edges].sort((a, b) => compareIds(a.id, b.id))) {
     const source = machines.get(edge.source);
     const target = machines.get(edge.target);
+    const intoBuffer = unconvertedIds.has(edge.source) && linkedDrawer(edge.target) === "buffer";
+    if (intoBuffer || (unconvertedIds.has(edge.target) && linkedDrawer(edge.source) === "buffer")) {
+      outsideBuffers.push({
+        edgeId: edge.id,
+        drawerId: `${UNCONVERTED_DRAWER_PREFIX}${edge.id}`,
+        bufferId: intoBuffer ? edge.target : edge.source,
+        kind: intoBuffer ? "SOURCE" : "PRODUCT",
+      });
+      continue;
+    }
+    if (source && !target && unconvertedIds.has(edge.target)) {
+      const out = outputRowFor(source.outputs, edge);
+      if (out) {
+        const drawerId = `${UNCONVERTED_DRAWER_PREFIX}${edge.id}`;
+        outsideDrawers.set(drawerId, "PRODUCT");
+        const ref = { node: source.id, port: out.index, input: false };
+        drawerEdges.set(edge.id, { edgeId: edge.id, drawerId, ref });
+      }
+      continue;
+    }
+    if (target && !source && unconvertedIds.has(edge.source)) {
+      const into = inputRowFor(target.inputs, edge);
+      if (into) {
+        const drawerId = `${UNCONVERTED_DRAWER_PREFIX}${edge.id}`;
+        outsideDrawers.set(drawerId, "SOURCE");
+        const ref = { node: target.id, port: into.index, input: true };
+        drawerEdges.set(edge.id, { edgeId: edge.id, drawerId, ref });
+      }
+      continue;
+    }
     if (source && target) {
       const out = outputRowFor(source.outputs, edge);
       const into = inputRowFor(target.inputs, edge);
@@ -312,19 +363,36 @@ export function buildPlanModel(args: PlanSolveArgs): PlanModel {
     });
     drawerMap.set(storage.id, storage);
   }
+  for (const [id, kind] of outsideDrawers) {
+    const links = linksByDrawer.get(id) ?? [];
+    drawerIns.push({ id, label: "Unconverted recipe", kind, rule: "ANY", rate: 0, links });
+    hidden.add(id);
+  }
+  // On a buffer: the outside source sits on the buffer's takers, the outside product on its makers.
+  const outsideWires = new Map<string, { drawerId: Id; bufferId: Id }>();
+  for (const { edgeId, drawerId, bufferId, kind } of outsideBuffers) {
+    const ports = (kind === "SOURCE" ? takersByDrawer : linksByDrawer).get(bufferId) ?? [];
+    if (ports.length === 0) continue;
+    drawerIns.push({ id: drawerId, label: "Unconverted recipe", kind, rule: "ANY", rate: 0, links: [...ports] });
+    hidden.add(drawerId);
+    outsideWires.set(edgeId, { drawerId, bufferId });
+  }
+  drawerIns.sort((a, b) => compareIds(a.id, b.id));
 
   // ---- pins, pools, port rates ----------------------------------------------
   const pools: PoolIn[] = [];
   const grouped = new Set<Id>();
+  const cardsById = new Map(project.nodes.map((entry) => [entry.id, entry]));
   for (const [card, ids] of groups) {
-    const owner = machines.get(card);
-    const pin = owner?.node.solvePin;
+    // The card holds the pin; its section 0 may be out of the solve (unconverted) while other sections run.
+    const owner = cardsById.get(card);
+    const pin = owner?.solvePin;
     for (const id of ids) {
       grouped.add(id);
     }
-    if (owner && positive(pin)) {
+    if (owner && positive(pin) && ids.length > 0) {
       // Exactly pins the group's machine time; Up to caps it and runs it as high as the plan lets it.
-      const exact = pinRuleOf(owner.node, owner.recipe) === "exact";
+      const exact = pinRuleOf(owner, machines.get(ids[0]!)!.recipe) === "exact";
       pools.push({ machines: [...ids].sort(compareIds), capacity: pin, exact, upTo: !exact });
     }
   }
@@ -349,16 +417,18 @@ export function buildPlanModel(args: PlanSolveArgs): PlanModel {
     }
     return rates;
   };
-  for (const entry of entries) {
-    if (entry.section > 0) {
+  // Read off the cards, not the machines: a shared card whose section 0 is out of the solve still sets its other
+  // sections' rates.
+  for (const card of project.nodes) {
+    if (parseSectionNodeId(card.id).section > 0) {
       continue; // a section view carries a copy of the card's rates; the card owns them
     }
-    for (const [handleId, rate] of Object.entries(entry.node.portRates ?? {})) {
+    for (const [handleId, rate] of Object.entries(card.portRates ?? {})) {
       if (!positive(rate)) {
         continue;
       }
       const { section, handle } = canonicalPortRateHandle(handleId);
-      const target = machines.get(sectionNodeId(entry.node.id, section));
+      const target = machines.get(sectionNodeId(card.id, section));
       if (!target) {
         continue;
       }
@@ -486,6 +556,7 @@ export function buildPlanModel(args: PlanSolveArgs): PlanModel {
     drawers: drawerMap,
     groups,
     drawerPorts,
+    outsideWires,
     hidden,
     unanchored: [],
     portByKey,

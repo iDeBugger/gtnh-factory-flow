@@ -158,6 +158,64 @@ export function scoreRecipeRefCandidate(
   return score;
 }
 
+/**
+ * The maps whose slot positions are part of the recipe (a crafting pattern, an arcane grid): the same items in
+ * another layout are another recipe. Everywhere else a slot's position is only where NEI drew it.
+ */
+const POSITIONAL_MAPS = new Set(["Shaped Crafting", "Thaumcraft Arcane Crafting", "Thaumcraft"]);
+
+/**
+ * What the recipe's content id is made of (normalize-oracle-export.mjs `recipeContentKey`): the map, every slot's
+ * kind, id, amount, consumed flag, chance and grid cell, the ticks, EU and special value, plus the programmed
+ * circuit. Two bodies with the same key are one recipe with the same numbers.
+ */
+function recipeNumbersKey(recipe: Recipe): string {
+  const map = recipe.source?.recipeMap ?? recipe.machineType;
+  const positional = POSITIONAL_MAPS.has(map);
+  const slot = (entry: RecipeInput | RecipeOutput) =>
+    [
+      entry.kind,
+      entry.id,
+      entry.amount,
+      (entry as RecipeInput).consumed === false ? "nc" : "",
+      (entry as RecipeOutput).chance ?? "",
+      positional && entry.kind !== "aspect" && entry.neiSlot ? `${entry.neiSlot.x},${entry.neiSlot.y}` : "",
+    ].join("|");
+  return JSON.stringify({
+    map,
+    inputs: recipe.inputs.map(slot).sort(),
+    outputs: recipe.outputs.map(slot).sort(),
+    durationTicks: recipe.durationTicks ?? null,
+    eut: recipe.eut ?? null,
+    specialValue: recipe.specialValue ?? null,
+    programmedCircuit: recipe.programmedCircuit ?? null,
+  });
+}
+
+/**
+ * Whether the candidate is the stored recipe with the same numbers, for anything that must not change a plan's
+ * numbers (a conversion to another game version). Every field of the content key must agree. One exception: an
+ * arcane recipe saved by an old export with its vis cost and no items at all is the candidate that adds the grid,
+ * when the output and the exact aspect cost agree. A stored arcane recipe that has items is compared in full.
+ */
+export function hasSameRecipeNumbers(stored: Recipe, candidate: Recipe): boolean {
+  if (recipeNumbersKey(stored) === recipeNumbersKey(candidate)) {
+    return true;
+  }
+  if (stored.inputs.some((slot) => slot.kind !== "aspect")) {
+    return false;
+  }
+  const storedInputs = consumedInputs(stored.inputs);
+  const ref = recipeContentRef(stored);
+  return (
+    stored.durationTicks === candidate.durationTicks &&
+    stored.eut === candidate.eut &&
+    stored.outputs.every((output) => output.chance === undefined) &&
+    candidate.outputs.every((output) => output.chance === undefined) &&
+    isGridlessArcaneMatch(ref, storedInputs, candidate, consumedInputs(candidate.inputs))
+  );
+}
+
 // Maps holding Thaumcraft arcane workbench recipes: the arcane map, and the generic
 // Thaumcraft map, where arcane subclasses (Automagy's filter copy, Witching Gadgets'
 // photo developing) land.

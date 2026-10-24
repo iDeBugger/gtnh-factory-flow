@@ -73,6 +73,10 @@ nowhere or goes nowhere except through a source, a drawer or trash. Longer versi
 - Plan mode (`plan/`): a buffer wired only to cards is a BUFFER drawer (`DrawerIn.takers`), its rule a product's
   on what passes through (`docs/buffer-drawers.md`); `adapter/buffers.ts` joins only buffers wired to another drawer.
   The solver change mirrors the mod's line for line; adding any feature to both: `docs/cross-repo-features.md`.
+- An unconverted card (`FactoryNode.unconverted`, a section's `extraRecipes[i].unconverted`) is out of the solve
+  (`missing-recipe`, a warning), even if its recipe id resolves. Every wire of it is the plan's edge: `buildPlanModel`
+  adds a hidden `unconverted:<edgeId>` SOURCE or PRODUCT with rule ANY on the machine port, or on a buffer's takers or
+  makers. A source or product drawer wired only to it is left out. Exams: `plan/adapter/unconverted.test.ts`.
 - Drain drawers cycle product / byproduct / trash. Trash is free disposal with its books
   voided (`applyTrashedOutputBalances`). Old trash-can nodes convert on load.
 - In Build, targets are display arithmetic; in Solve and Pool they are LP rows.

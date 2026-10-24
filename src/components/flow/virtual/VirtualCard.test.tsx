@@ -68,6 +68,20 @@ describe("a card's shell", () => {
   });
 });
 
+describe("a marked card's shell", () => {
+  it("wears the amber frame's attribute, as the card does", () => {
+    boardVirtualizer.useBoard(`board-${Math.random()}`);
+    const { container } = render(
+      <ReactFlowProvider>
+        <CardShell nodeId="m" face={{ ...face, unset: false, unconverted: true }} layoutKey="k" far={false} />
+      </ReactFlowProvider>,
+    );
+    const shell = container.querySelector("[data-shell]") as HTMLElement;
+    expect(shell.hasAttribute("data-unconverted")).toBe(true);
+    expect(shell.hasAttribute("data-unset")).toBe(false);
+  });
+});
+
 describe("virtualised mount", () => {
   it("mounts the contents of the cards the camera is near and leaves shells for the rest", () => {
     const ids = ["a", "b", "c", "d"];

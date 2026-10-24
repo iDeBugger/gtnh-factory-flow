@@ -16,6 +16,7 @@ import { CropPickerMenu } from "../../CropPickerMenu";
 import { checklistLocked } from "../../RecipeNode";
 import {
   CardFoot,
+  UnconvertedLine,
   CountBox,
   CleanPortRow,
   StripChip,
@@ -496,6 +497,7 @@ export function SpecialCard({ model, recipe, node }: SpecialCardProps) {
       data-empty={view.sockets ? "" : undefined}
       data-tone={problemOutlines ? frameTone(view.foot) : undefined}
       data-loop={view.loop}
+      data-unconverted={view.unconverted ? "" : undefined}
       onPointerDownCapture={onPointerDownCapture}
     >
       <div className="cc-head">
@@ -706,6 +708,9 @@ export function SpecialCard({ model, recipe, node }: SpecialCardProps) {
             <p key={warning}>{warning}</p>
           ))}
         </div>
+      ) : null}
+      {view.unconverted ? (
+        <UnconvertedLine view={view.unconverted} wasClick={wasClick} gridRow={stripRow + 1} />
       ) : null}
       {view.foot ? <CardFoot nodeId={view.nodeId} foot={view.foot} gridRow={stripRow + 2} /> : null}
 

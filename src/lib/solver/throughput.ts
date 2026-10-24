@@ -50,6 +50,8 @@ import {
 } from "./runtime-calculation";
 import { closeBoundaries } from "./close-boundaries";
 import { expandSharedMachines } from "../model/shared-machine";
+import { planGameVersion } from "../model/game-version";
+import { unconvertedWarning } from "../model/unconverted-card";
 import { expandPool, getPoolProject } from "./pool-mode";
 import { getSetupRules } from "../model/setup-rules";
 import { solveEquationsCore } from "./equations-core";
@@ -128,6 +130,37 @@ export function calculateThroughput(
 
   for (const node of project.nodes) {
     const recipe = recipesById.get(node.recipeId);
+
+    // A card (or a shared card's section) whose recipe was not converted to the plan's version is out of the solve,
+    // even when a body under its id still resolves: those numbers are not its version's. Its wires are the plan's edge
+    // (the plan adapter reads them as outside inputs and outputs), so the plan still solves: a warning, not a failure.
+    if (node.unconverted) {
+      nodes[node.id] = {
+        nodeId: node.id,
+        recipeId: node.recipeId,
+        recipeName: node.unconverted.recipeName,
+        enabled: node.enabled,
+        operationRatePerSecond: 0,
+        inputs: {},
+        outputs: {},
+        euT: 0,
+        requiredRatePerSecond: 0,
+        maxRatePerSecond: 0,
+        utilization: 0,
+        theoreticalMachinesRequired: 0,
+        status: "missing-recipe",
+        unconverted: true,
+        warnings: [unconvertedWarning(planGameVersion(project))],
+      };
+      bottlenecks.push({
+        id: `missing-recipe:${node.id}`,
+        kind: "missing-recipe",
+        severity: "warning",
+        message: `Node ${node.id} holds recipe ${node.recipeId}, which was not converted.`,
+        nodeId: node.id,
+      });
+      continue;
+    }
 
     if (!recipe) {
       nodes[node.id] = {

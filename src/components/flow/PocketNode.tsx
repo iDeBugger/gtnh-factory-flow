@@ -1,5 +1,6 @@
 "use client";
 
+import { pastePayloadIntoPlan } from "./paste-payload";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { memo, useState, type CSSProperties } from "react";
 import { Copy, Maximize2, PackageOpen } from "lucide-react";
@@ -127,10 +128,11 @@ function PocketNodeComponent({ data, selected }: NodeProps<PocketFlowNode>) {
     if (!payload) {
       return;
     }
-    const pastedIds = state.pasteBoardItems(payload, { x: POCKET_NODE_WIDTH + 40, y: 0 });
-    if (pastedIds.length > 0) {
-      state.setPendingBoardSelection(pastedIds);
-    }
+    void pastePayloadIntoPlan(payload, { x: POCKET_NODE_WIDTH + 40, y: 0 }).then((pastedIds) => {
+      if (pastedIds.length > 0) {
+        useFactoryStore.getState().setPendingBoardSelection(pastedIds);
+      }
+    });
   };
 
   return (

@@ -59,6 +59,13 @@ export async function activateDesign(design: {
   leaveLibrary();
 }
 
+/** Selects a card of the open plan and brings the camera to it. */
+export function centreBoardCard(nodeId: string): void {
+  const factory = useFactoryStore.getState();
+  factory.setSelectedBoardIds([nodeId]);
+  factory.focusBoardNode(nodeId);
+}
+
 /** Opens the plan a link names and centres its card. Resolves to what went wrong, if anything. */
 export async function openTaskLink(link: PlanTaskLink): Promise<"plan-gone" | "card-gone" | undefined> {
   const store = useDesignStore.getState();
@@ -88,8 +95,7 @@ export async function openTaskLink(link: PlanTaskLink): Promise<"plan-gone" | "c
       useDesignStore.getState().activeDesignId === design.id &&
       hasCard(factory.project, link.node)
     ) {
-      factory.setSelectedBoardIds([link.node]);
-      factory.focusBoardNode(link.node);
+      centreBoardCard(link.node);
       return undefined;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));

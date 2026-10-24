@@ -6,6 +6,8 @@ import type {
   ResourceFlow,
   ThroughputResult,
 } from "@/lib/model/types";
+import { calculateThroughput } from "@/lib/solver/throughput";
+import * as planKit from "@/lib/solver/plan/adapter/test-kit";
 import { buildLimitLadder, buildRailPorts, deriveNodeVerdict } from "./node-verdict";
 
 // Unit tests for the verdict/rail derivation: solver numbers in, one honest
@@ -928,3 +930,75 @@ describe("buildRailPorts", () => {
   });
 });
 
+
+describe("a card next to an unconverted card", () => {
+  const unconvertedResult = (nodeId: string) =>
+    nodeResult({ nodeId, status: "missing-recipe", unconverted: true, utilization: 0, capableUtilization: 0 });
+  const recipes = [
+    { id: "r", name: "M", machineType: "M", minimumTier: "ULV", durationTicks: 20, eut: 1, inputs: [], outputs: [] },
+    { id: "old", name: "Old", machineType: "Old", minimumTier: "ULV", durationTicks: 20, eut: 1, inputs: [], outputs: [] },
+  ] as unknown as FactoryProject["recipes"];
+
+  it("the neighbour of an unconverted card is not STARVED", () => {
+    // In the plan the card's wire is an outside input, so the books feed N through it.
+    const plan = planKit.project({
+      recipes: [planKit.recipe("a", [["x", 1]], [["y", 1]]), planKit.recipe("b", [["y", 1]], [["z", 1]])],
+      nodes: [
+        planKit.node("U", "a", {
+          unconverted: { fromGameVersion: "2.9", recipeId: "a", recipeName: "a", machineType: "Mock Machine" },
+        }),
+        planKit.node("N", "b", { solvePin: 1 }),
+      ],
+      storages: [planKit.drawer("Z", "z")],
+      edges: [planKit.wire("un", "U", "N", "y"), planKit.wire("nz", "N", "Z", "z", {}, { toDrawer: true })],
+    });
+    const solved = calculateThroughput(plan, { generatedAt: "t" });
+    expect(deriveNodeVerdict(plan, solved, "N")).toMatchObject({ kind: "balanced", pct: 100 });
+  });
+
+  it("a line from an unconverted card never binds on the old Build path, whatever its wire carried", () => {
+    const proj = project({
+      recipes,
+      nodes: [machineNode("N"), machineNode("U", "old")],
+      edges: [edge("eU", "U", "N", "eth")],
+    });
+    const result = throughput(
+      {
+        N: nodeResult({
+          utilization: 0,
+          capableUtilization: 0,
+          demandUtilization: 1,
+          inputs: { "item:eth": flow("item", "eth", 144) },
+        }),
+        U: unconvertedResult("U"),
+      },
+      { eU: edgeResult({ transferredPerSecond: 0, availablePerSecond: 0, constraint: "supply" }) },
+    );
+    const verdict = deriveNodeVerdict(proj, result, "N");
+    expect(verdict.kind).not.toBe("starved");
+    expect(verdict.binding).toBeUndefined();
+  });
+
+  it("a machine shipping to an unconverted card is not CLOGGED by it", () => {
+    const proj = project({
+      recipes,
+      nodes: [machineNode("N"), machineNode("U", "old")],
+      edges: [edge("eU", "N", "U", "out")],
+    });
+    const result = throughput(
+      {
+        N: nodeResult({
+          utilization: 0,
+          capableUtilization: 1,
+          demandUtilization: 0,
+          outputs: { "item:out": flow("item", "out", 10) },
+        }),
+        U: unconvertedResult("U"),
+      },
+      { eU: edgeResult({ transferredPerSecond: 0 }) },
+    );
+    const verdict = deriveNodeVerdict(proj, result, "N");
+    expect(verdict.kind).not.toBe("clogged");
+    expect(verdict.clog).toBeUndefined();
+  });
+});

@@ -9,6 +9,12 @@ import type { Note, NoteArg, PlanNote, PlanShortfall } from "@/lib/solver/plan/t
 import { splitResultNodeId } from "./rail-model";
 import type { GameVersion } from "@/lib/model/game-version";
 import { CONVERT_TO_DEFAULT_LABEL, unservedPlanText } from "@/lib/datasets/new-plan-version";
+import {
+  isUnconvertedCard,
+  unconvertedWiresRule,
+  unconvertedCardLabel,
+  unconvertedVersionOf,
+} from "@/lib/model/unconverted-card";
 
 /**
  * The notices bar's list: the solver's notes in the mod's words
@@ -36,6 +42,8 @@ export interface BoardNotice {
   tag?: string;
   /** The ring an alarm is about: its row and chip take the ring's tone, as its cards' outlines do. */
   loop?: LoopTone;
+  /** Cards listed under the sentence, one row each; a press on a row centres that card. */
+  cards?: Array<{ id: string; label: string }>;
 }
 
 /** Where a notice goes in the list, lowest first: a failed solve, then alarms, then warnings, then the rest. */
@@ -110,6 +118,27 @@ export function planVersionNotice(
     // Its second half (which versions this site has) is the rule, and nothing else ever shows it.
     wrap: true,
     ...(onConvert ? { action: { label: CONVERT_TO_DEFAULT_LABEL, onSelect: onConvert } } : {}),
+  };
+}
+
+/**
+ * The cards whose recipe was not converted to the plan's game version (lib/model/unconverted-card.ts): how many, the
+ * rule for their wires, and each card listed under it. It reads the plan alone, so it shows whatever the solve says.
+ */
+export function unconvertedNotice(
+  project: Pick<FactoryProject, "nodes" | "gameVersion">,
+): BoardNotice | undefined {
+  const marked = project.nodes.filter(isUnconvertedCard);
+  if (marked.length === 0) return undefined;
+  const version = unconvertedVersionOf(project);
+  const count = marked.length === 1 ? "1 card has" : `${marked.length} cards have`;
+  return {
+    id: "unconverted",
+    severity: "warn",
+    text: `${count} no recipe in GTNH ${version}. ${unconvertedWiresRule(marked.length)}`,
+    focus: marked.map((node) => node.id),
+    wrap: true,
+    cards: marked.map((node) => ({ id: node.id, label: unconvertedCardLabel(node) })),
   };
 }
 

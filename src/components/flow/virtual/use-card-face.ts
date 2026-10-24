@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useFactoryStore } from "@/store/factory-store";
 import type { FactoryNode } from "@/lib/model/types";
 import { pinRuleOf } from "@/lib/model/pin-rule";
+import { isUnconvertedCard } from "@/lib/model/unconverted-card";
 import {
   cardCountState,
   cardPicture,
@@ -43,6 +44,8 @@ export interface ShellFace {
   count: string;
   /** The picture the glance face draws. */
   art?: string;
+  /** A recipe on the card is not in the plan's game version: the amber frame, as the card wears it. */
+  unconverted?: boolean;
   /** The box to use when React Flow has not measured the card yet. */
   fallbackWidth: number;
   fallbackHeight: number;
@@ -140,11 +143,14 @@ export function useCardFace(
   // What runs: an Up to card's reached count, as the card's own glance face prints it.
   const count = cardCountState(result, projectNode, plan, recipe);
   const { machineIcon, art } = cardPicture(recipe, projectNode, derived, machineIcons, mapIcons);
+  // A marked card is out of the solve: no prompt and no reason tone, only its frame (clean-model does the same).
+  const unconverted = isUnconvertedCard(projectNode);
   const face: ShellFace = {
     selected,
     cannotRun: derived.powerReport !== undefined && derived.powerReport.state !== "ok",
-    unset: count.unset,
-    tone: problemOutlines ? stateFrameTone(count, plan, projectNode.id) : undefined,
+    unset: unconverted ? false : count.unset,
+    tone: problemOutlines && !unconverted ? stateFrameTone(count, plan, projectNode.id) : undefined,
+    ...(unconverted ? { unconverted: true } : {}),
     loop: cardLoop(plan?.loops, projectNode.id),
     bar: glanceBar(count.upTo, cardLoop(plan?.loops, projectNode.id)),
     count: `×${formatSolvedMachines(count.value)}`,

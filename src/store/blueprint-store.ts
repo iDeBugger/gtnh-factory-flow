@@ -19,7 +19,8 @@ import type {
   PublicBlueprintSort,
 } from "@/lib/blueprints/types";
 import type { EntryIcon } from "@/lib/community/types";
-import type { BoardClipboardPayload } from "@/store/factory-store";
+import { preparePayloadForPlan } from "@/lib/datasets/convert-payload-version";
+import { useFactoryStore, type BoardClipboardPayload } from "@/store/factory-store";
 
 /**
  * A request for the one blueprint save dialog (rendered once at app level):
@@ -91,6 +92,7 @@ interface BlueprintStore {
     icon?: EntryIcon,
     tags?: string[],
   ) => Promise<BlueprintSummary | undefined>;
+  /** The blueprint's payload, prepared for the plan on the board at call time (`preparePayloadForPlan`). */
   load: (blueprintId: string) => Promise<BoardClipboardPayload | undefined>;
   remove: (blueprintId: string) => Promise<void>;
   /**
@@ -177,7 +179,8 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
     set({ busyId: blueprintId, error: undefined });
     try {
       const detail = await getBlueprint(blueprintId);
-      return detail.payload;
+      // Ready for the plan on the board now: a blueprint saved on another game version arrives converted.
+      return await preparePayloadForPlan(detail.payload, useFactoryStore.getState().project);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Blueprint could not be loaded." });
       return undefined;
@@ -361,7 +364,7 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
             : blueprint,
         ),
       }));
-      return detail.payload;
+      return await preparePayloadForPlan(detail.payload, useFactoryStore.getState().project);
     } catch (error) {
       set({
         publicError: error instanceof Error ? error.message : "Blueprint could not be loaded.",

@@ -439,6 +439,11 @@ function findStoppedTakerClog(
     for (const taker of takers) {
       const takerResult = result.nodes[taker];
       const takerNode = nodeById.get(taker);
+      // An unconverted card is the plan's edge: what goes to it leaves the plan, so it never holds a feeder.
+      if (takerResult?.unconverted) {
+        allStopped = false;
+        break;
+      }
       const stopped =
         takerNode?.enabled === false ||
         !takerResult ||
@@ -1442,6 +1447,11 @@ function findBindingInput(
       candidates.push({ key, ratio: 0, supplied: 0, need: flow.amountPerSecond, edges });
       continue;
     }
+    // A line from an unconverted card is an outside input (the plan solves it as one, rule ANY): it covers whatever
+    // the port needs, so the port cannot bind even when its other feeders are short.
+    if (edges.some((edge) => result.nodes[edge.source]?.unconverted)) {
+      continue;
+    }
     let supplied = 0;
     for (const edge of edges) {
       supplied += honestInboundAvailablePerSecond(
@@ -1819,7 +1829,9 @@ export function buildRailPorts(
     // such thing as a slot with nothing to supply it, so the bare-slot marks
     // come off and the port reads as the ordinary working port it now is.
     const freeSide = isInput ? rules.freeInputs : rules.freeOutputs;
-    const flows = isInput ? nodeResult?.inputs : nodeResult?.outputs;
+    // A card out of the solve because its recipe was not converted has no flows: its ports are its stand-in's slots,
+    // one per resource its wires carry.
+    const flows = nodeResult?.unconverted ? undefined : isInput ? nodeResult?.inputs : nodeResult?.outputs;
     const resources = isInput ? displayRecipe.inputs : displayRecipe.outputs;
     const sideEdges = isInput ? incoming : outgoing;
     const ports: RailPort[] = [];

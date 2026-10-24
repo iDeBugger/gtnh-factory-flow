@@ -4,7 +4,7 @@ import { isFluidTankRecipe } from "@/lib/model/fluid-tank";
 import { isSharedMachineNode } from "@/lib/model/shared-machine";
 import { isCropFarmRecipe, isCropProductionRecipe } from "@/lib/model";
 import type { RecipeProgrammedCircuit } from "@/lib/model/programmed-circuit";
-import type { CleanChipView, CleanPortView, CleanPowerView, CleanCardView } from "../clean-model";
+import type { CleanChipView, CleanPortView, CleanPowerView, CleanCardView, CleanUnconvertedView } from "../clean-model";
 
 /**
  * The cards the plain clean card cannot be: one card with several recipes, a generator, and the two holders
@@ -105,6 +105,8 @@ export interface SpecialView {
   selected: boolean;
   cannotRun: boolean;
   unset: boolean;
+  /** A recipe on the card is not in the plan's game version: the amber frame and its line. */
+  unconverted?: CleanUnconvertedView;
   /** Every port's handle id, for React Flow's handle bookkeeping. */
   handleIds: string[];
 }

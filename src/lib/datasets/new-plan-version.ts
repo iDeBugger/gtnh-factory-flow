@@ -97,8 +97,13 @@ export function recipesNotOnSiteText(v: GameVersion): string {
   return `Recipes for ${gameVersionLabel(v)} are not on this site.`;
 }
 
-/** The notice's key, wired once conversion exists. */
-export const CONVERT_TO_DEFAULT_LABEL = `Convert to ${gameVersionLabel(DEFAULT_GAME_VERSION)}`;
+/** The Convert row and key: a copy of the plan for `v` opens as a new plan. */
+export function convertToLabel(v: GameVersion): string {
+  return `Convert to ${gameVersionLabel(v)}`;
+}
+
+/** The unserved-version notice's key: such a plan converts to the default version. */
+export const CONVERT_TO_DEFAULT_LABEL = convertToLabel(DEFAULT_GAME_VERSION);
 
 /** Forgets the page's own choice (tests start from an empty device). */
 export function resetNewPlanVersionForTests(): void {

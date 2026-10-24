@@ -45,6 +45,7 @@ import type {
   CleanChipView,
   CleanFootView,
   CleanPortView,
+  CleanUnconvertedView,
 } from "./clean-model";
 import {
   circuitNumber,
@@ -642,6 +643,44 @@ export function CardFoot({
   );
 }
 
+/**
+ * A marked card's line (`Not in GTNH 2.9. Pick a recipe.`): a press opens the recipe search seeded from the card's
+ * wires, and the pick replaces the recipe in place (`beginRecipeRefactor` -> `refactorNodeWithRecipe`).
+ */
+export function UnconvertedLine({
+  view,
+  wasClick,
+  gridRow,
+}: {
+  view: CleanUnconvertedView;
+  wasClick: (event: MouseEvent) => boolean;
+  gridRow?: number;
+}) {
+  const pick = () => {
+    const state = useFactoryStore.getState();
+    if (state.isReadOnly || checklistLocked()) return;
+    state.beginRecipeRefactor(view.target);
+  };
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className="cc-unconverted"
+      style={gridRow ? { gridRow } : undefined}
+      {...tipAttrs(view.tip)}
+      onClick={(event) => {
+        event.stopPropagation();
+        if (wasClick(event)) pick();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") pick();
+      }}
+    >
+      {view.line}
+    </div>
+  );
+}
+
 export function TierChip({
   label,
   tip,
@@ -939,6 +978,7 @@ export function CleanCard({ view, actions, context, recipe, node }: CleanCardPro
       data-unset={view.unset ? "" : undefined}
       data-tone={problemOutlines ? frameTone(view.foot) : undefined}
       data-loop={view.loop}
+      data-unconverted={view.unconverted ? "" : undefined}
       onPointerDownCapture={onPointerDownCapture}
     >
       <div className="cc-head">
@@ -1113,6 +1153,8 @@ export function CleanCard({ view, actions, context, recipe, node }: CleanCardPro
           <CleanPortRow key={p.key} p={p} wasClick={wasClick} unset={view.unset} />
         ))}
       </div>
+
+      {view.unconverted ? <UnconvertedLine view={view.unconverted} wasClick={wasClick} /> : null}
 
       {view.chips.length > 0 ? (
         <div className="cc-strip" style={{ height: view.stripHeight }}>

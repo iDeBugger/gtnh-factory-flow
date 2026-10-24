@@ -200,6 +200,9 @@ contents. Read `virtual/card-virtualizer.ts` first (pure, tested); budgets and n
   drawn is drawn once in the background pass (a few a frame, nearest first, only while the camera rests) so React
   Flow gets its real size and handle boxes; it is marked drawn when React Flow holds its handles, and not
   released before. A layout change while a card is away (`useCardLayoutKey`) draws it again.
+- Another plan on the board (`boardVirtualizer.useBoard(project.id)`) forgets every box, so the geometry publish keys
+  on the plan id as well as the geometry fingerprint: a plan with the same cards in the same places (a converted
+  copy, a file opened twice) would otherwise keep no boxes, and no wire would be picked to draw.
 - A shown shell carries one empty marker per handle (`data-vstub`) at the last measured place: the measure a
   hidden wrapper provokes when it is shown again reads them back instead of wiping the handles.
 - Wires: `board-edges.ts` hands React Flow only the wires whose box (the two cards, or the routed path once there

@@ -779,6 +779,36 @@ input.rail-box-edit {
 .rail-notice-show:hover {
   color: #fff;
 }
+/* A notice that lists cards (the unconverted cards'): the list goes under the sentence and its keys, one card a line,
+   scrolling past six; a press on a line centres that card. */
+.rail-notice[data-cards] {
+  flex-wrap: wrap;
+}
+.rail-notice-cards {
+  order: 10;
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  max-height: 96px;
+  overflow-y: auto;
+  margin-top: 2px;
+}
+.rail-notice-card {
+  /* A line each, never squeezed: past six the list scrolls. */
+  flex: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  line-height: 16px;
+  color: #c8cad0;
+  cursor: pointer;
+}
+.rail-notice-card:hover {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .rail-notice-text:not([data-clipped=""]) {
   -webkit-mask-image: none;
   mask-image: none;

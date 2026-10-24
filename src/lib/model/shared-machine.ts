@@ -95,16 +95,26 @@ export function sectionNodeView(node: FactoryNode, section: number): FactoryNode
   if (!extra) {
     return node;
   }
-  const { extraRecipes: _extras, solvePin: _pin, solvePinExact: _exact, targetOutput: _target, ...rest } = node;
+  const {
+    extraRecipes: _extras,
+    solvePin: _pin,
+    solvePinExact: _exact,
+    targetOutput: _target,
+    unconverted: _unconverted,
+    ...rest
+  } = node;
   void _extras;
   void _pin;
   void _exact;
   void _target;
+  void _unconverted;
+  // The unconverted marker is per section: section 0's belongs to the card's own recipe, never to this one.
   return {
     ...rest,
     id: sectionNodeId(node.id, section),
     recipeId: extra.recipeId,
     recipeInputOverrides: extra.recipeInputOverrides,
+    ...(extra.unconverted ? { unconverted: extra.unconverted } : {}),
   };
 }
 
