@@ -42,7 +42,7 @@ export async function POST(
       return NextResponse.json({ error: "Invalid vote." }, { status: 400 });
     }
 
-    const actorKey = makeActorKey(request, deviceId);
+    const actorKey = makeActorKey(request);
     if (!(await checkRateLimit(actorKey, "blueprint-vote", 60, 60 * 10))) {
       return NextResponse.json({ error: "Voting too fast. Slow down." }, { status: 429 });
     }

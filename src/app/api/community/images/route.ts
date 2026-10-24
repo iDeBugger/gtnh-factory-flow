@@ -1,26 +1,23 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { BOARD_IMAGE_MAX_BYTES } from "@/lib/community/types";
-import {
-  checkRateLimit,
-  getCommunityDb,
-  isCommunityConfigured,
-  makeActorKey,
-} from "@/lib/server/community";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/community";
+import { claimImageUpload } from "@/lib/server/image-upload-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
  * Board image uploads. Anyone can put a picture on their board, so this is
- * anonymous like voting: rate-limited per actor, size-capped, and the bytes
- * are sniffed rather than trusting the client's content type. Files land in a
- * public Supabase Storage bucket and come back as a plain URL the annotation
- * carries; the plan itself stays small.
+ * anonymous like voting: limited per address and for the whole site
+ * (`image-upload-guard.ts`), size-capped, and the bytes are sniffed rather
+ * than trusting the client's content type. Junk is refused before it is
+ * counted, so it never spends anyone's share. Files land in a public Supabase
+ * Storage bucket and come back as a plain URL the annotation carries; the plan
+ * itself stays small.
  */
 
 const BUCKET = "board-images";
-const UPLOADS_PER_HOUR = 30;
 
 /** Magic-byte sniffing: the four image formats browsers render everywhere. */
 function sniffImageType(bytes: Uint8Array): { contentType: string; ext: string } | undefined {
@@ -78,7 +75,6 @@ export async function POST(request: Request) {
   try {
     const form = await request.formData();
     const file = form.get("image");
-    const deviceId = typeof form.get("deviceId") === "string" ? (form.get("deviceId") as string) : undefined;
     if (!(file instanceof Blob)) {
       return NextResponse.json({ error: "No image in the upload." }, { status: 400 });
     }
@@ -89,14 +85,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const actorKey = makeActorKey(request, deviceId);
-    if (!(await checkRateLimit(actorKey, "image_upload", UPLOADS_PER_HOUR, 3600))) {
-      return NextResponse.json(
-        { error: "Too many image uploads: try again in a little while." },
-        { status: 429 },
-      );
-    }
-
     const bytes = new Uint8Array(await file.arrayBuffer());
     const sniffed = sniffImageType(bytes);
     if (!sniffed) {
@@ -104,6 +92,11 @@ export async function POST(request: Request) {
         { error: "Only PNG, JPEG, GIF and WebP images can go on the board." },
         { status: 415 },
       );
+    }
+
+    const refusal = await claimImageUpload(request);
+    if (refusal) {
+      return NextResponse.json({ error: refusal.error }, { status: refusal.status });
     }
 
     await ensureBucket();

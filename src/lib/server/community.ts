@@ -202,11 +202,14 @@ export function saltedKey(text: string): string {
 }
 
 /**
- * Anonymous identity: a salted hash of client IP + device id. Good enough to
- * rate-limit without storing raw IPs (votes use `makeVoterKey`).
+ * Anonymous identity for a rate limit: a salted hash of the client address
+ * and nothing the client chooses. A device id in the key would let one
+ * address start a fresh count with every made-up id (votes use
+ * `makeVoterKey`). The trailing colon keeps the key the same bytes as before,
+ * so no stored count moves.
  */
-export function makeActorKey(request: Request, deviceId?: string): string {
-  return saltedKey(`${clientAddress(request)}:${deviceId ?? ""}`);
+export function makeActorKey(request: Request): string {
+  return saltedKey(`${clientAddress(request)}:`);
 }
 
 /**

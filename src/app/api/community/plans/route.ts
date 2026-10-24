@@ -257,7 +257,6 @@ export async function POST(request: Request) {
       description?: unknown;
       gameVersion?: unknown;
       datasetVersionId?: unknown;
-      deviceId?: unknown;
       plan?: unknown;
       tags?: unknown;
       icon?: unknown;
@@ -275,10 +274,6 @@ export async function POST(request: Request) {
     const gameVersion = typeof body.gameVersion === "string" ? body.gameVersion.slice(0, 60) : "";
     const datasetVersionId =
       typeof body.datasetVersionId === "string" ? body.datasetVersionId.slice(0, 120) : "";
-    const deviceId = typeof body.deviceId === "string" ? body.deviceId.slice(0, 64) : "";
-    if (!deviceId) {
-      return NextResponse.json({ error: "Missing device id." }, { status: 400 });
-    }
 
     const sessionUser = await getSessionUser(request);
     if (!sessionUser) {
@@ -300,8 +295,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Refusing to share an empty plan." }, { status: 400 });
     }
 
-    const actorKey = makeActorKey(request, deviceId);
-    if (!(await checkRateLimit(actorKey, "upload", 10, 60 * 60))) {
+    // Keyed on the account, like every other signed-in write: each post costs
+    // a server-side solve and a few MB of storage, and a key the client could
+    // vary would make the limit nothing at all.
+    if (!(await checkRateLimit(`user:${sessionUser.id}`, "upload", 10, 60 * 60))) {
       return NextResponse.json(
         { error: "Upload rate limit reached. Try again later." },
         { status: 429 },
@@ -337,7 +334,7 @@ export async function POST(request: Request) {
         highest_tier: stats.highestTier ?? null,
         highest_tier_index: stats.highestTierIndex,
         stats_version: APP_VERSION,
-        uploader_key: actorKey,
+        uploader_key: makeActorKey(request),
       };
     let { data, error } = await db
       .from("community_plans")

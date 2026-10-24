@@ -119,6 +119,12 @@ The instance is small and has gone down under load. Rules:
   10 failures per account in 15 minutes from any address (unknown names counted alike, so the limit names no
   accounts); the account count runs inside the same critical section as the lookup and the record. Exam:
   `rate-limit.test.ts`, `app/api/community/auth/login/route.test.ts`.
+- A rate-limit key never holds a string the client chooses: `makeActorKey(request)` is the salted address alone, and a
+  signed-in write is keyed `user:<id>` (the community plan POST: 10 an hour per account). A device id in a key is a
+  fresh count per made-up id. Board images (`image-upload-guard.ts`, open to anonymous players) are 30 an hour and 60
+  a day per address and 120 an hour and 400 a day for the whole site, counted after the size and magic-byte checks so
+  junk spends no share. Exam: `community.test.ts`, `app/api/community/images/route.test.ts`,
+  `app/api/community/plans/plan-access.test.ts`.
 - Password derivations run on the threadpool, two at a time with a queue of 32 (`KDF_CONCURRENCY`, `KDF_QUEUE_MAX`):
   the dataset's shard reads share the pool's four threads, so a sign-in flood may never hold them all. Past the
   queue the check throws `PasswordCheckBusyError` and sign-in and sign-up answer 429 "Sign-in is busy. Try again in

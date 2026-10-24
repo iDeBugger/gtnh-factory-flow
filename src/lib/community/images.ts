@@ -1,13 +1,13 @@
 "use client";
 
 import { BOARD_IMAGE_MAX_BYTES } from "./types";
-import { getDeviceId } from "./client";
 
 /**
  * Uploading a picture for the board. The file goes to /api/community/images,
  * which sniffs, caps and stores it in a public bucket; what comes back is the
  * hosted URL an image annotation carries. All the friendly refusals (too big,
- * not an image) surface here as thrown Errors with player-readable messages.
+ * not an image, too many) surface here as thrown Errors with player-readable
+ * messages. Nothing but the file is sent: the server limits by address.
  */
 export async function uploadBoardImage(file: File | Blob): Promise<string> {
   if (file.size > BOARD_IMAGE_MAX_BYTES) {
@@ -16,7 +16,6 @@ export async function uploadBoardImage(file: File | Blob): Promise<string> {
 
   const form = new FormData();
   form.set("image", file);
-  form.set("deviceId", getDeviceId());
 
   const response = await fetch("/api/community/images", { method: "POST", body: form });
   const body = (await response.json().catch(() => undefined)) as
