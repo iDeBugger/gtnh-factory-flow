@@ -21,7 +21,7 @@ export async function serveDatasetFile(
 ) {
   const stats = await stat(filePath);
   if (!stats.isFile()) {
-    return new Response("Not found", { status: 404 });
+    return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
   }
 
   const stream = Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>;

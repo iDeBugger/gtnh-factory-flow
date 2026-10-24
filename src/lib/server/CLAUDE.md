@@ -15,12 +15,15 @@
   catalog field must be added to `getDatasetCatalog`'s explicit field list (and
   `RecipeDataset` in types.ts) or it never reaches the client.
 - Dataset files other than textures may be replaced in place; textures are
-  cache-immutable, so a changed icon needs a new name. The served gzips and shards therefore carry a day's cache
-  (`next.config.ts` headers, `DATASET_FILE_CACHE_CONTROL`), never `immutable`; the manifest stays `max-age=0`.
-- Next's public handler serves everything under `public/datasets/gtnh` before any route (the `[assetFile]` route
-  only answers for names not on disk, so its whitelist gates nothing by itself). The one gate ahead of it is a
-  `beforeFiles` rewrite in `next.config.ts`: that is how the raw `recipes.json` (about 2 GB) is refused with 400.
-  Exam: `next-config.test.ts`, `[assetFile]/route.test.ts`.
+  cache-immutable, so a changed icon needs a new name. The index gzips and the shards are therefore served for a
+  day (`DATASET_FILE_CACHE_CONTROL`), never `immutable`; the manifest stays `max-age=0`.
+- Next's public handler serves everything under `public/datasets/gtnh` before any route, with a cache policy it can
+  only set by path (a 404 would be cached like the file). So `next.config.ts` rewrites the four index gzips, the
+  shards and the raw `recipes.json` (`beforeFiles`, ahead of the dev proxy) to
+  `src/app/dataset-files/[versionId]/[...assetPath]/route.ts`, the only thing that serves them: a day's cache on
+  200, `no-store` on 400 and 404, and `recipes.json` (about 2 GB) refused. Anything else beside the data
+  (`oracle/`, stray copies) is still served by the public handler at `max-age=0`. Exam: `next-config.test.ts`,
+  `dataset-files/[versionId]/[...assetPath]/route.test.ts`.
 - Every server cache is bounded or index-sized (the Node heap is capped at 3 GB). A slow
   site: check the heap first.
 - The OG card route reads fonts through `process.cwd()` (non-standalone build).
