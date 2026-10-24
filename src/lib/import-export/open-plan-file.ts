@@ -7,11 +7,21 @@ import {
 } from "@/lib/datasets/browser-loader";
 import type { DatasetVersion } from "@/lib/datasets";
 import type { FactoryProject, Recipe } from "@/lib/model/types";
-import { refreshImportedProjectEdges, remapMigratedRecipeReferences } from "@/lib/import-export/recipe-migration";
-import { extractProjectJsonFromPng, extractProjectJsonFromSvg } from "@/lib/import-export/plan-image";
+import {
+  refreshImportedProjectEdges,
+  remapMigratedRecipeReferences,
+} from "@/lib/import-export/recipe-migration";
+import {
+  extractProjectJsonFromPng,
+  extractProjectJsonFromSvg,
+} from "@/lib/import-export/plan-image";
 import { isPowerRecipe } from "@/lib/power/power-recipe";
 import { pickRecipeRefMatch, recipeContentRef } from "@/lib/import-export/recipe-ref-match";
-import { cloneImportedProject, parseFactoryProjectJson, serializeFactoryProject } from "@/lib/import-export";
+import {
+  cloneImportedProject,
+  parseFactoryProjectJson,
+  serializeFactoryProject,
+} from "@/lib/import-export";
 import { untagCommunityPlan } from "@/lib/community/client";
 import { useFactoryStore } from "@/store/factory-store";
 
@@ -75,8 +85,7 @@ export async function hydrateImportedProjectRecipes(
       : [],
   );
   const missingRecipes: Array<Pick<FactoryProject["recipes"][number], "id" | "name">> = [];
-  const migratedRecipes: Array<{ fromId: string; toId: string; name: string; exact: boolean }> =
-    [];
+  const migratedRecipes: Array<{ fromId: string; toId: string; name: string; exact: boolean }> = [];
   const recipeIdMigration = new Map<string, string>();
 
   const hydratedRecipes = await Promise.all(
@@ -92,7 +101,11 @@ export async function hydrateImportedProjectRecipes(
       if (!availableRecipeIds.has(recipe.id)) {
         const contentMatch = resolvedRecipeIds.get(recipe.id);
         const migratedRecipe = contentMatch
-          ? await getRecipeDatasetRecipe(DEFAULT_DATASET_MANIFEST_URL, version, contentMatch.recipeId)
+          ? await getRecipeDatasetRecipe(
+              DEFAULT_DATASET_MANIFEST_URL,
+              version,
+              contentMatch.recipeId,
+            )
           : await resolveImportedRecipe(version, recipe);
         if (migratedRecipe) {
           migratedRecipes.push({
@@ -156,8 +169,6 @@ async function resolveImportedRecipe(
 /** Below this the likeness is too loose to swap a plan's recipe for. */
 const RECIPE_MIGRATION_SCORE = 300;
 
-
-
 /** True when pasted text is a plan file (JSON) rather than a link or code. */
 export function looksLikePlanJson(text: string): boolean {
   return /^\s*\{/.test(text);
@@ -168,7 +179,22 @@ export function looksLikePlanJson(text: string): boolean {
  * board. Recipes are hydrated against the dataset of the plan's own game version, whatever the open tab is on; ones it
  * lacks keep the plan's embedded body. A plan whose version this site does not serve opens as it was written.
  */
-export async function openPlanJsonText(text: string, fallbackName = "Imported plan"): Promise<void> {
+export async function openPlanJsonText(
+  text: string,
+  fallbackName = "Imported plan",
+): Promise<void> {
+  // The board shows its loading overlay while the recipes are fetched, which can take a while when the
+  // server asks the browser to wait: for a pasted plan as much as for a file.
+  const { setProjectImporting } = useFactoryStore.getState();
+  setProjectImporting(true);
+  try {
+    await openPlanJson(text, fallbackName);
+  } finally {
+    setProjectImporting(false);
+  }
+}
+
+async function openPlanJson(text: string, fallbackName: string): Promise<void> {
   const importedProject = refreshImportedProjectEdges(
     cloneImportedProject(untagCommunityPlan(parseFactoryProjectJson(text)) as FactoryProject),
   );
@@ -178,7 +204,8 @@ export async function openPlanJsonText(text: string, fallbackName = "Imported pl
   const factory = useFactoryStore.getState();
   // Hydration asks the recipe endpoints by version and needs no catalog; the catalog only
   // warms in the cache so the new tab opens ready.
-  const datasetVersion = factory.datasetManifest && pickDatasetVersionFor(factory.datasetManifest, gameVersion);
+  const datasetVersion =
+    factory.datasetManifest && pickDatasetVersionFor(factory.datasetManifest, gameVersion);
   if (datasetVersion) {
     void factory.ensureDatasetFor(gameVersion);
   }
@@ -193,13 +220,7 @@ export async function openPlanJsonText(text: string, fallbackName = "Imported pl
 
 /** Open a plan file (.json, or a .png / .svg picture that carries the plan) as a new design tab. */
 export async function openPlanFile(file: File): Promise<void> {
-  const { setProjectImporting } = useFactoryStore.getState();
-  setProjectImporting(true);
-  try {
-    await openPlanJsonText(await readProjectFile(file), file.name.replace(/\.[^.]+$/, ""));
-  } finally {
-    setProjectImporting(false);
-  }
+  await openPlanJsonText(await readProjectFile(file), file.name.replace(/\.[^.]+$/, ""));
 }
 
 /**
@@ -207,7 +228,9 @@ export async function openPlanFile(file: File): Promise<void> {
  * picture is ignored with a short notice, since plan boards have no image annotations.
  */
 export async function dropFilesOnPlanBoard(files: File[]): Promise<void> {
-  const planFile = files.find((file) => /\.json$/i.test(file.name) || file.type === "application/json");
+  const planFile = files.find(
+    (file) => /\.json$/i.test(file.name) || file.type === "application/json",
+  );
   const picture = files.find((file) => file.type.startsWith("image/"));
   try {
     if (planFile) {
@@ -223,7 +246,10 @@ export async function dropFilesOnPlanBoard(files: File[]): Promise<void> {
       flashNotice("info", "That file is not a plan. Drop a .json plan file.");
     }
   } catch (error) {
-    flashNotice("warn", error instanceof Error ? error.message : "That plan file could not be opened.");
+    flashNotice(
+      "warn",
+      error instanceof Error ? error.message : "That plan file could not be opened.",
+    );
   }
 }
 

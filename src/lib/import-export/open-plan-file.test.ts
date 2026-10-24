@@ -8,6 +8,8 @@ import { looksLikePlanJson, openPlanJsonText } from "./open-plan-file";
 
 /** Which dataset each recipe call asked, as `<version>|<what>`. */
 const asked = vi.hoisted(() => [] as string[]);
+/** Whether the board was marked importing at each recipe fetch. */
+const importingSeen = vi.hoisted(() => [] as boolean[]);
 vi.mock("@/lib/datasets/browser-loader", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/datasets/browser-loader")>()),
   getRecipeDatasetRecipeIds: async (_url: string, version: DatasetVersion) => {
@@ -16,6 +18,7 @@ vi.mock("@/lib/datasets/browser-loader", async (importOriginal) => ({
   },
   getRecipeDatasetRecipe: async (_url: string, version: DatasetVersion, id: string): Promise<Recipe> => {
     asked.push(`${version.id}|${id}`);
+    importingSeen.push(useFactoryStore.getState().isProjectImporting);
     return { ...recipe(id), durationTicks: version.id === "local-2.8.1" ? 80 : 400, source: { datasetVersionId: version.id } };
   },
   resolveRecipeDatasetRecipes: async () => ({ matches: [] }),
@@ -76,9 +79,14 @@ describe("open-plan-file", () => {
       edges: [],
     };
     asked.length = 0;
+    importingSeen.length = 0;
     await openPlanJsonText(JSON.stringify(file));
 
     expect(asked).toEqual(["local-2.8.1|ids", "local-2.8.1|shared"]);
+    // Pasted text takes the same path as a file, so the board shows its loading
+    // overlay while the recipes are fetched (a busy server can make that long).
+    expect(importingSeen).toEqual([true]);
+    expect(useFactoryStore.getState().isProjectImporting).toBe(false);
     expect(imported).toHaveLength(1);
     expect(imported[0]?.gameVersion).toBe("2.8.1");
     expect(imported[0]?.recipes[0]?.durationTicks).toBe(80);
