@@ -162,7 +162,10 @@ The instance is small and has gone down under load. Rules:
 - Emergency stop without a deploy: a Caddy rule answering 503 to `POST /api/feedback` (`/etc/caddy/Caddyfile`, then
   `systemctl reload caddy`).
 - Plans and the picture go to the private `feedback-files` bucket, served by `/api/feedback/files/<id>/<file>`, only
-  once every check has passed. The mod strips names, paths and addresses from logs and crash reports before sending.
+  once every check has passed; a report whose issue GitHub refuses has its files removed again. An attached plan is
+  stored and linked without its task board (`tasks`, `taskItems`, `taskComments`, `primaryView`: account ids, names,
+  screenshot files, coordinates) and without `metadata.communityPlanId` (`reportablePlan`); the box says "Tasks and
+  comments stay out." The mod strips names, paths and addresses from logs and crash reports before sending.
 
 ## Local database (local-db/, `npm run dev:local`)
 

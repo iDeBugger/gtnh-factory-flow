@@ -35,8 +35,10 @@ describe("feedback report", () => {
   });
 
   it("names what goes with the words", () => {
-    expect(sendsLine("Iron line", true)).toBe("Sent with it: the open plan 'Iron line' and a picture of it.");
-    expect(sendsLine("Iron line", false)).toBe("Sent with it: the open plan 'Iron line'.");
+    expect(sendsLine("Iron line", true)).toBe(
+      "Sent with it: the open plan 'Iron line' and a picture of it. Tasks and comments stay out.",
+    );
+    expect(sendsLine("Iron line", false)).toBe("Sent with it: the open plan 'Iron line'. Tasks and comments stay out.");
     expect(sendsLine(undefined, false)).toBe("Nothing goes with it but your words.");
   });
 

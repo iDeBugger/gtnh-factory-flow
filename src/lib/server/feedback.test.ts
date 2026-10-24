@@ -86,6 +86,51 @@ describe("feedback reports from the game", () => {
     expect(r.log).toBe("a log");
   });
 
+  it("a report's plan carries no task board, comments or community id", () => {
+    const r = parsed({
+      plans: [
+        {
+          name: "Team line",
+          plan: {
+            ...plan,
+            primaryView: "tasks",
+            tasks: [{ id: "t1", title: "Wire it", status: "todo", order: "a", assignees: ["acct-2"], createdBy: "acct-1" }],
+            taskItems: [
+              {
+                id: "i1",
+                taskId: "t1",
+                kind: "picture",
+                text: "the shot",
+                done: false,
+                order: "a",
+                picture: {
+                  thumb: "data:image/jpeg;base64,AAAA",
+                  w: 1,
+                  h: 1,
+                  takenAt: "2026-01-01T00:00:00Z",
+                  file: "2026-01-01_12.00.00.png",
+                },
+              },
+            ],
+            taskComments: [{ id: "c1", taskId: "t1", by: "acct-2", byName: "Bob", at: "2026-01-01T00:00:00Z", text: "hi" }],
+            metadata: { communityPlanId: "post-1", source: "test" },
+          },
+        },
+      ],
+    });
+    const stripped = r.plans[0]!.plan;
+    expect(stripped).not.toHaveProperty("tasks");
+    expect(stripped).not.toHaveProperty("taskItems");
+    expect(stripped).not.toHaveProperty("taskComments");
+    expect(stripped).not.toHaveProperty("primaryView");
+    expect(stripped.metadata).toEqual({ source: "test" });
+    const text = JSON.stringify(stripped);
+    for (const word of ["Bob", "acct-2", "2026-01-01_12.00.00.png"]) {
+      expect(text).not.toContain(word);
+    }
+    expect(stripped.name).toBe("Steel line");
+  });
+
   it("refuses what it cannot use, saying why", () => {
     expect(parseFeedback(report({ title: "  " }))).toEqual({ error: "Give it a title." });
     expect(parseFeedback(report({ kind: "rant" }))).toHaveProperty("error");

@@ -28,7 +28,10 @@ export function promptFor(kind: FeedbackKind): string {
       : "Quick questions do well on the Discord.";
 }
 
-/** What goes with the words, as a sentence: the open plan by name, and its picture. */
+/**
+ * What goes with the words, as a sentence: the open plan by name, and its picture. The site keeps the plan's
+ * task board and comments out of the public issue, and the line says so.
+ */
 export function sendsLine(planName: string | undefined, picture: boolean): string {
   const parts: string[] = [];
   if (planName !== undefined) {
@@ -37,7 +40,7 @@ export function sendsLine(planName: string | undefined, picture: boolean): strin
   }
   if (parts.length === 0) return "Nothing goes with it but your words.";
   const last = parts.pop()!;
-  return `Sent with it: ${parts.length ? `${parts.join(", ")} and ${last}` : last}.`;
+  return `Sent with it: ${parts.length ? `${parts.join(", ")} and ${last}` : last}. Tasks and comments stay out.`;
 }
 
 /** The issue's title: the first line written, cut at a word (the mod's rule). */

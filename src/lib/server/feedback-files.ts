@@ -50,6 +50,24 @@ export async function storeFeedbackFile(
   }
 }
 
+/**
+ * Removes a report's stored files once the issue they were for could not be
+ * opened: a file nobody links to is only a copy of someone's plan kept for
+ * nothing. Best effort, never throws.
+ */
+export async function removeFeedbackFiles(reportId: string, files: string[]): Promise<void> {
+  if (files.length === 0) {
+    return;
+  }
+  try {
+    await getCommunityDb()
+      .storage.from(FEEDBACK_BUCKET)
+      .remove(files.map((file) => `${reportId}/${file}`));
+  } catch {
+    // The files stay; nothing links to them.
+  }
+}
+
 export async function readFeedbackFile(reportId: string, file: string): Promise<Buffer | undefined> {
   try {
     const { data, error } = await getCommunityDb()

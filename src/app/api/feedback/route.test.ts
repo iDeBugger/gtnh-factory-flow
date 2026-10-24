@@ -15,6 +15,7 @@ vi.mock("@/lib/server/feedback-files", () => ({
   storeFeedbackFile: vi.fn(
     async (origin: string, id: string, file: string) => `${origin}/api/feedback/files/${id}/${file}`,
   ),
+  removeFeedbackFiles: vi.fn(async () => undefined),
 }));
 vi.mock("@/lib/server/feedback", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/server/feedback")>();
@@ -25,6 +26,7 @@ vi.mock("@/lib/server/feedback", async (importOriginal) => {
 });
 
 import { openIssue } from "@/lib/server/feedback";
+import { removeFeedbackFiles, storeFeedbackFile } from "@/lib/server/feedback-files";
 import { claimIssue, feedbackGate } from "@/lib/server/feedback-guard";
 import { resetMemoryTokens } from "@/lib/server/memory-rate";
 import { POST } from "./route";
@@ -117,6 +119,50 @@ describe("the feedback route", () => {
     const busy = await send(report);
     expect(busy.status).toBe(429);
     expect(await busy.json()).toEqual({ error: "That's a lot of reports. Try again in an hour." });
+  });
+
+  it("the stored plan file and the link carry no comments", async () => {
+    vi.stubEnv("GITHUB_FEEDBACK_TOKEN", "token");
+    vi.mocked(openIssue).mockClear();
+    vi.mocked(storeFeedbackFile).mockClear();
+    const teamPlan = {
+      ...plan,
+      primaryView: "tasks",
+      tasks: [{ id: "t1", title: "Wire it", status: "todo", order: "a", assignees: ["acct-2"], createdBy: "acct-1" }],
+      taskComments: [{ id: "c1", taskId: "t1", by: "acct-2", byName: "Bob", at: "2026-01-01T00:00:00Z", text: "hi" }],
+      metadata: { communityPlanId: "post-1", source: "test" },
+    };
+    const response = await send({ ...report, plans: [{ name: "Team line", plan: teamPlan }] });
+    expect(response.status).toBe(201);
+    const stored = vi.mocked(storeFeedbackFile).mock.calls.find((call) => call[2] === "plan-1.json");
+    expect(stored).toBeDefined();
+    const file = JSON.parse(Buffer.from(stored![3]).toString()) as Record<string, unknown>;
+    expect(file).not.toHaveProperty("tasks");
+    expect(file).not.toHaveProperty("taskComments");
+    expect(file).not.toHaveProperty("primaryView");
+    expect(file.metadata).toEqual({ source: "test" });
+    expect(JSON.stringify(file)).not.toContain("acct-2");
+    expect(vi.mocked(openIssue).mock.calls[0]![2].body).not.toContain("Bob");
+  });
+
+  it("a GitHub refusal removes what was stored", async () => {
+    vi.stubEnv("GITHUB_FEEDBACK_TOKEN", "token");
+    vi.mocked(removeFeedbackFiles).mockClear();
+    vi.mocked(openIssue).mockRejectedValueOnce(new Error("GitHub answered 502"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const refused = await send(report);
+    expect(refused.status).toBe(502);
+    expect(await refused.json()).toEqual({ error: "The report could not be sent. Try again later." });
+    expect(removeFeedbackFiles).toHaveBeenCalledTimes(1);
+    const [id, files] = vi.mocked(removeFeedbackFiles).mock.calls[0]!;
+    expect(id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(files).toEqual(["plan-1.json"]);
+
+    vi.mocked(removeFeedbackFiles).mockClear();
+    vi.mocked(openIssue).mockRejectedValueOnce(new Error("GitHub answered 502"));
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]).toString("base64");
+    expect((await send({ ...report, picture: png })).status).toBe(502);
+    expect(vi.mocked(removeFeedbackFiles).mock.calls[0]![1]).toEqual(["plan-1.json", "picture.png"]);
   });
 
   it("pauses nothing for one address's bad reports", async () => {

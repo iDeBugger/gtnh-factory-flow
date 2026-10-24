@@ -17,7 +17,7 @@ import {
   parseFeedback,
   planFile,
 } from "@/lib/server/feedback";
-import { storeFeedbackFile } from "@/lib/server/feedback-files";
+import { removeFeedbackFiles, storeFeedbackFile } from "@/lib/server/feedback-files";
 import { claimIssue, feedbackGate, looksGenuine } from "@/lib/server/feedback-guard";
 
 export const runtime = "nodejs";
@@ -97,6 +97,10 @@ export async function POST(request: Request) {
   if (!token || !isCommunityConfigured()) {
     return NextResponse.json({ error: "Reports can't be sent yet." }, { status: 503 });
   }
+  // The files stored for this report so far, removed again if no issue
+  // comes to link to them.
+  const id = randomUUID();
+  const stored: string[] = [];
   try {
     // The sender is the salted address, computed once: the gate keys its
     // shares and its flood count on it and never sees the address itself.
@@ -133,7 +137,6 @@ export async function POST(request: Request) {
       return refuse(sender, refusal.status, refusal.error);
     }
 
-    const id = randomUUID();
     const links: FeedbackLinks = { plans: [] };
     for (let i = 0; i < report.plans.length; i++) {
       const { name, plan } = report.plans[i]!;
@@ -144,17 +147,18 @@ export async function POST(request: Request) {
       } catch {
         link = undefined;
       }
-      const file = await storeFeedbackFile(
-        SITE,
-        id,
-        `plan-${i + 1}.json`,
-        Buffer.from(planFile(plan)),
-        "application/json",
-      );
+      const fileName = `plan-${i + 1}.json`;
+      const file = await storeFeedbackFile(SITE, id, fileName, Buffer.from(planFile(plan)), "application/json");
+      if (file) {
+        stored.push(fileName);
+      }
       links.plans.push({ name, cards: plan.nodes.length, link, file });
     }
     if (report.picture) {
       links.picture = await storeFeedbackFile(SITE, id, "picture.png", report.picture, "image/png");
+      if (links.picture) {
+        stored.push("picture.png");
+      }
     }
 
     const { body, plansComment } = issueBody(report, links);
@@ -167,6 +171,7 @@ export async function POST(request: Request) {
     return NextResponse.json(issue, { status: 201 });
   } catch (error) {
     console.error("feedback report failed", error);
+    await removeFeedbackFiles(id, stored);
     return NextResponse.json({ error: "The report could not be sent. Try again later." }, { status: 502 });
   }
 }

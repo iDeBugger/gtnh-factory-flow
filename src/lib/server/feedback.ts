@@ -94,6 +94,23 @@ export interface FeedbackReport {
 
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47];
 
+/**
+ * The plan as a report may carry it: the board without the task board, which
+ * names people (assignees, comment authors, their words, screenshot files and
+ * world coordinates), and without the community post it came from. The issue
+ * is public; the board itself is what the reporter sees and attaches.
+ */
+export function reportablePlan(plan: FactoryProject): FactoryProject {
+  const { tasks, taskItems, taskComments, primaryView, ...rest } = plan;
+  void tasks;
+  void taskItems;
+  void taskComments;
+  void primaryView;
+  const { communityPlanId, ...metadata } = rest.metadata ?? {};
+  void communityPlanId;
+  return { ...rest, metadata };
+}
+
 /** The report, or why not in words the player can act on. */
 export function parseFeedback(body: unknown): FeedbackReport | { error: string } {
   const parsed = reportSchema.safeParse(body);
@@ -110,7 +127,7 @@ export function parseFeedback(body: unknown): FeedbackReport | { error: string }
     if (!plan.success) {
       return { error: `The plan "${entry.name}" could not be read.` };
     }
-    plans.push({ name: entry.name || plan.data.name || "Plan", plan: plan.data });
+    plans.push({ name: entry.name || plan.data.name || "Plan", plan: reportablePlan(plan.data) });
   }
   let picture: Buffer | undefined;
   if (r.picture) {
