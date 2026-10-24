@@ -19,6 +19,13 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // Browsers that have seen the site over TLS keep asking for it that way for six months, so a pasted
+        // http:// link or a captive portal never carries the session cookie in the clear. Cloudflare passes
+        // origin headers through. No includeSubDomains: a staging subdomain may not be TLS.
+        source: "/:path*",
+        headers: [{ key: "Strict-Transport-Security", value: "max-age=15552000" }],
+      },
+      {
         source: "/datasets/gtnh/:version/textures/icons/:path*",
         headers: [
           {

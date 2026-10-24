@@ -6,3 +6,9 @@ test("the image optimizer is off, so /_next/image is a 404 and no picture reache
   // textures) to sharp's native decoder and burn CPU on uncached resizes.
   expect(nextConfig.images?.unoptimized).toBe(true);
 });
+
+test("every answer carries Strict-Transport-Security for six months, without includeSubDomains", async () => {
+  const rules = await nextConfig.headers!();
+  const site = rules.find((rule) => rule.source === "/:path*");
+  expect(site?.headers).toEqual([{ key: "Strict-Transport-Security", value: "max-age=15552000" }]);
+});

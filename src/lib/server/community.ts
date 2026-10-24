@@ -244,9 +244,16 @@ export function verifyPassword(password: string, stored: string): boolean {
   return candidate.length === expected.length && timingSafeEqual(candidate, expected);
 }
 
+/**
+ * The Set-Cookie line that stores or clears the session. In production the
+ * cookie is Secure, so a plaintext request to the host never carries a token
+ * that is good for 180 days; development runs over http://localhost. The
+ * clearing line carries the same attributes, or browsers keep the old cookie.
+ */
 export function sessionCookieHeader(token: string, clear = false): string {
   const maxAge = clear ? 0 : SESSION_DAYS * 24 * 60 * 60;
-  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
 }
 
 export interface SessionUser {
