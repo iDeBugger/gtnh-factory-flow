@@ -64,6 +64,39 @@ describe("what the browser does when the server is busy", () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
+  it("sends a long plan's refs in chunks of 500 and joins the matches in order", async () => {
+    const refs = Array.from({ length: 1201 }, (_, i) => ({
+      id: `imported-${i}`,
+      name: "x",
+      machineType: "m",
+      outputs: [],
+    }));
+    const fetchMock = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const sent = (JSON.parse(init.body as string) as { recipes: typeof refs }).recipes;
+      return Promise.resolve(
+        json(200, {
+          matches: sent.map((ref) => ({
+            importedId: ref.id,
+            recipeId: `new-${ref.id}`,
+            exact: true,
+          })),
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { resolveRecipeDatasetRecipes } = await loader();
+
+    const { matches } = await resolveRecipeDatasetRecipes("manifest", version, refs);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const sizes = fetchMock.mock.calls.map(
+      ([, init]) =>
+        (JSON.parse((init as RequestInit).body as string) as { recipes: unknown[] }).recipes.length,
+    );
+    expect(sizes).toEqual([500, 500, 201]);
+    expect(matches).toHaveLength(1201);
+    expect(matches.map((match) => match.importedId)).toEqual(refs.map((ref) => ref.id));
+  });
+
   it("shows a search its refusal at once", async () => {
     const fetchMock = vi.fn().mockResolvedValue(busy());
     vi.stubGlobal("fetch", fetchMock);

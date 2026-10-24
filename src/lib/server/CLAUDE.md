@@ -52,6 +52,12 @@
   production the first such request logs a one-shot warning. `GTNH_DATASET_BUDGET_PER_MINUTE` overrides the
   budget (`0` disables). Floods from many addresses are Cloudflare's. Exam: `dataset-rate.test.ts`,
   `recipes/route.test.ts`, `src/lib/datasets/browser-loader.test.ts`.
+- `resolve-recipes` takes at most `RESOLVE_RECIPES_MAX_REFS` (2,000) refs in a body of at most
+  `RESOLVE_RECIPES_MAX_BYTES` (2 MiB), each ref shape-checked by `recipe-ref-schema.ts` before the resolver sweeps
+  the index (a bad ref is 400, never a 500 with the matcher's error text); the resolver gets the array as it came,
+  so the fields the matcher reads and the schema does not name pass through. The browser sends
+  `RESOLVE_RECIPES_CHUNK_REFS` (500) at a time, in order (`src/lib/datasets/resolve-recipes-limits.ts` holds all
+  three numbers). Exam: `resolve-recipes/route.test.ts`, `src/lib/datasets/browser-loader.test.ts`.
 - A text search matches at most six words and at most two of them under three characters
   (`MAX_SEARCH_TERMS`, `MAX_SHORT_SEARCH_TERMS` in `src/lib/search/text-search.ts`): a word that short cannot use
   the trigram index and walks every recipe. The partial phase (entries with ANY of the words) runs in full on

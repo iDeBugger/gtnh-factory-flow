@@ -3,6 +3,7 @@
 import type { MachineTier, Recipe, ResourceAmount } from "@/lib/model/types";
 import type { RecipeContentRef } from "@/lib/import-export/recipe-ref-match";
 import { APP_VERSION } from "@/lib/version";
+import { RESOLVE_RECIPES_CHUNK_REFS } from "./resolve-recipes-limits";
 import {
   serializeRecipeQueryClause,
   type RecipeQueryClause,
@@ -173,6 +174,12 @@ export async function getRecipeDatasetRecipeIds(
   return result.recipeIds;
 }
 
+/**
+ * The server takes a bounded number of refs per call, so a plan whose
+ * recipes are all stale goes in chunks, one after the other, and the matches
+ * are joined in order. One chunk's refusal fails the whole resolution, as one
+ * call's did.
+ */
 export async function resolveRecipeDatasetRecipes(
   _manifestUrl: string,
   version: DatasetVersion,
@@ -183,11 +190,17 @@ export async function resolveRecipeDatasetRecipes(
     window.location.origin,
   );
   addDatasetCacheKey(url, version);
-  return fetchJson<RecipeDatasetResolveResult>(
-    url.toString(),
-    { method: "POST", body: JSON.stringify({ recipes }) },
-    { retryWhenBusy: true },
-  );
+  const matches: RecipeDatasetResolveResult["matches"] = [];
+  for (let at = 0; at === 0 || at < recipes.length; at += RESOLVE_RECIPES_CHUNK_REFS) {
+    const chunk = recipes.slice(at, at + RESOLVE_RECIPES_CHUNK_REFS);
+    const answer = await fetchJson<RecipeDatasetResolveResult>(
+      url.toString(),
+      { method: "POST", body: JSON.stringify({ recipes: chunk }) },
+      { retryWhenBusy: true },
+    );
+    matches.push(...answer.matches);
+  }
+  return { matches };
 }
 
 export async function queryRecipeDatasetRecipes(
