@@ -91,9 +91,13 @@ async function main() {
     try {
       await service.stop();
       console.log("[live] stopped");
-    } finally {
-      process.exit(code);
+    } catch (error) {
+      // Plans not stored stay in their journals for the next start; the exit
+      // code says the stop was not clean.
+      console.error(`[live] stopping failed: ${String(error)}`);
+      code = 1;
     }
+    process.exit(code);
   };
   process.on("SIGINT", () => void stop("SIGINT"));
   process.on("SIGTERM", () => void stop("SIGTERM"));
@@ -104,7 +108,7 @@ async function main() {
   const bail = (what: string, error: unknown) => {
     console.error(`[live] ${what}: ${String(error)}`);
     setTimeout(() => process.exit(1), 10_000).unref();
-    void stop(what, 1);
+    void stop("fault", 1);
   };
   process.on("uncaughtException", (error) => bail("uncaught exception", error));
   process.on("unhandledRejection", (reason) => bail("unhandled rejection", reason));
