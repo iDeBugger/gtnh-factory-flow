@@ -88,12 +88,19 @@ export function activeLpEngine(): "highs" | "simplex" {
 }
 
 /**
- * Limits for a solve that has integer columns. A branch-and-bound budget is a
- * count of nodes, never a clock, so the same program gives the same answer on
- * a fast and a slow machine.
+ * Limits for a solve. A branch-and-bound budget is a count of nodes, never a
+ * clock, so the same program gives the same answer on a fast and a slow
+ * machine; the clock exists for the server alone (`setLpSolveDefaults`),
+ * whose stats path needs an answer or an honest failure, never a board.
  */
 export interface LpSolveOptions {
   maxMipNodes?: number;
+  /**
+   * HiGHS' `time_limit`, in seconds. A solve it stops throws `LpTimeLimitError`
+   * rather than reporting the program unbounded, and never falls back to the
+   * homegrown simplex (which has no clock). Server only; see the doc above.
+   */
+  timeLimitSeconds?: number;
   /** Raw HiGHS options (presolve, tolerances, simplex strategy), for a second opinion on a doubtful answer. */
   highsOptions?: Record<string, number | string | boolean>;
   /**
@@ -110,11 +117,39 @@ export function hasIntegerColumns(lp: LinearProgram): boolean {
   return (lp.integers?.length ?? 0) > 0 || (lp.binaries?.length ?? 0) > 0;
 }
 
+/** HiGHS stopped on the clock a caller set: no answer, and no fallback. */
+export class LpTimeLimitError extends Error {
+  constructor(seconds: number) {
+    super(`HiGHS stopped at its ${seconds} s time limit.`);
+    this.name = "LpTimeLimitError";
+  }
+}
+
+type LpSolveDefaults = Pick<LpSolveOptions, "timeLimitSeconds" | "maxMipNodes">;
+
+let solveDefaults: LpSolveDefaults | null = null;
+
+/**
+ * Process-wide limits under every caller's own options (the caller's win).
+ * Only the server sets them, once, before it solves uploaded plans on the
+ * request thread; the browser, the worker and the test suite leave them
+ * unset, so no board ever sees a clock. `null` clears them.
+ */
+export function setLpSolveDefaults(defaults: LpSolveDefaults | null): void {
+  solveDefaults = defaults;
+}
+
 export function solveLpAuto(lp: LinearProgram, options: LpSolveOptions = {}): LpSolution {
+  if (solveDefaults) {
+    options = { ...solveDefaults, ...options };
+  }
   if (highs) {
     try {
       return solveWithHighs(highs, lp, options);
     } catch (error) {
+      if (error instanceof LpTimeLimitError) {
+        throw error;
+      }
       if (hasIntegerColumns(lp)) {
         // No honest fallback: the homegrown simplex cannot branch.
         throw new Error(
@@ -256,10 +291,16 @@ function solveWithHighs(
   if (mip && solveOptions.maxMipNodes !== undefined) {
     highsOptions.mip_max_nodes = solveOptions.maxMipNodes;
   }
+  if (solveOptions.timeLimitSeconds !== undefined) {
+    highsOptions.time_limit = solveOptions.timeLimitSeconds;
+  }
   const solved = instance.solve(
     lines.join("\n"),
     Object.keys(highsOptions).length > 0 ? highsOptions : undefined,
   );
+  if (solveOptions.timeLimitSeconds !== undefined && solved.Status === "Time limit reached") {
+    throw new LpTimeLimitError(solveOptions.timeLimitSeconds);
+  }
   if (solved.Status !== "Optimal") {
     if (mip && !["Infeasible", "Unbounded", "Unbounded or Infeasible"].includes(solved.Status)) {
       // Node budget spent, time limit, model error: there is no answer to

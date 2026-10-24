@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import { factoryProjectSchema } from "@/lib/model/schemas";
-import { calculateThroughput } from "@/lib/solver";
 import { normalizeLoadedProject } from "@/lib/model/project-normalize";
-import { ensurePlanEngine } from "@/lib/server/plan-engine";
+import { ensurePlanEngine, solvePlanStats } from "@/lib/server/plan-engine";
 import { computeCommunityPlanStats } from "@/lib/community/plan-stats";
 import { APP_VERSION } from "@/lib/version";
 import {
@@ -314,7 +313,7 @@ export async function POST(request: Request) {
     // first (the stored plan stays as uploaded).
     const solved = normalizeLoadedProject(project);
     await ensurePlanEngine(solved);
-    const stats = computeCommunityPlanStats(solved, calculateThroughput(solved));
+    const stats = computeCommunityPlanStats(solved, solvePlanStats(solved));
 
     const db = getCommunityDb();
     const row = {

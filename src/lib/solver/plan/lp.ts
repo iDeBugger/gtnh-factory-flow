@@ -280,6 +280,31 @@ const VERDICTS_NEEDED = 2;
 let columnOrder: "forward" | "reverse" = "forward";
 let lpCount = 0;
 let lpHook: ((label: string) => void) | null = null;
+/** The wall-clock moment past which no further LP runs, or null when none is set. */
+let lpDeadline: number | null = null;
+
+/**
+ * Runs `run` with a deadline: once `ms` have passed, every later model is
+ * rejected with the time budget note instead of being solved, so a plan that
+ * would take minutes fails within the budget plus one LP. Synchronous, so two
+ * callers never interleave; nested calls keep the outer deadline when it is
+ * nearer. For the server's stats solve of an uploaded plan alone: the answer
+ * a player sees on the board is counted work, never a clock.
+ */
+export function withLpDeadline<T>(ms: number, run: () => T): T {
+  const previous = lpDeadline;
+  const deadline = Date.now() + ms;
+  lpDeadline = previous === null ? deadline : Math.min(previous, deadline);
+  try {
+    return run();
+  } finally {
+    lpDeadline = previous;
+  }
+}
+
+function pastDeadline(): boolean {
+  return lpDeadline !== null && Date.now() >= lpDeadline;
+}
 
 /** Tests only: models add their columns in reverse order, a different path to the same optima. */
 export function setColumnOrder(order: "forward" | "reverse"): void {
@@ -372,6 +397,10 @@ export function lower(lp: ModelLp): Lowered {
  * the stage in the rejection.
  */
 export function runModel(ctx: SolveContext, lp: ModelLp, label: string): SolveResult {
+  if (pastDeadline()) {
+    ctx.rejection = note("SOLVER_UNSATISFIABLE", "time budget");
+    return { ok: false, rejection: ctx.rejection };
+  }
   lpHook?.(label);
   lpCount++;
   const lowered = lower(lp);
@@ -423,6 +452,7 @@ export function runRelaxation(
   lp: ModelLp,
   label: string,
 ): { lowered: Lowered; x: number[]; objective: number; rowDuals: number[] } | null {
+  if (pastDeadline()) return null;
   lpHook?.(label);
   lpCount++;
   const lowered = lower(lp);

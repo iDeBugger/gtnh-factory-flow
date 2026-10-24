@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import type { FactoryProject } from "@/lib/model/types";
+import { takeLpCount } from "@/lib/solver/plan/lp";
+import { APP_VERSION } from "@/lib/version";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
 import { forgetSessionUsers, getCommunityDb, makeSessionToken, resetDbBreaker } from "@/lib/server/community";
@@ -12,6 +17,19 @@ import * as plan from "./[planId]/route";
 import * as preview from "./[planId]/preview/route";
 import * as view from "./[planId]/view/route";
 import * as vote from "./[planId]/vote/route";
+
+/** The server's time budget for an uploaded plan's stats solve, set per case. */
+const statsBudget = vi.hoisted(() => ({ ms: 5_000 }));
+vi.mock("@/lib/server/plan-engine", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/server/plan-engine")>();
+  const { withLpDeadline } = await import("@/lib/solver/plan/lp");
+  const { calculateThroughput } = await import("@/lib/solver");
+  return {
+    ...actual,
+    solvePlanStats: (project: FactoryProject) =>
+      withLpDeadline(statsBudget.ms, () => calculateThroughput(project)),
+  };
+});
 
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
@@ -319,6 +337,37 @@ describe("posting to the community", () => {
     expect(response.status).toBe(413);
     expect(await response.json()).toEqual({ error: "Upload too large." });
     expect(counts.pulls).toBe(0);
+  });
+
+  it("stores a plan-mode post whose stats solve ran out of time, with the failed plan's stats", async () => {
+    const plan = JSON.parse(
+      readFileSync(
+        path.join(process.cwd(), "src/components/flow/__fixtures__/up-to-silicon-line.json"),
+        "utf8",
+      ),
+    ) as FactoryProject;
+    expect(plan.planMode).toBe(true);
+    statsBudget.ms = 0;
+    try {
+      takeLpCount();
+      const response = await list.POST(
+        request("POST", "/api/community/plans", {
+          who: "owner",
+          body: { ...postBody("device-plan"), name: "Silicon", plan },
+        }),
+      );
+      expect(response.status).toBe(201);
+      expect(takeLpCount()).toBe(0);
+      const { id } = (await response.json()) as { id: string };
+      const { data } = await getCommunityDb()
+        .from("community_plans")
+        .select("node_count,stats_version")
+        .eq("id", id)
+        .single();
+      expect(data).toEqual({ node_count: plan.nodes.length, stats_version: APP_VERSION });
+    } finally {
+      statsBudget.ms = 5_000;
+    }
   });
 
   it("holds one account to ten posts an hour whatever device id it sends", async () => {
