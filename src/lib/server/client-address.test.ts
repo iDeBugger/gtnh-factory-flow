@@ -53,9 +53,21 @@ describe("the client address", () => {
       addressFromHeaders(headers({ "x-client-ip": "2001:0DB8:0000:0000:0000:0000:0000:0001" })),
     ).toBe("2001:db8:0:0::");
     expect(addressFromHeaders(headers({ "x-client-ip": "2001:db8::1" }))).toBe("2001:db8:0:0::");
-    expect(addressFromHeaders(headers({ "x-client-ip": "::1" }))).toBe("0:0:0:0::");
-    expect(addressFromHeaders(headers({ "x-client-ip": "::ffff:203.0.113.9" }))).toBe("0:0:0:0::");
     expect(addressFromHeaders(headers({ "x-client-ip": "203.0.113.9" }))).toBe("203.0.113.9");
+  });
+
+  it("keys an IPv4-mapped address as its IPv4, and a loopback address as itself", () => {
+    // A dual-stack socket sees an IPv4 peer as ::ffff:a.b.c.d: the same key as the
+    // plain form, never one key for every mapped address.
+    expect(addressFromHeaders(headers({ "x-client-ip": "::ffff:203.0.113.9" }))).toBe(
+      "203.0.113.9",
+    );
+    expect(addressFromHeaders(headers({ "x-client-ip": "::FFFF:198.51.100.60" }))).toBe(
+      "198.51.100.60",
+    );
+    expect(addressFromHeaders(headers({ "x-client-ip": "::ffff:cb00:7109" }))).toBe("203.0.113.9");
+    expect(addressFromHeaders(headers({ "x-client-ip": "::1" }))).toBe("0:0:0:0:0:0:0:1");
+    expect(addressFromHeaders(headers({ "x-client-ip": "::2" }))).toBe("0:0:0:0:0:0:0:2");
   });
 
   it("reads a Request the same way", () => {

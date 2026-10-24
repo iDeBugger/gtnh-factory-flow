@@ -12,7 +12,8 @@ import { isIP } from "node:net";
  * client can forge. A value that is not an IP literal is skipped.
  *
  * The address is a key for limits, not a record: an IPv6 literal is keyed on its /64, the block a home connection
- * gets, so one connection cannot mint a fresh budget per address.
+ * gets, so one connection cannot mint a fresh budget per address. An IPv4-mapped literal (a dual-stack socket's
+ * view of an IPv4 peer) is keyed as that IPv4, and an address inside ::/64 (loopback) as itself.
  */
 
 /** What a request with no trusted address is keyed on. */
@@ -31,7 +32,7 @@ export function addressFromHeaders(header: (name: string) => string | null | und
       return value;
     }
     if (family === 6) {
-      return ipv6Block(value);
+      return ipv6Key(value);
     }
   }
   return NO_ADDRESS;
@@ -41,22 +42,41 @@ export function clientAddress(request: Request): string {
   return addressFromHeaders((name) => request.headers.get(name));
 }
 
-/** The /64 of an IPv6 literal: its first four groups, normalized, and "::". */
-function ipv6Block(address: string): string {
+/** The limit key of an IPv6 literal: its /64, the IPv4 it maps, or itself inside ::/64. */
+function ipv6Key(address: string): string {
+  const groups = expandIpv6(address);
+  const zero = (group: string) => group === "0";
+  if (groups.slice(0, 5).every(zero) && groups[5] === "ffff") {
+    const [high = "0", low = "0"] = groups.slice(6);
+    return [Number.parseInt(high, 16), Number.parseInt(low, 16)]
+      .flatMap((word) => [word >> 8, word & 0xff])
+      .join(".");
+  }
+  if (groups.slice(0, 4).every(zero)) {
+    return groups.join(":");
+  }
+  return `${groups.slice(0, 4).join(":")}::`;
+}
+
+/** The eight groups of an IPv6 literal, lowercase, no leading zeros, an embedded IPv4 as two groups. */
+function expandIpv6(address: string): string[] {
   const [head = "", tail = ""] = address.split("::");
-  // An embedded IPv4 ("::ffff:203.0.113.9") takes the last two groups; only
-  // the count matters here, the first four groups never hold it.
   const groups = (part: string) =>
     part === ""
       ? []
-      : part.split(":").flatMap((group) => (group.includes(".") ? ["0", "0"] : [group]));
+      : part.split(":").flatMap((group) => {
+          if (!group.includes(".")) {
+            return [group.toLowerCase().replace(/^0+(?=.)/, "")];
+          }
+          const bytes = group.split(".").map((octet) => Number.parseInt(octet, 10));
+          return [
+            ((bytes[0] ?? 0) << 8) | (bytes[1] ?? 0),
+            ((bytes[2] ?? 0) << 8) | (bytes[3] ?? 0),
+          ].map((word) => word.toString(16));
+        });
   const left = groups(head);
   const right = groups(tail);
-  const expanded = address.includes("::")
+  return address.includes("::")
     ? [...left, ...Array<string>(Math.max(0, 8 - left.length - right.length)).fill("0"), ...right]
     : left;
-  return `${expanded
-    .slice(0, 4)
-    .map((group) => group.toLowerCase().replace(/^0+(?=.)/, ""))
-    .join(":")}::`;
 }
