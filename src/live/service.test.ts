@@ -1087,6 +1087,15 @@ describe("the live service", { timeout: 30_000 }, () => {
     expect(ann.closeCode).toBe(1013);
   });
 
+  it("refuses a token made under another session epoch, as a sign-in to redo", async () => {
+    const { port } = await startService();
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/live`, {
+      headers: { cookie: `gtnh_session=${makeSessionToken(users.ann!.id, 999)}`, origin: ORIGIN },
+    });
+    const code = await new Promise<number>((resolve) => ws.on("close", (c) => resolve(c)));
+    expect(code).toBe(4001);
+  });
+
   it("answers a join the database cannot open as rate, never as not_found or forbidden", async () => {
     // A client removes its copy of a shared plan on not_found or forbidden.
     const store = supabasePlanStore();

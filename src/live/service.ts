@@ -18,7 +18,7 @@ import {
   type ServerFrame,
 } from "@/lib/live/protocol";
 import { sameSecret } from "@/lib/server/cloud-plans";
-import { readSessionCookie, verifySessionToken } from "@/lib/server/session";
+import { readSessionCookie, verifySessionToken, type SessionClaims } from "@/lib/server/session";
 import { FlushQueue } from "./flush-queue";
 import { Journal } from "./journal";
 import { Room, type RoomPeer, type RoomTiming } from "./room";
@@ -250,10 +250,7 @@ export class LiveService {
   private readonly nearbyByAccount: RateLimiter;
   private readonly nearbyByAddress: RateLimiter;
   /** Accounts looked up for sessions, each kept `accountCacheMs`. */
-  private readonly accounts = new Map<
-    string,
-    { at: number; account: Promise<{ id: string; username: string } | undefined> }
-  >();
+  private readonly accounts = new Map<string, { at: number; account: Promise<Account | undefined> }>();
   private heartbeat?: ReturnType<typeof setInterval>;
   private stopping = false;
 
@@ -418,7 +415,7 @@ export class LiveService {
       if (!this.nearbyByAccount.take(session.userId)) {
         return { status: 429, body: { error: "Too many asks. Try again in a minute." } };
       }
-      const user = await this.account(session.userId);
+      const user = await this.account(session);
       if (!user) {
         return { status: 401, body: { error: "Sign in first." } };
       }
@@ -536,13 +533,22 @@ export class LiveService {
   }
 
   /** The account a request's session cookie names, when its signature holds (no database). */
-  private session(req: IncomingMessage): { userId: string } | undefined {
+  private session(req: IncomingMessage): SessionClaims | undefined {
     const token = readSessionCookie(req.headers.cookie);
     return token ? verifySessionToken(token) : undefined;
   }
 
-  /** An account by id, looked up at most once every `accountCacheMs`. */
-  private account(userId: string): Promise<{ id: string; username: string } | undefined> {
+  /**
+   * The account a session names, looked up at most once every `accountCacheMs`;
+   * undefined when it is gone or when the account's session epoch has moved
+   * since the token was made (signed out everywhere).
+   */
+  private async account(session: SessionClaims): Promise<Account | undefined> {
+    const account = await this.cachedAccount(session.userId);
+    return account && account.epoch === session.epoch ? account : undefined;
+  }
+
+  private cachedAccount(userId: string): Promise<Account | undefined> {
     const cached = this.accounts.get(userId);
     if (cached && Date.now() - cached.at < this.limits.accountCacheMs) {
       return cached.account;
@@ -598,11 +604,11 @@ export class LiveService {
     }
     const tooMany = () =>
       !!session && (this.byUser.get(session.userId)?.size ?? 0) >= CONNECTIONS_PER_ACCOUNT;
-    let user: { id: string; username: string } | undefined;
+    let user: Account | undefined;
     let lookupFailed = false;
     if (session && !tooMany()) {
       try {
-        user = await this.account(session.userId);
+        user = await this.account(session);
       } catch (error) {
         lookupFailed = true;
         this.log(`sign-in check failed: ${String(error)}`);
@@ -1224,6 +1230,9 @@ async function readJson(req: IncomingMessage, maxBytes = 256 * 1024): Promise<un
     return undefined;
   }
 }
+
+/** What the store says about a signed-in account. */
+type Account = Awaited<ReturnType<PlanStore["account"]>> & object;
 
 interface InternalBody {
   doc?: unknown;

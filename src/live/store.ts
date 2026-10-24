@@ -25,8 +25,11 @@ export type LeaseOutcome =
   | "lost";
 
 export interface PlanStore {
-  /** The account behind a verified session, or undefined when it is gone; throws when the database does not answer. */
-  account(userId: string): Promise<{ id: string; username: string } | undefined>;
+  /**
+   * The account behind a verified session, or undefined when it is gone; throws when the database does not
+   * answer. `epoch` is the account's session epoch: a token made under another value is refused.
+   */
+  account(userId: string): Promise<{ id: string; username: string; epoch: number } | undefined>;
   /** What the account may do with the design: "owner", "editor" or null. */
   role(userId: string, ownerId: string, designId: string): Promise<DesignRole | null>;
   /**
@@ -85,7 +88,7 @@ export function supabasePlanStore(): PlanStore {
   return {
     async account(userId) {
       const user = await loadSessionUser(userId);
-      return user ? { id: user.id, username: user.username } : undefined;
+      return user ? { id: user.id, username: user.username, epoch: user.session_epoch } : undefined;
     },
     role: (userId, ownerId, designId) => designRole(db(), userId, ownerId, designId),
     async lease(ownerId, designId, token, until) {
