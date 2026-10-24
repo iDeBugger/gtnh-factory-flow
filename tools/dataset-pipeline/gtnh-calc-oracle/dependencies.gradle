@@ -28,4 +28,13 @@ dependencies {
     }
 
     shadowImplementation("com.google.code.gson:gson:2.10.1")
+
+    // The pixel checks (IconChecks) are plain Java and tested outside the game; `build` runs them.
+    testImplementation(platform("org.junit:junit-bom:5.10.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.named("test", Test) {
+    useJUnitPlatform()
 }

@@ -1,9 +1,8 @@
 import fs from "node:fs/promises";
-import { createReadStream, createWriteStream, existsSync } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
-import { createGzip } from "node:zlib";
-import { pipeline } from "node:stream/promises";
+import { gzipFileDeterministic } from "./deterministic-gzip.mjs";
 
 const channel = requiredEnv("GTNH_CHANNEL");
 const versionId = requiredEnv("GTNH_VERSION_ID");
@@ -112,10 +111,14 @@ await buildRecipeIndex(recipeDatasetPath, outDir);
 console.log(`Normalizing fluid icon alpha for ${versionId}.`);
 await normalizeFluidIconAlpha(outDir);
 
+// build-recipe-index wrote recipes.json.gz and the fluid alpha pass patched it with recipes.json, so it is
+// already the gzip of the final recipes.json; it is made here only if an index step did not.
 const compressedRecipeDatasetPath = `${recipeDatasetPath}.gz`;
 const uncompressedSizeBytes = (await fs.stat(recipeDatasetPath)).size;
-console.log(`Compressing dataset for ${versionId}.`);
-await gzipFile(recipeDatasetPath, compressedRecipeDatasetPath);
+if (!existsSync(compressedRecipeDatasetPath)) {
+  console.log(`Compressing dataset for ${versionId}.`);
+  await gzipFileDeterministic(recipeDatasetPath, compressedRecipeDatasetPath);
+}
 await fs.rm(recipeDatasetPath, { force: true });
 
 console.log(`Writing pipeline record for ${versionId}.`);
@@ -514,12 +517,4 @@ function positiveIntEnv(name, defaultValue) {
   }
 
   return parsed;
-}
-
-async function gzipFile(inputPath, outputPath) {
-  await pipeline(
-    createReadStream(inputPath),
-    createGzip({ level: 9 }),
-    createWriteStream(outputPath),
-  );
 }

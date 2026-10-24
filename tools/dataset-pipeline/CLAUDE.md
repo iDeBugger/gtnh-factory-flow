@@ -25,6 +25,10 @@ The GitHub "GTNH dataset pipeline" workflow is a decoy (no runner). Never dispat
    swap, compare icon counts and icon tables against live. Verify the live manifest and
    the published gzip afterwards.
 
+`build-recipe-index.mjs` also writes `recipes.json.gz` from the bytes of `recipes.json`. Every
+dataset gzip goes through `deterministic-gzip.mjs` (level 9, no name, zero mtime, OS byte pinned
+to Unix), so one `recipes.json` gives the same files and manifest checksum on macOS and in the image.
+
 Rebuilds must run `normalize-fluid-icon-alpha.mjs` (with `--rename`) after the index
 builds and before publishing, or faint fluids ship invisible. Texture URLs are cache-immutable: fix pixels under a NEW filename (`--rename`),
 and patch whole basenames only.
@@ -37,6 +41,8 @@ version, so a rebuild or another pack keeps every unchanged recipe's id with not
 carry. Recipes sharing a key take `-2`, `-3`... in the order of a hash of their whole body.
 Bees, crops, veins, small ores, mobs and underground fluids keep ids named by their game identity,
 and only the same identity folds: two veins with the same ores in other dimensions stay two veins.
+An identity exported twice folds only when both copies are the same; different contents under one id
+refuse the export (`identityExportGaps`, listed in the oracle report's `failures`).
 Some recipes differ between two exports of one pack because the game rolls them (Crop
 Breeder and assembly line ore picks, Gadomancy aspects, and Thaumcraft's generated item
 aspects behind essentia smelting): 18 to 70 ids across three pairs of exports. A plan
@@ -69,10 +75,10 @@ published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such 
   (Ross128b/ba) and `WorldGenEvergladesOreLayer.sList`, with each vein's chance among its dimension's
   veins. Everglades veins take 2.9's ids (`ore.mix.gtpp<n>`, n their `validOreveins` number) and its
   dimension naming (`dimensionDarkWorld`, `Eg`, added to `dimensions`); every 2.8.1 Everglades layer
-  generates at y 5-14 whatever it is given, and the export says so.
+  is configured at y 5-14 whatever it is given (ore blocks at about y 4-13), and the export says so.
 - `getMaxCatalystDurability` takes the catalyst stack there (no argument in 2.9); the oracle tries both,
   so Chemical Plant catalysts export `wearingInputs` on both. Nothing reads `wearingInputs` yet.
-- Machine names are the version's own (Primitive Blast Furnace, Naquadah Reactor Mark I, Zhuhai -
+- Machine names are the version's own (Primitive Blast Furnace, Naquadah Reactor MkI, Zhuhai -
   Fishing Port); `machineType` keeps them, so tables keyed by name need the 2.8.1 spelling too.
 - Generators named Mark I to IV fold into one tiered family (Plasma Generator Mark, EV to ZPM);
   2.9's Mk-I names keep one family per mark.
@@ -92,9 +98,29 @@ on a case-sensitive Docker volume: the pack has file names that differ only in c
 - A flat item icon (every 8x8 square one colour, about 70% of items) is written as 32x32,
   one pixel per texel, margins kept (`asPixelArt`). The app draws every icon pixelated and
   sized from the padded canvas, so it shows the same picture; blocks and models stay 256.
+- Each icon starts from the GL state the first icon rendered in (`applySavedGlState`, before the draw
+  as well as after it): the first icon of a frame otherwise inherited the menu screen's state, depth test
+  off, and a fresh 2.9 export drew about a hundred blocks inside out there (the RC-2 dataset shipped such
+  icons). The restore after each icon also covers face winding, the culled side and the texture matrix:
+  without them cells came out on a solid square and some machines, ores and Bibliocraft or ProjectRed
+  items garbled after the icon before them.
+- Each icon starts from CodeChickenLib's reset state with dynamic lighting on (`LibraryRenderState`:
+  `CCRenderState.reset()`, then `setDynamic()`), the state CCL item renderers leave. A CCL model drawn
+  without its own reset inherits the last icon's state: without the reset, 2.8.1's Logistics Pipes
+  crafting table, power junction and security station came out blank in a fresh export. A reset alone
+  leaves CCL's face shading on, and 2.9's Logistics Pipes pipe items (a vertex buffer built on their first
+  draw) came out darker than a chest GUI frame in the game draws them. Exam: `LibraryRenderStateTest`.
+  Every icon the checks drop is listed with its reason in `dropped-icons.json` beside `icon-map.json`
+  (the log shows only the first `gtnh.oracle.maxIconRenderWarnings`).
+- The missing-texture check counts magenta only beside the checkerboard's black half (`IconChecks`):
+  plain magenta is a tint, as on 2.8.1's computronics colorful upgrade, whose cycling colour dropped
+  it at random. Exam: `IconChecksTest` (`gradlew test`, part of `build`).
 - Animated textures are held on their first frame while icons render
   (`IconAnimationFreezer`), so fluids and machines come out the same on every export. About
-  400 icons from time-driven renderers still differ between exports.
+  400 icons from time-driven renderers still differ between exports (magmatter, infinity, six-phased
+  copper, the timepiece, the phononic seed crystal, TwilightForest's carminite reactor debris). About 37
+  GT++ alloy items (Laurenium, Grisium, Eglin Steel, Indalloy 140, Octiron) change with each game launch:
+  GT++ picks their texture set (shiny or metallic) by a hash map count whose ties fall by identity hash.
 - The mod writes `icon-colors.json` beside the icons (`IconColors`, a step-for-step port of
   `getDominantOpaqueColor`); `stage-rendered-icons.mjs` decodes only icons it lacks. The two
   must stay identical.
@@ -163,7 +189,7 @@ on a case-sensitive Docker volume: the pack has file names that differ only in c
   ("Needs Red Granite under it") the recipe search card shows (`CropRequirementNote`); the plain
   crop keeps its id. IC2's own cards export their lang key (`ic2.crop.redwheat`) as the name, on
   2.8.1 and 2.9: the normalizer names them after their seed bag ("Redwheat Seeds" is Redwheat),
-  else from the key's last part (`ic2CropDisplayName`); ids never use the name. Exam: the IC2 crop
+  else from the key's last part (`ic2CropDisplayName`, only for crops IC2 owns); ids never use the name. Exam: the IC2 crop
   block in `normalize-oracle-export.test.mjs`.
 - Extreme Entity Crusher mobs come from the `kubatech-eec-mobs` oracle adapter (drop
   chances replayed in `eec-drops.mjs`). Sparge Tower rolled outputs and fusion startup EU

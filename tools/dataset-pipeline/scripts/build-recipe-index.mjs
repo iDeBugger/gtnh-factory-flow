@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
-import { gunzipSync, gzipSync } from "node:zlib";
+import { gunzipSync } from "node:zlib";
+import { gzipDeterministic, gzipFileDeterministic } from "./deterministic-gzip.mjs";
 
 const datasetPath = process.argv[2];
 const datasetOutDir = process.argv[3];
@@ -45,7 +46,7 @@ for (
     recipes: dataset.recipes.slice(start, end),
   };
 
-  await fs.writeFile(path.join(shardDir, fileName), gzipSync(JSON.stringify(shard), { level: 9 }));
+  await fs.writeFile(path.join(shardDir, fileName), gzipDeterministic(JSON.stringify(shard)));
   shards.push({ id: String(shardIndex), path: publicPath, start, end });
 }
 
@@ -85,9 +86,14 @@ const resourceCatalog = {
 const resourceIndexPath = path.join(datasetOutDir, "resource-index.json.gz");
 const indexPath = path.join(datasetOutDir, "recipe-index.json.gz");
 const lookupIndexPath = path.join(datasetOutDir, "recipe-lookup-index.json.gz");
-await fs.writeFile(resourceIndexPath, gzipSync(JSON.stringify(resourceCatalog), { level: 9 }));
-await fs.writeFile(indexPath, gzipSync(JSON.stringify(recipeIndex), { level: 9 }));
-await fs.writeFile(lookupIndexPath, gzipSync(JSON.stringify(recipeLookupIndex), { level: 9 }));
+await fs.writeFile(resourceIndexPath, gzipDeterministic(JSON.stringify(resourceCatalog)));
+await fs.writeFile(indexPath, gzipDeterministic(JSON.stringify(recipeIndex)));
+await fs.writeFile(lookupIndexPath, gzipDeterministic(JSON.stringify(recipeLookupIndex)));
+// The full dataset ships as recipes.json.gz and is part of the manifest checksum, so it is written here from the
+// exact bytes of recipes.json; the fluid alpha pass then patches both the same way.
+if (!datasetPath.endsWith(".gz")) {
+  await gzipFileDeterministic(datasetPath, path.join(datasetOutDir, "recipes.json.gz"));
+}
 
 console.log(
   `Wrote resource catalog, recipe index with ${recipeIndex.recipes.length} summaries, compact lookup index, and ${shards.length} shard(s).`,

@@ -9,6 +9,8 @@ final class IconChecks {
 
     /** At or above this share of magenta (missing texture) pixels an icon is dropped. */
     static final double MISSING_TEXTURE_LIMIT = 0.5D;
+    /** The missing texture is half magenta, half black; a rendered one keeps about as much black as magenta. */
+    static final double MISSING_TEXTURE_BLACK_SHARE = 0.8D;
 
     private IconChecks() {}
 
@@ -25,9 +27,15 @@ final class IconChecks {
         return false;
     }
 
+    /**
+     * The share of visible pixels that are the missing texture's magenta, counted only when the icon also holds the
+     * checkerboard's black half (at least MISSING_TEXTURE_BLACK_SHARE as many near-black pixels as magenta ones).
+     * Magenta alone is an item tinted magenta, such as a colour-cycling upgrade drawn while its hue sat there.
+     */
     static double missingTextureRatio(int[] argb) {
         int visiblePixels = 0;
         int missingTexturePixels = 0;
+        int blackPixels = 0;
         for (int value : argb) {
             int alpha = (value >>> 24) & 255;
             if (alpha == 0) {
@@ -40,9 +48,14 @@ final class IconChecks {
             int blue = value & 255;
             if (red >= 220 && green <= 40 && blue >= 220) {
                 missingTexturePixels++;
+            } else if (red <= 40 && green <= 40 && blue <= 40) {
+                blackPixels++;
             }
         }
 
-        return visiblePixels > 0 ? (double) missingTexturePixels / (double) visiblePixels : 0.0D;
+        if (visiblePixels == 0 || blackPixels < MISSING_TEXTURE_BLACK_SHARE * missingTexturePixels) {
+            return 0.0D;
+        }
+        return (double) missingTexturePixels / (double) visiblePixels;
     }
 }

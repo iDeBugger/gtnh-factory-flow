@@ -212,6 +212,8 @@ public final class ClientItemStackIconRenderer {
         final int modelViewDepth = GL11.glGetInteger(GL11.GL_MODELVIEW_STACK_DEPTH);
         final int projectionDepth = GL11.glGetInteger(GL11.GL_PROJECTION_STACK_DEPTH);
         saveGlStateOnce();
+        applySavedGlState();
+        resetLibraryRenderState();
 
         try {
             resetTessellator();
@@ -789,8 +791,10 @@ public final class ClientItemStackIconRenderer {
         BufferedImage image = imageFromRgbaBuffer(pixels.overlay);
         applyTint(pixels.tint, image);
         image = withContainerBase(pixels, image);
-        if (!IconChecks.usable(argbOf(image))) {
+        int[] argb = argbOf(image);
+        if (!IconChecks.usable(argb)) {
             markSkipped(key);
+            warnRejectedIcon(key, argb);
             return MaterializedIconResult.SKIPPED;
         }
 
@@ -802,6 +806,10 @@ public final class ClientItemStackIconRenderer {
         byte[] png = encodePng(stored);
         Files.write(outFile.toPath(), png);
         cache.store(cachedFile, png, colour);
+        // A key dropped by an earlier draw and written now (a retry) is no longer a drop.
+        synchronized (DROPPED_ICONS) {
+            DROPPED_ICONS.remove(key);
+        }
         return MaterializedIconResult.RENDERED;
     }
 
@@ -1074,6 +1082,7 @@ public final class ClientItemStackIconRenderer {
     private static boolean[] savedCaps;
     private static boolean savedLightmapTexture;
     private static int savedBlendSrc, savedBlendDst, savedAlphaFunc, savedDepthFunc, savedShadeModel;
+    private static int savedFrontFace, savedCullFaceMode;
     private static float savedAlphaRef;
     private static boolean savedDepthMask;
 
@@ -1096,6 +1105,8 @@ public final class ClientItemStackIconRenderer {
         savedDepthFunc = GL11.glGetInteger(GL11.GL_DEPTH_FUNC);
         savedDepthMask = GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK);
         savedShadeModel = GL11.glGetInteger(GL11.GL_SHADE_MODEL);
+        savedFrontFace = GL11.glGetInteger(GL11.GL_FRONT_FACE);
+        savedCullFaceMode = GL11.glGetInteger(GL11.GL_CULL_FACE_MODE);
         savedCaps = caps;
     }
 
@@ -1114,6 +1125,15 @@ public final class ClientItemStackIconRenderer {
             GL11.glPopMatrix();
         }
         resetTessellator();
+        applySavedGlState();
+    }
+
+    /**
+     * The switches, functions and colour the first icon rendered in. Applied before every icon as well as after it:
+     * the first icon of each frame otherwise drew in whatever state the menu screen left, and a fresh 2.9 export
+     * drew about a hundred blocks there inside out (back faces over front ones: ores, slabs, machines).
+     */
+    static void applySavedGlState() {
         if (savedCaps == null) {
             return;
         }
@@ -1129,6 +1149,12 @@ public final class ClientItemStackIconRenderer {
         GL11.glDepthFunc(savedDepthFunc);
         GL11.glDepthMask(savedDepthMask);
         GL11.glShadeModel(savedShadeModel);
+        // Face winding, the culled side and the item unit's texture matrix go back too, like the switches above.
+        GL11.glFrontFace(savedFrontFace);
+        GL11.glCullFace(savedCullFaceMode);
+        GL11.glMatrixMode(GL11.GL_TEXTURE);
+        GL11.glLoadIdentity();
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
         GL11.glColorMask(true, true, true, true);
         GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
         GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
@@ -1141,6 +1167,14 @@ public final class ClientItemStackIconRenderer {
         } else {
             GL11.glDisable(cap);
         }
+    }
+
+    /** Each icon starts from CodeChickenLib's reset, dynamic-lit state (LibraryRenderState says why). */
+    private static final LibraryRenderState LIBRARY_RENDER_STATE =
+        new LibraryRenderState(LibraryRenderState.CCL_RENDER_STATE);
+
+    static void resetLibraryRenderState() {
+        LIBRARY_RENDER_STATE.apply();
     }
 
     static void resetTessellator() {
@@ -1172,6 +1206,26 @@ public final class ClientItemStackIconRenderer {
         }
     }
 
+    private static int rejectWarnings;
+    /** Every icon the checks dropped and why, written beside icon-map.json: the log shows only the first few. */
+    private static final Map<String, String> DROPPED_ICONS = new LinkedHashMap<String, String>();
+
+    /** A drawn icon the checks dropped says why, as a render that threw does. */
+    private static synchronized void warnRejectedIcon(String key, int[] argb) {
+        rejectWarnings++;
+        String reason = IconChecks.hasVisiblePixels(argb)
+            ? "missing texture on " + Math.round(IconChecks.missingTextureRatio(argb) * 100) + "% of it"
+            : "no visible pixels";
+        synchronized (DROPPED_ICONS) {
+            DROPPED_ICONS.put(key, reason);
+        }
+        if (rejectWarnings <= MAX_RENDER_WARNINGS || rejectWarnings % 1000 == 0) {
+            GtnhCalcOracleMod.LOG.warn(
+                "GTNH 1.7.10 icon exporter dropped " + key + " (" + rejectWarnings + " dropped): " + reason
+            );
+        }
+    }
+
     static void writeIconMap() {
         synchronized (ICONS_BY_STACK_KEY) {
             writeIconMapLocked();
@@ -1179,13 +1233,19 @@ public final class ClientItemStackIconRenderer {
     }
 
     private static void writeIconMapLocked() {
-        File file = new File(iconDir(), "icon-map.json");
+        synchronized (DROPPED_ICONS) {
+            writeStringMap(new File(iconDir(), "dropped-icons.json"), DROPPED_ICONS);
+        }
+        writeStringMap(new File(iconDir(), "icon-map.json"), ICONS_BY_STACK_KEY);
+    }
+
+    private static void writeStringMap(File file, Map<String, String> map) {
         FileWriter writer = null;
         try {
             writer = new FileWriter(file);
             writer.write("{\n");
             int index = 0;
-            for (Map.Entry<String, String> entry : ICONS_BY_STACK_KEY.entrySet()) {
+            for (Map.Entry<String, String> entry : map.entrySet()) {
                 if (index > 0) {
                     writer.write(",\n");
                 }
@@ -1194,7 +1254,7 @@ public final class ClientItemStackIconRenderer {
             }
             writer.write("\n}\n");
         } catch (IOException e) {
-            GtnhCalcOracleMod.LOG.warn("Could not write GTNH icon map.", e);
+            GtnhCalcOracleMod.LOG.warn("Could not write " + file.getName() + ".", e);
         } finally {
             if (writer != null) {
                 try {

@@ -92,6 +92,10 @@ function registerMachineHandlerIcons(templates) {
   }
 }
 const recipeSignatures = new Set();
+// A game identity's recipe (vein, small ore, bee, crop, mob, underground fluid)
+// by id: the hash of its first body, and every id met again with another body.
+const identityBodies = new Map();
+const identityConflicts = new Set();
 // The game names two different maps "Coke Oven": gtpp.recipe.cokeoven is the
 // Industrial Coke Oven's map (GTNH deliberately registers every Pyrolyse Oven
 // recipe into it too), while gt.recipe.cokeoven mirrors the Railcraft brick
@@ -1181,10 +1185,15 @@ function normalizeIc2Crops(domain) {
 
 // IC2's own crop cards export their unlocalized name (`ic2.crop.redwheat`). The game names
 // the crop's seed bag "<name> Seeds" with the translated name, so that is the display name;
-// a crop with no seed bag takes a name made from the key's last part.
+// a crop with no seed bag takes a name made from the key's last part. Only IC2's crops (owner
+// IC2, or with no owner an `ic2.` key) are renamed: another mod's dotted name is its own.
 function ic2CropDisplayName(crop) {
   const name = text(crop.name, undefined);
   if (!name || !/^[\w-]+(\.[\w-]+)+$/.test(name)) {
+    return name;
+  }
+  const owner = text(crop.owner, undefined);
+  if (owner !== undefined ? owner.toLowerCase() !== "ic2" : !name.toLowerCase().startsWith("ic2.")) {
     return name;
   }
   const seedName = text(crop.seed?.displayName, "");
@@ -1972,6 +1981,20 @@ function compactCraftingInputPositions(count) {
 }
 
 function addRecipe(recipe) {
+  if (recipe.id !== undefined) {
+    // The same identity exported twice folds only when both copies say the
+    // same thing; two different bodies under one id would keep whichever came
+    // first, so the export is refused (identityExportGaps).
+    const body = sha1Hex(JSON.stringify(recipe));
+    const first = identityBodies.get(recipe.id);
+    if (first !== undefined) {
+      if (first !== body) {
+        identityConflicts.add(recipe.id);
+      }
+      return;
+    }
+    identityBodies.set(recipe.id, body);
+  }
   const signature = recipeSignature(recipe);
   if (recipeSignatures.has(signature)) {
     return;
@@ -2357,6 +2380,7 @@ async function writeOracleReport(dataset) {
   const gridGaps = arcaneGridGaps(raw);
   const exportGaps = [
     ...spargeExportGaps(raw),
+    ...identityExportGaps(),
     ...(gridGaps.length > ARCANE_UNRESOLVED_GRID_CEILING
       ? [
           {
@@ -2409,6 +2433,23 @@ async function writeOracleReport(dataset) {
       `Oracle strict mode failed: ${runtimeFailures.length} oracle-eligible recipe(s) have no computed runtime calculation. See oracle/oracle-report.json.`,
     );
   }
+}
+
+/** Game identities exported more than once with different contents (addRecipe). */
+function identityExportGaps() {
+  if (identityConflicts.size === 0) {
+    return [];
+  }
+  const ids = [...identityConflicts].sort();
+  const shown = ids.slice(0, 20).join(", ");
+  return [
+    {
+      status: "identity-exported-twice",
+      recipeCount: ids.length,
+      recipeIds: ids,
+      message: `Export gap: ${ids.length} game identit${ids.length === 1 ? "y is" : "ies are"} exported more than once with different contents (${shown}${ids.length > 20 ? ", ..." : ""}), so only the first copy would ship.`,
+    },
+  ];
 }
 
 /**

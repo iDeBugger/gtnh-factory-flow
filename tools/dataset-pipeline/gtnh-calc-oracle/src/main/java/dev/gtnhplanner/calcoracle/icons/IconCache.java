@@ -559,6 +559,15 @@ final class IconCache {
             probes.add(argb);
         }
 
+        for (int black = 0; black <= 100; black++) {
+            // The checkerboard's black half: a hundred magenta pixels against a growing number of black ones.
+            int[] argb = new int[200];
+            for (int i = 0; i < argb.length; i++) {
+                argb[i] = i < 100 ? 0xFFDC28DC : (i < 100 + black ? 0xFF141414 : 0);
+            }
+            probes.add(argb);
+        }
+
         StringBuilder answers = new StringBuilder();
         for (int[] argb : probes) {
             answers.append(IconChecks.usable(argb)).append(',')

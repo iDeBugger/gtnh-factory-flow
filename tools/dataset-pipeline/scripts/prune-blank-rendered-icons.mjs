@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import zlib from "node:zlib";
 import { writeDatasetJson } from "./dataset-json-writer.mjs";
+import { gzipDeterministic } from "./deterministic-gzip.mjs";
 
 const datasetPath = process.argv[2];
 const renderedDir = process.argv[3];
@@ -61,7 +62,7 @@ for (const recipe of dataset.recipes ?? []) {
 }
 
 if (datasetPath.endsWith(".gz")) {
-  await fs.writeFile(datasetPath, zlib.gzipSync(`${JSON.stringify(dataset)}\n`));
+  await fs.writeFile(datasetPath, gzipDeterministic(`${JSON.stringify(dataset)}\n`));
 } else {
   await writeDatasetJson(datasetPath, dataset);
 }

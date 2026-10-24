@@ -82,5 +82,5 @@ height each vein names. The base Iron vein (`ore-mix-gtpp0`) places vanilla Iron
 8. Red Stonelilly on Red Granite drops 9 Red Granite Dust a drop; on (non-GT) Granite it drops a granite block.
 9. Redwheat with a redstone signal drops only redstone; without one, half redstone and half wheat.
 10. Ross128b Graphite vein: y 5 to 25, Graphite, Diamond, Coal and Graphite.
-11. Toxic Everglades Agardite (Nd) vein: found only at y 5 to 14, not up to y 60.
+11. Toxic Everglades Agardite (Nd) vein: its ore blocks sit at about y 4 to 13, never up to y 60.
 12. Tree Growth Simulator, Spruce sapling: 10 logs a cycle in log mode at the base tier, the same as the NEI recipe.

@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import readline from "node:readline";
-import { gunzipSync, gzipSync } from "node:zlib";
+import { gunzipSync } from "node:zlib";
+import { gzipDeterministic } from "./deterministic-gzip.mjs";
 import { writeDatasetJson } from "./dataset-json-writer.mjs";
 
 const datasetPath = process.argv[2];
@@ -105,7 +106,7 @@ function parseJsonLineValue(line) {
 async function writeDataset(filePath, dataset) {
   if (filePath.endsWith(".gz")) {
     const json = `${JSON.stringify(dataset)}\n`;
-    await fs.writeFile(filePath, gzipSync(json, { level: 9 }));
+    await fs.writeFile(filePath, gzipDeterministic(json));
     return;
   }
 

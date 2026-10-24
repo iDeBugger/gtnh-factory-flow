@@ -3,6 +3,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import crypto from "node:crypto";
 import { PNG } from "pngjs";
+import { gzipDeterministic } from "./deterministic-gzip.mjs";
 
 /**
  * Make ghost fluids visible: turn nearly invisible fluid icons into solid chips
@@ -326,7 +327,7 @@ function patchArtifact(filePath) {
 
   fs.writeFileSync(
     filePath,
-    isGz ? zlib.gzipSync(buffer, { level: zlib.constants.Z_BEST_COMPRESSION }) : buffer,
+    isGz ? gzipDeterministic(buffer) : buffer,
   );
   console.log(`Patched ${replaced} references in ${path.relative(datasetDir, filePath)}.`);
 }

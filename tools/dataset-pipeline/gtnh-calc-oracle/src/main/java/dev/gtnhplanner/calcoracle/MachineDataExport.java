@@ -95,20 +95,28 @@ public final class MachineDataExport {
             f.put("yield", call(genome, "getYield"));
             Object base = products.get("Forestry:sapling:" + f.get("species"));
             Map<String, Object> counts = ctx.map();
+            List<String> unread = new ArrayList<String>();
             if (base instanceof Map) {
                 for (Map.Entry<?, ?> e : ((Map<?, ?>) base).entrySet()) {
+                    String mode = ((Enum<?>) e.getKey()).name().toLowerCase(Locale.ROOT);
                     // 2.8.1 keeps a product the tree lacks (Dark Oak's fruit) as a null stack; 2.9 leaves
                     // it out. Either way the tree makes none of it, so the mode is left out.
-                    if (!(e.getValue() instanceof ItemStack)) {
+                    if (e.getValue() == null) {
                         continue;
                     }
-                    counts.put(
-                        ((Enum<?>) e.getKey()).name().toLowerCase(Locale.ROOT),
-                        Integer.valueOf(((ItemStack) e.getValue()).stackSize)
-                    );
+                    // Anything else is a product this export cannot count: it is reported as an error,
+                    // which the importer refuses, rather than dropped as if the tree made none.
+                    if (!(e.getValue() instanceof ItemStack)) {
+                        unread.add(mode + " is a " + e.getValue().getClass().getName());
+                        continue;
+                    }
+                    counts.put(mode, Integer.valueOf(((ItemStack) e.getValue()).stackSize));
                 }
             }
             f.put("base", counts);
+            if (!unread.isEmpty()) {
+                f.put("error", "products that are not item stacks: " + String.join(", ", unread));
+            }
             return f;
         } catch (ReflectiveOperationException | RuntimeException e) {
             Map<String, Object> f = ctx.map();

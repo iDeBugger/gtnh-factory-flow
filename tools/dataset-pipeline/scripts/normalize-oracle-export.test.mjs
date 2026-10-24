@@ -491,6 +491,23 @@ describe("recipes named by a game identity are not folded by their contents", ()
     const veins = dataset.recipes.filter((recipe) => recipe.kind === "ore_vein");
 
     expect(veins.map((vein) => vein.id)).toEqual(["oracle:ore-vein:ore-mix-quartz"]);
+    expect(dataset.oracleReport.failures).toEqual([]);
+  });
+
+  it("refuses an export that lists one identity twice with different contents", () => {
+    let error;
+    try {
+      normalize(miningExport([nether, { ...nether, heightRange: "10-20" }], [
+        smallOre("ore.small.garnetred", "Overworld"),
+        smallOre("ore.small.garnetred", "GalacticraftCore_Moon"),
+      ]));
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeDefined();
+    expect(String(error.stderr)).toContain(
+      "2 game identities are exported more than once with different contents (oracle:ore-vein:ore-mix-quartz, oracle:small-ore:ore-small-garnetred)",
+    );
   });
 });
 
@@ -576,6 +593,17 @@ describe("IC2 crops that drop something only on a block under them or with a red
     expect(fromSeed.inputs[0].tooltip).toContain("Crop: Redwheat");
     expect(fromKey.name).toBe("IC2 Crop: Terra Wart");
     expect(fromKey.id).toBe(named.id);
+  });
+
+  it("renames only IC2's own crops: another mod's dotted name stays as it is", () => {
+    const drops = [stats("23-31-0", [item("minecraft:redstone", 1, "Redstone")])];
+    const [other] = ic2Crops(normalize(cropsExport([crop("7", "berriespp.crop.Ex.Ample", drops)])));
+    const { owner, ...unowned } = crop("8", "ic2.crop.terraWart", drops);
+    const [ic2Key] = ic2Crops(normalize(cropsExport([{ ...unowned, seed: undefined }])));
+
+    expect(owner).toBe("berriespp");
+    expect(other.name).toBe("IC2 Crop: berriespp.crop.Ex.Ample");
+    expect(ic2Key.name).toBe("IC2 Crop: Terra Wart");
   });
 
   it("keeps the plain crop's recipe and id and adds the condition beside it", () => {
