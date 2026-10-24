@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { factoryProjectSchema } from "@/lib/model/schemas";
-import { COMMUNITY_UPLOAD_MAX_BYTES } from "@/lib/community/types";
+import { COMMUNITY_UPLOAD_BODY_MAX_BYTES, COMMUNITY_UPLOAD_MAX_BYTES } from "@/lib/community/types";
 import {
   LIBRARY_DESIGN_NAME_MAX_LENGTH,
   LIBRARY_MAX_DESIGNS,
@@ -25,6 +25,7 @@ import {
   rowToDesignMeta,
   type DesignRow,
 } from "@/lib/server/library";
+import { readTextCapped } from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -109,13 +110,10 @@ export async function PUT(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Bad owner id." }, { status: 400 });
   }
 
-  let raw: string;
-  try {
-    raw = await request.text();
-  } catch {
-    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
-  }
-  if (raw.length > COMMUNITY_UPLOAD_MAX_BYTES) {
+  // Bytes first (nothing past the cap is buffered), then the player's limit
+  // in characters, which is what the client counts.
+  const raw = await readTextCapped(request, COMMUNITY_UPLOAD_BODY_MAX_BYTES);
+  if (raw === undefined || raw.length > COMMUNITY_UPLOAD_MAX_BYTES) {
     return NextResponse.json({ error: "This design is too large to sync." }, { status: 413 });
   }
   let body: Partial<DesignUpsertBody>;

@@ -4,6 +4,7 @@ import type { FactoryProject } from "@/lib/model/types";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
 import { getCommunityDb, makeSessionToken } from "@/lib/server/community";
+import { oversizeRequest } from "@/test-support/request-bodies";
 import { GET, PUT } from "./route";
 
 /**
@@ -76,5 +77,18 @@ describe("the library design PUT", () => {
     expect(stored.tasks).toEqual(plan.tasks);
     expect(stored.taskItems).toEqual(plan.taskItems);
     expect(stored.taskComments).toEqual(plan.taskComments);
+  });
+
+  it("refuses a save whose declared length is over the cap without reading it", async () => {
+    const { request, counts } = oversizeRequest(
+      "http://localhost/api/library/designs/design-big",
+      "PUT",
+      5 * 1024 * 1024,
+      { cookie },
+    );
+    const response = await PUT(request, { params: Promise.resolve({ designId: "design-big" }) });
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "This design is too large to sync." });
+    expect(counts.pulls).toBe(0);
   });
 });

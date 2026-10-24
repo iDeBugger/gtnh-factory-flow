@@ -187,6 +187,22 @@ The instance is small and has gone down under load. Rules:
   a moment." Accepted trade-off: a flood past the queue refuses sign-ins for as long as it lasts, and never stalls
   the site. Exam: the "password checks" block of `app/api/community/auth/auth.test.ts`.
 
+## Request bodies (request-body.ts)
+
+- Next.js route handlers have no body limit, so `request.json()`, `request.text()` and `request.formData()` buffer
+  whatever arrives. Every route that reads a body reads it through `request-body.ts` (`readJsonCapped`,
+  `readTextCapped`, `readFormDataCapped`) with a cap sized to what the client sends: a declared `content-length`
+  over the cap is refused unread, a chunked body stops at the cap, and the answer is 413 with the route's own
+  sentence. The read happens where it happened before, so every gate, 503 and auth check that ran ahead of it
+  still does. Caps: feedback `FEEDBACK_MAX_BYTES` (4 MiB); plan uploads and synced designs
+  `COMMUNITY_UPLOAD_BODY_MAX_BYTES` (4 MiB of bytes, then the player-facing 3 Mi-character count
+  `COMMUNITY_UPLOAD_MAX_BYTES`); board images and plan previews `BOARD_IMAGE_MAX_BYTES + UPLOAD_FORM_OVERHEAD_BYTES`
+  (the multipart is re-parsed from the capped bytes); blueprint saves `BLUEPRINT_BODY_MAX_BYTES` (2 MiB, the
+  payload's own 1.5 MB check stays behind it); comments `COMMENT_BODY_MAX_BYTES` (64 KiB); sign-in, sign-up, votes,
+  folders and publish `SMALL_JSON_MAX_BYTES` (16 KiB). A new route that reads a body uses the reader and names its
+  cap. Caddy's `request_body max_size` is the edge's copy of the rule, not a substitute. Exam: `request-body.test.ts`
+  and the "declared length over the cap" cases in the route tests.
+
 ## The mod and community switch (deployment-features.ts)
 
 - `isModAndCommunityOn()` is true only when `NEXT_PUBLIC_MOD_AND_COMMUNITY` is `on`; unset or anything else is off.

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
+import { oversizeRequest } from "@/test-support/request-bodies";
 
 /** Every query call the routes make, as [method, args]. */
 const calls: Array<[string, unknown[]]> = [];
@@ -100,6 +101,20 @@ describe("blueprints with the setting unset", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ blueprints: [] });
     expect(calls).toContainEqual(["eq", ["user_id", ann.id]]);
+  });
+
+  it("refuses a save whose declared length is over the cap without reading it", async () => {
+    sessionUser.mockReturnValue(ann);
+    const { request, counts } = oversizeRequest(
+      "http://localhost/api/blueprints",
+      "POST",
+      3 * 1024 * 1024,
+    );
+    const response = await list.POST(request);
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "Blueprint is too large to save." });
+    expect(counts.pulls).toBe(0);
+    expect(calls).toEqual([]);
   });
 
   it("finds only the reader's own blueprint by id, never someone else's published one", async () => {

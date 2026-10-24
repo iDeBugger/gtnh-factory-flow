@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
-import { BOARD_IMAGE_MAX_BYTES } from "@/lib/community/types";
+import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
 import { getCommunityDb, isCommunityConfigured } from "@/lib/server/community";
 import { claimImageUpload } from "@/lib/server/image-upload-guard";
+import { readFormDataCapped } from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,7 +74,18 @@ export async function POST(request: Request) {
   }
 
   try {
-    const form = await request.formData();
+    // The whole body is held to the picture's cap plus the form's overhead
+    // before it is buffered, so an oversize upload costs no memory.
+    const form = await readFormDataCapped(
+      request,
+      BOARD_IMAGE_MAX_BYTES + UPLOAD_FORM_OVERHEAD_BYTES,
+    );
+    if (!form) {
+      return NextResponse.json(
+        { error: "That image is too big: the limit is 4 MB." },
+        { status: 413 },
+      );
+    }
     const file = form.get("image");
     if (!(file instanceof Blob)) {
       return NextResponse.json({ error: "No image in the upload." }, { status: 400 });

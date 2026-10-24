@@ -20,6 +20,11 @@ import {
   rowToFolder,
   type FolderRow,
 } from "@/lib/server/library";
+import {
+  readJsonCapped,
+  REQUEST_TOO_BIG_MESSAGE,
+  SMALL_JSON_MAX_BYTES,
+} from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,12 +48,13 @@ export async function PUT(request: Request, context: RouteContext) {
   if (!isLibraryId(folderId)) {
     return NextResponse.json({ error: "Bad folder id." }, { status: 400 });
   }
-  let body: Partial<FolderUpsertBody>;
-  try {
-    body = (await request.json()) as Partial<FolderUpsertBody>;
-  } catch {
-    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  const read = await readJsonCapped(request, SMALL_JSON_MAX_BYTES);
+  if (!read.ok) {
+    return read.status === 413
+      ? NextResponse.json({ error: REQUEST_TOO_BIG_MESSAGE }, { status: 413 })
+      : NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
+  const body = (read.value ?? {}) as Partial<FolderUpsertBody>;
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (!name || name.length > LIBRARY_FOLDER_NAME_MAX_LENGTH) {
     return NextResponse.json({ error: "Folder names run 1 to 60 characters." }, { status: 400 });

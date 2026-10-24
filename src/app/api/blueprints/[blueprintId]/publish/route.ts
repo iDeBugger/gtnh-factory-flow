@@ -14,6 +14,11 @@ import {
   rowToBlueprintSummary,
   type BlueprintRow,
 } from "@/lib/server/blueprints";
+import {
+  readJsonCapped,
+  REQUEST_TOO_BIG_MESSAGE,
+  SMALL_JSON_MAX_BYTES,
+} from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,12 +52,13 @@ export async function POST(
     );
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  const read = await readJsonCapped(request, SMALL_JSON_MAX_BYTES);
+  if (!read.ok) {
+    return read.status === 413
+      ? NextResponse.json({ error: REQUEST_TOO_BIG_MESSAGE }, { status: 413 })
+      : NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
+  const body = read.value;
   const { publish, description } = (body ?? {}) as { publish?: unknown; description?: unknown };
   if (typeof publish !== "boolean") {
     return NextResponse.json({ error: "Invalid publish request." }, { status: 400 });

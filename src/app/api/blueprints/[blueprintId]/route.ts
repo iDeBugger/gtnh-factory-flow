@@ -3,6 +3,7 @@ import { isModAndCommunityOn } from "@/lib/deployment-features";
 import type { BoardClipboardPayload } from "@/store/factory-store";
 import { boardSelectionPayloadSchema } from "@/lib/model/schemas";
 import {
+  BLUEPRINT_BODY_MAX_BYTES,
   BLUEPRINT_NAME_MAX_LENGTH,
   BLUEPRINT_PAYLOAD_MAX_BYTES,
   normalizeBlueprintTags,
@@ -23,6 +24,7 @@ import {
   rowToBlueprintSummary,
   type BlueprintRow,
 } from "@/lib/server/blueprints";
+import { readJsonCapped } from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -99,12 +101,13 @@ export async function PUT(request: Request, context: RouteContext) {
     );
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  const read = await readJsonCapped(request, BLUEPRINT_BODY_MAX_BYTES);
+  if (!read.ok) {
+    return read.status === 413
+      ? NextResponse.json({ error: "Blueprint is too large to save." }, { status: 413 })
+      : NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
+  const body = read.value;
   const { name, payload, needs, outputs, tags, icon, highestTier, highestTierIndex } =
     (body ?? {}) as {
       name?: unknown;

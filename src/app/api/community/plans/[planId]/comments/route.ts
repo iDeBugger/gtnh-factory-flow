@@ -11,6 +11,11 @@ import {
   recountPlanComments,
 } from "@/lib/server/community";
 import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
+import {
+  COMMENT_BODY_MAX_BYTES,
+  readJsonCapped,
+  REQUEST_TOO_BIG_MESSAGE,
+} from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -113,13 +118,14 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Plan not found." }, { status: 404 });
   }
 
-  let text = "";
-  try {
-    const body = (await request.json()) as { body?: unknown };
-    text = typeof body.body === "string" ? body.body.trim() : "";
-  } catch {
-    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  const read = await readJsonCapped(request, COMMENT_BODY_MAX_BYTES);
+  if (!read.ok) {
+    return read.status === 413
+      ? NextResponse.json({ error: REQUEST_TOO_BIG_MESSAGE }, { status: 413 })
+      : NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
+  const body = (read.value ?? {}) as { body?: unknown };
+  const text = typeof body.body === "string" ? body.body.trim() : "";
   if (!text || text.length > COMMUNITY_COMMENT_MAX_LENGTH) {
     return NextResponse.json(
       { error: `A comment runs 1 to ${COMMUNITY_COMMENT_MAX_LENGTH} characters.` },

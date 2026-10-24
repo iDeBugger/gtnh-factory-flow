@@ -45,6 +45,8 @@ export const BLUEPRINT_NAME_MAX_LENGTH = 60;
 export const BLUEPRINT_DESCRIPTION_MAX_LENGTH = 500;
 /** A blueprint is a fragment, not a whole plan; half the community cap. */
 export const BLUEPRINT_PAYLOAD_MAX_BYTES = 1_500_000;
+/** The whole save body on the wire: the payload plus a name, tags, two stat lists and an icon. */
+export const BLUEPRINT_BODY_MAX_BYTES = 2 * 1024 * 1024;
 /** Per user. Generous — the list UI stays honest well past this. */
 export const BLUEPRINT_MAX_PER_USER = 200;
 /** One page of the public shelf. */

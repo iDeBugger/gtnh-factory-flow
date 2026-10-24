@@ -10,6 +10,7 @@ import { APP_VERSION } from "@/lib/version";
 import {
   COMMUNITY_DESCRIPTION_MAX_LENGTH,
   COMMUNITY_NAME_MAX_LENGTH,
+  COMMUNITY_UPLOAD_BODY_MAX_BYTES,
   COMMUNITY_UPLOAD_MAX_BYTES,
   type CommunityPlanListResponse,
   type CommunityPlanSort,
@@ -33,6 +34,7 @@ import {
   type PlanRow,
 } from "@/lib/server/community";
 import { invalidatePlanListCache, readPlanListCache, writePlanListCache } from "@/lib/server/plan-list-cache";
+import { readTextCapped } from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -247,8 +249,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const raw = await request.text();
-    if (raw.length > COMMUNITY_UPLOAD_MAX_BYTES) {
+    // Bytes first (nothing past the cap is buffered), then the player's
+    // limit in characters, which is what the client counts.
+    const raw = await readTextCapped(request, COMMUNITY_UPLOAD_BODY_MAX_BYTES);
+    if (raw === undefined || raw.length > COMMUNITY_UPLOAD_MAX_BYTES) {
       return NextResponse.json({ error: "Upload too large." }, { status: 413 });
     }
 

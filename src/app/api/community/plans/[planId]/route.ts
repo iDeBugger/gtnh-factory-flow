@@ -12,6 +12,7 @@ import { APP_VERSION } from "@/lib/version";
 import {
   COMMUNITY_DESCRIPTION_MAX_LENGTH,
   COMMUNITY_NAME_MAX_LENGTH,
+  COMMUNITY_UPLOAD_BODY_MAX_BYTES,
   COMMUNITY_UPLOAD_MAX_BYTES,
 } from "@/lib/community/types";
 import { normalizeBlueprintTags } from "@/lib/blueprints/types";
@@ -32,6 +33,7 @@ import {
   type PlanRow,
 } from "@/lib/server/community";
 import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
+import { readTextCapped } from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -180,8 +182,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ plan
 
   try {
     const { planId } = await params;
-    const raw = await request.text();
-    if (raw.length > COMMUNITY_UPLOAD_MAX_BYTES) {
+    const raw = await readTextCapped(request, COMMUNITY_UPLOAD_BODY_MAX_BYTES);
+    if (raw === undefined || raw.length > COMMUNITY_UPLOAD_MAX_BYTES) {
       return NextResponse.json({ error: "Upload too large." }, { status: 413 });
     }
 

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
-import { BOARD_IMAGE_MAX_BYTES } from "@/lib/community/types";
+import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
 import { PLAN_PREVIEW_BUCKET, getPlanPreviewPng } from "@/lib/server/plan-preview";
+import { readFormDataCapped } from "@/lib/server/request-body";
 import {
   getCommunityDb,
   getSessionUser,
@@ -80,7 +81,16 @@ export async function POST(
       return NextResponse.json({ error: "You don't own this post." }, { status: 403 });
     }
 
-    const form = await request.formData();
+    const form = await readFormDataCapped(
+      request,
+      BOARD_IMAGE_MAX_BYTES + UPLOAD_FORM_OVERHEAD_BYTES,
+    );
+    if (!form) {
+      return NextResponse.json(
+        { error: "That preview is too big: the limit is 4 MB." },
+        { status: 413 },
+      );
+    }
     const file = form.get("image");
     if (!(file instanceof Blob)) {
       return NextResponse.json({ error: "No image in the upload." }, { status: 400 });

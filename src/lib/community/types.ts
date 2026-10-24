@@ -1,9 +1,4 @@
-import type {
-  EntryIcon,
-  MachineTier,
-  ResourceIconAtlasRef,
-  ResourceKind,
-} from "@/lib/model/types";
+import type { EntryIcon, MachineTier, ResourceIconAtlasRef, ResourceKind } from "@/lib/model/types";
 
 /**
  * The face an entry wears in a list: one item or fluid the author picked.
@@ -152,8 +147,17 @@ export const SIGN_OUT_EVERYWHERE_FAILED = "Could not sign out everywhere. Try ag
 /** What sign-in and sign-up answer while more password checks wait than the server queues. */
 export const SIGN_IN_BUSY = "Sign-in is busy. Try again in a moment.";
 export const COMMUNITY_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
+/**
+ * The wire cap for a plan upload or a synced design, in bytes, read before the
+ * character count above is taken: that count is UTF-16 code units, and a plan
+ * at the character limit with non-ASCII names is more than 3 MiB of bytes.
+ * Multipart image bodies get `BOARD_IMAGE_MAX_BYTES` plus `UPLOAD_FORM_OVERHEAD_BYTES`.
+ */
+export const COMMUNITY_UPLOAD_BODY_MAX_BYTES = 4 * 1024 * 1024;
 /** Board image uploads (the picture annotation): hard cap, client and server. */
 export const BOARD_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
+/** Multipart boundaries and the small fields beside an uploaded picture. */
+export const UPLOAD_FORM_OVERHEAD_BYTES = 64 * 1024;
 export const COMMUNITY_NAME_MAX_LENGTH = 80;
 export const COMMUNITY_DESCRIPTION_MAX_LENGTH = 2000;
 export const COMMUNITY_RESOURCE_STAT_LIMIT = 40;

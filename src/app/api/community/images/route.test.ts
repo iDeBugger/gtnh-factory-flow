@@ -8,6 +8,7 @@ import {
   SITE_IMAGES_PER_HOUR,
 } from "@/lib/server/image-upload-guard";
 import { withModAndCommunityUnset } from "@/test-support/mod-and-community";
+import { countedBody } from "@/test-support/request-bodies";
 import { POST } from "./route";
 
 /**
@@ -71,6 +72,40 @@ describe("board image uploads", () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as { url?: unknown };
     expect(typeof body.url).toBe("string");
+  });
+
+  it("refuses an oversize upload before the body is buffered or counted", async () => {
+    // A 5 MiB multipart part around a real PNG header: over the cap by its total, not by any field.
+    const padded = new Uint8Array(5 * 1024 * 1024);
+    padded.set(PNG);
+    const refused = await upload("203.0.113.2", padded);
+    expect(refused.status).toBe(413);
+    expect(await refused.json()).toEqual({ error: "That image is too big: the limit is 4 MB." });
+    expect(await uploadsRecorded()).toBe(0);
+
+    // A declared length over the cap is refused before a byte is read.
+    const { body, counts } = countedBody(new Uint8Array(1024 * 1024), 64);
+    const unread = await POST(
+      new Request("http://localhost/api/community/images", {
+        method: "POST",
+        headers: {
+          "x-client-ip": "203.0.113.2",
+          "content-length": String(64 * 1024 * 1024),
+          "content-type": "multipart/form-data; boundary=x",
+        },
+        body,
+        duplex: "half",
+      } as RequestInit),
+    );
+    expect(unread.status).toBe(413);
+    expect(counts.pulls).toBe(0);
+
+    // The capped re-parse keeps the file: a 100 KB picture still lands.
+    const picture = new Uint8Array(100 * 1024);
+    picture.set(PNG);
+    const stored = await upload("203.0.113.2", picture);
+    expect(stored.status).toBe(200);
+    expect(await uploadsRecorded()).toBeGreaterThan(0);
   });
 
   it("holds one address to 30 an hour whatever device id it sends", async () => {

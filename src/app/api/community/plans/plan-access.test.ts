@@ -5,6 +5,7 @@ import { useInProcessLocalDb } from "@/lib/server/local-db/client";
 import { forgetSessionUsers, getCommunityDb, makeSessionToken, resetDbBreaker } from "@/lib/server/community";
 import { planWithAdditions } from "@/lib/model/__fixtures__/plan-additions";
 import { withModAndCommunityOn } from "@/test-support/mod-and-community";
+import { oversizeRequest } from "@/test-support/request-bodies";
 import * as list from "./route";
 import * as plan from "./[planId]/route";
 import * as preview from "./[planId]/preview/route";
@@ -246,6 +247,19 @@ describe("counting views", () => {
 
 describe("posting to the community", () => {
   withModAndCommunityOn();
+
+  it("refuses a post whose declared length is over the cap without reading it", async () => {
+    const { request, counts } = oversizeRequest(
+      "http://localhost/api/community/plans",
+      "POST",
+      5 * 1024 * 1024,
+      { "x-client-ip": nextAddress(), cookie: users.poster!.cookie },
+    );
+    const response = await list.POST(request);
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "Upload too large." });
+    expect(counts.pulls).toBe(0);
+  });
 
   it("holds one account to ten posts an hour whatever device id it sends", async () => {
     for (let i = 0; i < 10; i++) {

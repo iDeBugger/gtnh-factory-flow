@@ -14,6 +14,11 @@ import {
   serially,
   sessionCookieHeader,
 } from "@/lib/server/community";
+import {
+  readJsonCapped,
+  REQUEST_TOO_BIG_MESSAGE,
+  SMALL_JSON_MAX_BYTES,
+} from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,7 +44,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as { username?: unknown; password?: unknown };
+    const read = await readJsonCapped(request, SMALL_JSON_MAX_BYTES);
+    if (!read.ok) {
+      return read.status === 413
+        ? NextResponse.json({ error: REQUEST_TOO_BIG_MESSAGE }, { status: 413 })
+        : NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+    }
+    const body = (read.value ?? {}) as { username?: unknown; password?: unknown };
     const username = typeof body.username === "string" ? body.username.trim() : "";
     const password = typeof body.password === "string" ? body.password : "";
     if (!username || !password) {

@@ -17,6 +17,11 @@ import {
 import {
   blueprintStorageErrorMessage,
 } from "@/lib/server/blueprints";
+import {
+  readJsonCapped,
+  REQUEST_TOO_BIG_MESSAGE,
+  SMALL_JSON_MAX_BYTES,
+} from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,7 +47,13 @@ export async function POST(
 
   try {
     const { blueprintId } = await context.params;
-    const body = (await request.json()) as { deviceId?: unknown; value?: unknown };
+    const read = await readJsonCapped(request, SMALL_JSON_MAX_BYTES);
+    if (!read.ok) {
+      return read.status === 413
+        ? NextResponse.json({ error: REQUEST_TOO_BIG_MESSAGE }, { status: 413 })
+        : NextResponse.json({ error: "Invalid vote." }, { status: 400 });
+    }
+    const body = (read.value ?? {}) as { deviceId?: unknown; value?: unknown };
     const deviceId = typeof body.deviceId === "string" ? body.deviceId.slice(0, 64) : "";
     const value = body.value === 1 || body.value === -1 ? body.value : undefined;
     if (!deviceId || value === undefined) {

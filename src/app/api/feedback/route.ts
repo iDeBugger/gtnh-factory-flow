@@ -19,6 +19,7 @@ import {
 } from "@/lib/server/feedback";
 import { removeFeedbackFiles, storeFeedbackFile } from "@/lib/server/feedback-files";
 import { claimIssue, feedbackGate, looksGenuine } from "@/lib/server/feedback-guard";
+import { readTextCapped } from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,41 +34,6 @@ function refuse(sender: string, status: number, error: string): NextResponse {
 }
 
 /**
- * The body as text, or undefined once it passes `max` bytes. A declared length over the cap is refused unread,
- * and a body with no length (chunked) stops being read at the cap rather than buffered whole.
- */
-async function readCapped(request: Request, max: number): Promise<string | undefined> {
-  if (Number(request.headers.get("content-length") ?? 0) > max) {
-    return undefined;
-  }
-  const reader = request.body?.getReader();
-  if (!reader) {
-    return "";
-  }
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-    size += value.byteLength;
-    if (size > max) {
-      await reader.cancel();
-      return undefined;
-    }
-    chunks.push(value);
-  }
-  const body = new Uint8Array(size);
-  let at = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, at);
-    at += chunk.byteLength;
-  }
-  return new TextDecoder().decode(body);
-}
-
-/**
  * A report from the in-game Feedback box, opened as a GitHub issue on the planner's repo. Answers the issue's
  * number and page, which the game shows. `feedback-guard.ts` has what a report must get past first.
  */
@@ -79,7 +45,7 @@ export async function POST(request: Request) {
   // runs ahead of the gate.
   let early: string | undefined;
   if (!isModAndCommunityOn()) {
-    early = await readCapped(request, FEEDBACK_MAX_BYTES);
+    early = await readTextCapped(request, FEEDBACK_MAX_BYTES);
     if (early === undefined) {
       return NextResponse.json({ error: "The report is too big. Send fewer plans." }, { status: 413 });
     }
@@ -115,7 +81,7 @@ export async function POST(request: Request) {
     if (gate === "busy") {
       return NextResponse.json({ error: "Lots of reports are coming in. Try again in a few minutes." }, { status: 429 });
     }
-    const raw = early ?? (await readCapped(request, FEEDBACK_MAX_BYTES));
+    const raw = early ?? (await readTextCapped(request, FEEDBACK_MAX_BYTES));
     if (raw === undefined) {
       return refuse(sender, 413, "The report is too big. Send fewer plans.");
     }
