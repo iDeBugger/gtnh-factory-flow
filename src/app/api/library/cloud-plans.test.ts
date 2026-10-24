@@ -434,6 +434,8 @@ describe("cloud plans over REST", () => {
     expect((await (await find("bobby_", "ann")).json()).accounts).toHaveLength(1);
     expect((await (await find("bobbyx", "ann")).json()).accounts).toHaveLength(0);
     expect((await (await find("%", "ann")).json()).accounts).toEqual([]);
+    // One character is a directory, not a search.
+    expect(await (await find("b", "ann")).json()).toEqual({ accounts: [] });
     expect((await search.GET(request("GET", "/api/accounts/search?q=bo"))).status).toBe(401);
     let last = 200;
     for (let i = 0; i < 70; i += 1) {

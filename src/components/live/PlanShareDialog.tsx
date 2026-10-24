@@ -268,7 +268,8 @@ function AccountSearch({
 
   useEffect(() => {
     const prefix = query.trim();
-    if (!prefix) {
+    // The server answers one typed character with nothing; asking would only show an empty "no accounts".
+    if (prefix.length < 2) {
       return;
     }
     const controller = new AbortController();

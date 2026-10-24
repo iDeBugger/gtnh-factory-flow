@@ -209,5 +209,6 @@ The instance is small and has gone down under load. Rules:
 - Deleting a design deletes its member rows (designs are tombstoned, so the foreign key's cascade never fires) and
   tells the live service; sharing changes tell it too (`notifyLive`, only with `LIVE_INTERNAL_URL` and
   `LIVE_INTERNAL_TOKEN`). A failed notice loses nothing: the service checks membership on every join.
-- Account search is limited in memory (`memory-rate.ts`): a share box asks on every keystroke.
+- Account search is limited in memory (`memory-rate.ts`): a share box asks on every keystroke. A prefix is two
+  characters at least (the box asks from the second), so one character does not list a thirtieth of every account.
 - Exam: `app/api/library/cloud-plans.test.ts` (against the local database).

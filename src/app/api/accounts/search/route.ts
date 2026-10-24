@@ -5,8 +5,12 @@ import { takeMemoryToken } from "@/lib/server/memory-rate";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Usernames are letters, digits, - and _ (the register route's rule). */
-const PREFIX_PATTERN = /^[A-Za-z0-9_-]{1,24}$/;
+/**
+ * Usernames are letters, digits, - and _ (the register route's rule). Two
+ * characters at least: one names a thirtieth of every account, which is a
+ * directory, not a search.
+ */
+const PREFIX_PATTERN = /^[A-Za-z0-9_-]{2,24}$/;
 
 /**
  * Accounts whose username starts with `q` (any case), for picking whom to
