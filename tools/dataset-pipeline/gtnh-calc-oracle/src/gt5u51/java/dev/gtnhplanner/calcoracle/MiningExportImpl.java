@@ -47,8 +47,9 @@ public final class MiningExportImpl implements MiningExport {
         List<Map<String, Object>> dimensions = new ArrayList<Map<String, Object>>();
         try {
             // The three arrays run in step: DimName[i] is the internal name, DimNameTrimmed[i]
-            // its short form, DimNameDisplayed[i] its abbreviation. Veins name their dimensions
-            // by the worldgen name getFullName returns, so that is the fullName alias.
+            // its short form, DimNameDisplayed[i] its abbreviation, exported as is (getDims keys
+            // veins by the same abbreviations). Veins name their dimensions by the worldgen name
+            // getFullName returns, so that is the fullName alias.
             String[] internal = DimensionHelper.DimName;
             String[] trimmed = DimensionHelper.DimNameTrimmed;
             String[] displayed = DimensionHelper.DimNameDisplayed;
@@ -58,20 +59,18 @@ public final class MiningExportImpl implements MiningExport {
                 }
                 String displayedAbbr = index < displayed.length ? displayed[index] : null;
                 String fullName = null;
-                String abbr = displayedAbbr;
                 if (displayedAbbr != null) {
                     try {
                         fullName = DimensionHelper.getFullName(displayedAbbr);
-                        abbr = DimensionHelper.getDimAbbreviatedName(fullName);
                     } catch (Throwable ignored) {
-                        // Both helpers throw on a name they do not know; keep what the arrays give.
+                        // The helper throws on a name it does not know; the dimension then has no alias.
                     }
                 }
                 Map<String, Object> exported = ctx.map();
                 exported.put("id", ctx.safeString(internal[index]));
                 ctx.putIfPresent(exported, "name", index < trimmed.length ? ctx.safeString(trimmed[index]) : null);
                 ctx.putIfPresent(exported, "fullName", fullName == null ? null : ctx.safeString(fullName));
-                ctx.putIfPresent(exported, "abbr", abbr == null ? null : ctx.safeString(abbr));
+                ctx.putIfPresent(exported, "abbr", displayedAbbr == null ? null : ctx.safeString(displayedAbbr));
                 dimensions.add(exported);
             }
         } catch (Throwable ignored) {
@@ -98,7 +97,8 @@ public final class MiningExportImpl implements MiningExport {
         return domain;
     }
 
-    private void exportMiningOreVeins(List<Map<String, Object>> adapters, Map<String, Object> domain, MiningContext ctx) {
+    private void exportMiningOreVeins(
+        List<Map<String, Object>> adapters, Map<String, Object> domain, MiningContext ctx) {
         long started = System.currentTimeMillis();
         List<Map<String, Object>> veins = new ArrayList<Map<String, Object>>();
         try {
@@ -215,7 +215,8 @@ public final class MiningExportImpl implements MiningExport {
             for (Object dim : (List<?>) dims) {
                 Integer sum = weightByDim.get(dim);
                 if (sum != null) {
-                    weightByDim.put((String) dim, Integer.valueOf(sum.intValue() + ((Integer) gtVein.get("weight")).intValue()));
+                    int weight = ((Integer) gtVein.get("weight")).intValue();
+                    weightByDim.put((String) dim, Integer.valueOf(sum.intValue() + weight));
                 }
             }
         }
@@ -384,7 +385,7 @@ public final class MiningExportImpl implements MiningExport {
         exported.put("density", Integer.valueOf(vein.density));
         exported.put("size", Integer.valueOf(vein.size));
         ctx.putIfPresent(exported, "heightRange", vein.worldGenHeightRange);
-        List<String> dims = enabledDims(vein.allowedDimWithOrigNames);
+        List<String> dims = generatingDims(vein.allowedDimWithOrigNames);
         if (dims != null) {
             exported.put("dims", dims);
             List<String> abbrs = abbreviations(dims);
@@ -444,7 +445,7 @@ public final class MiningExportImpl implements MiningExport {
     }
 
     // The plugin keeps every dimension it knows with a flag; only the true ones generate.
-    private List<String> enabledDims(Map<String, Boolean> allowed) {
+    private List<String> generatingDims(Map<String, Boolean> allowed) {
         if (allowed == null) {
             return null;
         }
@@ -471,7 +472,8 @@ public final class MiningExportImpl implements MiningExport {
         return abbrs;
     }
 
-    private void exportMiningSmallOres(List<Map<String, Object>> adapters, Map<String, Object> domain, MiningContext ctx) {
+    private void exportMiningSmallOres(
+        List<Map<String, Object>> adapters, Map<String, Object> domain, MiningContext ctx) {
         long started = System.currentTimeMillis();
         List<Map<String, Object>> smallOres = new ArrayList<Map<String, Object>>();
         try {
@@ -491,7 +493,7 @@ public final class MiningExportImpl implements MiningExport {
                 ctx.putIfPresent(exported, "material", oreMaterial(small.getOreMaterial(), ctx));
                 ctx.putIfPresent(exported, "heightRange", small.worldGenHeightRange);
                 exported.put("amountPerChunk", Integer.valueOf(small.amountPerChunk));
-                List<String> dims = enabledDims(small.allowedDimWithOrigNames);
+                List<String> dims = generatingDims(small.allowedDimWithOrigNames);
                 if (dims != null) {
                     exported.put("dims", dims);
                 }
@@ -514,12 +516,14 @@ public final class MiningExportImpl implements MiningExport {
             adapters.add(
                 ctx.adapter("gregtech-small-ores", status, true, byName.size(), smallOres.size(), started, warning));
         } catch (Throwable t) {
-            adapters.add(ctx.adapter("gregtech-small-ores", "partial", true, 0, smallOres.size(), started, t.toString()));
+            adapters.add(
+                ctx.adapter("gregtech-small-ores", "partial", true, 0, smallOres.size(), started, t.toString()));
             domain.put("smallOres", smallOres);
         }
     }
 
-    private void exportMiningUndergroundFluids(List<Map<String, Object>> adapters, Map<String, Object> domain, MiningContext ctx) {
+    private void exportMiningUndergroundFluids(
+        List<Map<String, Object>> adapters, Map<String, Object> domain, MiningContext ctx) {
         long started = System.currentTimeMillis();
         List<Map<String, Object>> fluids = new ArrayList<Map<String, Object>>();
         try {
@@ -564,10 +568,12 @@ public final class MiningExportImpl implements MiningExport {
                 ? "GregTech underground fluid helper was present, but no fluids were exported."
                 : null;
             adapters.add(
-                ctx.adapter("gregtech-underground-fluids", status, true, fluids.size(), fluids.size(), started, warning));
+                ctx.adapter(
+                    "gregtech-underground-fluids", status, true, fluids.size(), fluids.size(), started, warning));
         } catch (Throwable t) {
-            adapters
-                .add(ctx.adapter("gregtech-underground-fluids", "partial", true, 0, fluids.size(), started, t.toString()));
+            adapters.add(
+                ctx.adapter(
+                    "gregtech-underground-fluids", "partial", true, 0, fluids.size(), started, t.toString()));
             domain.put("undergroundFluids", fluids);
         }
     }

@@ -1130,6 +1130,67 @@ describe.each(["gtpp.recipe.lftr.sparging", "gt.recipe.lftr.sparging"])("LFTR sp
   });
 });
 
+describe("the wear data guard", () => {
+  const ball = item("miscutils:milling.ball.alumina", 1, "Alumina Milling Ball");
+  const milling = (id, extra) => ({
+    id,
+    durationTicks: 2400,
+    eut: 1920,
+    itemInputs: [item("gregtech:gt.blockores@35", 16, "Sphalerite Ore"), ball],
+    itemOutputs: [item("gregtech:gt.metaitem.03@35", 64, "Milled Sphalerite")],
+    fluidInputs: [],
+    fluidOutputs: [],
+    ...extra,
+  });
+  const worn = { wearingInputs: [{ id: "miscutils:milling.ball.alumina", durability: 50 }] };
+  // 2.8.1 names the map gtpp.recipe.oremill; the guard reads it as the game's map.
+  const exportOf = (...recipes) => ({
+    domains: [{ id: "gregtech", recipeMaps: [{ id: "gtpp.recipe.oremill", name: "IsaMill Milling", recipes }] }],
+  });
+  const refusal = (rawExport) => {
+    try {
+      normalize(rawExport);
+    } catch (caught) {
+      return String(caught.stderr);
+    }
+    return undefined;
+  };
+
+  it("passes a map that carries wear data", () => {
+    expect(normalize(exportOf(milling("a", worn), milling("b"))).oracleReport.failures).toEqual([]);
+  });
+
+  it("refuses a map whose recipes all lost their wear data", () => {
+    expect(refusal(exportOf(milling("a"), milling("b")))).toContain(
+      "2 recipe(s) in gtpp.recipe.oremill and none carries wearingInputs",
+    );
+  });
+
+  it("refuses a map where reading the wear failed", () => {
+    expect(refusal(exportOf(milling("a", worn), milling("b", { wearError: "java.lang.NoSuchMethodException" })))).toContain(
+      "1 recipe(s) in gtpp.recipe.oremill failed to read which inputs wear (java.lang.NoSuchMethodException)",
+    );
+  });
+});
+
+it("leaves no recipes.json from an earlier run when it refuses an export", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "normalize-stale-"));
+  const input = path.join(dir, "oracle-export.json");
+  const output = path.join(dir, "recipes.json");
+  fs.writeFileSync(output, "{\"stale\":true}");
+  fs.writeFileSync(`${output}.gz`, "stale");
+  fs.writeFileSync(input, JSON.stringify({ domains: [] }));
+  expect(() =>
+    execFileSync(process.execPath, [scriptPath, input, output], {
+      env: { ...process.env, GTNH_DATASET_VERSION_ID: "test-fixture", GTNH_DATASET_VERSION_LABEL: "test" },
+      stdio: "pipe",
+    }),
+  ).toThrow();
+  expect(fs.existsSync(output)).toBe(false);
+  expect(fs.existsSync(`${output}.gz`)).toBe(false);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 /**
  * Thaumcraft 4 arcane workbench recipes as the oracle exports them: the grid read from
  * `getInput()`, a shaped cell carrying its 3x3 position (`gridSlot`), a shapeless recipe one
@@ -1308,19 +1369,24 @@ describe("a GTNH 2.8.1 export", () => {
     expect(dataset.recipes.every((recipe) => recipe.source.datasetVersionId === "local-2.8.1")).toBe(true);
   });
 
-  it("lists every recipe map the export has", () => {
+  it("lists every recipe map the export has, and nothing else", () => {
     const names = gregtechMaps().map((map) => map.name);
-    expect(dataset.recipeMaps).toEqual(expect.arrayContaining([
+    // Exact, so a map that vanished or came out under another name fails here.
+    expect(dataset.recipeMaps).toEqual([
       ...names.filter((name) => name !== "Coke Oven" && !name.startsWith("gt.recipe.")),
+      // GT++'s Coke Oven is 2.9's Industrial Coke Oven; the untranslated rock breaker is the Boldarnator.
       "Industrial Coke Oven",
+      "Boldarnator",
       "Tank",
       "Shaped Crafting",
+      "Furnace",
       "Thaumcraft Crucible",
+      "Bee Produce",
       "IC2 Crop",
       "Ore Vein",
       "Small Ore",
       "Underground Fluid",
-    ]));
+    ].sort());
   });
 
   it("a 2.8.1 GT++ map keeps its recipes and gets the same id key as its 2.9 twin", () => {

@@ -257,4 +257,27 @@ describe("RecipeBrowser", () => {
       }),
     );
   });
+
+  it("keeps the own name and picture of a slot that is the browsed item, so NBT variants stay apart", () => {
+    const box = (displayName: string, iconPath: string) => ({ kind: "item" as const, id: "etfuturum:shulker_box", amount: 1, displayName, iconPath });
+    const recipe = {
+      id: "orange-box",
+      name: "Shapeless Crafting: Orange Shulker Box",
+      machineType: "Shapeless Crafting",
+      minimumTier: "NONE",
+      durationTicks: 1,
+      eut: 0,
+      inputs: [box("Shulker Box", "/r/shulker_box.png"), { kind: "item" as const, id: "oredict:dyeOrange", amount: 1, displayName: "Ore Dictionary: dyeOrange" }],
+      outputs: [box("Orange Shulker Box", "/r/orange_shulker_box.png")],
+    };
+    // Browsing the catalog entry, which is named after the first colour.
+    const preview = contextualizePreviewRecipe(recipe, {
+      kind: "item",
+      id: "etfuturum:shulker_box",
+      displayName: "White Shulker Box",
+      iconPath: "/r/white_shulker_box.png",
+    });
+    expect(preview.outputs[0]).toMatchObject({ displayName: "Orange Shulker Box", iconPath: "/r/orange_shulker_box.png" });
+    expect(preview.inputs[0]).toMatchObject({ displayName: "Shulker Box", iconPath: "/r/shulker_box.png" });
+  });
 });

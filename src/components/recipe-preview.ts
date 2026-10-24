@@ -48,14 +48,18 @@ export function contextualizePreviewRecipe(
     }
 
     changed = true;
+    // A slot that stands for the browsed item (an oredict entry, a list of choices) shows it.
+    // A slot that IS the item keeps its own name and picture: one item id can carry several
+    // NBT variants (shulker box colours, wands), each named and drawn by its own slot.
+    const face = input.id === resource.id ? { ...resource, ...ownFace(input) } : resource;
     return {
       ...input,
       kind: resource.kind,
       id: resource.id,
-      displayName: resource.displayName ?? input.displayName,
-      iconPath: resource.iconPath ?? input.iconPath,
-      iconAtlas: resource.iconAtlas ?? input.iconAtlas,
-      dominantColor: resource.dominantColor ?? input.dominantColor,
+      displayName: face.displayName ?? input.displayName,
+      iconPath: face.iconPath ?? input.iconPath,
+      iconAtlas: face.iconAtlas ?? input.iconAtlas,
+      dominantColor: face.dominantColor ?? input.dominantColor,
       alternatives: undefined,
     };
   });
@@ -64,15 +68,26 @@ export function contextualizePreviewRecipe(
       return output;
     }
 
+    // The output is the browsed item itself: its own name and picture win (see the inputs),
+    // and the browsed face only fills what the slot lacks.
     changed = true;
     return {
       ...output,
-      displayName: resource.displayName ?? output.displayName,
-      iconPath: resource.iconPath ?? output.iconPath,
-      iconAtlas: resource.iconAtlas ?? output.iconAtlas,
-      dominantColor: resource.dominantColor ?? output.dominantColor,
+      displayName: output.displayName ?? resource.displayName,
+      iconPath: output.iconPath ?? resource.iconPath,
+      iconAtlas: output.iconAtlas ?? resource.iconAtlas,
+      dominantColor: output.dominantColor ?? resource.dominantColor,
     };
   });
 
   return changed ? { ...recipe, inputs, outputs } : recipe;
+}
+
+/** The face fields a slot carries itself, without the ones it leaves unset. */
+function ownFace(slot: ResourceAmount): Partial<PreviewContextResource> {
+  return Object.fromEntries(
+    (["displayName", "iconPath", "iconAtlas", "dominantColor"] as const)
+      .filter((key) => slot[key] !== undefined)
+      .map((key) => [key, slot[key]]),
+  );
 }

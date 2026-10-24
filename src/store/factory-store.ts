@@ -5733,17 +5733,20 @@ function buildRecipeInputOverrides(
       (entry) => entry.kind === resource.kind && entry.id === resource.id,
     );
 
+    // An input that IS the context item keeps its own face: one item id can carry several NBT
+    // variants (a plain shulker box going in, an orange one coming out), each named by its slot.
+    const own = input.id === resource.id ? input : undefined;
     overrides[String(index)] = {
       ...input,
       ...alternative,
       kind: resource.kind,
       id: resource.id,
-      displayName: resource.displayName ?? alternative?.displayName ?? input.displayName,
-      iconPath: resource.iconPath ?? alternative?.iconPath ?? input.iconPath,
-      iconAtlas: resource.iconAtlas ?? alternative?.iconAtlas ?? input.iconAtlas,
-      dominantColor: resource.dominantColor ?? alternative?.dominantColor ?? input.dominantColor,
-      tooltip: resource.tooltip ?? alternative?.tooltip ?? input.tooltip,
-      modId: resource.modId ?? alternative?.modId ?? input.modId,
+      displayName: own?.displayName ?? resource.displayName ?? alternative?.displayName ?? input.displayName,
+      iconPath: own?.iconPath ?? resource.iconPath ?? alternative?.iconPath ?? input.iconPath,
+      iconAtlas: own?.iconAtlas ?? resource.iconAtlas ?? alternative?.iconAtlas ?? input.iconAtlas,
+      dominantColor: own?.dominantColor ?? resource.dominantColor ?? alternative?.dominantColor ?? input.dominantColor,
+      tooltip: own?.tooltip ?? resource.tooltip ?? alternative?.tooltip ?? input.tooltip,
+      modId: own?.modId ?? resource.modId ?? alternative?.modId ?? input.modId,
       alternatives: undefined,
     };
   });
@@ -6721,13 +6724,14 @@ function refreshProjectResourceIcons(
   dataset: RecipeDataset,
 ): FactoryProject {
   const iconsByResource = getDatasetIconLookup(dataset);
+  const ownIconPrefix = `/datasets/gtnh/${dataset.datasetVersionId}/`;
 
   return {
     ...project,
     recipes: project.recipes.map((recipe) => ({
       ...recipe,
-      inputs: recipe.inputs.map((input) => refreshResourceIcon(input, iconsByResource)),
-      outputs: recipe.outputs.map((output) => refreshResourceIcon(output, iconsByResource)),
+      inputs: recipe.inputs.map((input) => refreshResourceIcon(input, iconsByResource, ownIconPrefix)),
+      outputs: recipe.outputs.map((output) => refreshResourceIcon(output, iconsByResource, ownIconPrefix)),
     })),
     storages: project.storages?.map((storage) => refreshStorageIcon(storage, iconsByResource)),
   };
@@ -6790,9 +6794,25 @@ function refreshStorageIcon(
 function refreshResourceIcon<T extends IconResource>(
   resource: T,
   iconsByResource: Map<string, IconResource>,
+  ownIconPrefix?: string,
 ): T {
   const indexed = iconsByResource.get(getResourceKey(resource));
   if (!indexed) {
+    return resource;
+  }
+  // One item id can carry several NBT variants (shulker box colours, Forestry saplings,
+  // wands), and the catalog holds one face for them all. A slot named otherwise than the
+  // catalog entry whose icon is THIS dataset's own is such a variant: its picture stays (the
+  // file stays published, and the landing refresh brings the current body). A name that
+  // differs for another reason (a power fuel's label, a custom rate card, an item renamed
+  // since an older version) comes with another version's path or none, and is refreshed.
+  if (
+    ownIconPrefix !== undefined &&
+    resource.iconPath?.startsWith(ownIconPrefix) &&
+    resource.displayName !== undefined &&
+    indexed.displayName !== undefined &&
+    resource.displayName !== indexed.displayName
+  ) {
     return resource;
   }
 

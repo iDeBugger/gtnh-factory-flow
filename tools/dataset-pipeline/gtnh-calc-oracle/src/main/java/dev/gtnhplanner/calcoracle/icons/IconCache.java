@@ -56,7 +56,11 @@ final class IconCache {
      */
     static final String FORMAT = LAYOUT + ";" + fingerprint();
     private static final long MAGIC = 0x67746e68_69636f6eL;
-    /** A pass writes its temporary pack within minutes; one older than this belongs to an export that died. */
+    /**
+     * A pass writes its temporary pack within minutes; one older than this belongs to an export that died. The age
+     * runs from the last write, and an all-hit pass never writes, so this relies on the export lock: only one export
+     * opens a cache dir at a time, and none can delete another's live temp.
+     */
     private static final long STALE_TEMP_MILLIS = 30L * 60 * 1000;
 
     private static final class Entry {
@@ -221,6 +225,9 @@ final class IconCache {
     /**
      * One read, one decode, one conversion to ARGB: the bytes go out unchanged, the pixels give the check and the
      * colour. A decoded PNG is not an int ARGB image, so each look at it through getRGB copied it whole.
+     * Every test of a hit's pixels goes through IconChecks and every colour through IconColors: the pack format
+     * fingerprints those two functions only, so a condition written here instead, or a change to which hits
+     * pass {@code strict}, would outlive old packs: bump LAYOUT for either.
      */
     private boolean materializeFile(String iconName, File source, byte[] alreadyRead, File copyTo, File outFile,
         BasicFileAttributes attrs, boolean strict) throws IOException {

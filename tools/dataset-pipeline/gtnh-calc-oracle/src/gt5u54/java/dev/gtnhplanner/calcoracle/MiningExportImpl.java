@@ -61,7 +61,8 @@ public final class MiningExportImpl implements MiningExport {
         return domain;
     }
 
-    private void exportMiningOreVeins(List<Map<String, Object>> adapters, Map<String, Object> domain, MiningContext ctx) {
+    private void exportMiningOreVeins(
+        List<Map<String, Object>> adapters, Map<String, Object> domain, MiningContext ctx) {
         long started = System.currentTimeMillis();
         List<Map<String, Object>> veins = new ArrayList<Map<String, Object>>();
         try {
@@ -105,7 +106,8 @@ public final class MiningExportImpl implements MiningExport {
             String warning = veins.isEmpty()
                 ? "GregTech ore vein helper was present, but no veins were exported."
                 : null;
-            adapters.add(ctx.adapter("gregtech-ore-veins", status, true, byName.size(), veins.size(), started, warning));
+            adapters.add(
+                ctx.adapter("gregtech-ore-veins", status, true, byName.size(), veins.size(), started, warning));
         } catch (Throwable t) {
             adapters.add(ctx.adapter("gregtech-ore-veins", "partial", true, 0, veins.size(), started, t.toString()));
             domain.put("veins", veins);
@@ -196,7 +198,8 @@ public final class MiningExportImpl implements MiningExport {
         return exported;
     }
 
-    private void exportMiningSmallOres(List<Map<String, Object>> adapters, Map<String, Object> domain, MiningContext ctx) {
+    private void exportMiningSmallOres(
+        List<Map<String, Object>> adapters, Map<String, Object> domain, MiningContext ctx) {
         long started = System.currentTimeMillis();
         List<Map<String, Object>> smallOres = new ArrayList<Map<String, Object>>();
         try {
@@ -240,12 +243,14 @@ public final class MiningExportImpl implements MiningExport {
             adapters.add(
                 ctx.adapter("gregtech-small-ores", status, true, byName.size(), smallOres.size(), started, warning));
         } catch (Throwable t) {
-            adapters.add(ctx.adapter("gregtech-small-ores", "partial", true, 0, smallOres.size(), started, t.toString()));
+            adapters.add(
+                ctx.adapter("gregtech-small-ores", "partial", true, 0, smallOres.size(), started, t.toString()));
             domain.put("smallOres", smallOres);
         }
     }
 
-    private void exportMiningUndergroundFluids(List<Map<String, Object>> adapters, Map<String, Object> domain, MiningContext ctx) {
+    private void exportMiningUndergroundFluids(
+        List<Map<String, Object>> adapters, Map<String, Object> domain, MiningContext ctx) {
         long started = System.currentTimeMillis();
         List<Map<String, Object>> fluids = new ArrayList<Map<String, Object>>();
         try {
@@ -289,10 +294,12 @@ public final class MiningExportImpl implements MiningExport {
                 ? "GregTech underground fluid helper was present, but no fluids were exported."
                 : null;
             adapters.add(
-                ctx.adapter("gregtech-underground-fluids", status, true, fluids.size(), fluids.size(), started, warning));
+                ctx.adapter(
+                    "gregtech-underground-fluids", status, true, fluids.size(), fluids.size(), started, warning));
         } catch (Throwable t) {
-            adapters
-                .add(ctx.adapter("gregtech-underground-fluids", "partial", true, 0, fluids.size(), started, t.toString()));
+            adapters.add(
+                ctx.adapter(
+                    "gregtech-underground-fluids", "partial", true, 0, fluids.size(), started, t.toString()));
             domain.put("undergroundFluids", fluids);
         }
     }

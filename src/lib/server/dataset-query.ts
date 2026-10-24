@@ -2595,7 +2595,7 @@ function* countedRange(count: number): Generator<number> {
   }
 }
 
-function applyUsesResourceContext<T extends RecipeSummary>(
+export function applyUsesResourceContext<T extends RecipeSummary>(
   recipe: T,
   catalog: LoadedRecipeIndex,
   resource: Pick<ResourceAmount, "kind" | "id"> | undefined,
@@ -2616,14 +2616,18 @@ function applyUsesResourceContext<T extends RecipeSummary>(
     }
 
     changed = true;
+    // An input that IS the selected item keeps its own name, picture and tooltip: one item id
+    // can carry several NBT variants (shulker box colours, wands), each described by its slot.
+    // An input that stands for it (an oredict entry, a list of choices) shows the selection.
+    const own = input.id === selected.id;
     return {
       ...input,
       id: selected.id,
-      displayName: selected.displayName ?? input.displayName,
-      iconPath: selected.iconPath ?? input.iconPath,
-      iconAtlas: selected.iconAtlas ?? input.iconAtlas,
-      dominantColor: selected.dominantColor ?? input.dominantColor,
-      tooltip: "tooltip" in selected ? selected.tooltip : undefined,
+      displayName: (own ? input.displayName : undefined) ?? selected.displayName ?? input.displayName,
+      iconPath: (own ? input.iconPath : undefined) ?? selected.iconPath ?? input.iconPath,
+      iconAtlas: (own ? input.iconAtlas : undefined) ?? selected.iconAtlas ?? input.iconAtlas,
+      dominantColor: (own ? input.dominantColor : undefined) ?? selected.dominantColor ?? input.dominantColor,
+      tooltip: (own ? input.tooltip : undefined) ?? ("tooltip" in selected ? selected.tooltip : undefined),
       alternatives: undefined,
       oreDictionary: undefined,
     };

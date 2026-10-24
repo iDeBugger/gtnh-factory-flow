@@ -36,6 +36,10 @@ const datasetVersionId = requiredEnv("GTNH_DATASET_VERSION_ID");
 const gtnhVersion = requiredEnv("GTNH_DATASET_VERSION_LABEL");
 const generatedAt = new Date().toISOString();
 const outDir = path.dirname(outputPath);
+// An earlier run's output goes before any work: a refused or failed run then leaves no
+// recipes.json (or its gzip) behind for a later stage started by hand to take for its own.
+await fs.rm(outputPath, { force: true });
+await fs.rm(`${outputPath}.gz`, { force: true });
 const renderedIconDir = process.env.GTNH_RENDERED_ICON_DIR;
 const oracleStrict = envFlag("GTNH_ORACLE_STRICT", false);
 
@@ -2380,6 +2384,7 @@ async function writeOracleReport(dataset) {
   const gridGaps = arcaneGridGaps(raw);
   const exportGaps = [
     ...spargeExportGaps(raw),
+    ...wearExportGaps(raw),
     ...identityExportGaps(),
     ...(gridGaps.length > ARCANE_UNRESOLVED_GRID_CEILING
       ? [
@@ -2496,6 +2501,44 @@ function spargeExportGaps(rawExport) {
     }));
 }
 
+/**
+ * Wear maps whose recipes came without their wear data. A renamed map would lose every
+ * `wearingInputs` without an error, and a failed read leaves `wearError` on the recipe;
+ * either refuses the export, as a sparging map without its rolled outputs does.
+ */
+function wearExportGaps(rawExport) {
+  // The GT++ maps whose machines wear an input down instead of eating it: Chemical Plant
+  // catalysts and IsaMill milling balls. The oracle reads which inputs wear, and how long
+  // they last, only for maps it recognises by name (`isGtppMap`); on 2.9 and 2.8.1 every
+  // milling recipe and each catalyst recipe carries them. (Declared here: the module's
+  // top-level work runs before constants declared below it.)
+  const WEAR_RECIPE_MAPS = ["gt.recipe.fluidchemicaleactor", "gt.recipe.oremill"];
+  return (rawExport.domains ?? [])
+    .flatMap((domain) => domain?.recipeMaps ?? [])
+    .filter((recipeMap) => WEAR_RECIPE_MAPS.includes(gameRecipeMapId(recipeMap.id)))
+    .flatMap((recipeMap) => {
+      const recipes = recipeMap.recipes ?? [];
+      const failed = recipes.filter((recipe) => recipe?.wearError);
+      if (failed.length > 0) {
+        return [{
+          recipeMapId: recipeMap.id,
+          status: "wear-data-failed",
+          recipeCount: failed.length,
+          message: `Export gap: ${failed.length} recipe(s) in ${recipeMap.id} failed to read which inputs wear (${failed[0].wearError}).`,
+        }];
+      }
+      if (recipes.length > 0 && !recipes.some((recipe) => Array.isArray(recipe?.wearingInputs))) {
+        return [{
+          recipeMapId: recipeMap.id,
+          status: "wear-data-missing",
+          recipeCount: recipes.length,
+          message: `Export gap: ${recipes.length} recipe(s) in ${recipeMap.id} and none carries wearingInputs, so the inputs its machine wears down would be lost.`,
+        }];
+      }
+      return [];
+    });
+}
+
 async function stageRenderedIcons(sourceDir, datasetOutDir) {
   const icons = new Map();
   if (!sourceDir || !existsSync(sourceDir)) {
@@ -2505,10 +2548,12 @@ async function stageRenderedIcons(sourceDir, datasetOutDir) {
   await fs.rm(targetDir, { recursive: true, force: true });
   await fs.mkdir(targetDir, { recursive: true });
   const files = (await fs.readdir(sourceDir)).filter((file) => file.toLowerCase().endsWith(".png"));
-  const colors = await stageIconsOnWorkers(files, sourceDir, targetDir);
+  // Keyed by the export's file name, which the raw records cite; the path is the staged,
+  // content-addressed name (stage-rendered-icons.mjs).
+  const { colors, names } = await stageIconsOnWorkers(files, sourceDir, targetDir);
   files.forEach((file, index) => {
     icons.set(file, {
-      iconPath: `/datasets/gtnh/${datasetVersionId}/textures/rendered/${file}`,
+      iconPath: `/datasets/gtnh/${datasetVersionId}/textures/rendered/${names[index]}`,
       dominantColor: colors[index],
     });
   });

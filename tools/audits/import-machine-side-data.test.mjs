@@ -105,6 +105,7 @@ describe("import-machine-side-data", () => {
 
   // A degraded export must never install, not even in part: each case leaves the old --out as it was.
   const degraded = [
+    ["a missing tgs-trees.json", (input) => fs.rmSync(path.join(input, "tgs-trees.json")), "the export wrote no tgs-trees.json"],
     ["a missing bio-vat.json", (input) => fs.rmSync(path.join(input, "bio-vat.json")), "the export wrote no bio-vat.json"],
     ["a missing radio-hatch.json", (input) => fs.rmSync(path.join(input, "radio-hatch.json")), "the export wrote no radio-hatch.json"],
     [
@@ -114,6 +115,14 @@ describe("import-machine-side-data", () => {
           file.trees[1].forestry = { error: "java.lang.NoSuchMethodException: getIdent" };
         }),
       "1 of 2 trees have a failed Forestry read, first Apple Oak Sapling: java.lang.NoSuchMethodException: getIdent",
+    ],
+    [
+      "a Forestry sapling without its genes",
+      (input) =>
+        edit(input, "tgs-trees.json", (file) => {
+          delete file.trees[1].forestry;
+        }),
+      "1 of 1 Forestry saplings have no Forestry genes, first Apple Oak Sapling",
     ],
     ["no trees", (input) => edit(input, "tgs-trees.json", (file) => (file.trees = [])), "tgs-trees.json has no trees"],
     ["no vat recipes", (input) => edit(input, "bio-vat.json", (file) => (file.recipes = [])), "bio-vat.json has no recipes"],

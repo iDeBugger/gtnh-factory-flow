@@ -35,6 +35,8 @@ forEachResource(previous, (resource) => {
 
 await copyTextureDir("icons");
 await copyTextureDir("atlas");
+// The reused references name rendered icons by content, so the files go along with them.
+await copyTextureDir("rendered");
 
 let reused = 0;
 forEachResource(current, (resource) => {

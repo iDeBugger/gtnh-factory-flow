@@ -1425,6 +1425,37 @@ describe("project recipe refresh", () => {
     );
   });
 
+  it("keeps an input's own face when it is the context item itself, so NBT variants stay apart", () => {
+    useFactoryStore.getState().setProject({
+      schemaVersion: PROJECT_SCHEMA_VERSION,
+      id: "add-context-nbt-test",
+      name: "Add context NBT test",
+      fuelProfiles: [],
+      recipes: [],
+      nodes: [],
+      edges: [],
+    });
+
+    useFactoryStore.getState().addNodeForRecipeObject(
+      {
+        id: "orange-box",
+        name: "Shapeless Crafting: Orange Shulker Box",
+        machineType: "Shapeless Crafting",
+        minimumTier: "NONE",
+        durationTicks: 1,
+        eut: 0,
+        inputs: [{ kind: "item", id: "etfuturum:shulker_box", amount: 1, displayName: "Shulker Box", iconPath: "box.png" }],
+        outputs: [{ kind: "item", id: "etfuturum:shulker_box", amount: 1, displayName: "Orange Shulker Box" }],
+      },
+      // The catalog entry the player browsed is named after the first colour.
+      { kind: "item", id: "etfuturum:shulker_box", displayName: "White Shulker Box", iconPath: "white.png", mode: "recipes" },
+    );
+
+    // The context matches the input, so an override is always written; it must carry the slot's own face.
+    const override = useFactoryStore.getState().project.nodes[0]?.recipeInputOverrides?.["0"];
+    expect(override).toMatchObject({ displayName: "Shulker Box", iconPath: "box.png" });
+  });
+
   it("stores concrete input context even when the browser mode is not uses", () => {
     useFactoryStore.getState().setProject({
       schemaVersion: PROJECT_SCHEMA_VERSION,
@@ -4947,6 +4978,31 @@ describe("the active dataset follows the open plan", () => {
     // The plan's own family does refresh its icons.
     useFactoryStore.getState().setDataset(dataset281);
     expect(useFactoryStore.getState().project.recipes[0]?.outputs[0]?.iconPath).toBe("/local-2.8.1/dust.png");
+  });
+
+  // The plan's output slot with another face, then the 2.8.1 catalog (its "Dust" draws /local-2.8.1/dust.png).
+  const outputAfterLoad = (face: { displayName: string; iconPath: string }) => {
+    const variant = plan("plan-281-variant", "2.8.1");
+    variant.recipes[0]!.outputs[0] = { ...variant.recipes[0]!.outputs[0]!, ...face };
+    useFactoryStore.getState().setProject(variant);
+    useFactoryStore.getState().setDataset(dataset281);
+    return useFactoryStore.getState().project.recipes[0]?.outputs[0];
+  };
+
+  it("a dataset load keeps the picture of a variant drawn by that dataset", () => {
+    const own = { displayName: "Fine Dust", iconPath: "/datasets/gtnh/local-2.8.1/textures/rendered/fine_dust-0123456789ab.png" };
+    expect(outputAfterLoad(own)).toMatchObject(own);
+  });
+
+  it("a dataset load refreshes a renamed slot whose icon is another version's", () => {
+    const other = { displayName: "Fine Dust", iconPath: "/datasets/gtnh/local-2.9.0-rc-2/textures/rendered/fine_dust-0123456789ab.png" };
+    expect(outputAfterLoad(other)).toMatchObject({ displayName: "Fine Dust", iconPath: "/local-2.8.1/dust.png" });
+  });
+
+  it("a dataset load refreshes a power fuel slot named by the power maps", () => {
+    // The power maps name fuels their own way and point at the published beta-2 icons.
+    const fuel = { displayName: "Bio Ethanol", iconPath: "/datasets/gtnh/local-2.9.0-beta-2/textures/rendered/bio_ethanol-0123456789ab.png" };
+    expect(outputAfterLoad(fuel)).toMatchObject({ displayName: "Bio Ethanol", iconPath: "/local-2.8.1/dust.png" });
   });
 
   it("a dataset switch does not re-solve the open plan against the other version", async () => {

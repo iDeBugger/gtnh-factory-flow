@@ -83,7 +83,9 @@ mkdir -p "$instance_root/mods"
 
 oracle_project="tools/dataset-pipeline/gtnh-calc-oracle"
 # The pack picks the GregTech the mod compiles against (dependencies.gradle), so one
-# source tree builds a different jar per pack: the pack goes in the cache key too.
+# source tree builds a different jar per pack: the pack goes in the cache key too. The key
+# covers the sources only: build/, .gradle/ and run/ (a local runClient's natives, configs and
+# saves) are the project's ignored outputs and never change the jar.
 GTNH_ORACLE_PACK="${GTNH_ORACLE_PACK:-2.9}"
 oracle_patch_hash="$(
   {
@@ -91,6 +93,7 @@ oracle_patch_hash="$(
     find "$oracle_project" -type f \
       ! -path '*/build/*' \
       ! -path '*/.gradle/*' \
+      ! -path "$oracle_project/run/*" \
       -print0 | sort -z | xargs -0 sha256sum
   } | sha256sum | awk '{print $1}'
 )"

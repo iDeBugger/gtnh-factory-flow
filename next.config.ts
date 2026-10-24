@@ -19,9 +19,11 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Rendered item and fluid art carries a content hash in the basename
-        // (the pipeline renames on any byte change), so these are immutable
-        // too - and they are most of what a returning browser re-downloads.
+        // Rendered item, block and fluid icons are named by a hash of their
+        // bytes (the normalizer's staging, stage-rendered-icons.mjs, and the
+        // fluid alpha pass for what it repaints), so changed pixels get a new
+        // URL and these can be immutable too. They are most of what a
+        // returning browser re-downloads.
         source: "/datasets/gtnh/:version/textures/rendered/:path*",
         headers: [
           {

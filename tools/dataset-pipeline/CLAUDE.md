@@ -19,19 +19,46 @@ The GitHub "GTNH dataset pipeline" workflow is a decoy (no runner). Never dispat
 3. `~/run-both.sh` (fuller: `~/rebuild-cokeoven.sh`) normalizes, indexes and gzips into
    `~/gtnh-export/datasets/gtnh/<id>`. Only 2.9 is supported; 2.8.4 is retired.
 4. `~/copy-datasets.sh` copies results into the Windows repo's `public/datasets/gtnh`.
-5. Publish: scp the changed gzips, shards and oracle-report to the droplet's
-   `/opt/shared/gtnh-datasets/<id>/` (stage first; move staging dirs out of the datasets
-   root before `rebuild-manifest.mjs`), then `systemctl restart gtnh-flow`. Before the
-   swap, compare icon counts and icon tables against live. Verify the live manifest and
-   the published gzip afterwards.
+5. Publish, in this order, to the droplet's `/opt/shared/gtnh-datasets/<id>/`:
+   1. Textures first, additively, straight into the live directory:
+      `rsync -a --ignore-existing <build>/textures/rendered/ <live>/textures/rendered/`
+      (the same for `textures/icons/` and `textures/atlas/` when the build has them). Never
+      `--delete`, never a staged swap of `textures/`, never removing a file there. Texture URLs
+      are served immutable for a year: a browser or Cloudflare holding an old URL keeps asking
+      for it, and saved plans' own icons, card overrides, OG cards, cached recipe responses and
+      the power maps (`src/lib/power/data/*.json`) name old files. A content name never changes
+      its bytes, so `--ignore-existing` is safe, and the live directory grows by the changed
+      icons on each publish. The first publish with content names renames every icon once.
+   2. Then the data: stage the changed gzips, shards and oracle-report beside the live ones,
+      move staging dirs out of the datasets root before `rebuild-manifest.mjs`, swap them in,
+      then `systemctl restart gtnh-flow`. Before the swap, compare icon counts and icon tables
+      against live (every name changes on the first content-named publish), and check that
+      every rendered name the new gzips cite exists in the live `textures/rendered/`.
+   3. Verify the live manifest, the published gzip and a few icon URLs afterwards. After a 2.9
+      publish, regenerate the power maps (`tools/power-machine-icons.mjs`,
+      `tools/power-resource-map.mjs`) before the version they cite is retired.
+   The WSL scripts (`~/run-both.sh`, `~/copy-datasets.sh`) and the deploy command live outside
+   the repo: check they never mirror with delete or swap `textures/` before relying on them.
 
 `build-recipe-index.mjs` also writes `recipes.json.gz` from the bytes of `recipes.json`. Every
 dataset gzip goes through `deterministic-gzip.mjs` (level 9, no name, zero mtime, OS byte pinned
 to Unix), so one `recipes.json` gives the same files and manifest checksum on macOS and in the image.
 
-Rebuilds must run `normalize-fluid-icon-alpha.mjs` (with `--rename`) after the index
-builds and before publishing, or faint fluids ship invisible. Texture URLs are cache-immutable: fix pixels under a NEW filename (`--rename`),
-and patch whole basenames only.
+Texture URLs are cache-immutable (a year, no dataset checksum in the URL), so a changed icon
+must get a new name. The normalizer stages every rendered icon (item, block, fluid) under a
+content-addressed name (`stage-rendered-icons.mjs`): the export's `<slug>-<sha1(stack key)[:12]>.png`
+becomes `<slug>-<sha1(bytes)[:12]>.png`, same length, and the dataset records point at that. A
+rebuild whose pixels did not change keeps every URL; one whose pixels changed moves only those.
+`apply-texture-icons.mjs` (textures/icons) names its files by content too, and
+`reuse-previous-icons.mjs` copies `textures/rendered/` along with the references it reuses.
+Exam: `stage-rendered-icons.test.mjs`. Publishing adds files beside the live ones and never deletes
+old names: a plan's own icon and other stored references keep the name they were saved with.
+
+Every rebuild runs `normalize-fluid-icon-alpha.mjs --rename` after the index builds
+(`generate-dataset.mjs` does), on 2.9 as on 2.8.1, so faint fluids never ship invisible. It
+repaints fluids under 20% mean opacity under a NEW content name and patches whole basenames
+only; a fluid it leaves alone already has its content name, so the pass changes nothing on a
+dataset with no faint fluid.
 
 Recipe ids come from what a recipe is, never from the export: `recipeContentKey` in
 `normalize-oracle-export.mjs` hashes the map (GT++'s `gtpp.recipe.*` read as
@@ -83,8 +110,12 @@ published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such 
 - Generators named Mark I to IV fold into one tiered family (Plasma Generator Mark, EV to ZPM);
   2.9's Mk-I names keep one family per mark.
 - 2.8.1 registers one arcane wand or sceptre recipe per rod and cap pair, all with the same
-  output item (the wand is its NBT): they stay apart by their grid items, but share one output
-  resource and display name.
+  output item (the wand is its NBT): they stay apart by their grid items and share one catalog
+  resource, named after one of them. Each output slot keeps its own name (and, where the export
+  drew one, its own icon), and the app shows the slot's: a slot that is the browsed or context
+  item keeps its own face (`contextualizePreviewRecipe`, `applyUsesResourceContext`,
+  `buildRecipeInputOverrides`), as on 2.9's shulker box colours and Forestry saplings. Thaumcraft
+  wands render no pixels on 2.8.1 (`dropped-icons.json`), so they have no icon there.
 
 ## Exporting on Apple Silicon
 
@@ -197,6 +228,9 @@ on a case-sensitive Docker volume: the pack has file names that differ only in c
   exported ones so recipe ids stay stable. The oracle picks the GT++ maps for sparge and
   wear data by name without the mod prefix (`isGtppMap`: `gtpp.recipe.*` to 2.8,
   `gt.recipe.*` since 2.9). The normalizer refuses an export whose sparging map has
-  recipes but none with `spargeFluidOutputs` (listed in the oracle report's `failures`).
+  recipes but none with `spargeFluidOutputs`, and one whose Chemical Plant or IsaMill map has
+  recipes but none with `wearingInputs` or any with `wearError` (`spargeExportGaps`,
+  `wearExportGaps`; listed in the oracle report's `failures`). It deletes its `recipes.json`
+  and `recipes.json.gz` before it starts, so a refused run leaves no earlier output behind.
 - Faint fluid icons: repair only captures under 20% mean opacity, starting from the
   original PNGs (`normalize-fluid-icon-alpha.mjs`).

@@ -35,6 +35,15 @@ if (failed.length > 0) {
     `${failed.length} of ${rawTrees.length} trees have a failed Forestry read, first ${failed[0].sapling?.name}: ${failed[0].forestry.error}`,
   );
 }
+// A Forestry sapling is one item whose species is its genes; one exported without them would
+// install as a plain tree, with the same silent wrong numbers.
+const forestrySaplings = rawTrees.filter((tree) => isForestrySapling(tree.sapling?.id));
+const geneless = forestrySaplings.filter((tree) => !tree.forestry);
+if (geneless.length > 0) {
+  throw new Error(
+    `${geneless.length} of ${forestrySaplings.length} Forestry saplings have no Forestry genes, first ${geneless[0].sapling?.name}`,
+  );
+}
 const trees = rawTrees.map((tree) => ({
   sapling: { id: tree.sapling.id, name: tree.sapling.name },
   outputs: Object.fromEntries(Object.entries(tree.outputs).map(([mode, entry]) => [mode, amount(entry)])),
@@ -77,3 +86,7 @@ write("bio-vat.json", { source: `bartworks bw.recipe.BacteriaVat, ${gt}`, recipe
 write("radio-hatch.json", { source: `bartworks bw.recipe.radhatch, ${gt}`, materials });
 
 console.log(`${trees.length} trees, ${vat.length} vat recipes, ${materials.length} radio hatch materials`);
+
+function isForestrySapling(id) {
+  return typeof id === "string" && id.split("@")[0] === "forestry:sapling";
+}

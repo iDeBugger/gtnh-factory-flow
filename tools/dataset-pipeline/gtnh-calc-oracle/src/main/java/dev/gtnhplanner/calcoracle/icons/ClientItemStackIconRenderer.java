@@ -26,6 +26,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.imageio.ImageIO;
@@ -755,21 +756,31 @@ public final class ClientItemStackIconRenderer {
      */
     private static void queueCacheHit(final String key, final ItemStack stack, final String filename,
         final File outFile, final File cachedFile, final File legacyCachedFile, final IconPass pass) {
+        // execute can throw after it has queued the task (an out-of-memory starting a worker), so
+        // this path and the task may both run: whichever claims the hit first settles it, once,
+        // and the counter the pass waits on always ends at 0.
+        final AtomicBoolean claimed = new AtomicBoolean();
         pass.outstandingHits.incrementAndGet();
         try {
-            executeCacheHit(key, stack, filename, outFile, cachedFile, legacyCachedFile, pass);
+            executeCacheHit(key, stack, filename, outFile, cachedFile, legacyCachedFile, pass, claimed);
         } catch (Throwable t) {
             // A hit the pool did not take renders instead, so the pass still ends.
-            pass.retries.add(new PendingRender(key, stack, outFile, cachedFile));
-            pass.outstandingHits.decrementAndGet();
+            if (claimed.compareAndSet(false, true)) {
+                pass.retries.add(new PendingRender(key, stack, outFile, cachedFile));
+                pass.outstandingHits.decrementAndGet();
+            }
         }
     }
 
     private static void executeCacheHit(final String key, final ItemStack stack, final String filename,
-        final File outFile, final File cachedFile, final File legacyCachedFile, final IconPass pass) {
+        final File outFile, final File cachedFile, final File legacyCachedFile, final IconPass pass,
+        final AtomicBoolean claimed) {
         pass.encoder.execute(new Runnable() {
             @Override
             public void run() {
+                if (!claimed.compareAndSet(false, true)) {
+                    return;
+                }
                 try {
                     if (pass.cache.materialize(filename, cachedFile, legacyCachedFile, outFile, true)) {
                         pass.tally.count(MaterializedIconResult.CACHE_HIT);

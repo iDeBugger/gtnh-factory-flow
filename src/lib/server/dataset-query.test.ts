@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildTextSearchIndex, queryTextSearchIndex } from "@/lib/search";
 import { matchSearchTokens, parseSearchQuery } from "@/lib/search";
 import {
+  applyUsesResourceContext,
   getChoiceAlternativesByKey,
   getWildcardResource,
   orderByRecipeMap,
@@ -199,5 +200,23 @@ describe("an all-maps page walks the machines in section order", () => {
       recipeMaps,
     );
     expect(ordered.at(-1)?.recipeIndex).toBe(9);
+  });
+});
+
+describe("a search for an item that has NBT variants", () => {
+  const white = { kind: "item" as const, id: "etfuturum:shulker_box", displayName: "White Shulker Box", iconPath: "white.png" };
+  const catalog = { resources: [white], resourceIndex: [] } as never;
+  const recipe = {
+    id: "orange-box",
+    inputs: [
+      { kind: "item" as const, id: "etfuturum:shulker_box", amount: 1, displayName: "Shulker Box", iconPath: "box.png", tooltip: ["NBT: {Type:0b}"] },
+      { kind: "item" as const, id: "minecraft:dye@14", amount: 1, displayName: "Orange Dye" },
+    ],
+    outputs: [{ kind: "item" as const, id: "etfuturum:shulker_box", amount: 1, displayName: "Orange Shulker Box" }],
+  } as never;
+
+  it("leaves a slot that is the item with its own name, picture and tooltip", () => {
+    const [box] = (applyUsesResourceContext(recipe, catalog, white) as { inputs: Record<string, unknown>[] }).inputs;
+    expect(box).toMatchObject({ displayName: "Shulker Box", iconPath: "box.png", tooltip: ["NBT: {Type:0b}"] });
   });
 });

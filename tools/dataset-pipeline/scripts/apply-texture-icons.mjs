@@ -303,18 +303,9 @@ function textureCandidates(resource, parsed) {
   };
 }
 
+// Named by a hash of the bytes, like rendered icons (stage-rendered-icons.mjs): texture URLs
+// are served immutable, so changed pixels must get a new name.
 async function extractTexture(resource, texture, textureOutDir, publicTextureBase) {
-  const keyHash = crypto
-    .createHash("sha1")
-    .update(`${resource.kind}:${resource.id}:${texture.entry}`)
-    .digest("hex")
-    .slice(0, 12);
-  const filename = `${safeFileName(resource.id)}-${keyHash}.png`;
-  const relativePath = path.posix.join(resource.kind, filename);
-  const outputPath = path.join(textureOutDir, resource.kind, filename);
-
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
-
   const extract = spawnSync("unzip", ["-p", texture.jar, texture.entry], {
     encoding: "buffer",
     maxBuffer: 10 * 1024 * 1024,
@@ -323,6 +314,11 @@ async function extractTexture(resource, texture, textureOutDir, publicTextureBas
     throw new Error(`Failed to extract ${texture.entry} from ${texture.jar}`);
   }
 
+  const contentHash = crypto.createHash("sha1").update(extract.stdout).digest("hex").slice(0, 12);
+  const filename = `${safeFileName(resource.id)}-${contentHash}.png`;
+  const relativePath = path.posix.join(resource.kind, filename);
+  const outputPath = path.join(textureOutDir, resource.kind, filename);
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, extract.stdout);
   return `${publicTextureBase}/${relativePath}`;
 }
