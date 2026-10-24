@@ -33,6 +33,7 @@ import {
   resourceMatchesInput,
 } from "@/lib/model";
 import { HIDDEN_DATASET_VERSION_IDS } from "@/lib/datasets/hidden-versions";
+import { MIN_INDEXABLE_LENGTH, type SearchTerm } from "@/lib/search/text-search";
 import { BoundedLru } from "./bounded-lru";
 import { machineTableControlResourceIds } from "@/lib/machines/machine-table";
 import { EEC_MACHINE_TYPE } from "@/lib/machines/extreme-entity-crusher";
@@ -768,14 +769,12 @@ async function searchDatasetResources(
       // reading of the query the results came from.
       const counts = new Map<string, number>();
       const matches: Array<{ resourceIndex: number; score: number }> = [];
-      // The partial phase never walks the whole list (partialPhaseCandidates):
-      // skipped, the exact answer (empty) stands, with its empty mod counts.
-      const candidateIndexes = options.partial
-        ? partialPhaseCandidates(indexes.searchIndex, query)
-        : (queryTextSearchIndex(indexes.searchIndex, query, options) ?? indexes.sortedResourceIndexes);
-      if (!candidateIndexes) {
-        return matches;
-      }
+      // A query the index cannot narrow walks the whole list, the partial phase
+      // included: about 60k entries, 40-60 ms, within the heavy base cost and
+      // the metering, and that walk is what finds "bag of holding" (no item is
+      // named that) and "motor lv hv" (the motors of those tiers).
+      const candidateIndexes =
+        queryTextSearchIndex(indexes.searchIndex, query, options) ?? indexes.sortedResourceIndexes;
 
       for (const resourceIndex of candidateIndexes) {
         const resource = catalog.resourceIndex[resourceIndex];
@@ -2764,15 +2763,20 @@ function scoreAllRecipes(
 }
 
 /**
- * How many candidates the partial phase may score. That phase asks for entries
- * carrying ANY of the words, so its candidates are the union of every word's
- * matches: a word under three characters cannot narrow at all, and several
- * words together reach most of the corpus. Scoring every recipe against six
- * words and all their spellings held the one server thread for 1-2 s per
- * request. Past this the phase is skipped and the exact or corrected answer
- * stands: "anything with one of these words" over the whole corpus is no
- * answer a player wants anyway. The exact and corrected phases narrow by
- * trigram unless the query holds a short word, and then they walk once each.
+ * How many candidates the recipe partial phase may score. That phase asks for
+ * recipes carrying ANY of the words, so its candidates are the union of every
+ * word's matches, and several words together reach most of the 278k recipes.
+ * Scoring every recipe against six words and all their spellings held the one
+ * server thread for 1-2 s per request. Past this the phase is skipped and the
+ * exact or corrected answer stands: a list of six metals is not a search, and
+ * "anything with one of these words" over the whole corpus is no answer a
+ * player wants. A word under three characters cannot narrow at all, so the
+ * union is taken over the words the index can see and the short word only
+ * scores: "motor lv hv" finds the motors, not every LV thing, and a recipe
+ * carrying only the short word is not found, which is the right trade. The
+ * item pane keeps its full walk (searchDatasetResources): 60k entries are
+ * cheap. The exact and corrected phases narrow by trigram unless the query
+ * holds a short word, and then they walk once each.
  */
 export const PARTIAL_PHASE_CANDIDATE_LIMIT = 30_000;
 
@@ -2782,8 +2786,23 @@ export function partialPhaseCandidates(
   query: SearchQuery,
   limit = PARTIAL_PHASE_CANDIDATE_LIMIT,
 ): number[] | undefined {
-  const candidates = queryTextSearchIndex(index, query, { partial: true });
+  const narrowable = query.terms.filter(isIndexableTerm);
+  if (narrowable.length === 0) {
+    return undefined;
+  }
+  const candidates = queryTextSearchIndex(
+    index,
+    narrowable.length === query.terms.length ? query : { ...query, terms: narrowable },
+    { partial: true },
+  );
   return candidates && candidates.length <= limit ? candidates : undefined;
+}
+
+/** Every spelling of the word is long enough for the trigram index. */
+function isIndexableTerm(term: SearchTerm): boolean {
+  return term.variants.every((variant) =>
+    variant.tokens.every((token) => token.length >= MIN_INDEXABLE_LENGTH),
+  );
 }
 
 function* countedRange(count: number): Generator<number> {

@@ -38,20 +38,26 @@ describe("dataset query text search", () => {
   });
 });
 
-describe("the partial search phase", () => {
-  const index = buildTextSearchIndex(["Steel Plate", "Iron Ingot", "Copper Wire"], [0, 1, 2]);
+describe("the recipe partial search phase", () => {
+  const index = buildTextSearchIndex(
+    ["Steel Plate", "Iron Ingot", "Copper Wire", "LV Motor", "HV Motor"],
+    [0, 1, 2, 3, 4],
+  );
 
-  it("never walks the corpus for a word too short to narrow", () => {
-    expect(partialPhaseCandidates(index, parseSearchQuery("lv steel"))).toBeUndefined();
-    expect(partialPhaseCandidates(index, parseSearchQuery("zz irom steal"))).toBeUndefined();
+  it("narrows by the words it can index and lets a short word only score", () => {
+    // Never a walk over every recipe: the tier words add no candidates.
+    expect(partialPhaseCandidates(index, parseSearchQuery("motor lv hv"))).toEqual([3, 4]);
+    expect(partialPhaseCandidates(index, parseSearchQuery("lv steel"))).toEqual([0]);
+    expect(partialPhaseCandidates(index, parseSearchQuery("zz irom steal"))).toEqual([]);
   });
 
-  it("scores the union of the words' candidates while it is small", () => {
+  it("is skipped when no word can be indexed", () => {
+    expect(partialPhaseCandidates(index, parseSearchQuery("lv hv"))).toBeUndefined();
+  });
+
+  it("scores the union of the words' candidates while it is small, and is skipped past the cap", () => {
     expect(partialPhaseCandidates(index, parseSearchQuery("steel iron"))).toEqual([0, 1]);
     expect(PARTIAL_PHASE_CANDIDATE_LIMIT).toBe(30_000);
-  });
-
-  it("is skipped once the union is most of the corpus", () => {
     expect(partialPhaseCandidates(index, parseSearchQuery("steel iron"), 1)).toBeUndefined();
   });
 });
