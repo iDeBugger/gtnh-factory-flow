@@ -160,15 +160,19 @@ describe("password checks", () => {
   it("do not hold the event loop", async () => {
     const stored = await hashPassword("y");
     let ticks = 0;
+    const started = performance.now();
     const interval = setInterval(() => (ticks += 1), 5);
     try {
-      await Promise.all(Array.from({ length: 20 }, () => checkPassword("x", stored)));
+      await Promise.all(Array.from({ length: 40 }, () => checkPassword("x", stored)));
     } finally {
       clearInterval(interval);
     }
-    // Synchronous scrypt lets the interval fire once or twice while 20 derivations run.
-    expect(ticks).toBeGreaterThanOrEqual(20);
-  }, 20_000);
+    const elapsed = performance.now() - started;
+    // Synchronous scrypt lets the interval fire once or twice while the derivations run; a free
+    // loop fires it about every 5 ms, so at least half of that whatever the machine's speed.
+    expect(elapsed).toBeGreaterThanOrEqual(100);
+    expect(ticks).toBeGreaterThanOrEqual(Math.max(20, elapsed / 5 / 2));
+  }, 30_000);
 });
 
 describe("signing out everywhere", () => {
