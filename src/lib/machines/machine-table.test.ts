@@ -359,6 +359,8 @@ describe("curated machine table", () => {
         // kubatech's MTEExtremeEntityCrusher and MobHandlerLoader; the
         // reference never modelled it. extreme-entity-crusher.test.ts.
         "Extreme Entity Crusher",
+        // tectech's MTEBECIONode; the reference never modelled it. hatch-input.test.ts.
+        "Bose-Einstein Condensate Teleportation Node",
       ].map(normalizeMachineName),
     );
     // Every entry must trace back to a reference definition or a direct source

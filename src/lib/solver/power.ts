@@ -11,6 +11,7 @@ import {
   getVoltageTierMaxEuT,
   getVoltageTierWithinEuT,
   resolveVoltageTier,
+  roundUpVoltage,
 } from "@/lib/model/tiers";
 import type { FactoryNode, MachineTier, Recipe } from "@/lib/model/types";
 import type { GameVersion } from "@/lib/model/game-version";
@@ -216,11 +217,20 @@ export function getNodeSupplyAmps(recipe: PowerRecipeInput, node: PowerNodeInput
 
 /**
  * The amps the machine's power maths run on: the supply's amps, except that a typed supply on a
- * lone regular hatch works at 1 A (`isClampedLoneHatchSupply`). Raw EU/t keeps what it names.
+ * lone regular hatch works at 1 A (`isClampedLoneHatchSupply`). Raw EU/t keeps what it names. A
+ * machine that rounds its pool up to a tier's voltage (`roundsPoolUpToTier`) works at the rounded
+ * pool, stated as amps of the run tier.
  */
 export function getNodePowerAmps(recipe: PowerRecipeInput, node: PowerNodeInput, gameVersion: GameVersion): number {
   const amps = getNodeSupplyAmps(recipe, node, gameVersion);
-  if (!isMultiblockRecipe(recipe, gameVersion) || node.powerInputMode === "eut") return amps;
+  if (!isMultiblockRecipe(recipe, gameVersion)) return amps;
+  if (getMachineBehaviour(recipe.machineType, gameVersion)?.roundsPoolUpToTier) {
+    // The machine works at its pool rounded up to a tier's voltage, whatever supplies the pool.
+    const runRecipe = { ...recipe, eut: recipe.eut ?? 0, minimumTier: recipe.minimumTier ?? "ULV" };
+    const voltage = getVoltageTierMaxEuT(getNodeRunTier(runRecipe, node, gameVersion));
+    return roundUpVoltage(voltage * amps) / voltage;
+  }
+  if (node.powerInputMode === "eut") return amps;
   if (getFusionMachine(recipe.machineType)) return amps;
   const typed =
     (node.hatchVoltageTier !== undefined && node.hatchAmps !== undefined) ||

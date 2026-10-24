@@ -95,7 +95,8 @@ Every save goes through `persistCanvas` in design-store.ts:
   version this site no longer serves, or no manifest yet, reads as 2.9. A pick storage refuses holds for the page.
   The first-run seed waits for the manifest (at most 3 s) only when the remembered choice is not 2.9. The boot's
   dataset load starts as the manifest lands unless the plan last open on this device (`open-plan-version.v1`, a boot
-  hint written once the stored plans are in, not a setting) or, with none, the remembered choice is not 2.9; then it
+  hint written once the stored plans are in by `useOpenPlanVersionHint`, not a setting; a value that is not a version
+  number reads as none) or, with none, the remembered choice is not 2.9; then it
   waits for the stored plans (`bootWaitsForPlans`). A 2.9 player's catalog never waits, a 2.8.1 player never
   downloads 2.9.
 - Exam: `new-plan-version.test.ts`, `dataset-cache.test.ts`, `refresh-project-recipes.test.ts`, the "active dataset

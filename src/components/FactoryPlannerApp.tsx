@@ -3,7 +3,7 @@
 import { startLandingRefresh } from "@/lib/datasets/refresh-project-recipes";
 import { datasetServesPlan } from "@/lib/datasets/dataset-cache";
 import { gameVersionOfDataset, planGameVersion } from "@/lib/model/game-version";
-import { bootWaitsForPlans, writeOpenPlanVersion } from "@/lib/datasets/new-plan-version";
+import { bootWaitsForPlans, useOpenPlanVersionHint } from "@/lib/datasets/new-plan-version";
 import type { Recipe } from "@/lib/model/types";
 import { useDeviceSettings, writeDeviceSettings } from "@/lib/device-settings";
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -137,9 +137,7 @@ export function FactoryPlannerApp() {
   }, [activeDesignId, ensureDatasetFor, planVersion]);
   // The next boot's hint: the version of the plan open now, once it is a stored plan (not the empty starting one).
   const designsHydratedFlag = useDesignStore((state) => state.isHydrated);
-  useEffect(() => {
-    if (designsHydratedFlag && activeDesignId) writeOpenPlanVersion(planVersion);
-  }, [activeDesignId, designsHydratedFlag, planVersion]);
+  useOpenPlanVersionHint(designsHydratedFlag, activeDesignId, planVersion);
   useBoardSoundEffects();
   const skipInitialSaveRef = useRef(true);
   const saveTimeoutRef = useRef<number | undefined>(undefined);

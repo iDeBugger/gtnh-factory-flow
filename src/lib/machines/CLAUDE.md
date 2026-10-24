@@ -77,8 +77,11 @@ computes in float: replicate it.
   machine that doesn't exist (Cold Trap has IV and ZPM, no LuV).
 - A singleblock's minimum tier is the lowest whose voltage x the recipe map's amperage covers
   the EU/t (`recipe-map-amperage.ts`, per version: thermal centrifuge 2 A, mass fab 8 A, and
-  2.8.1's arc furnace 3 A). `applyMachineHandlerToRecipe` sets `recipeMapAmperage`; multiblocks
-  keep the draw tier. The machine's own amps (`amperage` in the table) are a separate fact.
+  2.8.1's arc furnace 3 A). The pipeline stamps that tier on the singleblock handler and the
+  app keeps the declared minimum as it is (the load funnel restamps an older stored body the same way,
+  `src/lib/model/amp-map-stamp.ts`); `applyMachineHandlerToRecipe` only sets
+  `recipeMapAmperage`, which `getRecipeMinimumVoltageTier` divides by. Multiblocks keep the
+  draw tier. The machine's own amps (`amperage` in the table) are a separate fact.
 
 ## Hatch power (src/lib/solver/hatch-input.ts)
 
@@ -113,6 +116,10 @@ computes in float: replicate it.
 - Utupu-Tanuri is both `Multiblock Dehydrator` and `Vacuum Furnace`; keep both aliases on
   one entry (`minimumHeatFromSpecialValue`).
 - Naquadah Fuel Refinery: special value = minimum coil tier (`minimumFromSpecialValue`).
+- BEC Teleportation Node (2.9 only, MTEBECIONode): no overclocks, unlimited tier skips, and the
+  Observation Array's pool rounded up to a tier's voltage at 1 A (`roundsPoolUpToTier`, read by
+  `getNodePowerAmps`). Speed is per nanite: the card assumes 1 nanite of the recipe's tier, no
+  slowdowns and 1 parallel (the dataset has no nanite tiers or condensate), and its note says so.
 - Pipe casings are two families: `pipeCasing` (FLUID, Bronze-Tungstensteel: Chemical
   Plant, Multi Autoclave) and `itemPipeCasing` (ITEM, Tin-Black Plutonium: lathe, mixer,
   wire factory, dissection, Amazon depot, which hide the fluid knob via `hidesControls`).

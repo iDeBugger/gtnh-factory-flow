@@ -31,4 +31,7 @@ export const ABSENT_OVERRIDES: Record<string, Partial<MachineBehaviour> | null> 
   // GT++'s "High Current Industrial Arc Furnace" (gtPlusPlus/xmod/gregtech/registration/gregtech/GregtechIndustrialArcFurnace.java:22),
   // a different name, so this null never reaches it.
   "Industrial Arc Furnace": null,
+  // GT5U@5.09.51.476 tectech/loader/thing/MachineLoader.java:2224-2271 (the tectech multiblock controllers: no
+  // MTEBECIONode; tectech/thing/metaTileEntity/multi has no bec package)
+  "Bose-Einstein Condensate Teleportation Node": null,
 };

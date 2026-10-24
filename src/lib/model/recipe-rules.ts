@@ -16,12 +16,6 @@ import {
 } from "@/lib/machines/machine-table";
 import { getRecipeMapAmperage } from "@/lib/machines/recipe-map-amperage";
 import type { GameVersion } from "./game-version";
-import {
-  getRecipeAvailableVoltageTiers,
-  getVoltageTierForEuT,
-  getVoltageTierIndex,
-  isVoltageTierName,
-} from "./tiers";
 
 export interface MachineConfigTierControl {
   id: string;
@@ -186,31 +180,6 @@ export function getSelectedMachineHandler(
   return handlers.find((handler) => handler.id === node.machineHandlerId) ?? handlers[0];
 }
 
-/**
- * A singleblock's minimum on a map with more than one amp: its lowest real
- * machine, or the tier whose voltage times the map's amps covers the EU/t if
- * that is higher. A declared minimum above the EU/t's own tier is a real gate
- * and stands. One at or below it is the pipeline's stamp of the draw: datasets
- * normalized before the pipeline counted map amperage stamp the 1 A tier.
- * Re-normalized datasets already stamp the amp tier, so there this changes
- * nothing; it stays while a served dataset carries the old stamp (a published
- * 2.9 build says MV for a 48 EU/t Thermal Centrifuge recipe the game runs on LV).
- */
-function singleblockMinimumOnAmpMap(
-  declared: string,
-  eut: number,
-  mapAmps: number,
-  availableTiers: string[] | undefined,
-): string {
-  const drawTier = getVoltageTierForEuT(eut);
-  if (isVoltageTierName(declared) && getVoltageTierIndex(declared) > getVoltageTierIndex(drawTier)) {
-    return declared;
-  }
-  const ampTier = getVoltageTierForEuT(eut / mapAmps);
-  const lowestMachine = getRecipeAvailableVoltageTiers({ availableTiers })?.[0];
-  return lowestMachine && getVoltageTierIndex(lowestMachine) > getVoltageTierIndex(ampTier) ? lowestMachine : ampTier;
-}
-
 export function applyMachineHandlerToRecipe(
   recipe: Recipe,
   node: Pick<FactoryNode, "machineHandlerId">,
@@ -252,16 +221,15 @@ export function applyMachineHandlerToRecipe(
   const tgs = handler.machineType === TGS_MACHINE_TYPE;
   const eut = tgs ? tgsEuPerTick(1) : isSteamMachineHandler(handler) ? 0 : (handlerEut ?? recipe.eut);
   // A singleblock finds its recipe at its voltage times the map's amperage
-  // (recipe-map-amperage.ts); a multiblock's hatches must carry the draw.
+  // (recipe-map-amperage.ts); a multiblock's hatches must carry the draw. The
+  // pipeline already stamps a singleblock handler's minimum at the amp tier,
+  // so the declared minimum stands and only the amperage rides along.
   const mapAmps = handler.kind === "multiblock" ? 1 : getRecipeMapAmperage(recipe.metadata?.recipeMapId, gameVersion);
-  const runMinimumTier = mapAmps > 1
-    ? singleblockMinimumOnAmpMap(minimumTier, eut, mapAmps, handler.availableTiers)
-    : minimumTier;
   const applied: Recipe = {
     ...recipe,
     runtimeCalculation,
     machineType: handler.machineType,
-    minimumTier: tgs ? "LV" : runMinimumTier,
+    minimumTier: tgs ? "LV" : minimumTier,
     recipeMapAmperage: mapAmps > 1 ? mapAmps : undefined,
     maximumTier: handler.maximumTier,
     availableTiers: handler.availableTiers,
@@ -271,7 +239,7 @@ export function applyMachineHandlerToRecipe(
     machineProfile: {
       ...recipe.machineProfile,
       machineType: handler.machineType,
-      minimumTier: runMinimumTier,
+      minimumTier,
       maximumTier: handler.maximumTier,
       availableTiers: handler.availableTiers,
       durationTicks: handlerDurationTicks ?? recipe.machineProfile?.durationTicks,

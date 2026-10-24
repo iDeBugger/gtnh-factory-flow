@@ -19,6 +19,7 @@ import {
 } from "./hatch-input";
 import { listPowerWinsCached } from "./power-wins";
 import { useFactoryStore } from "@/store/factory-store";
+import { getMachineBehaviour } from "@/lib/machines/machine-table";
 
 const recipe = (machineType = "Large Chemical Reactor", eut = 480): Recipe => ({
   id: machineType,
@@ -459,7 +460,6 @@ describe("machines that keep a lone hatch's 2 A", () => {
     ["Exo-Foundry", "2.9"],
     // 2.9 has no Mega Vacuum Freezer machine (the dataset lists none): only 2.8.1's is a full pool.
     ["Mega Vacuum Freezer", "2.8.1"],
-    ["Bose-Einstein Condensate Teleportation Node", "2.9"],
     ["Quantum Force Transformer", "2.9"],
     ["Quantum Force Transformer", "2.8.1"],
     ["Industrial Arc Furnace", "2.9"],
@@ -483,5 +483,70 @@ describe("machines that keep a lone hatch's 2 A", () => {
       const report = getNodePowerReport(r, node({ recipeId: r.id, hatchVoltageTier: "HV", hatchAmps: 2 }), gameVersion);
       expect(report.poolEuT).toBe(512);
     }
+  });
+});
+
+/**
+ * MTEBECIONode at GT5U@5.09.54.205: `setAvailableVoltage(GTUtility.roundUpVoltage(getMaxInputEu()))` at 1 A
+ * with unlimited tier skips (:302-310), and no overclocks (:279-282).
+ */
+describe("the BEC Teleportation Node works its pool rounded up to a tier's voltage", () => {
+  const BEC = "Bose-Einstein Condensate Teleportation Node";
+
+  it("works three HV hatches (3072 EU/t) at IV's 8192, so a 4000 EU/t recipe runs", () => {
+    const r = recipe(BEC, 4000);
+    const report = getNodePowerReport(r, node({ recipeId: r.id, hatchVoltageTier: "HV", hatchAmps: 6 }), "2.9");
+    expect(report.poolEuT).toBe(8192);
+    expect(report.workingAmps).toBe(16);
+    expect(report.state).toBe("ok");
+    // The same 3072 EU/t on a full-pool machine with no rounding stays 3072.
+    const forge = recipe("Nano Forge", 4000);
+    expect(getNodePowerReport(forge, node({ recipeId: forge.id, hatchVoltageTier: "HV", hatchAmps: 6 }), "2.9").poolEuT).toBe(3072);
+  });
+
+  it("rounds a lone hatch's 2 A up, leaves a pool at a tier's voltage, and rounds a raw EU/t budget", () => {
+    const r = recipe(BEC, 120);
+    expect(getNodePowerReport(r, node({ recipeId: r.id, hatchVoltageTier: "HV", hatchAmps: 2 }), "2.9").poolEuT).toBe(2048);
+    expect(getNodePowerReport(r, node({ recipeId: r.id, hatchVoltageTier: "HV", hatchAmps: 4 }), "2.9").poolEuT).toBe(2048);
+    expect(getNodePowerReport(r, node({ recipeId: r.id, hatchVoltageTier: "HV", hatchAmps: 1 }), "2.9").poolEuT).toBe(512);
+    const raw = getNodePowerReport(r, node({ recipeId: r.id, powerInputMode: "eut", powerEuT: 5000 }), "2.9");
+    expect(raw.poolEuT).toBe(8192);
+  });
+
+  it("reads a recipe above the rounded pool as short", () => {
+    const r = recipe(BEC, 9000);
+    const report = getNodePowerReport(r, node({ recipeId: r.id, hatchVoltageTier: "HV", hatchAmps: 6 }), "2.9");
+    expect(report.poolEuT).toBe(8192);
+    expect(report.state).toBe("under-powered");
+  });
+
+  it("works a multi-amp or laser hatch's whole rating, already a tier's voltage", () => {
+    const r = recipe(BEC, 120);
+    const amp16 = getNodePowerReport(r, node({ recipeId: r.id, overclockTier: "HV", energyHatchType: "amp16" }), "2.9");
+    expect(amp16.poolEuT).toBe(8192);
+    const laser = getNodePowerReport(r, node({ recipeId: r.id, overclockTier: "IV", energyHatchType: "laser256" }), "2.9");
+    expect(laser.poolEuT).toBe(2_097_152);
+    // A 4 A HV hatch (2048) cannot carry 9000 EU/t.
+    const short = recipe(BEC, 9000);
+    const amp4 = getNodePowerReport(short, node({ recipeId: short.id, overclockTier: "HV", energyHatchType: "amp4" }), "2.9");
+    expect(amp4).toMatchObject({ poolEuT: 2048, state: "under-powered" });
+  });
+
+  it("never overclocks, however far the pool is above the recipe", () => {
+    const r = recipe(BEC, 400);
+    const stats = getOverclockedRecipeStats(r, node({ recipeId: r.id, hatchVoltageTier: "HV", hatchAmps: 6 }), "2.9");
+    expect(stats).toMatchObject({ overclockSteps: 0, durationTicks: 400, eut: 400 });
+  });
+
+  it("is a 2.9 machine only", () => {
+    expect(getMachineBehaviour(BEC, "2.9")?.roundsPoolUpToTier).toBe(true);
+    expect(getMachineBehaviour(BEC, "2.8.1")).toBeUndefined();
+    expect(getMachineBehaviour("Nano Forge", "2.9")?.roundsPoolUpToTier).toBeUndefined();
+  });
+
+  it("tells the player the card's speed is for 1 nanite", () => {
+    expect(getMachineBehaviour(BEC, "2.9")?.note).toBe(
+      "Speed assumes 1 nanite of the recipe's tier, no slowdowns and 1 parallel. A build with more nanites runs faster.",
+    );
   });
 });

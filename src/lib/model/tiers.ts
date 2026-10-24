@@ -66,6 +66,18 @@ export function isVoltageTierName(value: unknown): value is Exclude<MachineTier,
   return GT_VOLTAGE_TIERS.some((entry) => entry.tier === value);
 }
 
+/** GTValues.V[15], the error tier past MAX that roundUpVoltage still rounds to (GT5U@5.09.54.205 GTValues.java:95). */
+const ERROR_TIER_VOLTAGE = 8_589_934_592;
+
+/**
+ * GTUtility.roundUpVoltage (GT5U@5.09.54.205 GTUtility.java:481-486): the lowest tier voltage at or
+ * above `euT`, the error tier past MAX, and anything above that unchanged.
+ */
+export function roundUpVoltage(euT: number): number {
+  if (euT > ERROR_TIER_VOLTAGE) return euT;
+  return GT_VOLTAGE_TIERS.find((entry) => euT <= entry.maxEuT)?.maxEuT ?? ERROR_TIER_VOLTAGE;
+}
+
 /** EU/t a single energy hatch of this tier delivers - the machine's power budget. */
 export function getVoltageTierMaxEuT(tier: Exclude<MachineTier, "DEMO">): number {
   return GT_VOLTAGE_TIERS.find((entry) => entry.tier === tier)?.maxEuT ?? Number.POSITIVE_INFINITY;

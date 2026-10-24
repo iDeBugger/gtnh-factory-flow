@@ -80,7 +80,8 @@ Types, Zod schemas, resource keys, recipe rules, and the load funnel
 
 `normalizeLoadedProject` snaps positions to the grid and migrates legacy shapes (trash
 cans to trash drawers, stored setup rules dropped, unratioed cross-form wires and overrides
-dropped, loose cell wires to tank cards). Unknown keys
+dropped, loose cell wires to tank cards, stored recipe bodies on multi-amp maps restamped at the amp tier as the
+pipeline stamps it: `amp-map-stamp.ts`, for a card the landing refresh does not re-find). Unknown keys
 are stripped by the Zod schema on import, paste and server paths, not here; IndexedDB
 loads are not schema-parsed. Old plans must keep opening: add a migration rather than
 breaking a schema.

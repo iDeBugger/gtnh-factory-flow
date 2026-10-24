@@ -1,15 +1,19 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { renderHook } from "@testing-library/react";
 import {
   NEW_PLAN_VERSION_STORAGE_KEY,
+  OPEN_PLAN_VERSION_STORAGE_KEY,
   bootWaitsForPlans,
   newPlanVersionNeedsManifest,
   readNewPlanVersion,
+  readOpenPlanVersion,
   resetNewPlanVersionForTests,
   recipesNotOnSiteText,
   servedGameVersions,
   unservedPlanText,
   writeNewPlanVersion,
+  useOpenPlanVersionHint,
   writeOpenPlanVersion,
 } from "./new-plan-version";
 import type { DatasetManifest } from "./types";
@@ -122,6 +126,69 @@ describe("the version new plans are made for", () => {
     writeNewPlanVersion("2.9");
     expect(window.localStorage.getItem(NEW_PLAN_VERSION_STORAGE_KEY)).toBe("2.8.1");
     expect(readNewPlanVersion(both)).toBe("2.9");
+  });
+});
+
+describe("the open plan's version, the next boot's hint", () => {
+  const stored = () => window.localStorage.getItem(OPEN_PLAN_VERSION_STORAGE_KEY);
+
+  it("is written once the stored plans are in and a stored plan is open, with that plan's version", () => {
+    const { rerender } = renderHook(
+      ({ hydrated, active, version }: { hydrated: boolean; active: string | undefined; version: string }) =>
+        useOpenPlanVersionHint(hydrated, active, version),
+      { initialProps: { hydrated: false, active: "plan-a" as string | undefined, version: "2.8.1" } },
+    );
+    expect(stored()).toBeNull();
+    // Hydrated with no stored plan open (the empty starting one): still nothing.
+    rerender({ hydrated: true, active: undefined, version: "2.8.1" });
+    expect(stored()).toBeNull();
+    rerender({ hydrated: true, active: "plan-a", version: "2.8.1" });
+    expect(stored()).toBe("2.8.1");
+  });
+
+  it("is rewritten when the open plan changes version, and left alone when it does not", () => {
+    const { rerender } = renderHook(
+      ({ active, version }: { active: string; version: string }) => useOpenPlanVersionHint(true, active, version),
+      { initialProps: { active: "plan-a", version: "2.8.1" } },
+    );
+    expect(stored()).toBe("2.8.1");
+    // Another tab on the other version.
+    rerender({ active: "plan-b", version: "2.9" });
+    expect(stored()).toBe("2.9");
+    // The open plan's version changes.
+    rerender({ active: "plan-b", version: "2.8.1" });
+    expect(stored()).toBe("2.8.1");
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    rerender({ active: "plan-c", version: "2.8.1" });
+    expect(setItem).not.toHaveBeenCalled();
+    expect(stored()).toBe("2.8.1");
+  });
+
+  it("reads a missing, blank or garbage value as no hint, so the new-plan choice decides", () => {
+    expect(readOpenPlanVersion()).toBeUndefined();
+    writeNewPlanVersion("2.8.1");
+    for (const garbage of ["", "   ", "banana", "{\"v\":1}", "2.9; drop", "undefined"]) {
+      window.localStorage.setItem(OPEN_PLAN_VERSION_STORAGE_KEY, garbage);
+      expect(readOpenPlanVersion()).toBeUndefined();
+      expect(bootWaitsForPlans()).toBe(true);
+    }
+    writeNewPlanVersion("2.9");
+    window.localStorage.setItem(OPEN_PLAN_VERSION_STORAGE_KEY, "banana");
+    expect(bootWaitsForPlans()).toBe(false);
+    window.localStorage.setItem(OPEN_PLAN_VERSION_STORAGE_KEY, " 2.8.1 ");
+    expect(readOpenPlanVersion()).toBe("2.8.1");
+    expect(bootWaitsForPlans()).toBe(true);
+  });
+
+  it("a write storage refuses does not throw, and storage that cannot be read gives no hint", () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("full");
+    });
+    expect(() => writeOpenPlanVersion("2.8.1")).not.toThrow();
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    expect(readOpenPlanVersion()).toBeUndefined();
   });
 });
 

@@ -1,3 +1,4 @@
+import { restampAmpMapMinimums } from "./amp-map-stamp";
 import { normalizeProductionGroups } from "./production-groups";
 import { normalizeFullFarms } from "./full-farms";
 import { normalizeProjectHatchInputs } from "@/lib/solver/hatch-input";
@@ -119,7 +120,12 @@ function normalizeLegacyProject(project: FactoryProject): FactoryProject {
                     // slot and lose its fuel wire to the cross-form drop.
                     resynthesizePowerRecipes(
                       normalizeProjectFuelProfiles(
-                        normalizeFullFarms(renameOpvTier(adoptSetupRules(requirePlanForSolve(requireSolveForPool(project))))),
+                        normalizeFullFarms(
+                          restampAmpMapMinimums(
+                            renameOpvTier(adoptSetupRules(requirePlanForSolve(requireSolveForPool(project)))),
+                            gameVersion,
+                          ),
+                        ),
                       ),
                       gameVersion,
                     ),

@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { DEFAULT_GAME_VERSION, gameVersionLabel, gameVersionOfDataset, type GameVersion } from "@/lib/model/game-version";
 import { HIDDEN_DATASET_VERSION_IDS, pickDatasetVersionFor } from "./remote";
 import type { DatasetManifest } from "./types";
@@ -54,6 +54,19 @@ export function newPlanVersionNeedsManifest(): boolean {
  */
 export const OPEN_PLAN_VERSION_STORAGE_KEY = "gtnh-factory-flow.open-plan-version.v1";
 
+/** A stored hint that is not a version number (digits and dots) is ignored: it is not one this code wrote. */
+const OPEN_PLAN_VERSION_SHAPE = /^\d+(?:\.\d+)*$/;
+
+/** The stored hint, or undefined when it is missing, blank, not a version number or unreadable. */
+export function readOpenPlanVersion(): GameVersion | undefined {
+  try {
+    const stored = window.localStorage.getItem(OPEN_PLAN_VERSION_STORAGE_KEY)?.trim();
+    return stored && OPEN_PLAN_VERSION_SHAPE.test(stored) ? stored : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function writeOpenPlanVersion(v: GameVersion): void {
   try {
     if (window.localStorage.getItem(OPEN_PLAN_VERSION_STORAGE_KEY) !== v) {
@@ -70,13 +83,22 @@ export function writeOpenPlanVersion(v: GameVersion): void {
  * soon as the manifest lands; a 2.8.1 player never downloads 2.9.
  */
 export function bootWaitsForPlans(): boolean {
-  let open: string | undefined;
-  try {
-    open = window.localStorage.getItem(OPEN_PLAN_VERSION_STORAGE_KEY)?.trim() || undefined;
-  } catch {
-    open = undefined;
-  }
+  const open = readOpenPlanVersion();
   return open !== undefined ? open !== DEFAULT_GAME_VERSION : newPlanVersionNeedsManifest();
+}
+
+/**
+ * Writes the next boot's hint: the open plan's version, once the stored plans are in and a stored plan is open
+ * (not the empty starting one), and again whenever the open plan's version changes.
+ */
+export function useOpenPlanVersionHint(
+  designsHydrated: boolean,
+  activeDesignId: string | undefined,
+  planVersion: GameVersion,
+): void {
+  useEffect(() => {
+    if (designsHydrated && activeDesignId) writeOpenPlanVersion(planVersion);
+  }, [activeDesignId, designsHydrated, planVersion]);
 }
 
 export function writeNewPlanVersion(v: GameVersion): void {

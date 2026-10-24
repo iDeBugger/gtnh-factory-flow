@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getRecipeMaximumVoltageTier, getRecipeAvailableVoltageTiers, getRunVoltageTier, getVoltageTierForEuT } from "./tiers";
+import { getRecipeMaximumVoltageTier, getRecipeAvailableVoltageTiers, getRunVoltageTier, getVoltageTierForEuT, roundUpVoltage } from "./tiers";
 
 describe("GT voltage tiers", () => {
   it("selects the first tier that can cover a recipe EU/t", () => {
@@ -43,5 +43,19 @@ describe("the run tier stops at the family's last real machine", () => {
     expect(getRunVoltageTier(canner, "ULV")).toBe("LV");
     expect(getRunVoltageTier({ eut: 120, minimumTier: "MV" }, "UV")).toBe("UV");
     expect(getRecipeMaximumVoltageTier({ maximumTier: "nonsense" })).toBeUndefined();
+  });
+});
+
+describe("roundUpVoltage (GTUtility.roundUpVoltage)", () => {
+  it("rounds up to the lowest tier voltage that covers the value", () => {
+    expect(roundUpVoltage(0)).toBe(8);
+    expect(roundUpVoltage(8)).toBe(8);
+    expect(roundUpVoltage(33)).toBe(128);
+    expect(roundUpVoltage(512)).toBe(512);
+    expect(roundUpVoltage(3072)).toBe(8192);
+    expect(roundUpVoltage(536_870_913)).toBe(2_147_483_640);
+    // Past MAX it rounds to GTValues.V[15], and above that it keeps the value.
+    expect(roundUpVoltage(2_147_483_641)).toBe(8_589_934_592);
+    expect(roundUpVoltage(9_000_000_000)).toBe(9_000_000_000);
   });
 });

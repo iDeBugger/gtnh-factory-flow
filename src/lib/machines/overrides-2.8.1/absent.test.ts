@@ -12,6 +12,7 @@ const ABSENT_MACHINES = [
   "Industrial Bending Machine",
   "Mass Solidifier",
   "L.A.T.E.X.",
+  "Bose-Einstein Condensate Teleportation Node",
 ];
 
 describe("machines absent in 2.8.1", () => {

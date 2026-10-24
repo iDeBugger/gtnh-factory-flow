@@ -168,6 +168,11 @@ export interface MachineBehaviour {
   /** `setUnlimitedTierSkips`: a recipe above the hatch tier still starts. */
   unlimitedTierSkip?: boolean;
   /**
+   * The machine hands ProcessingLogic `GTUtility.roundUpVoltage(pool)` at 1 A, so a pool between two
+   * tiers works at the higher tier's voltage (three HV hatches, 3072 EU/t, work at 8192).
+   */
+  roundsPoolUpToTier?: boolean;
+  /**
    * How a HEAT_OVERCLOCK machine computes its machine heat, transcribed from
    * each machine's `setMachineHeat` call. See `heat.ts`.
    */
@@ -1022,6 +1027,17 @@ const MACHINES: Record<string, MachineBehaviour> = {
     hidesControls: ["laserAmperage"],
     normalizeConfig: normalizeHileSettings,
     note: "Laser source sets parallels and the recipe/overclock ceiling; it supplies no power. Assumes glass at least the source tier. UEV+ sources allow one multi-amp energy hatch.",
+  },
+  // GT5U@5.09.54.205 tectech/thing/metaTileEntity/multi/bec/MTEBECIONode.java:279-282 (setNoOverclock) and
+  // :302-310 (setProcessingLogicPower): the linked Observation Array's getMaxInputEu() rounded up to a
+  // tier's voltage, at 1 A, with unlimited tier skips. The card's hatches stand for the array's.
+  "Bose-Einstein Condensate Teleportation Node": {
+    overclock: OVERCLOCK.none(),
+    fullPowerPool: true,
+    roundsPoolUpToTier: true,
+    unlimitedTierSkip: true,
+    // MTEBECIONode.java:567-578: progress per tick is nanites / (parallels x tier divisor x slowdowns).
+    note: "Speed assumes 1 nanite of the recipe's tier, no slowdowns and 1 parallel. A build with more nanites runs faster.",
   },
   "Transcendent Plasma Mixer": {
     overclock: OVERCLOCK.none(),
