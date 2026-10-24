@@ -1,8 +1,11 @@
-import { timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { docKey, isAccountId } from "@/lib/live/protocol";
 import type { PlanMember } from "@/lib/library/sync-types";
 import { fetchWithDbTimeout } from "./community";
+import { sameSecret } from "./secret";
+
+// The live service checks its internal token with the same helper.
+export { sameSecret };
 
 /**
  * Cloud plans: a library design shared with other accounts as editors, and
@@ -103,18 +106,6 @@ export async function listMembers(
 // ---------------------------------------------------------------------------
 // Telling the live service
 
-/** Constant-time check of a shared secret header value. */
-export function sameSecret(
-  given: string | null | undefined,
-  expected: string | undefined,
-): boolean {
-  if (!given || !expected) {
-    return false;
-  }
-  const a = Buffer.from(given);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 export type LiveNotice =
   | {

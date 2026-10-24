@@ -17,6 +17,7 @@ import {
   sessionSecret,
   verifySessionToken,
 } from "./session";
+import { sameSecret } from "./secret";
 
 export { makeSessionToken, SESSION_COOKIE };
 
@@ -303,9 +304,9 @@ export function forgetSessionUsers(): void {
   sessionUsers.clear();
 }
 
+/** The admin header, checked in constant time; with no token configured nobody is admin. */
 export function isAdminRequest(request: Request): boolean {
-  const adminToken = process.env.COMMUNITY_ADMIN_TOKEN;
-  return Boolean(adminToken) && request.headers.get("x-admin-token") === adminToken;
+  return sameSecret(request.headers.get("x-admin-token"), process.env.COMMUNITY_ADMIN_TOKEN);
 }
 
 /** Returns true when the action is allowed; records it when it is. */
