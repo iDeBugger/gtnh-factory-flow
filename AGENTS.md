@@ -44,9 +44,12 @@ Scratch harnesses are `*.local.test.ts` (excluded from the suite); run one with
   experiments survive as `archive/*` tags.
 - Push only to `origin` (`iDeBugger/gtnh-factory-flow`). `upstream` (Samiracle64, the
   original fork, long diverged) and `kewaii` are not push targets.
-- CI runs typecheck, the full suite and a Chromium/Firefox icon-sizing check on every PR
-  and push to main. No tolerated failures. A test that pins player-facing copy changes in
-  the same commit as the copy.
+- CI runs typecheck, the full suite, a Chromium/Firefox icon-sizing check and the dependency
+  audit gate (`npm run audit:gate`: production tree clean at moderate, whole tree at high)
+  on every PR and push to main, and weekly. No tolerated failures. A test that pins
+  player-facing copy changes in the same commit as the copy. An advisory that cannot be
+  lifted goes in `tools/audit-allowlist.json` with a reason and an expiry at most 90 days
+  out, never a loosened threshold.
 - Nothing generated goes in the repo root. Screenshots, probe scripts, captures and logs go
   in the session scratchpad or `scratch/` (gitignored). Old Playwright probes live in
   `scratch/probes/`. Delete screenshots once you have looked at them.

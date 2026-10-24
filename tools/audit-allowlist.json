@@ -1,0 +1,4 @@
+{
+  "$comment": "Advisories the CI audit gate ignores. Every entry needs a reason and an expiry at most 90 days out; an expired entry stops ignoring and the gate goes red.",
+  "advisories": {}
+}

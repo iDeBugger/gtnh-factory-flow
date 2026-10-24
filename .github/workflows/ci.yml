@@ -1,8 +1,11 @@
 # Typecheck + tests on every pull request and every push to main — the same
 # two commands AGENTS.md names as the verification suite. The full suite is
-# expected green: as of 2026-08-19 there are no tolerated failures, so any
-# red here is a real regression (or a test left pinning copy that changed —
-# update the pin in the same PR that changes the copy).
+# expected green: there are no tolerated failures, so any red here is a real
+# regression (or a test left pinning copy that changed — update the pin in the
+# same PR that changes the copy).
+#
+# The dependency audit also runs weekly so a new advisory surfaces without a
+# pull request; the other jobs run then too, which is cheap and harmless.
 name: CI
 
 on:
@@ -10,6 +13,9 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -49,3 +55,16 @@ jobs:
       - run: npm ci
       - run: node node_modules/playwright-core/cli.js install --with-deps --only-shell chromium firefox
       - run: npm run test:icons:browsers
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run audit:gate
