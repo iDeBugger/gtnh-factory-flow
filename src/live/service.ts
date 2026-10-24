@@ -706,8 +706,13 @@ export class LiveService {
       await this.upgrade(req, socket, head, refuse);
     } catch (error) {
       // A request target that cannot be read, or anything else thrown on the
-      // way: this socket is refused, the service goes on.
-      this.log(`upgrade ${req.url}: ${String(error)}`);
+      // way: this socket is refused, the service goes on. This runs before
+      // any limiter and the target can be kilobytes long, so it is logged
+      // clipped.
+      const target = req.url ?? "";
+      const shown =
+        target.length > 120 ? `${target.slice(0, 120)}... (${target.length} chars)` : target;
+      this.log(`upgrade ${shown}: ${String(error)}`);
       refuse(500, "Internal Server Error");
     }
   }
