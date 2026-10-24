@@ -767,9 +767,15 @@ async function searchDatasetResources(
       // Counted per pass, because which mods are on offer depends on which
       // reading of the query the results came from.
       const counts = new Map<string, number>();
-      const candidateIndexes =
-        queryTextSearchIndex(indexes.searchIndex, query, options) ?? indexes.sortedResourceIndexes;
       const matches: Array<{ resourceIndex: number; score: number }> = [];
+      // The partial phase never walks the whole list (partialPhaseCandidates):
+      // skipped, the exact answer (empty) stands, with its empty mod counts.
+      const candidateIndexes = options.partial
+        ? partialPhaseCandidates(indexes.searchIndex, query)
+        : (queryTextSearchIndex(indexes.searchIndex, query, options) ?? indexes.sortedResourceIndexes);
+      if (!candidateIndexes) {
+        return matches;
+      }
 
       for (const resourceIndex of candidateIndexes) {
         const resource = catalog.resourceIndex[resourceIndex];
@@ -2749,8 +2755,35 @@ function scoreAllRecipes(
   query: SearchQuery,
   options: { partial?: boolean },
 ): RankedRecipe[] {
+  if (options.partial) {
+    const candidates = partialPhaseCandidates(searchIndex, query);
+    return candidates ? scoreRecipeIndexes(searchIndex, candidates, query, options) : [];
+  }
   const narrowed = queryTextSearchIndex(searchIndex, query, options);
   return scoreRecipeIndexes(searchIndex, narrowed ?? countedRange(entryCount), query, options);
+}
+
+/**
+ * How many candidates the partial phase may score. That phase asks for entries
+ * carrying ANY of the words, so its candidates are the union of every word's
+ * matches: a word under three characters cannot narrow at all, and several
+ * words together reach most of the corpus. Scoring every recipe against six
+ * words and all their spellings held the one server thread for 1-2 s per
+ * request. Past this the phase is skipped and the exact or corrected answer
+ * stands: "anything with one of these words" over the whole corpus is no
+ * answer a player wants anyway. The exact and corrected phases narrow by
+ * trigram unless the query holds a short word, and then they walk once each.
+ */
+export const PARTIAL_PHASE_CANDIDATE_LIMIT = 30_000;
+
+/** The partial phase's candidates, or undefined when the phase must be skipped. */
+export function partialPhaseCandidates(
+  index: TextSearchIndex,
+  query: SearchQuery,
+  limit = PARTIAL_PHASE_CANDIDATE_LIMIT,
+): number[] | undefined {
+  const candidates = queryTextSearchIndex(index, query, { partial: true });
+  return candidates && candidates.length <= limit ? candidates : undefined;
 }
 
 function* countedRange(count: number): Generator<number> {

@@ -13,6 +13,8 @@ import {
   getDatasetCatalog,
   getWildcardResource,
   orderByRecipeMap,
+  PARTIAL_PHASE_CANDIDATE_LIMIT,
+  partialPhaseCandidates,
   prewarmFirstThenRest,
   prewarmInOrder,
   queryCatalogResources,
@@ -33,6 +35,24 @@ describe("dataset query text search", () => {
     const crossBoundary = parseSearchQuery("nsu");
     expect(queryTextSearchIndex(index, crossBoundary) ?? [0]).not.toContain(0);
     expect(matchSearchTokens(crossBoundary, tokens)).toBeUndefined();
+  });
+});
+
+describe("the partial search phase", () => {
+  const index = buildTextSearchIndex(["Steel Plate", "Iron Ingot", "Copper Wire"], [0, 1, 2]);
+
+  it("never walks the corpus for a word too short to narrow", () => {
+    expect(partialPhaseCandidates(index, parseSearchQuery("lv steel"))).toBeUndefined();
+    expect(partialPhaseCandidates(index, parseSearchQuery("zz irom steal"))).toBeUndefined();
+  });
+
+  it("scores the union of the words' candidates while it is small", () => {
+    expect(partialPhaseCandidates(index, parseSearchQuery("steel iron"))).toEqual([0, 1]);
+    expect(PARTIAL_PHASE_CANDIDATE_LIMIT).toBe(30_000);
+  });
+
+  it("is skipped once the union is most of the corpus", () => {
+    expect(partialPhaseCandidates(index, parseSearchQuery("steel iron"), 1)).toBeUndefined();
   });
 });
 
