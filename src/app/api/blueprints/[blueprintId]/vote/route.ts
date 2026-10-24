@@ -11,6 +11,7 @@ import {
   makeActorKey,
   makeVoterKey,
   saltedKey,
+  NETWORK_VOTES_SPENT,
   VOTES_PER_ADDRESS_PER_PLAN_PER_DAY,
 } from "@/lib/server/community";
 import {
@@ -81,7 +82,7 @@ export async function POST(
     if (!retracting && !(await getSessionUser(request))) {
       const perBlueprint = `votes:address:${saltedKey(clientAddress(request))}:${blueprintId}`;
       if (!(await checkRateLimit(perBlueprint, "vote-cast", VOTES_PER_ADDRESS_PER_PLAN_PER_DAY, 24 * 60 * 60))) {
-        return NextResponse.json({ error: "Voting too fast. Slow down." }, { status: 429 });
+        return NextResponse.json({ error: NETWORK_VOTES_SPENT }, { status: 429 });
       }
     }
 

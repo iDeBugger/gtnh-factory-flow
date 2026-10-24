@@ -12,6 +12,7 @@ import {
   makeActorKey,
   makeVoterKey,
   saltedKey,
+  NETWORK_VOTES_SPENT,
   VOTES_PER_ADDRESS_PER_PLAN_PER_DAY,
 } from "@/lib/server/community";
 import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
@@ -82,7 +83,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
     if (!sessionUser && !retracting) {
       const perPlan = `votes:address:${saltedKey(clientAddress(request))}:${planId}`;
       if (!(await checkRateLimit(perPlan, "vote-cast", VOTES_PER_ADDRESS_PER_PLAN_PER_DAY, 24 * 60 * 60))) {
-        return NextResponse.json({ error: "Voting too fast. Slow down." }, { status: 429 });
+        return NextResponse.json({ error: NETWORK_VOTES_SPENT }, { status: 429 });
       }
     }
 

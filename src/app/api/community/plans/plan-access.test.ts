@@ -156,7 +156,7 @@ describe("voting on a post", () => {
     }
     const fourth = await castVote(planId, { deviceId: "made-up-3", value: 1 }, { address });
     expect(fourth.status).toBe(429);
-    expect(await fourth.json()).toEqual({ error: "Voting too fast. Slow down." });
+    expect(await fourth.json()).toEqual({ error: "Too many votes from this network today. Sign in to vote." });
     expect((await planRow(planId)).upvotes).toBe(3);
     // Another address, and a signed-in account behind the same address, still vote.
     expect((await castVote(planId, { deviceId: "made-up-4", value: 1 }, { address: "203.0.113.78" })).status).toBe(200);

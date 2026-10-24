@@ -220,6 +220,8 @@ export async function makeVoterKey(request: Request, deviceId: string): Promise<
  * one address can each vote signed in.
  */
 export const VOTES_PER_ADDRESS_PER_PLAN_PER_DAY = 3;
+/** What the next anonymous voter behind that address is told: a shared network, not haste. */
+export const NETWORK_VOTES_SPENT = "Too many votes from this network today. Sign in to vote.";
 
 // ---------------------------------------------------------------------------
 // Dead-simple accounts: username + password, scrypt-hashed, with an HMAC-signed
