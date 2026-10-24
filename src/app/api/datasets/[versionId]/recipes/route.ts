@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
 import { queryDatasetRecipes } from "@/lib/server/dataset-query";
-import { datasetBudgetRefusal, searchRequestCost } from "@/lib/server/dataset-rate";
+import {
+  datasetBudgetRefusal,
+  meteredDatasetWork,
+  searchRequestCost,
+} from "@/lib/server/dataset-rate";
 import { parseSearchQuery } from "@/lib/search/text-search";
 import {
   MAX_RECIPE_QUERY_CLAUSES,
@@ -32,23 +36,25 @@ export async function GET(
     const resourceKind = url.searchParams.get("resourceKind");
     const resourceId = url.searchParams.get("resourceId");
     const clauses = parseClauses(url.searchParams.getAll("clause"));
-    const result = await queryDatasetRecipes(versionId, {
-      query,
-      resource:
-        resourceKind && resourceId && isRecipeResourceKind(resourceKind)
-          ? { kind: resourceKind, id: resourceId }
-          : undefined,
-      mode: url.searchParams.get("mode") === "uses" ? "uses" : "recipes",
-      clauses: clauses.length > 0 ? clauses : undefined,
-      takesOp: parseSideOp(url.searchParams.get("takesOp")),
-      makesOp: parseSideOp(url.searchParams.get("makesOp")),
-      allMaps: url.searchParams.get("allMaps") === "1",
-      mapSelection: parseMapSelection(url.searchParams),
-      recipeMap: url.searchParams.get("recipeMap") || undefined,
-      maxTier: parseTierFilter(url.searchParams.get("maxTier")),
-      offset: parseOffset(url.searchParams.get("offset")),
-      limit: parseLimit(url.searchParams.get("limit")),
-    });
+    const result = await meteredDatasetWork(request, () =>
+      queryDatasetRecipes(versionId, {
+        query,
+        resource:
+          resourceKind && resourceId && isRecipeResourceKind(resourceKind)
+            ? { kind: resourceKind, id: resourceId }
+            : undefined,
+        mode: url.searchParams.get("mode") === "uses" ? "uses" : "recipes",
+        clauses: clauses.length > 0 ? clauses : undefined,
+        takesOp: parseSideOp(url.searchParams.get("takesOp")),
+        makesOp: parseSideOp(url.searchParams.get("makesOp")),
+        allMaps: url.searchParams.get("allMaps") === "1",
+        mapSelection: parseMapSelection(url.searchParams),
+        recipeMap: url.searchParams.get("recipeMap") || undefined,
+        maxTier: parseTierFilter(url.searchParams.get("maxTier")),
+        offset: parseOffset(url.searchParams.get("offset")),
+        limit: parseLimit(url.searchParams.get("limit")),
+      }),
+    );
     return NextResponse.json(result, {
       headers: datasetCacheHeaders(request),
     });
@@ -110,4 +116,3 @@ function parseClauses(raw: string[]): RecipeQueryClause[] {
   }
   return clauses;
 }
-

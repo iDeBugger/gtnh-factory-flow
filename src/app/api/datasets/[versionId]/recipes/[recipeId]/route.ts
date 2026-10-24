@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
 import { getDatasetRecipe } from "@/lib/server/dataset-query";
-import { datasetBudgetRefusal } from "@/lib/server/dataset-rate";
+import { datasetBudgetRefusal, meteredDatasetWork } from "@/lib/server/dataset-rate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export async function GET(
     if (refusal) {
       return refusal;
     }
-    const recipe = await getDatasetRecipe(versionId, recipeId);
+    const recipe = await meteredDatasetWork(request, () => getDatasetRecipe(versionId, recipeId));
     if (!recipe) {
       return NextResponse.json({ error: "Recipe not found." }, { status: 404 });
     }
@@ -31,4 +31,3 @@ export async function GET(
     );
   }
 }
-

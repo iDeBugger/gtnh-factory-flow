@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
 import { queryDatasetResources } from "@/lib/server/dataset-query";
-import { datasetBudgetRefusal, searchRequestCost } from "@/lib/server/dataset-rate";
+import {
+  datasetBudgetRefusal,
+  meteredDatasetWork,
+  searchRequestCost,
+} from "@/lib/server/dataset-rate";
 import { getResourcePopularity } from "@/lib/server/resource-popularity";
 import { parseSearchQuery } from "@/lib/search/text-search";
 
@@ -25,24 +29,26 @@ export async function GET(
     const sourceParam = url.searchParams.get("source");
     // Never awaits the database: the last good ranking, or none yet.
     const popularity = sortParam === "popular" ? getResourcePopularity() : undefined;
-    const result = await queryDatasetResources(versionId, {
-      query,
-      offset: parseOffset(url.searchParams.get("offset")),
-      limit: parseLimit(url.searchParams.get("limit")),
-      kind: kindParam === "item" || kindParam === "fluid" ? kindParam : undefined,
-      mod: url.searchParams.get("mod") ?? undefined,
-      sort:
-        sortParam === "name" ||
-        sortParam === "mod" ||
-        sortParam === "recipes" ||
-        sortParam === "made" ||
-        sortParam === "uses" ||
-        sortParam === "popular"
-          ? sortParam
-          : undefined,
-      source: sourceParam === "plants" || sourceParam === "bees" ? sourceParam : undefined,
-      popularity,
-    });
+    const result = await meteredDatasetWork(request, () =>
+      queryDatasetResources(versionId, {
+        query,
+        offset: parseOffset(url.searchParams.get("offset")),
+        limit: parseLimit(url.searchParams.get("limit")),
+        kind: kindParam === "item" || kindParam === "fluid" ? kindParam : undefined,
+        mod: url.searchParams.get("mod") ?? undefined,
+        sort:
+          sortParam === "name" ||
+          sortParam === "mod" ||
+          sortParam === "recipes" ||
+          sortParam === "made" ||
+          sortParam === "uses" ||
+          sortParam === "popular"
+            ? sortParam
+            : undefined,
+        source: sourceParam === "plants" || sourceParam === "bees" ? sourceParam : undefined,
+        popularity,
+      }),
+    );
     return NextResponse.json(result, {
       // Popularity is community data, not dataset bytes: the datasetHash
       // fingerprint doesn't pin it, so it must not ride the immutable policy.
@@ -70,4 +76,3 @@ function parseLimit(value: string | null): number {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isInteger(parsed) ? Math.max(1, Math.min(120, parsed)) : 24;
 }
-

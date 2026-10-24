@@ -27,16 +27,26 @@
 - The image optimizer is off (`images.unoptimized` in next.config.ts): nothing uses next/image, and
   `/_next/image` would hand any same-origin PNG (uploads, dataset textures) to sharp. Pictures are served
   by the app's own routes or plain `<img>`; keep it that way.
-- Every dataset route except `prewarm` spends an in-memory work budget per client address before any dataset
-  work (`dataset-rate.ts`): 1200 units a minute; a cheap request is 1 unit, a heavy one 10 (a text search with a
-  word under three characters or more than three words, `recipe-ids`, `crops`, `resolve-recipes`). Past it the
-  route answers 429 `Too many requests. Wait a moment and try again.` with `Retry-After: 10`, which the search
-  panes show. `GTNH_DATASET_BUDGET_PER_MINUTE` overrides it (`0` disables, for local profiling); without Caddy
-  every request is one address, so a local load test needs that. Floods from many addresses are Cloudflare's.
-  Exam: `dataset-rate.test.ts`, `recipes/route.test.ts`.
+- Every dataset route except `prewarm` spends an in-memory work budget per client address (`dataset-rate.ts`):
+  3000 units a minute. A base cost goes before any dataset work (1 unit; 25 for a heavy request: a text search
+  with a word under three characters or more than three words, `recipe-ids`, `crops`, `resolve-recipes`), then
+  one unit per 10 ms the answer took (`meteredDatasetWork`), so the measured units alone keep one address under
+  30 s of the server thread a minute whatever a query costs. Past the budget the route answers 429 `Too many
+  requests. Wait a moment and try again.` with `Retry-After: 10`: the search panes show it, the import path
+  (`browser-loader.ts` `retryWhenBusy`: recipe bodies, the id list, recipe resolution) waits and asks again, up
+  to six times. The budget is sized against the client: a plan open or import is one body per recipe (about 200
+  at the 3 MB plan cap, 1 unit and a few ms each) after the id list; the item pane asks a page in chunks of 120
+  per debounced keystroke, heavy while the query holds a tier word. A request with no trusted address is never
+  refused (one shared key would turn a missing proxy header into a site-wide 429 and bounds no attacker); in
+  production the first such request logs a one-shot warning. `GTNH_DATASET_BUDGET_PER_MINUTE` overrides the
+  budget (`0` disables). Floods from many addresses are Cloudflare's. Exam: `dataset-rate.test.ts`,
+  `recipes/route.test.ts`, `src/lib/datasets/browser-loader.test.ts`.
 - A text search matches at most six words and at most two of them under three characters
   (`MAX_SEARCH_TERMS`, `MAX_SHORT_SEARCH_TERMS` in `src/lib/search/text-search.ts`): a word that short cannot use
-  the trigram index and walks every recipe. Exam: `text-search.test.ts`.
+  the trigram index and walks every recipe. The partial phase (entries with ANY of the words) never walks the
+  corpus: it runs only when the index narrows it to at most `PARTIAL_PHASE_CANDIDATE_LIMIT` candidates, else the
+  exact or corrected answer stands. Worst measured query shapes are in `scratch/probes/sec-data-p5.mjs`. Exam:
+  `text-search.test.ts`, `dataset-query.test.ts` "the partial search phase".
 
 ## Prewarm (instrumentation.ts, `prewarmDatasetVersions`)
 
@@ -194,9 +204,10 @@ The instance is small and has gone down under load. Rules:
 - The client address is Caddy's `X-Client-Ip` (Cloudflare's CF-Connecting-IP, trusted only from Cloudflare's
   ranges), then CF-Connecting-IP, each only as an IP literal; nothing else is read (X-Forwarded-For names a
   Cloudflare edge or the client's own chain, nothing sets X-Real-Ip). One module, `client-address.ts`
-  (`clientAddress`, re-exported by community.ts), used by every per-address rule on the site; a request with
-  neither header is `"local"`. It is trustworthy only because Caddy is the site's only peer: the unit binds
-  loopback and the firewall closes :3000. Exam: `client-address.test.ts`.
+  (`clientAddress`, re-exported by community.ts), used by every per-address rule on the site; an IPv6 literal is
+  keyed on its /64; a request with neither header is `"local"` (`NO_ADDRESS`), which the dataset budget never
+  refuses. It is trustworthy only because Caddy is the site's only peer: the unit binds loopback and the firewall
+  closes :3000. Exam: `client-address.test.ts`.
 - Emergency stop without a deploy: a Caddy rule answering 503 to `POST /api/feedback` (`/etc/caddy/Caddyfile`, then
   `systemctl reload caddy`).
 - Plans and the picture go to the private `feedback-files` bucket, served by `/api/feedback/files/<id>/<file>`, only

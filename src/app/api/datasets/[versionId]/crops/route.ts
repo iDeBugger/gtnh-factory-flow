@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
 import { listDatasetCropFarmRecipes } from "@/lib/server/dataset-query";
-import { datasetBudgetRefusal, HEAVY_REQUEST_COST } from "@/lib/server/dataset-rate";
+import {
+  datasetBudgetRefusal,
+  HEAVY_REQUEST_COST,
+  meteredDatasetWork,
+} from "@/lib/server/dataset-rate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +21,7 @@ export async function GET(
     if (refusal) {
       return refusal;
     }
-    const result = await listDatasetCropFarmRecipes(versionId);
+    const result = await meteredDatasetWork(request, () => listDatasetCropFarmRecipes(versionId));
     return NextResponse.json(result, {
       headers: datasetCacheHeaders(request),
     });

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { queryDatasetRecipes } from "@/lib/server/dataset-query";
-import { resetDatasetBudget } from "@/lib/server/dataset-rate";
+import { datasetBudgetSpent, resetDatasetBudget } from "@/lib/server/dataset-rate";
 import { GET } from "./route";
 
 vi.mock("@/lib/server/dataset-query", () => ({
@@ -118,8 +118,9 @@ describe("recipe dataset API route", () => {
   });
 
   it("answers 429 with Retry-After once an address has spent its minute", async () => {
-    // A two-letter query cannot be narrowed by the index, so it costs ten units
-    // of the 1200 an address gets a minute: 120 pass, the 121st waits.
+    // A two-letter query cannot be narrowed by the index, so it costs 25 units
+    // of the 3000 an address gets a minute before its measured time is added:
+    // about 120 pass, then the address waits.
     const send = () =>
       GET(
         new Request("http://localhost/api/datasets/stable/recipes?query=zz", {
@@ -127,17 +128,24 @@ describe("recipe dataset API route", () => {
         }),
         { params: Promise.resolve({ versionId: "stable" }) },
       );
-    for (let call = 0; call < 120; call += 1) {
-      expect((await send()).status).toBe(200);
+    let passed = 0;
+    let refused: Response | undefined;
+    while (passed < 130 && !refused) {
+      const response = await send();
+      if (response.status === 429) {
+        refused = response;
+      } else {
+        expect(response.status).toBe(200);
+        passed += 1;
+      }
     }
-
-    const refused = await send();
-    expect(refused.status).toBe(429);
-    expect(refused.headers.get("Retry-After")).toBe("10");
-    await expect(refused.json()).resolves.toEqual({
+    expect(passed).toBeGreaterThanOrEqual(110);
+    expect(passed).toBeLessThanOrEqual(120);
+    expect(refused?.headers.get("Retry-After")).toBe("10");
+    await expect(refused?.json()).resolves.toEqual({
       error: "Too many requests. Wait a moment and try again.",
     });
-    expect(queryDatasetRecipes).toHaveBeenCalledTimes(120);
+    expect(queryDatasetRecipes).toHaveBeenCalledTimes(passed);
 
     // Another address is not held up by it.
     const other = await GET(
@@ -155,6 +163,49 @@ describe("recipe dataset API route", () => {
         new Request("http://localhost/api/datasets/stable/recipes?query=iron", {
           headers: { "x-client-ip": "203.0.113.9" },
         }),
+        { params: Promise.resolve({ versionId: "stable" }) },
+      );
+      expect(response.status).toBe(200);
+    }
+    // One unit each, plus at most a unit for the mocked answer's few microseconds.
+    expect(datasetBudgetSpent("203.0.113.9")).toBeLessThanOrEqual(400);
+  });
+
+  it("charges the time an answer took on top of the base cost", async () => {
+    vi.mocked(queryDatasetRecipes).mockImplementationOnce(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                recipes: [],
+                total: 0,
+                recipeMaps: [],
+                recipeMapIcons: {},
+                offset: 0,
+                limit: 48,
+                hasMore: false,
+              } as never),
+            120,
+          ),
+        ),
+    );
+    const response = await GET(
+      new Request("http://localhost/api/datasets/stable/recipes?query=iron", {
+        headers: { "x-client-ip": "203.0.113.9" },
+      }),
+      { params: Promise.resolve({ versionId: "stable" }) },
+    );
+    expect(response.status).toBe(200);
+    // 1 unit up front and one more per 10 ms of the 120 ms answer.
+    expect(datasetBudgetSpent("203.0.113.9")).toBeGreaterThanOrEqual(13);
+    expect(datasetBudgetSpent("203.0.113.9")).toBeLessThanOrEqual(40);
+  });
+
+  it("never refuses a request with no trusted address", async () => {
+    for (let call = 0; call < 200; call += 1) {
+      const response = await GET(
+        new Request("http://localhost/api/datasets/stable/recipes?query=zz"),
         { params: Promise.resolve({ versionId: "stable" }) },
       );
       expect(response.status).toBe(200);

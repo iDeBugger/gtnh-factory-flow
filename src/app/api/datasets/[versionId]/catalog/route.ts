@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
 import { getDatasetCatalog, prewarmDatasetVersion } from "@/lib/server/dataset-query";
-import { datasetBudgetRefusal } from "@/lib/server/dataset-rate";
+import { datasetBudgetRefusal, meteredDatasetWork } from "@/lib/server/dataset-rate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export async function GET(
     void prewarmDatasetVersion(versionId).catch((error) => {
       console.error(`Dataset ${versionId} prewarm failed.`, error);
     });
-    const catalog = await getDatasetCatalog(versionId);
+    const catalog = await meteredDatasetWork(request, () => getDatasetCatalog(versionId));
     return NextResponse.json(catalog, {
       headers: datasetCacheHeaders(request),
     });
@@ -30,4 +30,3 @@ export async function GET(
     );
   }
 }
-

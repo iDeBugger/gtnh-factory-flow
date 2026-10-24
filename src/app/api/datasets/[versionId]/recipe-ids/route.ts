@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
 import { getDatasetRecipeIds } from "@/lib/server/dataset-query";
-import { datasetBudgetRefusal, HEAVY_REQUEST_COST } from "@/lib/server/dataset-rate";
+import {
+  datasetBudgetRefusal,
+  HEAVY_REQUEST_COST,
+  meteredDatasetWork,
+} from "@/lib/server/dataset-rate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +23,7 @@ export async function GET(
     }
     return NextResponse.json(
       {
-        recipeIds: await getDatasetRecipeIds(versionId),
+        recipeIds: await meteredDatasetWork(request, () => getDatasetRecipeIds(versionId)),
       },
       {
         headers: datasetCacheHeaders(request),
@@ -32,4 +36,3 @@ export async function GET(
     );
   }
 }
-

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { type DatasetRecipeRef, resolveDatasetRecipeRefs } from "@/lib/server/dataset-query";
-import { datasetBudgetRefusal, HEAVY_REQUEST_COST } from "@/lib/server/dataset-rate";
+import {
+  datasetBudgetRefusal,
+  HEAVY_REQUEST_COST,
+  meteredDatasetWork,
+} from "@/lib/server/dataset-rate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +23,9 @@ export async function POST(
     const body = (await request.json()) as { recipes?: DatasetRecipeRef[] };
     return NextResponse.json(
       {
-        matches: await resolveDatasetRecipeRefs(versionId, body.recipes ?? []),
+        matches: await meteredDatasetWork(request, () =>
+          resolveDatasetRecipeRefs(versionId, body.recipes ?? []),
+        ),
       },
       {
         headers: datasetCacheHeaders(),
