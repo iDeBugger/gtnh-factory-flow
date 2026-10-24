@@ -91,7 +91,9 @@ The frames are the contract's (version 1). What the service adds or decides:
   `not_found`, `auth` (no valid session: the socket closes with 4001; a failed account lookup closes with 1013 and the client tries again), `version` (hello first, `v: 1`).
 - **`rate` means not now, not never.** A batch refused as `rate` was not applied and should go again shortly (the
   website resends it after a second): over 30 batches a second, over the account's batch-work budget (250 ms of
-  checking and applying a second, 1 s banked), or the room's journal backlog while the database is down. A join
+  checking and applying a second, 1 s banked), over the account's intake budget (4 MB of frames a second across its
+  sockets, 8 MB banked, charged by size before a frame is decoded), or the room's journal backlog while the database
+  is down. A join
   refused as `rate` (too many plans open, the service full, or the database not answering the open or the membership
   check) should be asked again after a few seconds.
 - **Sizes.** Frames are measured in UTF-8 bytes before they are parsed: only an `ops` frame may be over 16 KB, and a

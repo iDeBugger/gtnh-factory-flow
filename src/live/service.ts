@@ -50,6 +50,15 @@ export const SERVICE_LIMITS = {
    */
   editMsPerSecond: 250,
   editMsBurst: 1000,
+  /**
+   * Bytes of frames one account may send a second across its connections,
+   * and what it may bank: past it, frames are refused as `rate` before they
+   * are decoded, so an account's parsing costs the service a few
+   * milliseconds a second whatever it sends. The website's batches stay under
+   * 256 KB; presence is a few hundred bytes.
+   */
+  frameBytesPerSecond: 4 * 1024 * 1024,
+  frameBytesBurst: 8 * 1024 * 1024,
   /** A socket with more than this waiting to be sent is reading too slowly: dropped. */
   bufferedBytes: 8 * 1024 * 1024,
   /** A connection already in a plan gets its snapshot again at most this often (and only when it moved on). */
@@ -105,8 +114,8 @@ const JOINS_PER_SECOND = 10;
 /** Sockets one account may hold at once (a game and a few browser tabs). */
 const CONNECTIONS_PER_ACCOUNT = 16;
 
-/** A bucket of milliseconds refilled at a steady rate, for one account's batch work. */
-class TimeBudget {
+/** A bucket refilled at a steady rate (milliseconds of work, bytes received), one per account. */
+class Budget {
   private left: number;
   private at = performance.now();
   constructor(
@@ -120,13 +129,19 @@ class TimeBudget {
     this.left = Math.min(this.burst, this.left + ((now - this.at) / 1000) * this.perSecond);
     this.at = now;
   }
+  /** Anything left: work whose cost is known only afterwards may start. */
   allows(): boolean {
     this.refill();
     return this.left > 0;
   }
-  spend(ms: number): void {
+  /** A known cost fits in what is left. */
+  fits(cost: number): boolean {
     this.refill();
-    this.left -= ms;
+    return this.left >= cost;
+  }
+  spend(cost: number): void {
+    this.refill();
+    this.left -= cost;
   }
 }
 
@@ -242,8 +257,8 @@ export class LiveService {
   private readonly cids = new Map<string, number>();
   private readonly timing: RoomTiming;
   private readonly limits: typeof LIVE_LIMITS & typeof SERVICE_LIMITS;
-  /** Each account's batch work budget, while it has connections. */
-  private readonly budgets = new Map<string, TimeBudget>();
+  /** Each account's budgets (batch work, bytes received), while it has connections. */
+  private readonly budgets = new Map<string, { edit: Budget; intake: Budget }>();
   private readonly origins: Set<string>;
   private readonly log: (message: string) => void;
   private readonly upgradesByAccount: RateLimiter;
@@ -779,26 +794,35 @@ export class LiveService {
       this.error(conn, "bad_op", "Frames are JSON text.");
       return;
     }
-    const bytes = Array.isArray(data)
-      ? data.reduce((sum, chunk) => sum + chunk.byteLength, 0)
-      : data.byteLength;
-    const text = Array.isArray(data)
-      ? Buffer.concat(data).toString("utf8")
-      : Buffer.from(data as ArrayBuffer).toString("utf8");
+    const raw = Array.isArray(data)
+      ? Buffer.concat(data)
+      : Buffer.isBuffer(data)
+        ? data
+        : Buffer.from(data);
+    const bytes = raw.byteLength;
+    // Charged to the account by size before it is decoded or parsed: a
+    // refused frame costs the service its two end kilobytes, read for the
+    // batch's name, and nothing more.
+    const intake = this.budget(conn.userId).intake;
+    if (!intake.fits(bytes)) {
+      this.error(conn, "rate", "Too much sent at once. It goes again shortly.", peekNames(raw));
+      return;
+    }
+    intake.spend(bytes);
     // Sized before it is parsed: only a batch may be big, and a big frame
     // counts as a batch for the rate before any work is done on it.
     const big = bytes > this.limits.frameBytes;
     if (big) {
-      const named = peekNames(text);
       if (bytes > this.limits.batchBytes) {
-        this.error(conn, "too_big", "That frame is too big.", named);
+        this.error(conn, "too_big", "That frame is too big.", peekNames(raw));
         return;
       }
       if (!conn.batches.take()) {
-        this.error(conn, "rate", "Too many edits a second.", named);
+        this.error(conn, "rate", "Too many edits a second.", peekNames(raw));
         return;
       }
     }
+    const text = raw.toString("utf8");
     let frame: Record<string, unknown>;
     try {
       frame = JSON.parse(text) as Record<string, unknown>;
@@ -1094,7 +1118,7 @@ export class LiveService {
       this.error(conn, "too_big", "Too many changes in one batch.", { doc, cid });
       return;
     }
-    const budget = this.budget(conn.userId);
+    const budget = this.budget(conn.userId).edit;
     if (!budget.allows()) {
       this.error(conn, "rate", "Too much editing at once. It goes again shortly.", { doc, cid });
       return;
@@ -1135,13 +1159,16 @@ export class LiveService {
     }
   }
 
-  private budget(userId: string): TimeBudget {
-    let budget = this.budgets.get(userId);
-    if (!budget) {
-      budget = new TimeBudget(this.limits.editMsPerSecond, this.limits.editMsBurst);
-      this.budgets.set(userId, budget);
+  private budget(userId: string): { edit: Budget; intake: Budget } {
+    let budgets = this.budgets.get(userId);
+    if (!budgets) {
+      budgets = {
+        edit: new Budget(this.limits.editMsPerSecond, this.limits.editMsBurst),
+        intake: new Budget(this.limits.frameBytesPerSecond, this.limits.frameBytesBurst),
+      };
+      this.budgets.set(userId, budgets);
     }
-    return budget;
+    return budgets;
   }
 
   private onPresence(
@@ -1231,12 +1258,16 @@ function readNames(raw: string | null): Set<string> {
 }
 
 /**
- * The doc and cid of a frame too big to parse, read off its first and last
- * kilobyte (clients put them before or after the ops), so the refusal still
- * names the batch and its sender can drop it.
+ * The doc and cid of a frame refused before it is read, taken off its first
+ * and last kilobyte (clients put them before or after the ops), so the
+ * refusal still names the batch and its sender can drop it. Only those two
+ * kilobytes are ever decoded.
  */
-function peekNames(text: string): { doc?: string; cid?: string } {
-  const ends = [text.slice(0, 1024), text.slice(-1024)];
+function peekNames(raw: Buffer): { doc?: string; cid?: string } {
+  const ends =
+    raw.byteLength <= 2048
+      ? [raw.toString("utf8")]
+      : [raw.subarray(0, 1024).toString("utf8"), raw.subarray(-1024).toString("utf8")];
   const find = (name: string): string | undefined => {
     const pattern = new RegExp(String.raw`"${name}"\s*:\s*"((?:[^"\\]|\\.){1,200})"`);
     for (const part of ends) {

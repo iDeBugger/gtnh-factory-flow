@@ -1263,6 +1263,34 @@ describe("the live service", { timeout: 30_000 }, () => {
     expect(plansEqual((await storedRow(designId)).plan, state.view)).toBe(true);
   });
 
+  it("holds an account to the bytes it sends, before reading them", async () => {
+    const { port } = await startService({
+      limits: { frameBytesPerSecond: 1024, frameBytesBurst: 48 * 1024 },
+    });
+    const { doc } = await makeDesign();
+    const ann = await TestClient.open(port, { who: "ann" });
+    await ann.hello();
+    await ann.join(doc);
+    // Three batches of about 20 KB: the first two fit the bank, the third is
+    // refused by name without being read (its ops never reach the plan).
+    for (const cid of ["p1", "p2", "p3"]) {
+      ann.send({ t: "ops", doc, base: 0, cid, ops: [], pad: "x".repeat(20_000) });
+    }
+    expect(await ann.next("ops", (frame) => frame.cid === "p1")).toMatchObject({ ops: [] });
+    expect(await ann.next("ops", (frame) => frame.cid === "p2")).toMatchObject({ ops: [] });
+    expect(await ann.next("error", (frame) => frame.cid === "p3")).toMatchObject({
+      code: "rate",
+      doc,
+    });
+    expect(ann.closed).toBe(false);
+    // Another account's budget is its own.
+    const bob = await TestClient.open(port, { who: "bob" });
+    await bob.hello();
+    await bob.join(doc);
+    bob.send({ t: "ops", doc, base: 0, cid: "b1", ops: [taskPatch("t1", { title: "Bob" })] });
+    expect(await bob.next("ops", (frame) => frame.cid === "b1")).toMatchObject({ seq: 1 });
+  });
+
   it("holds an account to its batches' working time and a batch to its op count", async () => {
     const { port } = await startService({ limits: { editMsPerSecond: 0.001, editMsBurst: 0.001 } });
     const { doc } = await makeDesign();
