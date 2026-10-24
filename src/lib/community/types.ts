@@ -149,6 +149,8 @@ export const PASSWORD_MIN_LENGTH = 8;
 export const SIGN_IN_PASSWORD_MIN_LENGTH = 6;
 /** What the player reads when Sign out everywhere could not reach the database: this browser stays signed in. */
 export const SIGN_OUT_EVERYWHERE_FAILED = "Could not sign out everywhere. Try again.";
+/** What sign-in and sign-up answer while more password checks wait than the server queues. */
+export const SIGN_IN_BUSY = "Sign-in is busy. Try again in a moment.";
 export const COMMUNITY_UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
 /** Board image uploads (the picture annotation): hard cap, client and server. */
 export const BOARD_IMAGE_MAX_BYTES = 4 * 1024 * 1024;

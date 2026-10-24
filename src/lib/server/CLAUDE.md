@@ -121,8 +121,9 @@ The instance is small and has gone down under load. Rules:
   `rate-limit.test.ts`, `app/api/community/auth/login/route.test.ts`.
 - Password derivations run on the threadpool, two at a time with a queue of 32 (`KDF_CONCURRENCY`, `KDF_QUEUE_MAX`):
   the dataset's shard reads share the pool's four threads, so a sign-in flood may never hold them all. Past the
-  queue the check throws `PasswordCheckBusyError` and sign-in and sign-up answer 429 "Too many attempts. Slow
-  down." Exam: the "password checks" block of `app/api/community/auth/auth.test.ts`.
+  queue the check throws `PasswordCheckBusyError` and sign-in and sign-up answer 429 "Sign-in is busy. Try again in
+  a moment." Accepted trade-off: a flood past the queue refuses sign-ins for as long as it lasts, and never stalls
+  the site. Exam: the "password checks" block of `app/api/community/auth/auth.test.ts`.
 
 ## The mod and community switch (deployment-features.ts)
 

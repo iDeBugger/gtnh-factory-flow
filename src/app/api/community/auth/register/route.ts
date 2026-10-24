@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PASSWORD_MIN_LENGTH } from "@/lib/community/types";
+import { PASSWORD_MIN_LENGTH, SIGN_IN_BUSY } from "@/lib/community/types";
 import {
   checkRateLimit,
   getCommunityDb,
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     if (error instanceof PasswordCheckBusyError) {
-      return NextResponse.json({ error: "Too many attempts. Slow down." }, { status: 429 });
+      return NextResponse.json({ error: SIGN_IN_BUSY }, { status: 429 });
     }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Sign up failed." },

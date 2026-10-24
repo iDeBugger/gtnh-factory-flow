@@ -199,6 +199,24 @@ describe("password checks", () => {
     expect((refused[0] as PromiseRejectedResult).reason).toBeInstanceOf(PasswordCheckBusyError);
     expect(answers.filter((answer) => answer.status === "fulfilled")).toHaveLength(KDF_CONCURRENCY + KDF_QUEUE_MAX);
   }, 30_000);
+
+  it("past the queue, sign-in and sign-up say the server is busy", async () => {
+    await post(register, "register", { username: "ann_busy", password: "ann-password" });
+    const stored = await hashPassword("y");
+    const filling = Promise.all(
+      Array.from({ length: KDF_CONCURRENCY + KDF_QUEUE_MAX }, () => checkPassword("x", stored)),
+    );
+    try {
+      const signIn = await post(login, "login", { username: "ann_busy", password: "ann-password" });
+      expect(signIn.status).toBe(429);
+      expect(await signIn.json()).toEqual({ error: "Sign-in is busy. Try again in a moment." });
+      const signUp = await post(register, "register", { username: "bob_busy", password: "bob-password" });
+      expect(signUp.status).toBe(429);
+      expect(await signUp.json()).toEqual({ error: "Sign-in is busy. Try again in a moment." });
+    } finally {
+      await filling;
+    }
+  }, 30_000);
 });
 
 describe("signing out everywhere", () => {
