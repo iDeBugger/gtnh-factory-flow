@@ -1781,6 +1781,11 @@ export async function prewarmFirstThenRest(
   void prewarmInOrder(rest, prewarm, logError);
 }
 
+/** The served versions, the default first: the prewarm's order. */
+export async function servedDatasetVersionOrder(): Promise<string[]> {
+  return datasetPrewarmOrder(await loadManifest());
+}
+
 export function datasetPrewarmOrder(
   manifest: Pick<DatasetManifest, "latestStableVersion" | "latestDailyVersion" | "versions">,
 ): string[] {
@@ -1893,6 +1898,22 @@ export class DatasetNotFoundError extends Error {
     super("Dataset not found.");
     this.name = "DatasetNotFoundError";
   }
+}
+
+/**
+ * The manifest entry of a version this site serves, or undefined for an
+ * unknown or hidden one: what a route checks before it keeps anything per
+ * version, so a made-up id holds nothing.
+ */
+export async function getServedDatasetVersion(
+  versionId: string,
+): Promise<DatasetVersion | undefined> {
+  if (HIDDEN_DATASET_VERSION_IDS.has(versionId)) {
+    return undefined;
+  }
+  const manifest = await loadManifest();
+  const version = manifest.versions.find((entry) => entry.id === versionId);
+  return version?.resourceIndexPath ? version : undefined;
 }
 
 async function loadCatalog(versionId: string): Promise<LoadedRecipeIndex> {

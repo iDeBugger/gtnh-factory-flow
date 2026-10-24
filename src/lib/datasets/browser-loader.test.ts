@@ -46,12 +46,15 @@ describe("what the browser does when the server is busy", () => {
   });
 
   it("waits for the id list and recipe resolution the same way", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(busy())
-      .mockResolvedValueOnce(json(200, { recipeIds: ["a"] }))
-      .mockResolvedValueOnce(busy())
-      .mockResolvedValueOnce(json(200, { matches: [] }));
+    const answers = [busy(), json(200, { recipeIds: ["a"] }), busy(), json(200, { matches: [] })];
+    // No static files listed: the id list comes from the API.
+    const fetchMock = vi.fn((url: string) =>
+      Promise.resolve(
+        url.includes("/client-files")
+          ? json(200, { complete: true, files: {} })
+          : (answers.shift() ?? json(500, {})),
+      ),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const { getRecipeDatasetRecipeIds, resolveRecipeDatasetRecipes } = await loader();
 
@@ -61,7 +64,7 @@ describe("what the browser does when the server is busy", () => {
     const matches = resolveRecipeDatasetRecipes("manifest", version, []);
     await vi.advanceTimersByTimeAsync(1000);
     await expect(matches).resolves.toEqual({ matches: [] });
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
   it("sends a long plan's refs in chunks of 500 and joins the matches in order", async () => {
@@ -179,11 +182,100 @@ describe("the cache key of every dataset request", () => {
       limit: 120,
     });
 
-    expect(urls).toHaveLength(8);
+    // Eight answers, and before each of the four with a static copy the listing
+    // of those copies (an empty listing is not kept, so it is asked each time).
+    expect(urls.filter((url) => !url.includes("/client-files"))).toHaveLength(8);
+    expect(urls.filter((url) => url.includes("/client-files"))).toHaveLength(4);
     for (const url of urls) {
       const params = new URL(url).searchParams;
       expect(params.get("datasetHash"), url).toBe("abc");
       expect(params.get("appVersion"), url).toBe(DATASET_ANSWER_VERSION);
     }
+  });
+});
+
+describe("the static copies of the answers every player shares", () => {
+  const files = {
+    catalog: "/datasets/gtnh/local-2.9.0-rc-2/client/catalog.0123456789abcdef0123.json",
+    crops: "/datasets/gtnh/local-2.9.0-rc-2/client/crops.0123456789abcdef0123.json",
+    "recipe-ids": "/datasets/gtnh/local-2.9.0-rc-2/client/recipe-ids.0123456789abcdef0123.json",
+  };
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.stubGlobal("window", { location: { origin: "http://localhost" } });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function serve(routes: (path: string) => Response) {
+    const paths: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        const path = new URL(url).pathname;
+        paths.push(path);
+        return Promise.resolve(routes(path));
+      }),
+    );
+    return paths;
+  }
+
+  it("fetches a listed file instead of the API, and keeps a complete listing", async () => {
+    const paths = serve((path) =>
+      path.endsWith("/client-files")
+        ? json(200, { complete: true, files })
+        : path === files.catalog
+          ? json(200, { schemaVersion: 1 })
+          : path === files["recipe-ids"]
+            ? json(200, { recipeIds: ["r1"] })
+            : json(500, { error: "API asked" }),
+    );
+    const api = await loader();
+    await expect(api.initRecipeDatasetVersion("manifest", version)).resolves.toEqual({
+      schemaVersion: 1,
+    });
+    await expect(api.getRecipeDatasetRecipeIds("manifest", version)).resolves.toEqual(["r1"]);
+    expect(paths).toEqual([
+      "/api/datasets/local-2.9.0-rc-2/client-files",
+      files.catalog,
+      files["recipe-ids"],
+    ]);
+  });
+
+  it("asks the API for a kind not listed, a file that fails, or no listing at all", async () => {
+    const paths = serve((path) =>
+      path.endsWith("/client-files")
+        ? json(200, { complete: false, files: { crops: files.crops } })
+        : path === files.crops
+          ? json(404, { error: "Dataset file not found." })
+          : json(200, { mobs: [], crops: [] }),
+    );
+    const api = await loader();
+    await expect(api.listRecipeDatasetCrops("manifest", version)).resolves.toEqual({
+      mobs: [],
+      crops: [],
+    });
+    await api.listRecipeDatasetMobs("manifest", version);
+    expect(paths).toEqual([
+      "/api/datasets/local-2.9.0-rc-2/client-files",
+      files.crops,
+      "/api/datasets/local-2.9.0-rc-2/crops",
+      // An incomplete listing is asked again.
+      "/api/datasets/local-2.9.0-rc-2/client-files",
+      "/api/datasets/local-2.9.0-rc-2/mobs",
+    ]);
+
+    vi.resetModules();
+    const failing = serve((path) =>
+      path.endsWith("/client-files") ? json(500, { error: "down" }) : json(200, { mobs: [] }),
+    );
+    await (await loader()).listRecipeDatasetMobs("manifest", version);
+    expect(failing).toEqual([
+      "/api/datasets/local-2.9.0-rc-2/client-files",
+      "/api/datasets/local-2.9.0-rc-2/mobs",
+    ]);
   });
 });

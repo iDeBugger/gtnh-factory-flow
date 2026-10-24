@@ -27,7 +27,7 @@
   sent, so a rewrite alone is bypassed by percent-encoding (`recipes%2Ejson`). The gate is `src/proxy.ts`
   (`decideDatasetPath`, `dataset-path-gate.ts`), which runs on every request path but `/_next/`: under
   `/datasets/gtnh/` (decoded) it refuses a path that is percent-encoded at all or holds a `.` or `..` segment
-  (400 `no-store`), sends the four index gzips, the shards and `recipes.json` to
+  (400 `no-store`), sends the four index gzips, the shards, `client/` and `recipes.json` to
   `src/app/dataset-files/[versionId]/[...assetPath]/route.ts` (a day's cache, ETag, Last-Modified and one byte
   range on a file; `no-store` on 400 and 404; `recipes.json`, about 2 GB, refused), and lets everything else
   through to the public handler: textures (`immutable` by `next.config.ts` header rule), `oracle/`, stray copies,
@@ -38,6 +38,20 @@
   (dataset-static-file.ts): lexically, then by real path against the real version directory, so a symlink in the
   tree never reads outside it (a miss is a 404). Exam: `dataset-path-gate.test.ts`, `proxy.test.ts`,
   `dataset-files/[versionId]/[...assetPath]/route.test.ts`, `dataset-static-file.test.ts`.
+- The answers every player gets the same (catalog, mobs, crops, recipe-ids) are also static files the server
+  writes itself (`client-files.ts`, `dataset-client-files.ts`): `<dataset>/client/<kind>.<20 hex of the sha256 of
+  the JSON>.json`, stored as `.gz` (level 9) and, except the id list (23 s of brotli for 13%), `.br` (quality 11).
+  The server writes them, not the pipeline, because each is the dataset run through server code; a deploy that
+  changes the JSON changes the name. With `GTNH_PREWARM_ON_STARTUP=1` they are written after the default
+  version's prewarm, in the background, one at a time on the thread pool (`writeServedDatasetClientFiles`);
+  otherwise on the first listing request. A file already there is only touched; one no start has named for 30 days
+  is removed. The browser reads `GET /api/datasets/<id>/client-files` (1 unit; `no-store` until every file is
+  written, then cached like a dataset answer) and fetches each listed file through the gate and the dataset-files
+  route (`immutable` for a year, brotli or gzip by Accept-Encoding, ETag `"<hash>-<br|gz>"`); with no listing, a
+  kind not listed or a failed file it asks the API as before, and the API routes stay for old tabs. A write that
+  fails (an unwritable dataset directory) is logged and the site keeps the API. Exam: `client-files.test.ts`,
+  `dataset-files/[versionId]/[...assetPath]/client-files.test.ts`, `api/datasets/[versionId]/client-files/route.test.ts`,
+  `browser-loader.test.ts`.
 - Every server cache is bounded or index-sized (the Node heap is capped at 3 GB). A slow
   site: check the heap first.
 - The OG card route reads fonts through `process.cwd()` (non-standalone build).

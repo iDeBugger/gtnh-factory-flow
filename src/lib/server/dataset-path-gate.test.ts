@@ -23,6 +23,28 @@ describe("the dataset path gate", () => {
     });
   });
 
+  it("sends the server's content-addressed answers to the dataset-files route, encoded spellings refused", () => {
+    expect(
+      decideDatasetPath(`/datasets/gtnh/${V}/client/catalog.0123456789abcdef0123.json`),
+    ).toEqual({
+      kind: "rewrite",
+      pathname: `/dataset-files/${V}/client/catalog.0123456789abcdef0123.json`,
+    });
+    // The stored encodings go to the route too, which serves only the logical name.
+    expect(
+      decideDatasetPath(`/datasets/gtnh/${V}/client/catalog.0123456789abcdef0123.json.br`),
+    ).toEqual({
+      kind: "rewrite",
+      pathname: `/dataset-files/${V}/client/catalog.0123456789abcdef0123.json.br`,
+    });
+    expect(decideDatasetPath(`/datasets/gtnh/${V}/client%2Fcatalog.json`)).toEqual({
+      kind: "refuse",
+    });
+    expect(decideDatasetPath(`/datasets/gtnh/${V}/client/../recipes.json`)).toEqual({
+      kind: "refuse",
+    });
+  });
+
   it("refuses any percent-encoding under the data, whatever it spells", () => {
     for (const path of [
       `/datasets/gtnh/${V}/recipes%2Ejson`,

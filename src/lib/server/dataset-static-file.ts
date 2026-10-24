@@ -13,6 +13,12 @@ export const datasetRoot = path.join(process.cwd(), "public", "datasets", "gtnh"
 export const DATASET_FILE_CACHE_CONTROL = "public, max-age=86400";
 
 /**
+ * The server's content-addressed answers (client-files.ts): a name holds the
+ * hash of its bytes, so it never means other bytes, and is kept a year.
+ */
+export const CLIENT_FILE_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
+/**
  * Streams a file with the validators a cache or a download tool expects: an
  * ETag from size and mtime (a 304 for If-None-Match, a list, a weak form or
  * "*" included, or for If-Modified-Since at second precision when no ETag is
@@ -27,6 +33,10 @@ export async function serveDatasetFile(
     cacheControl?: string;
     contentType: string;
     requestHeaders?: Headers;
+    /** The file is this encoding of the content (a client file's `.br` or `.gz`). */
+    contentEncoding?: string;
+    /** A validator that outlives the file's mtime (a content-addressed name's hash). */
+    etag?: string;
   },
 ) {
   const stats = await stat(filePath);
@@ -34,13 +44,17 @@ export async function serveDatasetFile(
     return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
   }
 
-  const etag = `"${stats.size.toString(16)}-${Math.floor(stats.mtimeMs).toString(16)}"`;
+  const etag =
+    options.etag ?? `"${stats.size.toString(16)}-${Math.floor(stats.mtimeMs).toString(16)}"`;
   const headers: Record<string, string> = {
     "Accept-Ranges": "bytes",
     "Cache-Control": options.cacheControl ?? "public, max-age=0",
     "Content-Type": options.contentType,
     ETag: etag,
     "Last-Modified": new Date(stats.mtimeMs).toUTCString(),
+    ...(options.contentEncoding
+      ? { "Content-Encoding": options.contentEncoding, Vary: "Accept-Encoding" }
+      : {}),
   };
   const request = options.requestHeaders;
   if (isFresh(request, etag, stats.mtimeMs)) {

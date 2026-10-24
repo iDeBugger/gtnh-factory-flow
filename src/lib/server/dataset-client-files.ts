@@ -1,0 +1,94 @@
+import path from "node:path";
+import {
+  clientFileListing,
+  CLIENT_FILES_DIRECTORY,
+  ensureClientFiles,
+  type ClientFileListing,
+  type ClientFileSpec,
+} from "./client-files";
+import {
+  getDatasetCatalog,
+  getDatasetRecipeIds,
+  getServedDatasetVersion,
+  listDatasetCropFarmRecipes,
+  listDatasetEecMobs,
+  prewarmDatasetVersion,
+  servedDatasetVersionOrder,
+} from "./dataset-query";
+import { datasetRoot, isSafePathSegment } from "./dataset-static-file";
+import type { DatasetVersion } from "@/lib/datasets/types";
+
+/**
+ * The dataset's static answers (client-files.ts), each the same JSON its API
+ * route sends, cheapest first so the listing fills from the catalog up.
+ */
+function datasetClientFileSpecs(versionId: string): ClientFileSpec[] {
+  return [
+    { kind: "catalog", brotli: true, produce: () => getDatasetCatalog(versionId) },
+    { kind: "mobs", brotli: true, produce: () => listDatasetEecMobs(versionId) },
+    { kind: "crops", brotli: true, produce: () => listDatasetCropFarmRecipes(versionId) },
+    {
+      kind: "recipe-ids",
+      brotli: false,
+      produce: async () => ({ recipeIds: await getDatasetRecipeIds(versionId) }),
+    },
+  ];
+}
+
+/** One key per dataset build: a republished version under the same id writes its own files. */
+function stateKey(version: DatasetVersion): string {
+  return `${version.id}:${version.checksumSha256 ?? version.publishedAt ?? ""}`;
+}
+
+function clientDirectory(versionId: string): string | undefined {
+  return isSafePathSegment(versionId)
+    ? path.join(datasetRoot, versionId, CLIENT_FILES_DIRECTORY)
+    : undefined;
+}
+
+/** What a served version has written so far; undefined for a version this site does not serve. */
+export async function datasetClientFileListing(
+  versionId: string,
+): Promise<ClientFileListing | undefined> {
+  const version = await getServedDatasetVersion(versionId);
+  const directory = version && clientDirectory(version.id);
+  if (!version || !directory) {
+    return undefined;
+  }
+  return clientFileListing(
+    stateKey(version),
+    version.id,
+    directory,
+    datasetClientFileSpecs(version.id),
+  );
+}
+
+/**
+ * Writes every served version's files after its prewarm, one version at a
+ * time, the default first. Started in the background once the default
+ * version is warm: the site answers meanwhile, and the client uses the API
+ * for any file not written yet.
+ */
+export async function writeServedDatasetClientFiles(): Promise<void> {
+  for (const versionId of await servedDatasetVersionOrder()) {
+    const started = Date.now();
+    try {
+      // Joins the background prewarm of this version, or finds it done.
+      await prewarmDatasetVersion(versionId);
+      const version = await getServedDatasetVersion(versionId);
+      const directory = version && clientDirectory(version.id);
+      if (!version || !directory) {
+        continue;
+      }
+      await ensureClientFiles(
+        stateKey(version),
+        version.id,
+        directory,
+        datasetClientFileSpecs(version.id),
+      );
+      console.info(`GTNH dataset ${versionId} client files ready in ${Date.now() - started} ms.`);
+    } catch (error) {
+      console.error(`GTNH dataset ${versionId} client files were not written.`, error);
+    }
+  }
+}

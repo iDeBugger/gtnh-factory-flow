@@ -105,7 +105,7 @@ describe("the dataset gate in the proxy", () => {
     }
   });
 
-  it("rewrites the index gzips, the shards and the raw recipes file to the dataset-files route", () => {
+  it("rewrites the index gzips, the shards, the client files and the raw recipes file to the dataset-files route", () => {
     const gz = get(`/datasets/gtnh/${V}/recipes.json.gz`);
     expect(gz.headers.get("x-middleware-rewrite")).toBe(
       `https://gtnhplanner.com/dataset-files/${V}/recipes.json.gz`,
@@ -113,6 +113,10 @@ describe("the dataset gate in the proxy", () => {
     const shard = get(`/datasets/gtnh/${V}/recipes-shards/shard-0001.json.gz`);
     expect(shard.headers.get("x-middleware-rewrite")).toBe(
       `https://gtnhplanner.com/dataset-files/${V}/recipes-shards/shard-0001.json.gz`,
+    );
+    const client = get(`/datasets/gtnh/${V}/client/crops.0123456789abcdef0123.json`);
+    expect(client.headers.get("x-middleware-rewrite")).toBe(
+      `https://gtnhplanner.com/dataset-files/${V}/client/crops.0123456789abcdef0123.json`,
     );
     const raw = get(`/datasets/gtnh/${V}/recipes.json`);
     expect(raw.headers.get("x-middleware-rewrite")).toBe(

@@ -8,12 +8,15 @@
  * reaches the public handler, which serves everything under
  * public/datasets/gtnh. src/proxy.ts runs this on every request path: a
  * dataset path is refused when it is encoded at all or holds a "." or ".."
- * segment; the index gzips, the shards and the raw recipes.json go to the
- * dataset-files route, which serves the first two and refuses the raw file;
+ * segment; the index gzips, the shards, the server's content-addressed
+ * answers (client/, client-files.ts) and the raw recipes.json go to the
+ * dataset-files route, which serves the first three and refuses the raw file;
  * everything else beside the data (textures, oracle reports, stray copies) is
  * still served by the public handler. The gate is one process's view of a
  * path: the raw recipes.json must not exist on the server either.
  */
+
+import { CLIENT_FILES_DIRECTORY } from "@/lib/datasets/client-file-kinds";
 
 export const DATASET_PUBLIC_PREFIX = "/datasets/gtnh/";
 export const DATASET_FILES_PREFIX = "/dataset-files/";
@@ -69,7 +72,7 @@ export function decideDatasetPath(rawPathname: string): DatasetPathDecision {
   if (rest.length === 1 && rest[0] !== undefined && INDEX_FILES.has(rest[0])) {
     return { kind: "rewrite", pathname: `${DATASET_FILES_PREFIX}${version}/${rest[0]}` };
   }
-  if (rest.length === 2 && rest[0] === SHARDS_DIRECTORY) {
+  if (rest.length === 2 && (rest[0] === SHARDS_DIRECTORY || rest[0] === CLIENT_FILES_DIRECTORY)) {
     return { kind: "rewrite", pathname: `${DATASET_FILES_PREFIX}${version}/${rest[0]}/${rest[1]}` };
   }
   return PASS;

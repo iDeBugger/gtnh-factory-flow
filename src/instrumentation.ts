@@ -19,4 +19,10 @@ export async function register() {
   } catch (error) {
     console.error("GTNH dataset cache prewarm failed.", error);
   }
+
+  // The static answers the browser fetches instead of the API, in the
+  // background: requests are not held for them (the client asks the API for
+  // a file not written yet). It logs its own failures.
+  const { writeServedDatasetClientFiles } = await import("@/lib/server/dataset-client-files");
+  void writeServedDatasetClientFiles();
 }

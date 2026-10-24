@@ -4,6 +4,7 @@ import type { MachineTier, Recipe, ResourceAmount } from "@/lib/model/types";
 import type { RecipeContentRef } from "@/lib/import-export/recipe-ref-match";
 import { DATASET_ANSWER_VERSION, DATASET_ANSWER_VERSION_PARAM } from "./answer-version";
 import { RESOLVE_RECIPES_CHUNK_REFS } from "./resolve-recipes-limits";
+import type { ClientFileKind, ClientFileListingResponse } from "./client-file-kinds";
 import {
   serializeRecipeQueryClause,
   type RecipeQueryClause,
@@ -99,12 +100,74 @@ export async function initRecipeDatasetVersion(
   version: DatasetVersion,
   options: { signal?: AbortSignal } = {},
 ): Promise<RecipeDataset> {
+  return fetchClientFile(version, "catalog", options.signal, () => {
+    const url = new URL(
+      `/api/datasets/${encodeURIComponent(version.id)}/catalog`,
+      window.location.origin,
+    );
+    addDatasetCacheKey(url, version);
+    return fetchJson<RecipeDataset>(url.toString(), { signal: options.signal });
+  });
+}
+
+/**
+ * Where the server keeps this version's static answers, by request URL. Only
+ * a complete listing is kept: one the server is still writing is asked again
+ * next time, so a file written since is picked up.
+ */
+const clientFileListings = new Map<string, Promise<ClientFileListingResponse>>();
+
+function clientFileListing(version: DatasetVersion): Promise<ClientFileListingResponse> {
   const url = new URL(
-    `/api/datasets/${encodeURIComponent(version.id)}/catalog`,
+    `/api/datasets/${encodeURIComponent(version.id)}/client-files`,
     window.location.origin,
   );
   addDatasetCacheKey(url, version);
-  return fetchJson<RecipeDataset>(url.toString(), { signal: options.signal });
+  const key = url.toString();
+  const kept = clientFileListings.get(key);
+  if (kept) {
+    return kept;
+  }
+  const listing = fetchJson<ClientFileListingResponse>(key).then(
+    (answer) => {
+      if (!answer.complete) {
+        clientFileListings.delete(key);
+      }
+      return { complete: answer.complete === true, files: answer.files ?? {} };
+    },
+    () => {
+      clientFileListings.delete(key);
+      return { complete: false, files: {} };
+    },
+  );
+  clientFileListings.set(key, listing);
+  return listing;
+}
+
+/**
+ * One of the answers every player gets the same (the catalog, the pickers'
+ * lists, the recipe id list), from the server's content-addressed static file
+ * when it lists one: the same JSON as the API route, cached a year by the
+ * browser and Cloudflare. Anything else (no listing yet, a file missing, an
+ * old server) asks the API as before.
+ */
+async function fetchClientFile<T>(
+  version: DatasetVersion,
+  kind: ClientFileKind,
+  signal: AbortSignal | undefined,
+  fromApi: () => Promise<T>,
+): Promise<T> {
+  const path = (await clientFileListing(version)).files[kind];
+  if (path) {
+    try {
+      return await fetchJson<T>(new URL(path, window.location.origin).toString(), { signal });
+    } catch (error) {
+      if (signal?.aborted) {
+        throw error;
+      }
+    }
+  }
+  return fromApi();
 }
 
 /**
@@ -158,13 +221,15 @@ export async function getRecipeDatasetRecipeIds(
   _manifestUrl: string,
   version: DatasetVersion,
 ): Promise<string[]> {
-  const url = new URL(
-    `/api/datasets/${encodeURIComponent(version.id)}/recipe-ids`,
-    window.location.origin,
-  );
-  addDatasetCacheKey(url, version);
-  const result = await fetchJson<{ recipeIds: string[] }>(url.toString(), undefined, {
-    retryWhenBusy: true,
+  const result = await fetchClientFile(version, "recipe-ids", undefined, () => {
+    const url = new URL(
+      `/api/datasets/${encodeURIComponent(version.id)}/recipe-ids`,
+      window.location.origin,
+    );
+    addDatasetCacheKey(url, version);
+    return fetchJson<{ recipeIds: string[] }>(url.toString(), undefined, {
+      retryWhenBusy: true,
+    });
   });
   return result.recipeIds;
 }
@@ -248,12 +313,14 @@ export async function listRecipeDatasetCrops(
   version: DatasetVersion,
   options: { signal?: AbortSignal } = {},
 ): Promise<{ crops: RecipeSummary[] }> {
-  const url = new URL(
-    `/api/datasets/${encodeURIComponent(version.id)}/crops`,
-    window.location.origin,
-  );
-  addDatasetCacheKey(url, version);
-  return fetchJson<{ crops: RecipeSummary[] }>(url.toString(), { signal: options.signal });
+  return fetchClientFile(version, "crops", options.signal, () => {
+    const url = new URL(
+      `/api/datasets/${encodeURIComponent(version.id)}/crops`,
+      window.location.origin,
+    );
+    addDatasetCacheKey(url, version);
+    return fetchJson<{ crops: RecipeSummary[] }>(url.toString(), { signal: options.signal });
+  });
 }
 
 /** The Extreme Entity Crusher's mobs, for the spawner picker on its card. */
@@ -262,12 +329,14 @@ export async function listRecipeDatasetMobs(
   version: DatasetVersion,
   options: { signal?: AbortSignal } = {},
 ): Promise<{ mobs: RecipeSummary[] }> {
-  const url = new URL(
-    `/api/datasets/${encodeURIComponent(version.id)}/mobs`,
-    window.location.origin,
-  );
-  addDatasetCacheKey(url, version);
-  return fetchJson<{ mobs: RecipeSummary[] }>(url.toString(), { signal: options.signal });
+  return fetchClientFile(version, "mobs", options.signal, () => {
+    const url = new URL(
+      `/api/datasets/${encodeURIComponent(version.id)}/mobs`,
+      window.location.origin,
+    );
+    addDatasetCacheKey(url, version);
+    return fetchJson<{ mobs: RecipeSummary[] }>(url.toString(), { signal: options.signal });
+  });
 }
 
 export async function queryRecipeDatasetResources(
