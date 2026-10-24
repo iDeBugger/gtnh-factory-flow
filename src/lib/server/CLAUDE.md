@@ -27,7 +27,9 @@
   range on a file; `no-store` on 400 and 404; `recipes.json`, about 2 GB, refused), and lets everything else
   through to the public handler: textures (`immutable` by `next.config.ts` header rule), `oracle/`, stray copies,
   at `max-age=0`. The gate is one process's view of a path: the raw `recipes.json` must still not exist on the
-  droplet, and the publish must not copy it. Exam: `dataset-path-gate.test.ts`, `proxy.test.ts`,
+  droplet, and the publish must not copy it. It also makes a pipeline invariant: published names stay within
+  `[A-Za-z0-9._-]` (`tools/dataset-pipeline/CLAUDE.md`; `rebuild-manifest.mjs` refuses a version that breaks it),
+  or the file is unreachable. Exam: `dataset-path-gate.test.ts`, `proxy.test.ts`,
   `dataset-files/[versionId]/[...assetPath]/route.test.ts`, `dataset-static-file.test.ts`.
 - Every server cache is bounded or index-sized (the Node heap is capped at 3 GB). A slow
   site: check the heap first.
@@ -54,8 +56,9 @@
   (`MAX_SEARCH_TERMS`, `MAX_SHORT_SEARCH_TERMS` in `src/lib/search/text-search.ts`): a word that short cannot use
   the trigram index and walks every recipe. The partial phase (entries with ANY of the words) runs in full on
   the item pane (60k entries, 40-60 ms); on recipes it narrows by the words the index can see (a tier word still
-  scores but adds no candidates) and is skipped when the union exceeds `PARTIAL_PHASE_CANDIDATE_LIMIT` (30,000:
-  a list of six metals answers nothing rather than "anything with one of these words"). Worst measured query
+  scores but adds no candidates) and is skipped when candidates times words exceed `PARTIAL_PHASE_WORK_BUDGET`
+  (180,000: 30,000 candidates for six words, 60,000 for three, so "steel plate pls" answers and a list of six
+  metals answers nothing rather than "anything with one of these words"). Worst measured query
   shapes are in `scratch/probes/sec-data-p5.mjs`. Exam: `text-search.test.ts`, `dataset-query.test.ts` "the
   recipe partial search phase".
 

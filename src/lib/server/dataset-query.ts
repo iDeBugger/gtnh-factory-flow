@@ -11,12 +11,7 @@ import type {
   RecipeMapIconEntry,
   RecipeSummary,
 } from "@/lib/datasets/types";
-import type {
-  MachineTier,
-  Recipe,
-  ResourceAlternative,
-  ResourceAmount,
-} from "@/lib/model/types";
+import type { MachineTier, Recipe, ResourceAlternative, ResourceAmount } from "@/lib/model/types";
 import {
   AUTO_WORKBENCH_HANDLER_ID,
   CROP_HARVESTER_INDUSTRIAL_FARM_ID,
@@ -348,7 +343,9 @@ export function withTankMapFace(
   if (!icons?.some((entry) => entry.recipeMap === TANK_RECIPE_MAP)) {
     return icons;
   }
-  const byName = new Map(catalog.resources.map((resource) => [resource.displayName, resource] as const));
+  const byName = new Map(
+    catalog.resources.map((resource) => [resource.displayName, resource] as const),
+  );
   const face = TANK_MAP_FACE_ITEM_NAMES.map((name) => byName.get(name)).find(Boolean);
   if (!face) {
     return icons;
@@ -374,7 +371,9 @@ export function withTankMapFace(
 
 function withSynthesizedHandlerIcons(catalog: LoadedRecipeIndex): MachineHandlerIconEntry[] {
   const icons = [...(catalog.machineHandlerIcons ?? [])];
-  const byName = new Map(catalog.resources.map((resource) => [resource.displayName, resource] as const));
+  const byName = new Map(
+    catalog.resources.map((resource) => [resource.displayName, resource] as const),
+  );
   for (const { familyId, displayNames, tierNames } of SYNTHESIZED_HANDLER_FACES) {
     if (icons.some((entry) => entry.familyId === familyId)) {
       continue;
@@ -564,7 +563,9 @@ function lookupCandidateIndexes(lookup: LoadedRecipeLookupIndex, ref: DatasetRec
       break;
     }
   }
-  return [...new Set(indexes)].sort((left, right) => left - right).slice(0, RECIPE_REF_CANDIDATE_LIMIT);
+  return [...new Set(indexes)]
+    .sort((left, right) => left - right)
+    .slice(0, RECIPE_REF_CANDIDATE_LIMIT);
 }
 
 /**
@@ -704,7 +705,10 @@ export async function queryCatalogResources(
   const search =
     kept && kept.popularity === request.popularity
       ? kept.value
-      : await searchDatasetResources(catalog, blankKey === undefined ? request : { ...request, mod: undefined });
+      : await searchDatasetResources(
+          catalog,
+          blankKey === undefined ? request : { ...request, mod: undefined },
+        );
   if (blankKey !== undefined && search !== kept?.value) {
     catalog.blankResourceSearches ??= createBlankResourceSearchCache();
     catalog.blankResourceSearches.set(blankKey, { popularity: request.popularity, value: search });
@@ -921,8 +925,7 @@ function sortResourceMatches(
   // to the thing with the most ways to MAKE it, which is the item a planner
   // most likely came to place.
   return [...matches].sort(
-    (left, right) =>
-      right.score - left.score || countsOf(right).madeBy - countsOf(left).madeBy,
+    (left, right) => right.score - left.score || countsOf(right).madeBy - countsOf(left).madeBy,
   );
 }
 
@@ -1142,10 +1145,7 @@ export function orderByRecipeMap<T extends { recipeIndex: number }>(
 }
 
 /** {@link RankedRecipe.focus}, read against one recipe body. */
-function recipeFocusScore(
-  summary: RecipeSummary,
-  clauses: RecipeQueryClause[],
-): number {
+function recipeFocusScore(summary: RecipeSummary, clauses: RecipeQueryClause[]): number {
   const makesClauses = clauses.filter((clause) => clause.role === "makes");
   const takesClauses = clauses.filter((clause) => clause.role === "takes");
   let total = 0;
@@ -1321,9 +1321,7 @@ async function queryDatasetRecipesFromLookup(
 
   // Only a typed query needs the words index, and building it walks every
   // recipe: browsing a resource must not pay for one.
-  const search = parsedQuery.terms.length
-    ? await getRecipeSearchIndex(catalog, lookup)
-    : undefined;
+  const search = parsedQuery.terms.length ? await getRecipeSearchIndex(catalog, lookup) : undefined;
   let scopedByMap = clauses.length
     ? tierFilteredByMap(
         lookup,
@@ -1351,7 +1349,11 @@ async function queryDatasetRecipesFromLookup(
   // the words matched.
   const tierCandidatesByMap =
     scopedByMap ??
-    tierFilteredByMap(lookup, groupRecipesByMap(lookup, searchScores?.keys() ?? []), request.maxTier);
+    tierFilteredByMap(
+      lookup,
+      groupRecipesByMap(lookup, searchScores?.keys() ?? []),
+      request.maxTier,
+    );
   const countedRecipeMaps = [...tierCandidatesByMap.entries()]
     .map(([recipeMapId, recipeIndexes]) => {
       const recipeMap = lookup.recipeMaps[recipeMapId];
@@ -1496,10 +1498,13 @@ function getClauseLookupRecipesByMap(
  */
 const ONLY_VERIFY_LIMIT = 5000;
 
-function hasOnlySide(clauses: RecipeQueryClause[], ops: {
-  takesOp?: RecipeQuerySideOp;
-  makesOp?: RecipeQuerySideOp;
-}): boolean {
+function hasOnlySide(
+  clauses: RecipeQueryClause[],
+  ops: {
+    takesOp?: RecipeQuerySideOp;
+    makesOp?: RecipeQuerySideOp;
+  },
+): boolean {
   return (
     (ops.takesOp === "only" && clauses.some((clause) => clause.role === "takes")) ||
     (ops.makesOp === "only" && clauses.some((clause) => clause.role === "makes"))
@@ -2763,28 +2768,31 @@ function scoreAllRecipes(
 }
 
 /**
- * How many candidates the recipe partial phase may score. That phase asks for
- * recipes carrying ANY of the words, so its candidates are the union of every
- * word's matches, and several words together reach most of the 278k recipes.
- * Scoring every recipe against six words and all their spellings held the one
- * server thread for 1-2 s per request. Past this the phase is skipped and the
- * exact or corrected answer stands: a list of six metals is not a search, and
- * "anything with one of these words" over the whole corpus is no answer a
- * player wants. A word under three characters cannot narrow at all, so the
- * union is taken over the words the index can see and the short word only
- * scores: "motor lv hv" finds the motors, not every LV thing, and a recipe
- * carrying only the short word is not found, which is the right trade. The
- * item pane keeps its full walk (searchDatasetResources): 60k entries are
+ * How much the recipe partial phase may score, as candidates times words. That
+ * phase asks for recipes carrying ANY of the words, so its candidates are the
+ * union of every word's matches, and several words together reach most of the
+ * 278k recipes; each candidate is scored against every word, so the cost is
+ * the product. Scoring every recipe against six words and all their spellings
+ * held the one server thread for 1-2 s per request. The budget allows 30,000
+ * candidates for six words, 60,000 for three ("steel plate pls" still answers)
+ * and 90,000 for two, at the same ceiling of work. Past it the phase is
+ * skipped and the exact or corrected answer stands: a list of six metals is
+ * not a search, and "anything with one of these words" over the whole corpus
+ * is no answer a player wants. A word under three characters cannot narrow at
+ * all, so the union is taken over the words the index can see and the short
+ * word only scores: "motor lv hv" finds the motors, not every LV thing, and a
+ * recipe carrying only the short word is not found, which is the right trade.
+ * The item pane keeps its full walk (searchDatasetResources): 60k entries are
  * cheap. The exact and corrected phases narrow by trigram unless the query
  * holds a short word, and then they walk once each.
  */
-export const PARTIAL_PHASE_CANDIDATE_LIMIT = 30_000;
+export const PARTIAL_PHASE_WORK_BUDGET = 180_000;
 
 /** The partial phase's candidates, or undefined when the phase must be skipped. */
 export function partialPhaseCandidates(
   index: TextSearchIndex,
   query: SearchQuery,
-  limit = PARTIAL_PHASE_CANDIDATE_LIMIT,
+  workBudget = PARTIAL_PHASE_WORK_BUDGET,
 ): number[] | undefined {
   const narrowable = query.terms.filter(isIndexableTerm);
   if (narrowable.length === 0) {
@@ -2795,6 +2803,7 @@ export function partialPhaseCandidates(
     narrowable.length === query.terms.length ? query : { ...query, terms: narrowable },
     { partial: true },
   );
+  const limit = Math.floor(workBudget / Math.max(1, query.terms.length));
   return candidates && candidates.length <= limit ? candidates : undefined;
 }
 
@@ -2839,11 +2848,14 @@ export function applyUsesResourceContext<T extends RecipeSummary>(
     return {
       ...input,
       id: selected.id,
-      displayName: (own ? input.displayName : undefined) ?? selected.displayName ?? input.displayName,
+      displayName:
+        (own ? input.displayName : undefined) ?? selected.displayName ?? input.displayName,
       iconPath: (own ? input.iconPath : undefined) ?? selected.iconPath ?? input.iconPath,
       iconAtlas: (own ? input.iconAtlas : undefined) ?? selected.iconAtlas ?? input.iconAtlas,
-      dominantColor: (own ? input.dominantColor : undefined) ?? selected.dominantColor ?? input.dominantColor,
-      tooltip: (own ? input.tooltip : undefined) ?? ("tooltip" in selected ? selected.tooltip : undefined),
+      dominantColor:
+        (own ? input.dominantColor : undefined) ?? selected.dominantColor ?? input.dominantColor,
+      tooltip:
+        (own ? input.tooltip : undefined) ?? ("tooltip" in selected ? selected.tooltip : undefined),
       alternatives: undefined,
       oreDictionary: undefined,
     };
@@ -3107,7 +3119,6 @@ function resourceSearchTerms(
     ...(indexed?.tooltip ?? []),
   ].filter((term): term is string => Boolean(term));
 }
-
 
 function buildRecipeMapIconMap(
   recipeMaps: string[],

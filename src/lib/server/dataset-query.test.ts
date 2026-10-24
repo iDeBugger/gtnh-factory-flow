@@ -13,7 +13,7 @@ import {
   getDatasetCatalog,
   getWildcardResource,
   orderByRecipeMap,
-  PARTIAL_PHASE_CANDIDATE_LIMIT,
+  PARTIAL_PHASE_WORK_BUDGET,
   partialPhaseCandidates,
   prewarmFirstThenRest,
   prewarmInOrder,
@@ -55,10 +55,17 @@ describe("the recipe partial search phase", () => {
     expect(partialPhaseCandidates(index, parseSearchQuery("lv hv"))).toBeUndefined();
   });
 
-  it("scores the union of the words' candidates while it is small, and is skipped past the cap", () => {
+  it("scores the union while candidates times words fit the budget, and is skipped past it", () => {
     expect(partialPhaseCandidates(index, parseSearchQuery("steel iron"))).toEqual([0, 1]);
-    expect(PARTIAL_PHASE_CANDIDATE_LIMIT).toBe(30_000);
-    expect(partialPhaseCandidates(index, parseSearchQuery("steel iron"), 1)).toBeUndefined();
+    // Six words keep 30,000 candidates; fewer words may score more of them.
+    expect(PARTIAL_PHASE_WORK_BUDGET).toBe(180_000);
+    expect(PARTIAL_PHASE_WORK_BUDGET / 6).toBe(30_000);
+    // Two words and two candidates: a budget of 4 fits, a budget of 3 does not.
+    expect(partialPhaseCandidates(index, parseSearchQuery("steel iron"), 4)).toEqual([0, 1]);
+    expect(partialPhaseCandidates(index, parseSearchQuery("steel iron"), 3)).toBeUndefined();
+    // Three words, the same two candidates: 6 fits, 5 does not.
+    expect(partialPhaseCandidates(index, parseSearchQuery("steel iron pls"), 6)).toEqual([0, 1]);
+    expect(partialPhaseCandidates(index, parseSearchQuery("steel iron pls"), 5)).toBeUndefined();
   });
 });
 
