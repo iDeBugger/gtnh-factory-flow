@@ -10,6 +10,10 @@ import {
   forgetSessionUsers,
   getCommunityDb,
   hashPassword,
+  KDF_CONCURRENCY,
+  KDF_QUEUE_MAX,
+  PasswordCheckBusyError,
+  passwordChecksInFlight,
   resetDbBreaker,
 } from "@/lib/server/community";
 import * as login from "./login/route";
@@ -163,7 +167,10 @@ describe("password checks", () => {
     const started = performance.now();
     const interval = setInterval(() => (ticks += 1), 5);
     try {
-      await Promise.all(Array.from({ length: 40 }, () => checkPassword("x", stored)));
+      // As many as the queue takes at once: two at a time, so this lasts well over half a second.
+      await Promise.all(
+        Array.from({ length: KDF_CONCURRENCY + KDF_QUEUE_MAX }, () => checkPassword("x", stored)),
+      );
     } finally {
       clearInterval(interval);
     }
@@ -172,6 +179,25 @@ describe("password checks", () => {
     // loop fires it about every 5 ms, so at least half of that whatever the machine's speed.
     expect(elapsed).toBeGreaterThanOrEqual(100);
     expect(ticks).toBeGreaterThanOrEqual(Math.max(20, elapsed / 5 / 2));
+  }, 30_000);
+
+  it("run two at a time, and refuse what the queue cannot hold", async () => {
+    const stored = await hashPassword("y");
+    let most = 0;
+    const sampler = setInterval(() => (most = Math.max(most, passwordChecksInFlight())), 1);
+    try {
+      await Promise.all(Array.from({ length: 8 }, () => checkPassword("x", stored)));
+    } finally {
+      clearInterval(sampler);
+    }
+    expect(most).toBe(KDF_CONCURRENCY);
+    const answers = await Promise.allSettled(
+      Array.from({ length: KDF_CONCURRENCY + KDF_QUEUE_MAX + 1 }, () => checkPassword("x", stored)),
+    );
+    const refused = answers.filter((answer) => answer.status === "rejected");
+    expect(refused).toHaveLength(1);
+    expect((refused[0] as PromiseRejectedResult).reason).toBeInstanceOf(PasswordCheckBusyError);
+    expect(answers.filter((answer) => answer.status === "fulfilled")).toHaveLength(KDF_CONCURRENCY + KDF_QUEUE_MAX);
   }, 30_000);
 });
 

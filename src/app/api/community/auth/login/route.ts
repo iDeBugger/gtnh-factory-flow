@@ -7,6 +7,7 @@ import {
   isCommunityConfigured,
   makeActorKey,
   makeSessionToken,
+  PasswordCheckBusyError,
   recordEvents,
   saltedKey,
   serially,
@@ -90,6 +91,9 @@ export async function POST(request: Request) {
       );
     });
   } catch (error) {
+    if (error instanceof PasswordCheckBusyError) {
+      return NextResponse.json({ error: "Too many attempts. Slow down." }, { status: 429 });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Sign in failed." },
       { status: 500 },

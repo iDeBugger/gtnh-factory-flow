@@ -248,8 +248,45 @@ const scrypt = promisify(scryptCallback) as (
 const SCRYPT_KEY_BYTES = 64;
 const SCRYPT_MAX_MEMORY = 64 * 1024 * 1024;
 
-function deriveKey(password: string, salt: string): Promise<Buffer> {
-  return scrypt(password, salt, SCRYPT_KEY_BYTES, { maxmem: SCRYPT_MAX_MEMORY });
+/**
+ * Derivations in flight at once, and how many may wait behind them. The
+ * threadpool has four threads and the dataset's shard reads queue on the same
+ * pool, so a sign-in flood may never hold every thread; two at a time keeps
+ * the dataset API's latency its own. Past the queue a check is refused and
+ * the route answers "slow down" rather than holding the request open.
+ */
+export const KDF_CONCURRENCY = 2;
+export const KDF_QUEUE_MAX = 32;
+let kdfRunning = 0;
+const kdfWaiting: Array<() => void> = [];
+
+/** Thrown when more password checks arrive than the queue holds. */
+export class PasswordCheckBusyError extends Error {
+  constructor() {
+    super("Too many sign-in attempts at once.");
+    this.name = "PasswordCheckBusyError";
+  }
+}
+
+/** For tests: derivations running right now. */
+export function passwordChecksInFlight(): number {
+  return kdfRunning;
+}
+
+async function deriveKey(password: string, salt: string): Promise<Buffer> {
+  if (kdfRunning >= KDF_CONCURRENCY) {
+    if (kdfWaiting.length >= KDF_QUEUE_MAX) {
+      throw new PasswordCheckBusyError();
+    }
+    await new Promise<void>((resolve) => kdfWaiting.push(resolve));
+  }
+  kdfRunning += 1;
+  try {
+    return await scrypt(password, salt, SCRYPT_KEY_BYTES, { maxmem: SCRYPT_MAX_MEMORY });
+  } finally {
+    kdfRunning -= 1;
+    kdfWaiting.shift()?.();
+  }
 }
 
 export async function hashPassword(password: string): Promise<string> {

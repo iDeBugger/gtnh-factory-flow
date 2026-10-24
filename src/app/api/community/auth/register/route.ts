@@ -7,6 +7,7 @@ import {
   isCommunityConfigured,
   makeActorKey,
   makeSessionToken,
+  PasswordCheckBusyError,
   sessionCookieHeader,
 } from "@/lib/server/community";
 
@@ -67,6 +68,9 @@ export async function POST(request: Request) {
       { status: 201, headers: { "Set-Cookie": sessionCookieHeader(makeSessionToken(data.id)) } },
     );
   } catch (error) {
+    if (error instanceof PasswordCheckBusyError) {
+      return NextResponse.json({ error: "Too many attempts. Slow down." }, { status: 429 });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Sign up failed." },
       { status: 500 },

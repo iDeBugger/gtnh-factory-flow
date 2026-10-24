@@ -119,6 +119,10 @@ The instance is small and has gone down under load. Rules:
   10 failures per account in 15 minutes from any address (unknown names counted alike, so the limit names no
   accounts); the account count runs inside the same critical section as the lookup and the record. Exam:
   `rate-limit.test.ts`, `app/api/community/auth/login/route.test.ts`.
+- Password derivations run on the threadpool, two at a time with a queue of 32 (`KDF_CONCURRENCY`, `KDF_QUEUE_MAX`):
+  the dataset's shard reads share the pool's four threads, so a sign-in flood may never hold them all. Past the
+  queue the check throws `PasswordCheckBusyError` and sign-in and sign-up answer 429 "Too many attempts. Slow
+  down." Exam: the "password checks" block of `app/api/community/auth/auth.test.ts`.
 
 ## The mod and community switch (deployment-features.ts)
 
