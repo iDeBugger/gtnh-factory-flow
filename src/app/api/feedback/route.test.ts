@@ -4,6 +4,8 @@ import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/
 
 vi.mock("@/lib/server/community", () => ({
   isCommunityConfigured: () => true,
+  clientAddress: (request: Request) => request.headers.get("x-client-ip") ?? "local",
+  saltedKey: (text: string) => `#${text}`,
 }));
 vi.mock("@/lib/server/feedback-guard", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/server/feedback-guard")>();
@@ -23,7 +25,8 @@ vi.mock("@/lib/server/feedback", async (importOriginal) => {
 });
 
 import { openIssue } from "@/lib/server/feedback";
-import { claimIssue } from "@/lib/server/feedback-guard";
+import { claimIssue, feedbackGate } from "@/lib/server/feedback-guard";
+import { resetMemoryTokens } from "@/lib/server/memory-rate";
 import { POST } from "./route";
 
 const plan = {
@@ -37,8 +40,8 @@ const plan = {
   fuelProfiles: [],
 };
 
-function send(body: unknown): Promise<Response> {
-  return POST(new Request("http://localhost/api/feedback", { method: "POST", body: JSON.stringify(body) }));
+function send(body: unknown, headers: Record<string, string> = {}): Promise<Response> {
+  return POST(new Request("http://localhost/api/feedback", { method: "POST", headers, body: JSON.stringify(body) }));
 }
 
 const report = {
@@ -53,6 +56,9 @@ const report = {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  // Every case here sends from one (absent) address: the gate's sender share would otherwise meet across them.
+  feedbackGate.reset();
+  resetMemoryTokens();
 });
 
 describe("the feedback route", () => {
@@ -111,6 +117,22 @@ describe("the feedback route", () => {
     const busy = await send(report);
     expect(busy.status).toBe(429);
     expect(await busy.json()).toEqual({ error: "That's a lot of reports. Try again in an hour." });
+  });
+
+  it("pauses nothing for one address's bad reports", async () => {
+    vi.stubEnv("GITHUB_FEEDBACK_TOKEN", "token");
+    vi.mocked(openIssue).mockClear();
+    for (let i = 0; i < 70; i++) {
+      const response = await send({ ...report, title: "" }, { "x-client-ip": "10.0.0.1" });
+      expect([400, 429]).toContain(response.status);
+    }
+    // Past its share, the one address is told so; the box stays open to everyone else.
+    const held = await send(report, { "x-client-ip": "10.0.0.1" });
+    expect(held.status).toBe(429);
+    expect(await held.json()).toEqual({ error: "That's a lot of reports. Slow down." });
+    const other = await send(report, { "x-client-ip": "10.0.0.2" });
+    expect(other.status).toBe(201);
+    expect(openIssue).toHaveBeenCalledTimes(1);
   });
 
   it("opens nothing for a report the game did not send, before any count", async () => {

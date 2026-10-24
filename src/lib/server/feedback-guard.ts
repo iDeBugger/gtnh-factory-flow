@@ -1,5 +1,6 @@
 import { clientAddress, countEvents, recordEvents, saltedKey } from "./community";
 import type { FeedbackReport } from "./feedback";
+import { takeMemoryToken } from "./memory-rate";
 
 /**
  * What stands between `/api/feedback` and a public issue. On 2026-10-12 it was flooded from about 5,000 residential
@@ -8,8 +9,9 @@ import type { FeedbackReport } from "./feedback";
  *
  * - the report must look like the mod's (its device id and version shapes), or, from the web planner, like the
  *   web's: it says `origin: "web"`, has its own device id, no Java or log, and gets stricter limits and its own label;
- * - a process-wide gate takes at most `ARRIVALS_PER_MINUTE` reports a minute to the database, and a flood of refusals
- *   pauses reports altogether for `PAUSE_MS`;
+ * - a process-wide gate takes at most `ARRIVALS_PER_MINUTE` reports a minute to the database, each sender at most
+ *   `SENDER_ARRIVALS_PER_MINUTE` of them, and a flood of refusals from many senders pauses reports altogether for
+ *   `PAUSE_MS`;
  * - per address and per device, a few an hour and a day;
  * - the same words are taken once a month;
  * - and the whole site opens at most `SITE_PER_HOUR` / `SITE_PER_DAY` issues, whoever sends them.
@@ -82,46 +84,82 @@ export function wordsOf(report: FeedbackReport): string {
 }
 
 export const ARRIVALS_PER_MINUTE = 30;
+/**
+ * One sender's share of the minute's arrivals, so no one address can hold the
+ * whole site's share on its own.
+ */
+export const SENDER_ARRIVALS_PER_MINUTE = 6;
 /** Refusals in `FLOOD_WINDOW_MS` that mean a flood. */
 export const FLOOD_REFUSALS = 60;
+/**
+ * How many of one sender's refusals count toward a flood. A pause is for a
+ * flood from many addresses (the one seen: thousands of addresses, one to
+ * three reports each); a single address sending junk must never trip it, or
+ * one machine closes the box for everyone for hours. Sixty counted refusals
+ * therefore need at least twenty addresses.
+ */
+export const FLOOD_REFUSALS_PER_ADDRESS = 3;
 const FLOOD_WINDOW_MS = 10 * 60 * 1000;
 export const PAUSE_MS = 6 * 60 * 60 * 1000;
 
-/** The in-memory first line: a cap on arrivals, and a pause once refusals pile up. Cheap, before any parsing. */
+/**
+ * The in-memory first line: a cap on arrivals, a sender's own share of them,
+ * and a pause once refusals from enough senders pile up. Cheap, before any
+ * parsing. A sender is the salted address hash; the gate never holds a raw
+ * address.
+ */
 export class FeedbackGate {
   private arrivals: number[] = [];
-  private refusals: number[] = [];
+  private refusals: { at: number; sender: string }[] = [];
   private pausedUntil = 0;
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  /** "open" lets the report on; "busy" past the minute's share; "paused" after a flood. */
-  admit(): "open" | "busy" | "paused" {
+  /**
+   * "open" lets the report on; "sender" past the sender's share of the
+   * minute; "busy" past the site's; "paused" after a flood.
+   */
+  admit(sender: string): "open" | "busy" | "paused" | "sender" {
     const t = this.now();
     if (t < this.pausedUntil) {
       return "paused";
     }
+    if (!takeMemoryToken(`feedback:arrivals:${sender}`, SENDER_ARRIVALS_PER_MINUTE, 60_000, t)) {
+      this.refused(sender);
+      return "sender";
+    }
     this.arrivals = this.arrivals.filter((a) => t - a < 60_000);
     if (this.arrivals.length >= ARRIVALS_PER_MINUTE) {
-      this.refused();
+      this.refused(sender);
       return "busy";
     }
     this.arrivals.push(t);
     return "open";
   }
 
-  /** A report turned away for any reason; enough of them pauses reports. */
-  refused(): void {
+  /** A report turned away for any reason; enough of them, from enough senders, pauses reports. */
+  refused(sender: string): void {
     const t = this.now();
-    this.refusals = this.refusals.filter((r) => t - r < FLOOD_WINDOW_MS);
-    this.refusals.push(t);
+    this.refusals = this.refusals.filter((r) => t - r.at < FLOOD_WINDOW_MS);
+    if (this.refusals.filter((r) => r.sender === sender).length >= FLOOD_REFUSALS_PER_ADDRESS) {
+      return;
+    }
+    this.refusals.push({ at: t, sender });
     if (this.refusals.length >= FLOOD_REFUSALS) {
+      const senders = new Set(this.refusals.map((r) => r.sender)).size;
       this.pausedUntil = t + PAUSE_MS;
       this.refusals = [];
       console.warn(
-        `feedback: ${FLOOD_REFUSALS} reports refused in ${FLOOD_WINDOW_MS / 60_000} min; paused until ${new Date(this.pausedUntil).toISOString()}`,
+        `feedback: ${FLOOD_REFUSALS} reports from ${senders} addresses refused in ${FLOOD_WINDOW_MS / 60_000} min; paused until ${new Date(this.pausedUntil).toISOString()}`,
       );
     }
+  }
+
+  /** For tests: a gate as new. */
+  reset(): void {
+    this.arrivals = [];
+    this.refusals = [];
+    this.pausedUntil = 0;
   }
 }
 

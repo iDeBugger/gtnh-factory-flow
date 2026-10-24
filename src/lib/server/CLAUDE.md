@@ -153,9 +153,10 @@ The instance is small and has gone down under load. Rules:
   the token needs Issues read and write on both repos.
 - It was flooded on 2026-10-12 (450 spam issues from about 5,000 residential addresses, the mod's user agent, made-up
   versions), so `feedback-guard.ts` stands in front: the mod's shapes (device id, versions), an in-memory gate (30
-  a minute; 60 refusals in 10 minutes pause reports for 6 hours), 3 an hour and 10 a day per address and per device,
-  the same words once a month, and at most 10 issues an hour and 40 a day for the whole site. Player text is escaped
-  (no pictures, links or HTML in the issue).
+  a minute for the site and 6 a minute per address; 60 refusals in 10 minutes pause reports for 6 hours, each address
+  counting at most 3 of them, so a pause takes 20 addresses and one address can never trip it), 3 an hour and 10 a
+  day per address and per device, the same words once a month, and at most 10 issues an hour and 40 a day for the
+  whole site. Player text is escaped (no pictures, links or HTML in the issue).
 - The client address is Caddy's `X-Client-Ip` (Cloudflare's CF-Connecting-IP, trusted only from Cloudflare's
   ranges), then CF-Connecting-IP; X-Forwarded-For names a Cloudflare edge (`clientAddress` in community.ts).
 - Emergency stop without a deploy: a Caddy rule answering 503 to `POST /api/feedback` (`/etc/caddy/Caddyfile`, then

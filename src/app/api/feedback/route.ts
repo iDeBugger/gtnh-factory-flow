@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { encodePlanCode, planCodeLink } from "@/lib/import-export/plan-code";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { isCommunityConfigured } from "@/lib/server/community";
+import { clientAddress, isCommunityConfigured, saltedKey } from "@/lib/server/community";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import {
   FEEDBACK_MAX_BYTES,
@@ -26,9 +26,9 @@ export const dynamic = "force-dynamic";
 /** Where the issues are opened, and the site the links point at. */
 const SITE = "https://gtnhplanner.com";
 
-/** A refusal, counted towards the gate's flood pause. */
-function refuse(status: number, error: string): NextResponse {
-  feedbackGate.refused();
+/** A refusal, counted against its sender towards the gate's flood pause. */
+function refuse(sender: string, status: number, error: string): NextResponse {
+  feedbackGate.refused(sender);
   return NextResponse.json({ error }, { status });
 }
 
@@ -97,34 +97,40 @@ export async function POST(request: Request) {
   if (!token || !isCommunityConfigured()) {
     return NextResponse.json({ error: "Reports can't be sent yet." }, { status: 503 });
   }
-  const gate = feedbackGate.admit();
-  if (gate === "paused") {
-    return NextResponse.json({ error: "Reports are paused for a while. Try again later." }, { status: 503 });
-  }
-  if (gate === "busy") {
-    return NextResponse.json({ error: "Lots of reports are coming in. Try again in a few minutes." }, { status: 429 });
-  }
   try {
+    // The sender is the salted address, computed once: the gate keys its
+    // shares and its flood count on it and never sees the address itself.
+    const sender = saltedKey(clientAddress(request));
+    const gate = feedbackGate.admit(sender);
+    if (gate === "paused") {
+      return NextResponse.json({ error: "Reports are paused for a while. Try again later." }, { status: 503 });
+    }
+    if (gate === "sender") {
+      return NextResponse.json({ error: "That's a lot of reports. Slow down." }, { status: 429 });
+    }
+    if (gate === "busy") {
+      return NextResponse.json({ error: "Lots of reports are coming in. Try again in a few minutes." }, { status: 429 });
+    }
     const raw = early ?? (await readCapped(request, FEEDBACK_MAX_BYTES));
     if (raw === undefined) {
-      return refuse(413, "The report is too big. Send fewer plans.");
+      return refuse(sender, 413, "The report is too big. Send fewer plans.");
     }
     let json: unknown;
     try {
       json = JSON.parse(raw);
     } catch {
-      return refuse(400, "That report could not be read.");
+      return refuse(sender, 400, "That report could not be read.");
     }
     const report = parseFeedback(json);
     if ("error" in report) {
-      return refuse(400, report.error);
+      return refuse(sender, 400, report.error);
     }
     if (!looksGenuine(report)) {
-      return refuse(400, "That report could not be read.");
+      return refuse(sender, 400, "That report could not be read.");
     }
     const refusal = await claimIssue(request, report);
     if (refusal) {
-      return refuse(refusal.status, refusal.error);
+      return refuse(sender, refusal.status, refusal.error);
     }
 
     const id = randomUUID();

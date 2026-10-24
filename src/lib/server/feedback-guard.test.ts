@@ -16,11 +16,14 @@ vi.mock("./community", () => ({
 }));
 
 import type { FeedbackReport } from "./feedback";
+import { resetMemoryTokens } from "./memory-rate";
 import {
   ARRIVALS_PER_MINUTE,
   claimIssue,
   FeedbackGate,
   FLOOD_REFUSALS,
+  FLOOD_REFUSALS_PER_ADDRESS,
+  SENDER_ARRIVALS_PER_MINUTE,
   looksGenuine,
   looksSentByTheGame,
   looksSentByTheWeb,
@@ -67,6 +70,7 @@ function from(address: string): Request {
 
 beforeEach(() => {
   events.length = 0;
+  resetMemoryTokens();
 });
 
 describe("what a report from the game looks like", () => {
@@ -149,28 +153,68 @@ describe("the gate", () => {
   it("takes a minute's share, then is busy until the minute is past", () => {
     let now = 0;
     const gate = new FeedbackGate(() => now);
+    // The site's share is spread over senders, each within their own.
+    const senders = Math.ceil(ARRIVALS_PER_MINUTE / SENDER_ARRIVALS_PER_MINUTE);
     for (let i = 0; i < ARRIVALS_PER_MINUTE; i++) {
-      expect(gate.admit()).toBe("open");
+      expect(gate.admit(`s${i % senders}`)).toBe("open");
     }
-    expect(gate.admit()).toBe("busy");
+    expect(gate.admit("someone else")).toBe("busy");
     now = 60_000;
-    expect(gate.admit()).toBe("open");
+    expect(gate.admit("someone else")).toBe("open");
   });
 
   it("pauses reports after a flood of refusals, for hours", () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     let now = 0;
     const gate = new FeedbackGate(() => now);
+    // Sixty refusals as twenty senders with three each; the last one tips it.
     for (let i = 0; i < FLOOD_REFUSALS - 1; i++) {
-      gate.refused();
+      gate.refused(`s${Math.floor(i / FLOOD_REFUSALS_PER_ADDRESS)}`);
     }
-    expect(gate.admit()).toBe("open");
-    gate.refused();
-    expect(gate.admit()).toBe("paused");
+    expect(gate.admit("x")).toBe("open");
+    gate.refused(`s${Math.floor((FLOOD_REFUSALS - 1) / FLOOD_REFUSALS_PER_ADDRESS)}`);
+    expect(gate.admit("x")).toBe("paused");
     now = PAUSE_MS - 1;
-    expect(gate.admit()).toBe("paused");
+    expect(gate.admit("x")).toBe("paused");
     now = PAUSE_MS;
-    expect(gate.admit()).toBe("open");
+    expect(gate.admit("x")).toBe("open");
+  });
+
+  it("does not pause for one address's refusals", () => {
+    const gate = new FeedbackGate(() => 0);
+    for (let i = 0; i < 200; i++) {
+      gate.refused("a");
+    }
+    expect(gate.admit("b")).toBe("open");
+  });
+
+  it("counts each address at most three times toward a flood", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const gate = new FeedbackGate(() => 0);
+    for (let s = 0; s < 10; s++) {
+      for (let i = 0; i < 20; i++) {
+        gate.refused(`many${s}`);
+      }
+    }
+    expect(gate.admit("z")).toBe("open");
+    for (let s = 0; s < 10; s++) {
+      for (let i = 0; i < FLOOD_REFUSALS_PER_ADDRESS; i++) {
+        gate.refused(`more${s}`);
+      }
+    }
+    expect(gate.admit("z")).toBe("paused");
+  });
+
+  it("gives one address a few arrivals a minute, and the site its own share", () => {
+    let now = 0;
+    const gate = new FeedbackGate(() => now);
+    for (let i = 0; i < SENDER_ARRIVALS_PER_MINUTE; i++) {
+      expect(gate.admit("a")).toBe("open");
+    }
+    expect(gate.admit("a")).toBe("sender");
+    expect(gate.admit("b")).toBe("open");
+    now = 60_000;
+    expect(gate.admit("a")).toBe("open");
   });
 });
 
