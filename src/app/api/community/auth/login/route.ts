@@ -2,15 +2,34 @@ import { NextResponse } from "next/server";
 import {
   checkPassword,
   checkRateLimit,
+  countEvents,
   getCommunityDb,
   isCommunityConfigured,
   makeActorKey,
   makeSessionToken,
+  recordEvents,
+  saltedKey,
+  serially,
   sessionCookieHeader,
 } from "@/lib/server/community";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/**
+ * Failed sign-ins per account before the account is refused from every
+ * address until the window passes. Failures only, so a player's own sign-ins
+ * never count; a name nobody has is counted the same way, so the limit says
+ * nothing about which names exist. The per-address limit (20 attempts in 10
+ * minutes, successes included) stays beside it: that one bounds a single
+ * address, this one bounds guessing at a single account from many. Anyone
+ * can hold one known name locked with a wrong attempt every 90 seconds;
+ * existing sessions keep working, and the alternative (count per account and
+ * address) does not stop the rotating attacker this is for.
+ */
+const ACCOUNT_FAILURES = 10;
+const ACCOUNT_WINDOW_SECONDS = 15 * 60;
+const ACCOUNT_FAILURE_ACTION = "login-fail";
 
 export async function POST(request: Request) {
   if (!isCommunityConfigured()) {
@@ -30,22 +49,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Too many attempts. Slow down." }, { status: 429 });
     }
 
-    const { data } = await getCommunityDb()
-      .from("community_users")
-      .select("id,username,password_hash,is_admin")
-      .eq("username", username)
-      .single<{ id: string; username: string; password_hash: string; is_admin: boolean }>();
+    // The exact name: lookups are exact and registration is case-sensitive, so
+    // two names differing in case are two accounts. One attempt at a time per
+    // account, so the count sees every earlier failure.
+    const accountKey = saltedKey(`login-user:${username}`);
+    return await serially(accountKey, async () => {
+      if ((await countEvents(accountKey, ACCOUNT_FAILURE_ACTION, ACCOUNT_WINDOW_SECONDS)) >= ACCOUNT_FAILURES) {
+        return NextResponse.json(
+          { error: "Too many attempts for this account. Try again in 15 minutes." },
+          { status: 429 },
+        );
+      }
 
-    // The check runs whether or not the name exists, so its timing says nothing about which names do.
-    const ok = await checkPassword(password, data?.password_hash);
-    if (!data || !ok) {
-      return NextResponse.json({ error: "Wrong username or password." }, { status: 401 });
-    }
+      const { data } = await getCommunityDb()
+        .from("community_users")
+        .select("id,username,password_hash,is_admin")
+        .eq("username", username)
+        .single<{ id: string; username: string; password_hash: string; is_admin: boolean }>();
 
-    return NextResponse.json(
-      { username: data.username, isAdmin: data.is_admin },
-      { headers: { "Set-Cookie": sessionCookieHeader(makeSessionToken(data.id)) } },
-    );
+      // The check runs whether or not the name exists, so its timing says nothing about which names do.
+      const ok = await checkPassword(password, data?.password_hash);
+      if (!data || !ok) {
+        await recordEvents([{ actorKey: accountKey, action: ACCOUNT_FAILURE_ACTION }]);
+        return NextResponse.json({ error: "Wrong username or password." }, { status: 401 });
+      }
+
+      return NextResponse.json(
+        { username: data.username, isAdmin: data.is_admin },
+        { headers: { "Set-Cookie": sessionCookieHeader(makeSessionToken(data.id)) } },
+      );
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Sign in failed." },

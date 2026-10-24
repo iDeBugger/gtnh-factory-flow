@@ -104,6 +104,12 @@ The instance is small and has gone down under load. Rules:
   checkout signs in with no setup. Never add a second read of the variable or a second default. The live service
   exits without it (`src/live/main.ts`); the two must carry the same value.
 - The startup checks warn about a missing or short secret and never throw for it (`startup-checks.ts`).
+- Every database-backed limit counts then records, so `checkRateLimit` runs one at a time per key and action
+  (`serially`); a burst for one key is counted one by one. The site is one process, which is what makes the
+  in-process queue enough. Sign-in has two limits: 20 attempts per address in 10 minutes (successes included) and
+  10 failures per account in 15 minutes from any address (unknown names counted alike, so the limit names no
+  accounts); the account count runs inside the same critical section as the lookup and the record. Exam:
+  `rate-limit.test.ts`, `app/api/community/auth/login/route.test.ts`.
 
 ## The mod and community switch (deployment-features.ts)
 

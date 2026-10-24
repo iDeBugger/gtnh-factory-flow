@@ -351,18 +351,46 @@ export function isAdminRequest(request: Request): boolean {
   return sameSecret(request.headers.get("x-admin-token"), process.env.COMMUNITY_ADMIN_TOKEN);
 }
 
-/** Returns true when the action is allowed; records it when it is. */
-export async function checkRateLimit(
+/**
+ * Work in flight per key, so a count-then-record limit sees every earlier
+ * record: without this, N requests for one key arriving together all read a
+ * count under the limit and all pass. The site is one process, so an
+ * in-process queue is the whole story. An entry lives only while something
+ * is in flight under its key.
+ */
+const inFlight = new Map<string, Promise<void>>();
+
+/** Runs `work` after everything already queued under `key`, whatever became of it. */
+export function serially<T>(key: string, work: () => Promise<T>): Promise<T> {
+  const previous = inFlight.get(key) ?? Promise.resolve();
+  const run = previous.then(work, work);
+  const settled = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  inFlight.set(key, settled);
+  void settled.then(() => {
+    if (inFlight.get(key) === settled) {
+      inFlight.delete(key);
+    }
+  });
+  return run;
+}
+
+/** Returns true when the action is allowed; records it when it is. One at a time per key and action. */
+export function checkRateLimit(
   actorKey: string,
   action: string,
   maxPerWindow: number,
   windowSeconds: number,
 ): Promise<boolean> {
-  if ((await countEvents(actorKey, action, windowSeconds)) >= maxPerWindow) {
-    return false;
-  }
-  await recordEvents([{ actorKey, action }]);
-  return true;
+  return serially(`${actorKey}:${action}`, async () => {
+    if ((await countEvents(actorKey, action, windowSeconds)) >= maxPerWindow) {
+      return false;
+    }
+    await recordEvents([{ actorKey, action }]);
+    return true;
+  });
 }
 
 /** How many times the actor did the action in the last `windowSeconds`. */
