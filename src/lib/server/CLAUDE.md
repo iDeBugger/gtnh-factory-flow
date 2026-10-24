@@ -183,6 +183,10 @@ The instance is small and has gone down under load. Rules:
   `plan-previews` bucket is private and its pictures are served only by `GET .../preview`, which answers an
   unpublished post's picture to its owner and the admin alone (`Cache-Control: private, no-store`) and 404 `No preview.`
   to everyone else; a deployment whose bucket was created public before this must be switched off in the dashboard.
+  The share card sizes the picture from its IHDR without a decode, so the preview POST stores only a PNG whose
+  first chunk is an IHDR with both sides in 1..`PLAN_PREVIEW_MAX_SIDE` (4096; `readPngHeader` in `plan-preview.ts`,
+  else 415), `sizePlanPreview` answers nothing for an object that breaks the rule (the card falls back to the icon
+  face), and an account uploads at most 30 previews an hour (`PREVIEWS_PER_HOUR`, counted after the checks).
   No GET writes: a view is `POST .../view` (60 a minute per address), which the library's grid sends once when a player
   opens a post's page (`countPlanView` in `src/lib/community/client.ts`, from the tile's open gesture); the drawer, the
   bookmarks shelf and a copy being made are lookups (`getCommunityPlan`) and count nothing.

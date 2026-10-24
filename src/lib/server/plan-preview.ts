@@ -23,6 +23,65 @@ import {
  */
 export const PLAN_PREVIEW_BUCKET = "plan-previews";
 
+/**
+ * The largest side a stored preview may claim. The client captures at most
+ * 1600 by 1000, so the bound costs nothing legitimate, and it keeps the one
+ * decode the card pays (resvg, from the IHDR's own numbers) under 64 MB.
+ */
+export const PLAN_PREVIEW_MAX_SIDE = 4096;
+
+/** The card's hero area the photograph is contain-fit into, assuming a two-line title. */
+export const PREVIEW_BOX_WIDTH = 1084;
+export const PREVIEW_BOX_HEIGHT = 330;
+
+/**
+ * The width and height a PNG's IHDR declares, or undefined when the bytes
+ * are not a PNG whose first chunk is an IHDR with both sides in
+ * 1..`PLAN_PREVIEW_MAX_SIDE`. The signature and the chunk tag are checked
+ * because the numbers at offsets 16 and 20 mean nothing otherwise.
+ */
+export function readPngHeader(bytes: Uint8Array): { width: number; height: number } | undefined {
+  if (bytes.length < 33) {
+    return undefined;
+  }
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (!signature.every((byte, index) => bytes[index] === byte)) {
+    return undefined;
+  }
+  if (String.fromCharCode(bytes[12]!, bytes[13]!, bytes[14]!, bytes[15]!) !== "IHDR") {
+    return undefined;
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = view.getUint32(16);
+  const height = view.getUint32(20);
+  if (width < 1 || height < 1 || width > PLAN_PREVIEW_MAX_SIDE || height > PLAN_PREVIEW_MAX_SIDE) {
+    return undefined;
+  }
+  return { width, height };
+}
+
+/**
+ * The stored photograph contain-fit into the card's hero area by hand
+ * (satori cannot infer an image's intrinsic size), from the IHDR alone so no
+ * pixel decode is paid per unfurl. Undefined for a header the bound above
+ * refuses, so an object stored before the check falls back to the icon face
+ * rather than a decode.
+ */
+export function sizePlanPreview(
+  png: Buffer,
+): { dataUri: string; width: number; height: number } | undefined {
+  const header = readPngHeader(png);
+  if (!header) {
+    return undefined;
+  }
+  const scale = Math.min(PREVIEW_BOX_WIDTH / header.width, PREVIEW_BOX_HEIGHT / header.height);
+  return {
+    dataUri: `data:image/png;base64,${png.toString("base64")}`,
+    width: Math.max(1, Math.round(header.width * scale)),
+    height: Math.max(1, Math.round(header.height * scale)),
+  };
+}
+
 /** The plan's stored board photograph, or undefined when none was uploaded. */
 export async function getPlanPreviewPng(planId: string): Promise<Buffer | undefined> {
   if (!isCommunityConfigured()) {

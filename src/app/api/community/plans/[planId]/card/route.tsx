@@ -6,7 +6,7 @@ import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import { PNG } from "pngjs";
 import { GT_TIER_COLORS } from "@/components/flow/tier-colors";
-import { getPlanPreviewPng, getPublicPlanRow } from "@/lib/server/plan-preview";
+import { getPlanPreviewPng, getPublicPlanRow, sizePlanPreview } from "@/lib/server/plan-preview";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -116,37 +116,6 @@ async function loadIconDataUri(iconPath: string | undefined): Promise<string | u
   } catch {
     return undefined;
   }
-}
-
-/**
- * The uploaded board photograph, contain-fit into the card's hero area by
- * hand (satori cannot infer an image's intrinsic size). The bounds assume a
- * two-line title. Dimensions come from the PNG's IHDR at fixed offsets, so no
- * pixel decode is paid per unfurl.
- */
-const PREVIEW_BOX_WIDTH = 1084;
-const PREVIEW_BOX_HEIGHT = 330;
-
-function sizePlanPreview(
-  png: Buffer,
-): { dataUri: string; width: number; height: number } | undefined {
-  if (png.length < 24) {
-    return undefined;
-  }
-  const sourceWidth = png.readUInt32BE(16);
-  const sourceHeight = png.readUInt32BE(20);
-  if (sourceWidth <= 0 || sourceHeight <= 0) {
-    return undefined;
-  }
-  const scale = Math.min(
-    PREVIEW_BOX_WIDTH / sourceWidth,
-    PREVIEW_BOX_HEIGHT / sourceHeight,
-  );
-  return {
-    dataUri: `data:image/png;base64,${png.toString("base64")}`,
-    width: Math.max(1, Math.round(sourceWidth * scale)),
-    height: Math.max(1, Math.round(sourceHeight * scale)),
-  };
 }
 
 export async function GET(

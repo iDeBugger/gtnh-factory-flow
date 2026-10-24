@@ -5,6 +5,7 @@ import { useInProcessLocalDb } from "@/lib/server/local-db/client";
 import { forgetSessionUsers, getCommunityDb, makeSessionToken, resetDbBreaker } from "@/lib/server/community";
 import { planWithAdditions } from "@/lib/model/__fixtures__/plan-additions";
 import { withModAndCommunityOn } from "@/test-support/mod-and-community";
+import { pngHeader } from "@/test-support/png";
 import { oversizeRequest } from "@/test-support/request-bodies";
 import * as list from "./route";
 import * as plan from "./[planId]/route";
@@ -204,6 +205,65 @@ describe("a post's board photograph", () => {
     const anyone = await getPreview(planId);
     expect(anyone.status).toBe(200);
     expect(anyone.headers.get("cache-control")).toBe("public, max-age=300");
+  });
+
+  const postPreview = (planId: string, bytes: Uint8Array, who: string) => {
+    const form = new FormData();
+    form.set("image", new Blob([bytes as BlobPart], { type: "image/png" }), "board.png");
+    return preview.POST(
+      new Request(`http://localhost/api/community/plans/${planId}/preview`, {
+        method: "POST",
+        headers: { "x-client-ip": nextAddress(), cookie: users[who]!.cookie },
+        body: form,
+      }),
+      params({ planId }),
+    );
+  };
+
+  it("refuses a PNG whose header claims 60000 by 60000 pixels, and stores a 1600 by 1000 one", async () => {
+    const planId = await makePlan("Oversized", false);
+    const refused = await postPreview(planId, pngHeader(60000, 60000), "owner");
+    expect(refused.status).toBe(415);
+    expect(await refused.json()).toEqual({
+      error: "The preview must be a PNG of at most 4096 by 4096 pixels.",
+    });
+    expect((await getPreview(planId, "owner")).status).toBe(404);
+    expect((await postPreview(planId, pngHeader(100, 100, "IDAT"), "owner")).status).toBe(415);
+    expect((await getPreview(planId, "owner")).status).toBe(404);
+
+    const stored = await postPreview(planId, pngHeader(1600, 1000), "owner");
+    expect(stored.status).toBe(200);
+    const read = await getPreview(planId, "owner");
+    expect(read.status).toBe(200);
+    expect(Buffer.from(await read.arrayBuffer()).equals(pngHeader(1600, 1000))).toBe(true);
+  });
+
+  it("gives an account thirty preview uploads an hour, and stores nothing for the next", async () => {
+    await makeUser("photographer");
+    const { data } = await getCommunityDb()
+      .from("community_plans")
+      .insert({
+        user_id: users.photographer!.id,
+        author_name: "photographer",
+        name: "Reshared",
+        plan: { nodes: [] },
+        is_public: true,
+        uploader_key: "test",
+      })
+      .select("id")
+      .single();
+    const planId = (data as { id: string }).id;
+    for (let i = 0; i < 30; i++) {
+      const stored = await postPreview(planId, pngHeader(10 + i, 10), "photographer");
+      expect(stored.status, `upload ${i + 1}`).toBe(200);
+    }
+    const refused = await postPreview(planId, pngHeader(999, 10), "photographer");
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toEqual({
+      error: "Too many preview uploads: try again in a little while.",
+    });
+    const read = await getPreview(planId);
+    expect(Buffer.from(await read.arrayBuffer()).equals(pngHeader(39, 10))).toBe(true);
   });
 
   it("creates the preview bucket private", async () => {

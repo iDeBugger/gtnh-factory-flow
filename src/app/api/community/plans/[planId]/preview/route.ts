@@ -2,9 +2,15 @@ import { NextResponse } from "next/server";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
-import { PLAN_PREVIEW_BUCKET, getPlanPreviewPng } from "@/lib/server/plan-preview";
+import {
+  PLAN_PREVIEW_BUCKET,
+  PLAN_PREVIEW_MAX_SIDE,
+  getPlanPreviewPng,
+  readPngHeader,
+} from "@/lib/server/plan-preview";
 import { readFormDataCapped } from "@/lib/server/request-body";
 import {
+  checkRateLimit,
   getCommunityDb,
   getSessionUser,
   isAdminRequest,
@@ -24,10 +30,14 @@ export const dynamic = "force-dynamic";
  *
  * Owner-only, unlike board-image uploads: this picture becomes the plan's
  * public face in every chat the link is pasted into, so only the person who
- * owns the post gets to stamp it.
+ * owns the post gets to stamp it. The card trusts the PNG's header for its
+ * size, so the header is checked here: a real IHDR with both sides within
+ * `PLAN_PREVIEW_MAX_SIDE`. A re-share overwrites one object, so the cost of
+ * a flood is storage churn; an account gets a few dozen an hour, counted
+ * after the checks so junk spends no share.
  */
 
-const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47];
+const PREVIEWS_PER_HOUR = 30;
 
 let bucketReady = false;
 
@@ -103,8 +113,20 @@ export async function POST(
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
-    if (bytes.length < 8 || !PNG_MAGIC.every((byte, index) => bytes[index] === byte)) {
-      return NextResponse.json({ error: "The preview must be a PNG." }, { status: 415 });
+    if (!readPngHeader(bytes)) {
+      return NextResponse.json(
+        {
+          error: `The preview must be a PNG of at most ${PLAN_PREVIEW_MAX_SIDE} by ${PLAN_PREVIEW_MAX_SIDE} pixels.`,
+        },
+        { status: 415 },
+      );
+    }
+
+    if (!(await checkRateLimit(`user:${sessionUser.id}`, "plan-preview", PREVIEWS_PER_HOUR, 60 * 60))) {
+      return NextResponse.json(
+        { error: "Too many preview uploads: try again in a little while." },
+        { status: 429 },
+      );
     }
 
     await ensureBucket();
