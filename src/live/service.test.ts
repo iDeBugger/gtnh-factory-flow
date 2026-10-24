@@ -897,7 +897,7 @@ describe("the live service", { timeout: 30_000 }, () => {
   });
 
   it("names signed-in players in the asker's game, by the names it sees there, and answers pings", async () => {
-    const { port } = await startService({ limits: { nearbyPerMinuteByAccount: 3 } });
+    const { port } = await startService({ limits: { nearbyPerMinuteByAccount: 4 } });
     const ann = await TestClient.open(port, { who: "ann", origin: null });
     const bob = await TestClient.open(port, { who: "bob", origin: null });
     const carol = await TestClient.open(port, { who: "carol", origin: null });
@@ -912,15 +912,28 @@ describe("the live service", { timeout: 30_000 }, () => {
       return { status: response.status, body: (await response.json()) as unknown };
     };
     // Only who the asker's game shows it: the server's hash alone lists nobody.
+    // Each account comes with the name it claimed.
     expect(await nearby("bobthebuilder,Someone_Else")).toEqual({
       status: 200,
-      body: { accounts: [{ id: users.bob!.id, username: "bob" }] },
+      body: { accounts: [{ id: users.bob!.id, username: "bob", mcName: "bobthebuilder" }] },
     });
     expect(await nearby()).toEqual({ status: 200, body: { accounts: [] } });
     // A name on another server is not there.
     const elsewhere = await TestClient.open(port, { who: "carol", origin: null });
     await elsewhere.hello("game", { server: "other-world", mcName: "Elsewhere" });
     expect((await nearby("Elsewhere")).body).toEqual({ accounts: [] });
+    // A name claimed by two accounts (nothing here can tell which is real)
+    // answers both, never silently one: the game shows them side by side.
+    const claimant = await TestClient.open(port, { who: "carol", origin: null });
+    await claimant.hello("game", { server: "same-world", mcName: "BobTheBuilder" });
+    const claimed = (await nearby("BobTheBuilder")).body as { accounts: unknown[] };
+    expect(claimed.accounts).toHaveLength(2);
+    expect(claimed.accounts).toEqual(
+      expect.arrayContaining([
+        { id: users.bob!.id, username: "bob", mcName: "bobthebuilder" },
+        { id: users.carol!.id, username: "carol", mcName: "bobthebuilder" },
+      ]),
+    );
     expect((await nearby("BobTheBuilder")).status).toBe(429);
     expect((await fetch(`http://127.0.0.1:${port}/live/nearby`)).status).toBe(401);
     ann.send({ t: "ping" });

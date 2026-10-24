@@ -158,15 +158,19 @@ still opens a new one.
 
 ### Nearby players (for the game's share helper)
 
-`GET /live/nearby?names=<name>,<name>,...` with the session cookie answers `{ accounts: [{ id, username }] }`: the
-signed-in accounts, other than the asker, that are connected from a game (`hello` with `client: "game"`) with the
+`GET /live/nearby?names=<name>,<name>,...` with the session cookie answers `{ accounts: [{ id, username, mcName }] }`:
+the signed-in accounts, other than the asker, that are connected from a game (`hello` with `client: "game"`) with the
 same `game.server` hash as one of the asker's own game connections **and** whose `game.mcName` is one of `names`.
+`mcName` (lower case) is the name that account claimed, an addition to the contract's `{ id, username }`.
 
 - `names` are the Minecraft names the asker's game shows it (its tab list), comma separated, `[A-Za-z0-9_]{1,32}` each,
   compared without case; at most 100 are read. Without `names` the answer is empty. The game must send its own
   player's name as `game.mcName` in `hello` to be found.
 - So the server hash alone (an unsalted SHA-256 of the address, which anyone can compute) lists nobody: the asker
   must already see a player in the game to learn their account.
+- Neither the hash nor the name is checked here (nothing in this repo can): a name two accounts claim answers both,
+  each with its `mcName` and `username`, for the game to show side by side. Dropping either would let a claimant
+  hide the real player. The durable fix is attestation on the game's side.
 - 20 asks a minute per account and 60 per address; more answer `429`. No session: `401`.
 
 ## The editor

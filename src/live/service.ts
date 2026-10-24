@@ -95,6 +95,8 @@ export const SERVICE_LIMITS = {
 
 /** Minecraft names, as the game sends its player's and the names it sees. */
 const MC_NAME = /^[A-Za-z0-9_]{1,32}$/;
+/** A `/live/nearby` answer: the contract's account, plus the Minecraft name it claimed (lower case). */
+type NearbyAccount = LiveMember & { mcName: string };
 /** How many names one `/live/nearby` ask may carry. */
 const NEARBY_NAMES = 100;
 
@@ -555,15 +557,20 @@ export class LiveService {
    * game connections, and playing under one of `names`, the Minecraft names
    * the asker's game shows it (its tab list). Knowing a server's address is
    * not enough to list who is on it: the asker must already see them there.
+   *
+   * Each account comes with the name it claimed: nothing here can check a
+   * server hash or a Minecraft name, so two accounts claiming one name are
+   * both answered, each with its name and username, for the game to show side
+   * by side. Dropping either would let a claimant hide the real player.
    */
-  private nearby(userId: string, names: ReadonlySet<string>): LiveMember[] {
+  private nearby(userId: string, names: ReadonlySet<string>): NearbyAccount[] {
     const servers = new Set<string>();
     for (const conn of this.byUser.get(userId) ?? []) {
       if (conn.gameServer) {
         servers.add(conn.gameServer);
       }
     }
-    const found = new Map<string, LiveMember>();
+    const found = new Map<string, NearbyAccount>();
     if (servers.size === 0 || names.size === 0) {
       return [];
     }
@@ -575,7 +582,7 @@ export class LiveService {
         conn.mcName &&
         names.has(conn.mcName)
       ) {
-        found.set(conn.userId, { id: conn.userId, username: conn.username });
+        found.set(conn.userId, { id: conn.userId, username: conn.username, mcName: conn.mcName });
       }
     }
     return [...found.values()];
