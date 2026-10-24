@@ -1,0 +1,74 @@
+import { mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { serveDatasetFile } from "./dataset-static-file";
+
+const BYTES = "0123456789abcdefghij";
+let dir = "";
+let filePath = "";
+
+beforeAll(async () => {
+  dir = await mkdtemp(path.join(os.tmpdir(), "gtnh-dataset-file-"));
+  filePath = path.join(dir, "shard-0000.json.gz");
+  await writeFile(filePath, BYTES);
+  await utimes(filePath, new Date("2026-01-02T03:04:05Z"), new Date("2026-01-02T03:04:05Z"));
+});
+
+afterAll(async () => {
+  await rm(dir, { recursive: true, force: true });
+});
+
+const serve = (headers: Record<string, string> = {}) =>
+  serveDatasetFile(filePath, {
+    cacheControl: "public, max-age=86400",
+    contentType: "application/gzip",
+    requestHeaders: new Headers(headers),
+  });
+
+describe("a served dataset file", () => {
+  it("carries its length, a validator and the cache policy", async () => {
+    const response = await serve();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Length")).toBe("20");
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=86400");
+    expect(response.headers.get("Accept-Ranges")).toBe("bytes");
+    expect(response.headers.get("ETag")).toMatch(/^"[0-9a-f]+-[0-9a-f]+"$/);
+    expect(response.headers.get("Last-Modified")).toBe("Fri, 02 Jan 2026 03:04:05 GMT");
+    expect(await response.text()).toBe(BYTES);
+  });
+
+  it("answers 304 to the validator it gave, so a revalidation costs no bytes", async () => {
+    const etag = (await serve()).headers.get("ETag") ?? "";
+    const fresh = await serve({ "if-none-match": etag });
+    expect(fresh.status).toBe(304);
+    expect(fresh.headers.get("ETag")).toBe(etag);
+    expect((await serve({ "if-none-match": '"other"' })).status).toBe(200);
+  });
+
+  it("serves one byte range, and the whole file when the range is not for this version", async () => {
+    const part = await serve({ range: "bytes=2-5" });
+    expect(part.status).toBe(206);
+    expect(part.headers.get("Content-Range")).toBe("bytes 2-5/20");
+    expect(part.headers.get("Content-Length")).toBe("4");
+    expect(await part.text()).toBe("2345");
+
+    const tail = await serve({ range: "bytes=-3" });
+    expect(tail.status).toBe(206);
+    expect(await tail.text()).toBe("hij");
+
+    const open = await serve({ range: "bytes=15-" });
+    expect(await open.text()).toBe("fghij");
+
+    const stale = await serve({ range: "bytes=2-5", "if-range": '"other"' });
+    expect(stale.status).toBe(200);
+    expect(await stale.text()).toBe(BYTES);
+
+    const beyond = await serve({ range: "bytes=30-40" });
+    expect(beyond.status).toBe(416);
+    expect(beyond.headers.get("Content-Range")).toBe("bytes */20");
+
+    expect((await serve({ range: "bytes=1-2,4-5" })).status).toBe(200);
+    expect((await serve({ range: "lines=1-2" })).status).toBe(200);
+  });
+});
