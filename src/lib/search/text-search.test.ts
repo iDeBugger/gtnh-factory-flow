@@ -95,6 +95,36 @@ describe("which result comes first", () => {
   });
 });
 
+describe("how much of a query is searched", () => {
+  const words = (value: string) => parseSearchQuery(value).terms.map((term) => term.raw);
+
+  it("keeps at most six words of a query", () => {
+    expect(words("iron steel plate ingot dust gear rod wire")).toEqual([
+      "iron",
+      "steel",
+      "plate",
+      "ingot",
+      "dust",
+      "gear",
+    ]);
+  });
+
+  it("keeps at most two words too short to narrow the search", () => {
+    // A word under three characters cannot use the trigram index, so each one
+    // costs a walk over every recipe. Two are enough for "lv hv".
+    expect(words("iron aa ab ac ad")).toEqual(["iron", "aa", "ab"]);
+    expect(words("ir pl zz")).toEqual(["ir", "pl"]);
+  });
+
+  it("keeps a tier word", () => {
+    expect(words("lv motor")).toEqual(["lv", "motor"]);
+  });
+
+  it("keeps the whole line as typed for the phrase bonus", () => {
+    expect(parseSearchQuery("iron aa ab ac ad").text).toBe("iron aa ab ac ad");
+  });
+});
+
 describe("typos", () => {
   const vocabulary = buildSearchVocabulary([
     "Steel Ingot",

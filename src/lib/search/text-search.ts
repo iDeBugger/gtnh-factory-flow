@@ -163,13 +163,43 @@ export function singularizeSearchToken(token: string): string | undefined {
   return token.slice(0, -1);
 }
 
+/** Words of a query past this many are ignored. */
+export const MAX_SEARCH_TERMS = 6;
+/**
+ * How many words too short to narrow the search (under MIN_INDEXABLE_LENGTH)
+ * a query may keep. A word that short cannot use the trigram index, so every
+ * phase walks the whole corpus for it: two such words cost about 250 ms on
+ * the 2.9 recipes, and a query of 676 of them held the server for 82 s. Two
+ * are kept because "lv motor" and "lv hv" are real queries.
+ */
+export const MAX_SHORT_SEARCH_TERMS = 2;
+
 export function parseSearchQuery(value: string): SearchQuery {
   const text = normalizeSearchText(value);
   return {
+    // `text` keeps the whole line: only the words that are matched are capped.
     text,
-    terms: splitSearchTokens(text).map(toSearchTerm),
+    terms: boundSearchTokens(splitSearchTokens(text)).map(toSearchTerm),
     corrections: [],
   };
+}
+
+function boundSearchTokens(tokens: string[]): string[] {
+  const kept: string[] = [];
+  let short = 0;
+  for (const token of tokens) {
+    if (kept.length >= MAX_SEARCH_TERMS) {
+      break;
+    }
+    if (token.length < MIN_INDEXABLE_LENGTH) {
+      if (short >= MAX_SHORT_SEARCH_TERMS) {
+        continue;
+      }
+      short += 1;
+    }
+    kept.push(token);
+  }
+  return kept;
 }
 
 function toSearchTerm(raw: string): SearchTerm {
