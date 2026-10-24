@@ -238,6 +238,8 @@ LIVE_ALLOWED_ORIGINS=https://new.gtnhplanner.com,https://gtnhplanner.com
 # between them (default 64 MB). Resident memory is about four times the plan bytes plus
 # about 120 MB: give the unit MemoryMax of at least 4 x LIVE_MAX_PLAN_BYTES + 150 MB and a
 # heap (NODE_OPTIONS=--max-old-space-size) about 100 MB under it. A 400 MB unit takes 32 MB.
+# The budget is checked as rooms open; rooms already open can grow through edits (up to
+# 3 MB each, 8 per account on live sockets) past it until the next open, so leave that margin.
 # LIVE_MAX_ROOMS=500
 # LIVE_MAX_PLAN_BYTES=67108864
 EOF

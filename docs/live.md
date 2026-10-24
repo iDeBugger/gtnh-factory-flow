@@ -74,8 +74,10 @@ effect within 30 s, dropping anyone no longer shared.
 - A room holding more than 8 MB of journalled batches the database has not taken refuses more as `rate` until a
   flush gets through.
 - At most 8 plans open per account (across its sockets) and 500 in the service (`LIVE_MAX_ROOMS`), holding at most
-  64 MB of plan JSON between them (`LIVE_MAX_PLAN_BYTES`; resident memory is about four times that plus the
-  baseline, so the unit's memory cap and heap follow from it). A full service closes a plan nobody is in and refuses
+  64 MB of plan JSON between them (`LIVE_MAX_PLAN_BYTES`; a room still opening counts as a whole 3 MB plan until it
+  is read). The budget is checked when a room opens: rooms already open can still grow through edits, up to 3 MB
+  each, until the next open notices. Resident memory is about four times the budget plus that growth plus the
+  baseline, so the unit's memory cap and heap follow from it. A full service closes a plan nobody is in and refuses
   the join as `rate`; the website asks again a few seconds later.
 - The rooms an account opened and left to linger count against it too: past 8, opening another closes the oldest of
   them. An account opens at most 30 plans a minute (a join of a plan that is not open, its membership query
