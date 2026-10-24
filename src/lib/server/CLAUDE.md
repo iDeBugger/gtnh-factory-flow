@@ -137,7 +137,10 @@ The instance is small and has gone down under load. Rules:
   before the rate limit's two queries; the plan schema check follows.
 - Read community plan jsonb about 10 rows per statement, or it hits the statement timeout.
 - `community_events` keeps 31 days (`EVENTS_KEPT_DAYS`; the longest window read is 30): `recordEvents` deletes older
-  rows once an hour per process, and a failed prune never fails a save. Exam: `community-events.test.ts`.
+  rows once an hour per process, oldest first in at most `PRUNE_BATCHES` batches of `PRUNE_BATCH_ROWS` (so a backlog
+  never holds a request past the statement timeout; the rest waits an hour), over the `created_at` index (migration
+  `2026-10-25-community-events-created-at.sql`, mirrored in `schema.sql`), and a failed prune never fails a save. Exam:
+  `community-events.test.ts`.
 - The dashboard (restarts, disk IO, memory) needs the repo owner; there is no management
   token here.
 

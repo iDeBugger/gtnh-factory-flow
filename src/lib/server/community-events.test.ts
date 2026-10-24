@@ -1,7 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { EVENTS_KEPT_DAYS, getCommunityDb, recordEvents } from "./community";
+import {
+  EVENTS_KEPT_DAYS,
+  forgetEventPrune,
+  getCommunityDb,
+  PRUNE_BATCH_ROWS,
+  PRUNE_BATCHES,
+  recordEvents,
+} from "./community";
 
 /**
  * The rate-limit events table against the local database: a record prunes
@@ -48,4 +55,30 @@ describe("recording events", () => {
     await recordEvents([{ actorKey: "later", action: "probe" }]);
     expect(await actorsRecorded()).toEqual(["later", "now", "old-again", "recent"]);
   });
+
+  it("prunes a backlog in bounded batches, the oldest first, and leaves the rest for the next hour", async () => {
+    await local.db.exec("delete from community_events");
+    const backlog = PRUNE_BATCH_ROWS * PRUNE_BATCHES + 7;
+    const { error } = await getCommunityDb()
+      .from("community_events")
+      .insert(
+        Array.from({ length: backlog }, (_, i) => ({
+          actor_key: `stale-${String(i).padStart(5, "0")}`,
+          action: "probe",
+          // The youngest of the backlog are the seven that must survive.
+          created_at: new Date(Date.now() - (60 + backlog - i) * 86_400_000).toISOString(),
+        })),
+      );
+    expect(error).toBeNull();
+    forgetEventPrune();
+    await recordEvents([{ actorKey: "now", action: "probe" }]);
+    const left = await actorsRecorded();
+    expect(left).toHaveLength(8);
+    expect(left.slice(-7)).toEqual(
+      Array.from({ length: 7 }, (_, i) => `stale-${String(backlog - 7 + i).padStart(5, "0")}`),
+    );
+    forgetEventPrune();
+    await recordEvents([{ actorKey: "later", action: "probe" }]);
+    expect(await actorsRecorded()).toEqual(["later", "now"]);
+  }, 60_000);
 });

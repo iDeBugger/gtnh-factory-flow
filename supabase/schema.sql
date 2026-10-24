@@ -288,3 +288,9 @@ alter table library_design_members enable row level security;
 -- supabase/migrations/2026-10-24-session-epoch.sql, which explains it.
 -- Additive and idempotent.
 alter table community_users add column if not exists session_epoch bigint not null default 0;
+
+-- ---------------------------------------------------------------------------
+-- EVENTS PRUNE. The same SQL as
+-- supabase/migrations/2026-10-25-community-events-created-at.sql, which
+-- explains it. Additive and idempotent.
+create index if not exists community_events_created_at_idx on community_events (created_at);

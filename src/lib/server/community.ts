@@ -510,12 +510,22 @@ export async function recordEvents(events: { actorKey: string; action: string }[
 /**
  * Nothing reads an event older than the longest window (30 days, the same
  * words check), so older rows only cost the small instance disk and its IO
- * budget. Pruned once an hour per process, after a record; a prune never
- * fails a save.
+ * budget. Pruned once an hour per process, after a record, in bounded
+ * batches (the oldest rows first, by the `created_at` index), so a backlog
+ * from before the prune existed can never hold one request past the
+ * statement timeout; what a prune does not reach waits for the next hour. A
+ * prune never fails a save.
  */
 export const EVENTS_KEPT_DAYS = 31;
+export const PRUNE_BATCH_ROWS = 500;
+export const PRUNE_BATCHES = 4;
 const PRUNE_EVERY_MS = 60 * 60_000;
 let lastPruneAt = 0;
+
+/** For tests: the next record prunes again. */
+export function forgetEventPrune(): void {
+  lastPruneAt = 0;
+}
 
 async function pruneEvents(): Promise<void> {
   const now = Date.now();
@@ -523,11 +533,26 @@ async function pruneEvents(): Promise<void> {
     return;
   }
   lastPruneAt = now;
+  const before = new Date(now - EVENTS_KEPT_DAYS * 86_400_000).toISOString();
   try {
-    await getCommunityDb()
-      .from("community_events")
-      .delete()
-      .lt("created_at", new Date(now - EVENTS_KEPT_DAYS * 86_400_000).toISOString());
+    const db = getCommunityDb();
+    for (let batch = 0; batch < PRUNE_BATCHES; batch++) {
+      const { data } = await db
+        .from("community_events")
+        .select("id")
+        .lt("created_at", before)
+        .order("created_at", { ascending: true })
+        .limit(PRUNE_BATCH_ROWS)
+        .returns<Array<{ id: number }>>();
+      const ids = (data ?? []).map((row) => row.id);
+      if (ids.length === 0) {
+        return;
+      }
+      await db.from("community_events").delete().in("id", ids);
+      if (ids.length < PRUNE_BATCH_ROWS) {
+        return;
+      }
+    }
   } catch {
     // The rows stay until the next hour's prune.
   }
