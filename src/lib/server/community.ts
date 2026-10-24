@@ -225,6 +225,15 @@ export async function makeVoterKey(request: Request, deviceId: string): Promise<
   return saltedKey(user ? `user:${user.id}` : `device:${deviceId}`);
 }
 
+/**
+ * Anonymous votes one address may cast or switch on one post (or blueprint)
+ * in a day. The anonymous voter key is the browser's device id, which a
+ * script can make up freely, so without this one address casts a vote per
+ * made-up id. Accounts are keyed by account and exempt: a household behind
+ * one address can each vote signed in.
+ */
+export const VOTES_PER_ADDRESS_PER_PLAN_PER_DAY = 3;
+
 // ---------------------------------------------------------------------------
 // Dead-simple accounts: username + password, scrypt-hashed, with an HMAC-signed
 // session cookie (session.ts, shared with the live service). No email, no

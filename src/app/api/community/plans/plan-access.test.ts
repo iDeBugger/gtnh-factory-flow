@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
@@ -5,6 +6,7 @@ import { forgetSessionUsers, getCommunityDb, makeSessionToken, resetDbBreaker } 
 import { planWithAdditions } from "@/lib/model/__fixtures__/plan-additions";
 import { withModAndCommunityOn } from "@/test-support/mod-and-community";
 import * as list from "./route";
+import * as vote from "./[planId]/vote/route";
 
 /**
  * Who may do what to a community post, against the local database: posting,
@@ -60,6 +62,33 @@ function postBody(deviceId: string) {
   };
 }
 
+/** A post of the owner's, public or not, with a plan nothing here reads. */
+async function makePlan(name: string, isPublic: boolean): Promise<string> {
+  const { data, error } = await getCommunityDb()
+    .from("community_plans")
+    .insert({
+      user_id: users.owner!.id,
+      author_name: "owner",
+      name,
+      plan: { nodes: [] },
+      is_public: isPublic,
+      uploader_key: "test",
+    })
+    .select("id")
+    .single();
+  expect(error).toBeNull();
+  return (data as { id: string }).id;
+}
+
+async function planRow(planId: string): Promise<{ upvotes: number; downvotes: number; views: number }> {
+  const { data } = await getCommunityDb()
+    .from("community_plans")
+    .select("upvotes,downvotes,views")
+    .eq("id", planId)
+    .single();
+  return data as { upvotes: number; downvotes: number; views: number };
+}
+
 beforeAll(async () => {
   vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "plan-access-test-salt");
@@ -76,6 +105,56 @@ afterAll(async () => {
   vi.unstubAllEnvs();
   resetDbBreaker();
   forgetSessionUsers();
+});
+
+describe("voting on a post", () => {
+  withModAndCommunityOn();
+
+  const castVote = (planId: string, body: unknown, options: { who?: string; address?: string } = {}) =>
+    vote.POST(request("POST", `/api/community/plans/${planId}/vote`, { body, ...options }), params({ planId }));
+
+  it("refuses a stranger's vote on an unpublished plan, as for a plan that does not exist", async () => {
+    const planId = await makePlan("Private", false);
+    const anonymous = await castVote(planId, { deviceId: "device-1", value: -1 });
+    expect(anonymous.status).toBe(404);
+    expect(await anonymous.json()).toEqual({ error: "Plan not found." });
+    const signedIn = await castVote(planId, { deviceId: "device-1", value: -1 }, { who: "stranger" });
+    expect(signedIn.status).toBe(404);
+    expect((await planRow(planId)).downvotes).toBe(0);
+
+    const missing = await castVote(randomUUID(), { deviceId: "device-1", value: 1 });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ error: "Plan not found." });
+  });
+
+  it("lets the owner vote on their own unpublished post, and anyone once it is public", async () => {
+    const planId = await makePlan("Mine", false);
+    const owner = await castVote(planId, { deviceId: "device-owner", value: 1 }, { who: "owner" });
+    expect(owner.status).toBe(200);
+    expect(await owner.json()).toMatchObject({ upvotes: 1, downvotes: 0, myVote: 1 });
+
+    await getCommunityDb().from("community_plans").update({ is_public: true }).eq("id", planId);
+    const anyone = await castVote(planId, { deviceId: "device-2", value: -1 });
+    expect(anyone.status).toBe(200);
+    expect(await anyone.json()).toMatchObject({ upvotes: 1, downvotes: 1, score: 0, myVote: -1 });
+  });
+
+  it("gives one address three anonymous votes a day on one post, whatever device ids it sends", async () => {
+    const planId = await makePlan("Popular", true);
+    const address = "203.0.113.77";
+    for (let i = 0; i < 3; i++) {
+      const cast = await castVote(planId, { deviceId: `made-up-${i}`, value: 1 }, { address });
+      expect(cast.status, `vote ${i + 1}`).toBe(200);
+    }
+    const fourth = await castVote(planId, { deviceId: "made-up-3", value: 1 }, { address });
+    expect(fourth.status).toBe(429);
+    expect(await fourth.json()).toEqual({ error: "Voting too fast. Slow down." });
+    expect((await planRow(planId)).upvotes).toBe(3);
+    // Another address, and a signed-in account behind the same address, still vote.
+    expect((await castVote(planId, { deviceId: "made-up-4", value: 1 }, { address: "203.0.113.78" })).status).toBe(200);
+    expect((await castVote(planId, { deviceId: "x", value: 1 }, { address, who: "stranger" })).status).toBe(200);
+    expect((await planRow(planId)).upvotes).toBe(5);
+  });
 });
 
 describe("posting to the community", () => {

@@ -4,10 +4,15 @@ import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate"
 import type { CommunityVoteResponse } from "@/lib/community/types";
 import {
   checkRateLimit,
+  clientAddress,
   getCommunityDb,
+  getSessionUser,
+  isAdminRequest,
   isCommunityConfigured,
   makeActorKey,
   makeVoterKey,
+  saltedKey,
+  VOTES_PER_ADDRESS_PER_PLAN_PER_DAY,
 } from "@/lib/server/community";
 import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
 
@@ -17,7 +22,9 @@ export const dynamic = "force-dynamic";
 /**
  * Casts, switches, or (when re-sending the same value) retracts a vote.
  * Votes are keyed by account or device id (see makeVoterKey); the IP only
- * feeds the rate limit.
+ * feeds the rate limits. The post must exist and be public, unless the
+ * voter owns it: an unpublished post is nobody else's to score, and the
+ * answer for one must read the same as for a post that does not exist.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ planId: string }> }) {
   if (!isModAndCommunityOn()) {
@@ -40,9 +47,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
     if (!(await checkRateLimit(actorKey, "vote", 60, 60 * 10))) {
       return NextResponse.json({ error: "Voting too fast. Slow down." }, { status: 429 });
     }
-    const voterKey = await makeVoterKey(request, deviceId);
 
     const db = getCommunityDb();
+    const sessionUser = await getSessionUser(request);
+    const { data: target, error: targetError } = await db
+      .from("community_plans")
+      .select("id,is_public,user_id")
+      .eq("id", planId)
+      .maybeSingle<{ id: string; is_public: boolean | null; user_id: string | null }>();
+    if (targetError) {
+      return NextResponse.json({ error: "Voting failed." }, { status: 500 });
+    }
+    const mayVote =
+      target &&
+      (target.is_public !== false ||
+        target.user_id === sessionUser?.id ||
+        sessionUser?.is_admin ||
+        isAdminRequest(request));
+    if (!mayVote) {
+      return NextResponse.json({ error: "Plan not found." }, { status: 404 });
+    }
+
+    const voterKey = await makeVoterKey(request, deviceId);
     const { data: existing } = await db
       .from("community_votes")
       .select("value")
@@ -50,8 +76,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
       .eq("voter_key", voterKey)
       .maybeSingle();
 
+    // A cast or a switch from an anonymous voter counts against the address
+    // for this post; a retraction does not.
+    const retracting = Boolean(existing && existing.value === value);
+    if (!sessionUser && !retracting) {
+      const perPlan = `votes:address:${saltedKey(clientAddress(request))}:${planId}`;
+      if (!(await checkRateLimit(perPlan, "vote-cast", VOTES_PER_ADDRESS_PER_PLAN_PER_DAY, 24 * 60 * 60))) {
+        return NextResponse.json({ error: "Voting too fast. Slow down." }, { status: 429 });
+      }
+    }
+
     let myVote: 1 | -1 | undefined;
-    if (existing && existing.value === value) {
+    if (retracting) {
       await db.from("community_votes").delete().eq("plan_id", planId).eq("voter_key", voterKey);
       myVote = undefined;
     } else {
@@ -95,9 +131,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
     };
     return NextResponse.json(response);
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Voting failed." },
-      { status: 500 },
-    );
+    // A fixed sentence: the database's own words would say whether the id exists.
+    console.error("vote failed", error);
+    return NextResponse.json({ error: "Voting failed." }, { status: 500 });
   }
 }

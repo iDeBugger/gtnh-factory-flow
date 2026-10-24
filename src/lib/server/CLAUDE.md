@@ -123,8 +123,10 @@ The instance is small and has gone down under load. Rules:
   signed-in write is keyed `user:<id>` (the community plan POST: 10 an hour per account). A device id in a key is a
   fresh count per made-up id. Board images (`image-upload-guard.ts`, open to anonymous players) are 30 an hour and 60
   a day per address and 120 an hour and 400 a day for the whole site, counted after the size and magic-byte checks so
-  junk spends no share. Exam: `community.test.ts`, `app/api/community/images/route.test.ts`,
-  `app/api/community/plans/plan-access.test.ts`.
+  junk spends no share. A vote lands only on a post that exists and is public (or the voter's own), with the same
+  404 either way and a fixed 500 sentence, so the route is no oracle for ids; an anonymous address casts or switches
+  at most 3 votes a day on one post or blueprint (`VOTES_PER_ADDRESS_PER_PLAN_PER_DAY`; accounts are exempt).
+  Exam: `community.test.ts`, `app/api/community/images/route.test.ts`, `app/api/community/plans/plan-access.test.ts`.
 - Password derivations run on the threadpool, two at a time with a queue of 32 (`KDF_CONCURRENCY`, `KDF_QUEUE_MAX`):
   the dataset's shard reads share the pool's four threads, so a sign-in flood may never hold them all. Past the
   queue the check throws `PasswordCheckBusyError` and sign-in and sign-up answer 429 "Sign-in is busy. Try again in

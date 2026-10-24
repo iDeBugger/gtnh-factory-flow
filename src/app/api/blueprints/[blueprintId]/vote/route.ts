@@ -4,10 +4,14 @@ import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate"
 import type { BlueprintVoteResponse } from "@/lib/blueprints/types";
 import {
   checkRateLimit,
+  clientAddress,
   getCommunityDb,
+  getSessionUser,
   isCommunityConfigured,
   makeActorKey,
   makeVoterKey,
+  saltedKey,
+  VOTES_PER_ADDRESS_PER_PLAN_PER_DAY,
 } from "@/lib/server/community";
 import {
   blueprintStorageErrorMessage,
@@ -19,8 +23,10 @@ export const dynamic = "force-dynamic";
 /**
  * Casts, switches, or (when re-sending the same value) retracts a vote on a
  * PUBLIC blueprint. Keyed like plan votes (`makeVoterKey`: the signed-in
- * user, else the device id), rate-limited by the actor key. Counts are
- * recounted rather than incremented, so they are idempotent under races.
+ * user, else the device id), rate-limited by the actor key, and an anonymous
+ * address gets a few casts per blueprint a day (the plan vote's rule, so a
+ * made-up device id is not a fresh vote). Counts are recounted rather than
+ * incremented, so they are idempotent under races.
  */
 export async function POST(
   request: Request,
@@ -71,8 +77,16 @@ export async function POST(
       .eq("voter_key", voterKey)
       .maybeSingle();
 
+    const retracting = Boolean(existing && existing.value === value);
+    if (!retracting && !(await getSessionUser(request))) {
+      const perBlueprint = `votes:address:${saltedKey(clientAddress(request))}:${blueprintId}`;
+      if (!(await checkRateLimit(perBlueprint, "vote-cast", VOTES_PER_ADDRESS_PER_PLAN_PER_DAY, 24 * 60 * 60))) {
+        return NextResponse.json({ error: "Voting too fast. Slow down." }, { status: 429 });
+      }
+    }
+
     let myVote: 1 | -1 | undefined;
-    if (existing && existing.value === value) {
+    if (retracting) {
       await db
         .from("blueprint_votes")
         .delete()
@@ -118,9 +132,8 @@ export async function POST(
     };
     return NextResponse.json(response);
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Voting failed." },
-      { status: 500 },
-    );
+    // A fixed sentence: the database's own words would say whether the id exists.
+    console.error("blueprint vote failed", error);
+    return NextResponse.json({ error: "Voting failed." }, { status: 500 });
   }
 }
