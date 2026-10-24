@@ -3,6 +3,12 @@ import type { NextConfig } from "next";
 const datasetBackendUrl = process.env.GTNH_DATASET_BACKEND_URL?.replace(/\/+$/, "");
 
 const nextConfig: NextConfig = {
+  // Always defined at build, so `process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY` is inlined in the browser AND the
+  // server bundles as the build's value (unset at build inlines ""). The server then compares it with the
+  // running process's (deployment-features.ts), and a build and a unit that disagree leave the routes off.
+  env: {
+    NEXT_PUBLIC_MOD_AND_COMMUNITY: process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY ?? "",
+  },
   outputFileTracingRoot: process.cwd(),
   turbopack: {
     root: process.cwd(),

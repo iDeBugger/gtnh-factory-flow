@@ -198,7 +198,7 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
           label={pictures ? newPlanVersion : `New plans: ${gameVersionLabel(newPlanVersion)}`}
           ariaLabel={`New plans: ${gameVersionLabel(newPlanVersion)}`}
           tip={`New plans: ${gameVersionLabel(newPlanVersion)}`}
-          tipSub="The GTNH version a new plan is made for. Open plans keep their own."
+          tipSub="The GTNH version a new plan is made for. Open plans keep their own. A recipe picked on Welcome opens on the version you browsed it on."
           open={menu?.kind === "version"}
           onClick={(event) => openMenuFrom("version", event)}
           menuAnchor

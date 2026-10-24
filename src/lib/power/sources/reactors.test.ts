@@ -199,7 +199,10 @@ describe("bartworks HTGR and solar panels by version", () => {
     const warnings = warningsFor("htgr", KUBATECH_HTGR_SETTINGS, "2.8.1");
     // A stored pebble the card reads no fuel from is named with the fuel it burns (a conversion carries the
     // material; this card was never converted).
-    expect(warnings).toEqual(["Not in GTNH 2.8.1: Uranium-235. Using Thorium.", "Not in GTNH 2.8.1: Pebble fill."]);
+    expect(warnings).toEqual([
+      "Not in GTNH 2.8.1: Uranium-235. Using Thorium.",
+      "Not in GTNH 2.8.1: Pebble fill. Using Pebbles kept 720,000.",
+    ]);
     // The kubatech ball count is not read as a pebble count: the card runs its own default.
     const m = model("htgr", KUBATECH_HTGR_SETTINGS, "2.8.1");
     expect(perSecond(m.inputs, "TRISO pebble (Thorium)")).toBe(10);

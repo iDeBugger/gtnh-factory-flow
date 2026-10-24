@@ -99,6 +99,13 @@ The instance is small and has gone down under load. Rules:
   `/download`, and another account's blueprint by id) and `/community` answer 404 (`modAndCommunityOffResponse`);
   sitemap, llms.txt, robots and the `?plan=` metadata say nothing of community plans. Accounts, board images, the
   library, account sync and an account's own blueprints stay. Read it at each call, never in a module constant.
+- The value must be the same at `next build` and in the site's and the live service's run-time environment; a change
+  needs a rebuild. `next.config.ts` always defines it (`env`, "" when unset), so the literal read is the build's value
+  in the browser and server bundles alike. The browser has only that. On the Next.js server `isModAndCommunityOn()`
+  also reads the process (`Reflect.get`, never inlined) and is on only when both say `on`: a build without it and a
+  unit that sets `on` (or the reverse) answers 404 on every mod and community route. The browser of a build made `on`
+  still shows the keys against those 404s, and the live service reads only its process, so it lets the game in
+  whenever its own unit says `on`.
 - Tests run with the default (off). A test of a gated feature calls `withModAndCommunityOn()`
   (`src/test-support/mod-and-community.ts`); a test of the off side calls `withModAndCommunityUnset()`.
 

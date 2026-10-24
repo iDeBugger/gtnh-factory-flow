@@ -67,7 +67,8 @@ import { leaveWelcomeTab } from "@/lib/welcome/welcome-tab";
 import type { GameVersion } from "@/lib/model/game-version";
 import type { EntryIcon, FactoryProject } from "@/lib/model/types";
 import { LOCAL_STORAGE_KEY, useFactoryStore } from "./factory-store";
-import { readNewPlanVersion } from "@/lib/datasets/new-plan-version";
+import { newPlanVersionNeedsManifest, readNewPlanVersion } from "@/lib/datasets/new-plan-version";
+import type { DatasetManifest } from "@/lib/datasets/types";
 import { liveDesignIdInThisTab } from "./live-edit-gate";
 import type { SharedPlanRef } from "@/lib/designs/design-library";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
@@ -1147,11 +1148,35 @@ async function backfillSummaryIcons(
  * as the first tab. The key is read, never cleared, so the original survives
  * if anything here goes wrong.
  */
+/** How long a first-run seed waits for the manifest to confirm a remembered version that is not the default. */
+const SEED_MANIFEST_WAIT_MS = 3000;
+
+/** The manifest once it is in, or undefined when it fails or takes longer than `timeoutMs`. */
+function manifestWithin(timeoutMs: number): Promise<DatasetManifest | undefined> {
+  const now = useFactoryStore.getState();
+  if (now.datasetManifest || now.datasetError) return Promise.resolve(now.datasetManifest);
+  return new Promise((resolve) => {
+    const done = (manifest: DatasetManifest | undefined) => {
+      window.clearTimeout(timer);
+      unsubscribe();
+      resolve(manifest);
+    };
+    const timer = window.setTimeout(() => done(undefined), timeoutMs);
+    const unsubscribe = useFactoryStore.subscribe((state) => {
+      if (state.datasetManifest || state.datasetError) done(state.datasetManifest);
+    });
+  });
+}
+
 async function seedFirstDesign(): Promise<DesignSummary> {
   const legacy = readLegacyProject();
+  // A remembered choice other than 2.9 needs the manifest to say this site serves it, so the seed waits for it
+  // (bounded); a device with no choice or 2.9 never waits.
+  const manifest =
+    useFactoryStore.getState().datasetManifest ??
+    (!legacy && newPlanVersionNeedsManifest() ? await manifestWithin(SEED_MANIFEST_WAIT_MS) : undefined);
   const record = createDesignRecord(
-    // The manifest is seldom in yet on a first run, so this is usually 2.9; a remembered choice it serves is kept.
-    legacy ?? createNewProject(readNewPlanVersion(useFactoryStore.getState().datasetManifest)),
+    legacy ?? createNewProject(readNewPlanVersion(manifest)),
     legacy?.name ?? UNTITLED_DESIGN_NAME,
   );
   await writeDesign(record);

@@ -3,6 +3,7 @@
 import { startLandingRefresh } from "@/lib/datasets/refresh-project-recipes";
 import { datasetServesPlan } from "@/lib/datasets/dataset-cache";
 import { gameVersionOfDataset, planGameVersion } from "@/lib/model/game-version";
+import { bootWaitsForPlans, writeOpenPlanVersion } from "@/lib/datasets/new-plan-version";
 import type { Recipe } from "@/lib/model/types";
 import { useDeviceSettings, writeDeviceSettings } from "@/lib/device-settings";
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -63,6 +64,24 @@ import { RecipeBrowser } from "./RecipeBrowser";
 import { FoldGlyph } from "./flow/clean/fold/FoldKey";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 
+/** Settled when this page's design hydration has run, whatever it did: a hydration that throws still frees the boot load. */
+let settleHydration: () => void = () => {};
+const hydrationSettled = new Promise<void>((resolve) => {
+  settleHydration = resolve;
+});
+
+/** Resolves once the stored plans have landed (or failed to), so the open plan is the player's own. */
+function designsHydrated(): Promise<void> {
+  if (useDesignStore.getState().isHydrated) return Promise.resolve();
+  let unsubscribe = () => {};
+  const landed = new Promise<void>((resolve) => {
+    unsubscribe = useDesignStore.subscribe((state) => {
+      if (state.isHydrated) resolve();
+    });
+  });
+  return Promise.race([landed, hydrationSettled]).finally(() => unsubscribe());
+}
+
 export function FactoryPlannerApp() {
   const project = useFactoryStore((state) => state.project);
   const lastResult = useFactoryStore((state) => state.lastResult);
@@ -116,6 +135,11 @@ export function FactoryPlannerApp() {
   useEffect(() => {
     void ensureDatasetFor(planVersion);
   }, [activeDesignId, ensureDatasetFor, planVersion]);
+  // The next boot's hint: the version of the plan open now, once it is a stored plan (not the empty starting one).
+  const designsHydratedFlag = useDesignStore((state) => state.isHydrated);
+  useEffect(() => {
+    if (designsHydratedFlag && activeDesignId) writeOpenPlanVersion(planVersion);
+  }, [activeDesignId, designsHydratedFlag, planVersion]);
   useBoardSoundEffects();
   const skipInitialSaveRef = useRef(true);
   const saveTimeoutRef = useRef<number | undefined>(undefined);
@@ -140,7 +164,9 @@ export function FactoryPlannerApp() {
     const cancelHydration = scheduleIdleWork(() => {
       hydrateResourceHistory(loadResourceHistory());
 
-      void hydrateDesigns()
+      const hydration = hydrateDesigns();
+      void hydration.then(settleHydration, settleHydration);
+      void hydration
         .then(async () => {
           try {
             // Own posts open as your design; everyone else's opens as a copy.
@@ -233,6 +259,15 @@ export function FactoryPlannerApp() {
 
         setDatasetManifest(manifest, DEFAULT_DATASET_MANIFEST_URL);
         // Boot loads the open plan's version; a version this site does not serve loads nothing.
+        // Before the stored plans are in, the open plan is the empty starting one (2.9). That is
+        // loaded at once unless this device points to another version (bootWaitsForPlans), so a
+        // 2.9 player's catalog never waits for the plans and a 2.8.1 player never downloads 2.9.
+        if (bootWaitsForPlans()) {
+          await designsHydrated();
+          if (cancelled) {
+            return;
+          }
+        }
         await useFactoryStore
           .getState()
           .ensureDatasetFor(planGameVersion(useFactoryStore.getState().project));

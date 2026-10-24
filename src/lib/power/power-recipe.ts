@@ -11,7 +11,7 @@ import type { FactoryNode, Recipe, RecipeInput, RecipeOutput } from "@/lib/model
 import { DEFAULT_GAME_VERSION, gameVersionLabel, type GameVersion } from "@/lib/model/game-version";
 import { resolvePowerResource } from "./planner-data";
 import { ABSENT_POWER_SOURCES, getPowerSource } from "./registry";
-import { powerReaderContext } from "./version-settings";
+import { powerReaderContext, standInSetting } from "./version-settings";
 import {
   buildPowerSettingsReader,
   type PowerFlowLine,
@@ -111,15 +111,30 @@ export function powerSettingWarnings(
     warnings.push(`Not in GTNH ${gameVersion}: ${stored}. Using ${optionLabel(settingId, used)}.`);
   }
   // Only 2.8.1's boilers merge two stored fuels into one select (2.9's liquid and solid).
-  for (const { settingId, used } of read.merged()) {
-    warnings.push(`GTNH ${gameVersion} boilers burn one fuel at a time. Using ${optionLabel(settingId, used)}.`);
+  // A stored fuel this version lacks is named too: "one at a time" alone would hide that it does not exist here.
+  for (const { settingId, absent, used } of read.merged()) {
+    const notHere = absent.length > 0 ? `Not in GTNH ${gameVersion}: ${absent.join(", ")}. ` : "";
+    warnings.push(`${notHere}GTNH ${gameVersion} boilers burn one fuel at a time. Using ${optionLabel(settingId, used)}.`);
   }
-  const labels = read
-    .unknownSettings()
-    .map((id) => [reference, ...others].flatMap((def) => def?.settings ?? []).find((setting) => setting.id === id)?.label)
-    .filter((label): label is string => Boolean(label));
-  if (labels.length > 0) {
-    warnings.push(`Not in GTNH ${gameVersion}: ${labels.join(", ")}.`);
+  // Each stored setting this card lacks is named with what the card reads in its place: the setting declared to
+  // stand in for it (the HTGR's Pebble fill for 2.8.1's Pebbles kept), else that it is not used.
+  const labelOf = (id: string) =>
+    [reference, ...others].flatMap((def) => def?.settings ?? []).find((setting) => setting.id === id)?.label;
+  const unused: string[] = [];
+  for (const id of read.unknownSettings()) {
+    const label = labelOf(id);
+    if (!label) continue;
+    const standIn = source.settings.find((setting) => setting.id === standInSetting(source.id, gameVersion, id));
+    if (standIn?.type === "number") {
+      warnings.push(
+        `Not in GTNH ${gameVersion}: ${label}. Using ${standIn.label} ${read.number(standIn.id).toLocaleString("en-US")}.`,
+      );
+    } else {
+      unused.push(label);
+    }
+  }
+  if (unused.length > 0) {
+    warnings.push(`Not in GTNH ${gameVersion}: ${unused.join(", ")}. Not used.`);
   }
   return warnings;
 }
@@ -142,9 +157,11 @@ export function buildPowerRecipe(
   const context = powerReaderContext(sourceId, gameVersion);
   const read = buildPowerSettingsReader(source, settings, gameVersion, context);
   const model = source.compute(read, gameVersion);
+  // The default version's card is the reference: it carries every setting a stored plan can name,
+  // and the other versions' cards (`context.others`) add the ones it lacks.
   const settingWarnings = powerSettingWarnings(
     source,
-    getPowerSource(sourceId, "2.9"),
+    getPowerSource(sourceId, DEFAULT_GAME_VERSION),
     read,
     gameVersion,
     context.others,

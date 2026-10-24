@@ -550,7 +550,9 @@ export function RecipeBrowser({ onLoadDatasetVersion }: RecipeBrowserProps) {
       // covered plan, so they are dropped.
       const welcomeCovered = readWelcomeTabState().active;
       if (welcomeCovered) {
-        // The new plan is on the version whose recipes the browser showed.
+        // The new plan is on the version whose recipes the browser showed, not the
+        // new-plan picker's: the picker's version may lack this recipe, and the
+        // picker's tip says so.
         const shown = currentState.datasetManifest?.versions.find(
           (version) => version.id === currentState.selectedDatasetVersionId,
         );

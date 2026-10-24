@@ -283,6 +283,23 @@ describe("Large turbine dynamo hatch", () => {
   };
   const carbon = { rotor: "Carbon", size: "Large" };
 
+  it("a multi-amp dynamo option names the hatch that gives it", () => {
+    const labels = (gameVersion: GameVersion) => {
+      const found = getPowerSource("large-steam-turbine", gameVersion)?.settings.find((s) => s.id === "dynamo");
+      return Object.fromEntries(found?.type === "select" ? found.options.map((option) => [option.key, option.label]) : []);
+    };
+    expect(labels("2.8.1")).toMatchObject({
+      LV: "LV, 32 EU/t",
+      "LV 2A": "LV 2A wireless, 64 EU/t",
+      "EV 4A": "EV 4A buffered, 8,192 EU/t",
+    });
+    expect(labels("2.9")).toMatchObject({
+      "MV 4A": "MV 4A buffered, 512 EU/t",
+      "EV 4A": "EV 4A TecTech or buffered, 8,192 EU/t",
+      "UEV 4A": "UEV 4A TecTech, 33.55M EU/t",
+    });
+  });
+
   for (const gameVersion of ["2.9", "2.8.1"] as const) {
     it(`large-sc-steam-turbine ${gameVersion} caps output at the dynamo and still drains the steam`, () => {
       // Carbon Large: 150 L/t of SC steam makes 187 EU/t; an MV dynamo passes 128.

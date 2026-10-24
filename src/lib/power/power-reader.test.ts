@@ -90,8 +90,19 @@ describe("power settings reader by game version", () => {
   });
 
   test("a stored setting missing in 2.8.1 is named on the card", () => {
-    expect(warningsFor(testSource, { pebble: "x" }, "2.8.1")).toContain("Not in GTNH 2.8.1: Pebble.");
+    expect(warningsFor(testSource, { pebble: "x" }, "2.8.1")).toContain("Not in GTNH 2.8.1: Pebble. Not used.");
     expect(warningsFor(testSource, { pebble: "x" }, "2.9")).toEqual([]);
+  });
+
+  test("a version-only number is named only for the setting declared to stand in for it", () => {
+    // 2.8.1's card has a number of its own, unrelated to the 2.9 toggle stored here: the toggle is not used.
+    const withOwnNumber = (gameVersion: GameVersion) => {
+      const base = testSource(gameVersion);
+      return gameVersion === "2.9"
+        ? base
+        : { ...base, settings: [...base.settings, { type: "number" as const, id: "own", label: "Own", min: 1, max: 9, step: 1, defaultValue: 3 }] };
+    };
+    expect(warningsFor(withOwnNumber, { pebble: "1" }, "2.8.1")).toEqual(["Not in GTNH 2.8.1: Pebble. Not used."]);
   });
 
   test("a stored id no version declares is not named", () => {
@@ -153,7 +164,9 @@ describe("power settings reader by game version", () => {
     const read = buildPowerSettingsReader(def, { liquidFuel: "Creosote Oil", solidFuel: "Coal" }, "2.8.1");
     expect(read.select("fuel")).toBe("Coal");
     expect(read.missing()).toEqual([]);
-    expect(read.merged()).toEqual([{ settingId: "fuel", stored: ["Creosote Oil", "Coal"], used: "Coal" }]);
+    expect(read.merged()).toEqual([
+      { settingId: "fuel", stored: ["Creosote Oil", "Coal"], absent: ["Creosote Oil"], used: "Coal" },
+    ]);
     expect(storedSelectValue(def.settings[0], { liquidFuel: "Creosote Oil", solidFuel: "Coal" })).toBe("Coal");
     expect(buildPowerSettingsReader(def, { liquidFuel: "Creosote Oil", solidFuel: "Coal" }, "2.9").select("fuel")).toBe("Coal");
   });
@@ -230,7 +243,7 @@ describe("power settings reader by game version", () => {
     });
     const merged = (values: Record<string, string>) => buildPowerSettingsReader(def, values, "2.8.1").merged();
     expect(merged({ liquidFuel: "Creosote Oil", solidFuel: "Coal" })).toEqual([
-      { settingId: "fuel", stored: ["Creosote Oil", "Coal"], used: "Creosote Oil" },
+      { settingId: "fuel", stored: ["Creosote Oil", "Coal"], absent: [], used: "Creosote Oil" },
     ]);
     expect(merged({ liquidFuel: "None", solidFuel: "Coal" })).toEqual([]);
     expect(merged({ fuel: "Coal", liquidFuel: "Creosote Oil", solidFuel: "Coal" })).toEqual([]);

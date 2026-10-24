@@ -180,6 +180,52 @@ describe("convertProjectToVersion", () => {
     expect(plan281).toEqual(before);
   });
 
+  test("a card marked going to 2.9 finds its recipe by id again when the copy is converted back to 2.8.1", async () => {
+    const { project: on29 } = await convertProjectToVersion(plan281, target29);
+    const { project: back, unconverted } = await convertProjectToVersion(on29, target281);
+    expect(unconverted).toEqual([]);
+    expect(back.gameVersion).toBe("2.8.1");
+    const card = back.nodes.find((n) => n.id === "n2")!;
+    expect(card.unconverted).toBeUndefined();
+    expect(card).toMatchObject({ recipeId: silicon281.id, solvePin: 3, coilTier: "kanthal" });
+    expect(back.recipes.find((r) => r.id === silicon281.id)?.durationTicks).toBe(80);
+    expect(back.edges).toEqual(plan281.edges);
+  });
+
+  test("a marked section the target still lacks keeps its earlier marker", async () => {
+    const { project: on29 } = await convertProjectToVersion(plan281, target29);
+    const { project: again, unconverted } = await convertProjectToVersion(on29, target29);
+    // Still marked, so still reported: the notice counts it.
+    expect(unconverted).toEqual([
+      { nodeId: "n2", section: 0, recipe: expect.objectContaining({ recipeId: silicon281.id, fromGameVersion: "2.8.1" }) },
+    ]);
+    expect(again.nodes.find((n) => n.id === "n2")?.unconverted).toMatchObject({
+      fromGameVersion: "2.8.1",
+      recipeId: silicon281.id,
+      recipeName: "Blast Furnace: Raw Silicon Ingot",
+    });
+    expect(again.recipes.some((r) => r.id === silicon281.id)).toBe(false);
+  });
+
+  test("a marked shared-machine section is found again by id on the way back", async () => {
+    // A second macerator recipe only 2.8.1 has, on the same machine as the card's first.
+    const onlyId = "oracle:gregtech:gt-recipe-macerator:only2810000";
+    const only281 = { ...dust(version281.id), id: onlyId, name: "Macerator: Gravel", inputs: [{ kind: "item" as const, id: "minecraft:gravel", amount: 1 }] };
+    const restore = [...(datasets.get(version281.id)?.values() ?? [])] as Recipe[];
+    install(version281.id, [...restore, only281]);
+    try {
+      const shared = plan("2.8.1", [dust(version281.id), only281], [node("s", dustId, { extraRecipes: [{ recipeId: onlyId }] })]);
+      const { project: on29, unconverted } = await convertProjectToVersion(shared, target29);
+      expect(unconverted).toEqual([{ nodeId: "s", section: 1, recipe: expect.objectContaining({ recipeId: onlyId }) }]);
+      const { project: back, unconverted: none } = await convertProjectToVersion(on29, target281);
+      expect(none).toEqual([]);
+      expect(back.nodes[0]?.extraRecipes).toEqual([{ recipeId: onlyId }]);
+      expect(back.recipes.map((r) => r.id).sort()).toEqual([dustId, onlyId].sort());
+    } finally {
+      install(version281.id, restore);
+    }
+  });
+
   test("matched by content gets the target id and body, with its overrides carried", async () => {
     // A plan holding a version-stamped id; the target lists the same recipe under its content id, slots reordered.
     const stampedId = "oracle:local-2.9.0-rc-2:gregtech:gt-recipe-mixer:1";
@@ -284,7 +330,10 @@ describe("convertProjectToVersion", () => {
       expect(bronze.settings).toMatchObject({ liquidFuel: "Fish Oil", solidFuel: "Coal" });
       expect(bronze.warnings).toContain("GTNH 2.8.1 boilers burn one fuel at a time. Using Fish Oil.");
       const titanium = await convertCard("large-titanium-boiler", { solidFuel: "Solid Super Fuel" }, "2.9");
-      expect(titanium.warnings).toContain("GTNH 2.8.1 boilers burn one fuel at a time. Using Solid Super Fuel.");
+      // Its implicit Ether has no 2.8.1 option: the line names it as well as the one fuel burned.
+      expect(titanium.warnings).toContain(
+        "Not in GTNH 2.8.1: Ether. GTNH 2.8.1 boilers burn one fuel at a time. Using Solid Super Fuel.",
+      );
     });
 
     test("a 2.8.1 boiler's one fuel lands on 2.9's liquid or solid select, the other set to None", async () => {
@@ -312,17 +361,24 @@ describe("convertProjectToVersion", () => {
       expect(thorium.settings).toEqual({ pebble: "Thorium" });
       expect(thorium.warnings).toEqual([]);
       expect(thorium.burns).toContain("TRISO Fuel (Thorium)");
+      // A material carried under another name keeps the source's choice beside it, and the card names the carry.
       const uranium = await convertCard("htgr", { fuel: "Uranium" }, "2.8.1");
-      expect(uranium.settings).toEqual({ pebble: "Uranium-235" });
-      expect(uranium.warnings).toEqual([]);
-      expect((await convertCard("htgr", { pebble: "Uranium-235" }, "2.9")).settings).toEqual({ fuel: "Uranium" });
+      expect(uranium.settings).toEqual({ pebble: "Uranium-235", fuel: "Uranium" });
+      expect(uranium.warnings).toEqual(["Not in GTNH 2.9: Uranium. Using Uranium-235."]);
+      const back = await convertCard("htgr", { pebble: "Uranium-235" }, "2.9");
+      expect(back.settings).toEqual({ fuel: "Uranium", pebble: "Uranium-235" });
+      expect(back.warnings).toEqual(["Not in GTNH 2.8.1: Uranium-235. Using Uranium."]);
+      // Converted back to the card it came from, the carry is undone with no line.
+      const roundTrip = await convertCard("htgr", uranium.settings, "2.9");
+      expect(roundTrip.settings).toEqual({ fuel: "Uranium" });
+      expect(roundTrip.warnings).toEqual([]);
       expect((await convertCard("htgr", { pebble: "Thorium" }, "2.9")).warnings).toEqual([]);
       // 2.8.1's reactor has no Glowstone or Silver fuel: the card says what it burns instead.
       const glowstone = await convertCard("htgr", undefined, "2.9");
       expect(glowstone.warnings).toEqual(["Not in GTNH 2.8.1: Glowstone. Using Thorium."]);
       // A pebble count 2.9's reactor has no setting for is named, not silently replaced.
       expect((await convertCard("htgr", { fuel: "Thorium", pebbles: "100000" }, "2.8.1")).warnings).toEqual([
-        "Not in GTNH 2.9: Pebbles kept.",
+        "Not in GTNH 2.9: Pebbles kept. Using Pebble fill 10,000.",
       ]);
     });
 

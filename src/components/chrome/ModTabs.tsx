@@ -365,7 +365,7 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
           ? [
               {
                 label: `New plans: ${gameVersionLabel(newPlanVersion)}`,
-                tip: "The GTNH version a new plan is made for",
+                tip: "The GTNH version a new plan is made for. A recipe picked on Welcome opens on the version you browsed it on.",
                 onSelect: () => setMenu({ kind: "version", anchor: m.anchor }),
               } satisfies MenuEntry,
             ]

@@ -120,6 +120,34 @@ export async function matchRecipesToVersion(
   return { bodies, unmatched };
 }
 
+/**
+ * The target's bodies for sections marked on an earlier conversion (their recipe is not in the plan), by the
+ * marker's recipe id alone: a marked card has no body to match by content. A miss, or a fetch that fails, keeps
+ * the marker as it is.
+ */
+async function findMarkedRecipes(
+  nodes: FactoryNode[],
+  inPlan: Map<string, Recipe>,
+  target: ConversionTarget,
+): Promise<Map<string, Recipe>> {
+  const ids = new Set<string>();
+  for (const node of nodes) {
+    if (node.unconverted && !inPlan.has(node.recipeId)) ids.add(node.recipeId);
+    for (const extra of node.extraRecipes ?? []) {
+      if (extra.unconverted && !inPlan.has(extra.recipeId)) ids.add(extra.recipeId);
+    }
+  }
+  const found = new Map<string, Recipe>();
+  const asked = [...ids];
+  const results = await Promise.allSettled(
+    asked.map((id) => getRecipeDatasetRecipe(target.manifestUrl, target.version, id)),
+  );
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") found.set(asked[index]!, result.value);
+  });
+  return found;
+}
+
 /** `"<name> (GTNH <v>)"` within the name limit; a suffix from an earlier conversion is replaced, not stacked. */
 function convertedPlanName(name: string, version: GameVersion): string {
   const suffix = ` (${gameVersionLabel(version)})`;
@@ -238,6 +266,10 @@ export async function convertProjectToVersion(
   }
   const { bodies, unmatched } = await matchRecipesToVersion(toMatch, target);
   const sourceById = new Map(source.recipes.map((recipe) => [recipe.id, recipe] as const));
+  // A section marked on an earlier conversion has no body in the plan, only its marker's id: the target is asked for
+  // that id like any card's, so a plan converted back to the version the card came from finds it again.
+  const revived = await findMarkedRecipes(source.nodes, sourceById, target);
+  for (const [recipeId, body] of revived) bodies.set(recipeId, body);
 
   // Which sections are marked and why (by node id, then section), and each card's machine on the target.
   const marks = new Map<string, Map<number, Marked>>();
@@ -288,9 +320,34 @@ export async function convertProjectToVersion(
     kept.add(body.id);
     recipes.push(body);
   }
+  for (const [recipeId, body] of revived) {
+    if (!usedByUnmarked.has(recipeId) || kept.has(body.id)) continue;
+    kept.add(body.id);
+    recipes.push(body);
+  }
+  // A found section takes its body: its earlier marker goes, the wires it kept are the recipe's own handles.
+  const unmarkFound = (node: FactoryNode): FactoryNode => {
+    const found = (recipeId: string, section: number) => revived.has(recipeId) && !marks.get(node.id)?.has(section);
+    let next = node;
+    if (next.unconverted && found(next.recipeId, 0)) {
+      next = { ...next };
+      delete next.unconverted;
+    }
+    if (next.extraRecipes?.some((extra, index) => extra.unconverted && found(extra.recipeId, index + 1))) {
+      next = {
+        ...next,
+        extraRecipes: next.extraRecipes.map((extra, index) => {
+          if (!extra.unconverted || !found(extra.recipeId, index + 1)) return extra;
+          const { unconverted: _cleared, ...rest } = extra;
+          return rest;
+        }),
+      };
+    }
+    return next;
+  };
 
   // Each card on the machine the target names; a card whose machine is gone keeps the one it chose.
-  const placed = source.nodes.map((node): FactoryNode => {
+  const placed = source.nodes.map(unmarkFound).map((node): FactoryNode => {
     const handlerId = handlerChoice.get(node.id);
     if (!handlerId || marks.get(node.id)?.has(0)) return node;
     const body = bodies.get(node.recipeId);
@@ -313,12 +370,13 @@ export async function convertProjectToVersion(
   );
 
   const unconverted: Array<{ nodeId: string; section: number; recipe: UnconvertedRecipe }> = [];
-  const markerFor = (recipeId: string, mark: Marked): UnconvertedRecipe => {
+  // A section marked before keeps its earlier marker's name and version when it has no body in the plan.
+  const markerFor = (recipeId: string, mark: Marked, earlier?: UnconvertedRecipe): UnconvertedRecipe => {
     const stored = sourceById.get(recipeId);
     return {
-      fromGameVersion,
+      fromGameVersion: stored ? fromGameVersion : (earlier?.fromGameVersion ?? fromGameVersion),
       recipeId,
-      recipeName: stored?.name ?? recipeId,
+      recipeName: stored?.name ?? earlier?.recipeName ?? recipeId,
       machineType: mark.machineType ?? stored?.machineType ?? "",
       ...(mark.reason ? { reason: mark.reason } : {}),
     };
@@ -331,7 +389,7 @@ export async function convertProjectToVersion(
     let marked: FactoryNode = node;
     const zero = nodeMarks.get(0);
     if (zero) {
-      const recipe = markerFor(original.recipeId, zero);
+      const recipe = markerFor(original.recipeId, zero, original.unconverted);
       // A marked section stays as it was built (recipe id, machine, slot overrides), none of it remapped onto a
       // body it no longer has.
       marked = { ...marked, recipeId: original.recipeId, unconverted: recipe };
@@ -348,7 +406,7 @@ export async function convertProjectToVersion(
           const mark = nodeMarks.get(index + 1);
           const originalExtra = original.extraRecipes?.[index];
           if (!mark || !originalExtra) return extra;
-          const recipe = markerFor(originalExtra.recipeId, mark);
+          const recipe = markerFor(originalExtra.recipeId, mark, originalExtra.unconverted);
           unconverted.push({ nodeId: node.id, section: index + 1, recipe });
           return { ...originalExtra, unconverted: recipe };
         }),
@@ -356,6 +414,19 @@ export async function convertProjectToVersion(
     }
     return marked;
   });
+
+  // A section marked before that the target still lacks keeps its earlier marker, and is reported like any marked one.
+  for (const node of nodes) {
+    const nodeMarks = marks.get(node.id);
+    if (node.unconverted && !nodeMarks?.has(0) && !revived.has(node.recipeId) && !sourceById.has(node.recipeId)) {
+      unconverted.push({ nodeId: node.id, section: 0, recipe: node.unconverted });
+    }
+    node.extraRecipes?.forEach((extra, index) => {
+      if (extra.unconverted && !nodeMarks?.has(index + 1) && !revived.has(extra.recipeId) && !sourceById.has(extra.recipeId)) {
+        unconverted.push({ nodeId: node.id, section: index + 1, recipe: extra.unconverted });
+      }
+    });
+  }
 
   // A wire's end on a marked section keeps the handle it had; the end on a converted card follows the remap.
   const originalEdges = new Map(source.edges.map((edge) => [edge.id, edge] as const));

@@ -11,7 +11,10 @@
  *
  * Every class that overrides setProcessingLogicPower at each tag was read; the ones with a fixed
  * voltage (fusion, steam, space elevator, godforge, Neutron Activator, Transcendent Plasma Mixer)
- * are not hatch builds, and the Precise Assembler and Spinmatron keep the lone-hatch clamp.
+ * are not hatch builds, and the Precise Assembler and Spinmatron keep the lone-hatch clamp. The BEC
+ * Teleportation Node (2.9 only) runs on its linked Observation Array's whole pool at 1 A, so the card's
+ * hatches stand for the array's and it is "full-pool"; the game rounds that pool up to a whole tier's
+ * voltage (roundUpVoltage), which the planner does not, so a pool between two tiers reads as its sum.
  * Leaf module: it imports nothing, so the machine table and the solver can both read it.
  */
 type HatchPowerRule = "full-pool" | "no-single-amp-clamp";
@@ -30,9 +33,9 @@ const HATCH_POWER: Record<Version, Record<string, HatchPowerRule>> = {
     "Nano Forge": "full-pool",
     // GT5U@5.09.54.205 gregtech/common/tileentities/machines/multi/foundry/MTEExoFoundry.java:676-683
     "Exo-Foundry": "full-pool",
-    // GT5U@5.09.54.205 bartworks/common/tileentities/multis/mega/MTEMegaVacuumFreezerLegacy.java:71 extends
-    // MegaMultiBlockBase, whose setProcessingLogicPower is MegaMultiBlockBase.java:107-111.
-    "Mega Vacuum Freezer": "full-pool",
+    // GT5U@5.09.54.205 tectech/thing/metaTileEntity/multi/bec/MTEBECIONode.java:302-310: the linked
+    // assembler's getMaxInputEu() at 1 A, amperage overclocks off.
+    "Bose-Einstein Condensate Teleportation Node": "full-pool",
     // GT5U@5.09.54.205 gtPlusPlus/xmod/gregtech/common/tileentities/machines/multi/production/MTEQuantumForceTransformer.java:504-508
     "Quantum Force Transformer": "no-single-amp-clamp",
     // GT5U@5.09.54.205 kubatech/tileentity/gregtech/multiblock/MTEIndustrialArcFurnace.java:593-602

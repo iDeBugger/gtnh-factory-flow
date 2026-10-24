@@ -1769,6 +1769,186 @@
       }
      ],
      "catalysts": []
+    },
+    {
+     "id": "gt.recipe.cuttingsaw",
+     "name": "Cutting Machine",
+     "sourceClass": "gregtech.api.recipe.RecipeMap",
+     "catalysts": [
+      {
+       "resource": {
+        "kind": "item",
+        "id": "gregtech:gt.blockmachines@251",
+        "registryId": "gregtech:gt.blockmachines",
+        "meta": 251,
+        "amount": 1,
+        "displayName": "Basic Cutting Machine",
+        "modId": "gregtech",
+        "tooltip": [
+         "Basic Cutting Machine",
+         "Slice'N Dice",
+         "Machine Type: Cutting Machine",
+         "Voltage IN: 32 (LV)",
+         "Capacity: 2,048 EU"
+        ]
+       },
+       "priority": 0,
+       "sourceClass": "gregtech.api.metatileentity.implementations.MTEBasicMachineWithRecipe",
+       "multiblock": false
+      },
+      {
+       "resource": {
+        "kind": "item",
+        "id": "gregtech:gt.blockmachines@992",
+        "registryId": "gregtech:gt.blockmachines",
+        "meta": 992,
+        "amount": 1,
+        "displayName": "Industrial Cutting Factory",
+        "modId": "gregtech",
+        "tooltip": [
+         "Industrial Cutting Factory",
+         "Machine Type: Cutting Machine, Slicing Machine, ICF",
+         "4 Parallels per Voltage Tier",
+         "300% Speed",
+         "75% EU Usage",
+         "160 Pollution per second",
+         "-----------------------------------------",
+         "Hold [LSHIFT] to display structure guidelines"
+        ]
+       },
+       "priority": -1,
+       "sourceClass": "gtPlusPlus.xmod.gregtech.common.tileentities.machines.multi.processing.MTEIndustrialCuttingMachine",
+       "multiblock": true
+      }
+     ],
+     "recipes": [
+      {
+       "id": "905dcb60e95ca77c",
+       "enabled": true,
+       "durationTicks": 100,
+       "eut": 8,
+       "specialValue": 0,
+       "itemInputs": [
+        {
+         "kind": "item",
+         "id": "minecraft:wool",
+         "registryId": "minecraft:wool",
+         "meta": 0,
+         "amount": 1,
+         "displayName": "Wool",
+         "modId": "minecraft"
+        }
+       ],
+       "itemOutputs": [
+        {
+         "kind": "item",
+         "id": "minecraft:carpet",
+         "registryId": "minecraft:carpet",
+         "meta": 0,
+         "amount": 2,
+         "displayName": "Carpet",
+         "modId": "minecraft"
+        }
+       ],
+       "fluidInputs": [
+        {
+         "kind": "fluid",
+         "id": "water",
+         "amount": 4,
+         "displayName": "Water"
+        }
+       ],
+       "fluidOutputs": [],
+       "nonConsumedInputs": [],
+       "runtimeCalculation": {
+        "sourceKind": "gregtech-overclock-calculator",
+        "sourceClass": "gregtech.api.util.OverclockCalculator",
+        "recipeMap": "Cutting Machine",
+        "status": "computed",
+        "oracleEligible": true,
+        "strict": true,
+        "generatedAt": "2026-10-23T14:47:33.538Z",
+        "variantFormat": "tierIndex,durationTicks,eut[,profile,configKey]",
+        "compactVariants": [
+         [
+          0,
+          100,
+          8
+         ],
+         [
+          1,
+          100,
+          8
+         ],
+         [
+          2,
+          50,
+          32
+         ],
+         [
+          3,
+          25,
+          128
+         ],
+         [
+          4,
+          12,
+          512
+         ],
+         [
+          5,
+          6,
+          2048
+         ],
+         [
+          6,
+          3,
+          8192
+         ],
+         [
+          7,
+          1,
+          32768
+         ],
+         [
+          8,
+          1,
+          131072
+         ],
+         [
+          9,
+          1,
+          524288
+         ],
+         [
+          10,
+          1,
+          2097152
+         ],
+         [
+          11,
+          1,
+          8388608
+         ],
+         [
+          12,
+          1,
+          33554432
+         ],
+         [
+          13,
+          1,
+          134217728
+         ],
+         [
+          14,
+          1,
+          576460752303423488
+         ]
+        ]
+       }
+      }
+     ]
     }
    ]
   },

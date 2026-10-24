@@ -457,8 +457,9 @@ describe("machines that keep a lone hatch's 2 A", () => {
     ["Nano Forge", "2.9"],
     ["Nano Forge", "2.8.1"],
     ["Exo-Foundry", "2.9"],
-    ["Mega Vacuum Freezer", "2.9"],
+    // 2.9 has no Mega Vacuum Freezer machine (the dataset lists none): only 2.8.1's is a full pool.
     ["Mega Vacuum Freezer", "2.8.1"],
+    ["Bose-Einstein Condensate Teleportation Node", "2.9"],
     ["Quantum Force Transformer", "2.9"],
     ["Quantum Force Transformer", "2.8.1"],
     ["Industrial Arc Furnace", "2.9"],

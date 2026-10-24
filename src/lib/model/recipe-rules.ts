@@ -192,6 +192,9 @@ export function getSelectedMachineHandler(
  * that is higher. A declared minimum above the EU/t's own tier is a real gate
  * and stands. One at or below it is the pipeline's stamp of the draw: datasets
  * normalized before the pipeline counted map amperage stamp the 1 A tier.
+ * Re-normalized datasets already stamp the amp tier, so there this changes
+ * nothing; it stays while a served dataset carries the old stamp (a published
+ * 2.9 build says MV for a 48 EU/t Thermal Centrifuge recipe the game runs on LV).
  */
 function singleblockMinimumOnAmpMap(
   declared: string,

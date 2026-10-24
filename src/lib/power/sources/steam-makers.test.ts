@@ -359,6 +359,10 @@ describe("large boilers by game version", () => {
     expect(buildPowerRecipe("large-bronze-boiler", stored, "r", "2.8.1")?.power?.warnings ?? []).toEqual([
       "GTNH 2.8.1 boilers burn one fuel at a time. Using Creosote Oil.",
     ]);
+    // A stored fuel 2.8.1 lacks is named with the one burned, not hidden behind "one at a time".
+    expect(
+      buildPowerRecipe("large-bronze-boiler", { liquidFuel: "Hydrogen", solidFuel: "Coal" }, "r", "2.8.1")?.power?.warnings,
+    ).toEqual(["Not in GTNH 2.8.1: Hydrogen. GTNH 2.8.1 boilers burn one fuel at a time. Using Coal."]);
     // A superheated boiler burns the solid of the same pair (it skips liquids).
     const ti = model(
       "large-titanium-boiler",

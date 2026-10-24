@@ -476,21 +476,31 @@ function dynamoRange(first: string, last: string): typeof GT_VOLTAGE_TIERS {
 }
 
 function dynamoOptions(gameVersion: GameVersion): DynamoOption[] {
-  const at = (amps: number) => (tiers: typeof GT_VOLTAGE_TIERS) =>
-    tiers.map(({ tier, maxEuT }) => ({
-      key: amps === 1 ? tier : `${tier} ${amps}A`,
-      label: `${tier}${amps === 1 ? "" : ` ${amps}A`}, ${formatAmount(maxEuT * amps)} EU/t`,
-      maxEuT: maxEuT * amps,
-    }));
+  // A multi-amp option names the hatch that gives it: "LV 2A wireless" (2.8.1's Wireless Energy Dynamo),
+  // "EV 4A buffered" (GT++'s Buffered Dynamo Hatch), "UEV 4A TecTech" (TecTech's 4A Dynamo Hatch); on 2.9 either
+  // 4A hatch fits from HV to UHV.
+  const at = (amps: number, kind: (tier: string) => string = () => "") => (tiers: typeof GT_VOLTAGE_TIERS) =>
+    tiers.map(({ tier, maxEuT }) => {
+      const name = amps === 1 ? tier : `${tier} ${amps}A`;
+      const hatch = kind(tier);
+      return {
+        key: name,
+        label: `${name}${hatch ? ` ${hatch}` : ""}, ${formatAmount(maxEuT * amps)} EU/t`,
+        maxEuT: maxEuT * amps,
+      };
+    });
+  const buffered = new Set<string>(dynamoRange("ULV", "UHV").map(({ tier }) => tier));
+  const tectech = new Set<string>(dynamoRange("HV", "UXV").map(({ tier }) => tier));
   if (gameVersion === "2.8.1") {
     return [
       ...at(1)(DYNAMO_TIERS),
-      ...at(2)(GT_VOLTAGE_TIERS),
-      ...at(4)(dynamoRange("ULV", "UHV")),
+      ...at(2, () => "wireless")(GT_VOLTAGE_TIERS),
+      ...at(4, () => "buffered")(dynamoRange("ULV", "UHV")),
     ];
   }
   // Buffered 4A (ULV to UHV) and TecTech 4A (HV to UXV) together cover ULV to UXV.
-  return [...at(1)(DYNAMO_TIERS), ...at(4)(DYNAMO_TIERS)];
+  const kind4 = (tier: string) => (!tectech.has(tier) ? "buffered" : buffered.has(tier) ? "TecTech or buffered" : "TecTech");
+  return [...at(1)(DYNAMO_TIERS), ...at(4, kind4)(DYNAMO_TIERS)];
 }
 
 /** The default: a hatch that holds whatever the rotor makes. */

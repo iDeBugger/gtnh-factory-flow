@@ -39,6 +39,46 @@ export function readNewPlanVersion(manifest: DatasetManifest | undefined): GameV
   return DEFAULT_GAME_VERSION;
 }
 
+/**
+ * Whether the remembered choice is one only a manifest can confirm: anything but the default. A device with
+ * no choice, or the default, makes 2.9 plans whether or not the manifest is in.
+ */
+export function newPlanVersionNeedsManifest(): boolean {
+  const stored = readStored()?.trim();
+  return Boolean(stored) && stored !== DEFAULT_GAME_VERSION;
+}
+
+/**
+ * The version of the plan last open on this device: a boot hint, not a setting. It only decides whether the boot
+ * dataset load starts before the stored plans are read; the open plan's own version still decides what loads.
+ */
+export const OPEN_PLAN_VERSION_STORAGE_KEY = "gtnh-factory-flow.open-plan-version.v1";
+
+export function writeOpenPlanVersion(v: GameVersion): void {
+  try {
+    if (window.localStorage.getItem(OPEN_PLAN_VERSION_STORAGE_KEY) !== v) {
+      window.localStorage.setItem(OPEN_PLAN_VERSION_STORAGE_KEY, v);
+    }
+  } catch {
+    // Storage refused: boot then waits for the stored plans whenever the new-plan choice is not 2.9.
+  }
+}
+
+/**
+ * Whether boot must wait for the stored plans before its first dataset load: only when something points away from
+ * 2.9 (the plan last open here, or with none known the remembered new-plan choice). A 2.9 player's catalog starts as
+ * soon as the manifest lands; a 2.8.1 player never downloads 2.9.
+ */
+export function bootWaitsForPlans(): boolean {
+  let open: string | undefined;
+  try {
+    open = window.localStorage.getItem(OPEN_PLAN_VERSION_STORAGE_KEY)?.trim() || undefined;
+  } catch {
+    open = undefined;
+  }
+  return open !== undefined ? open !== DEFAULT_GAME_VERSION : newPlanVersionNeedsManifest();
+}
+
 export function writeNewPlanVersion(v: GameVersion): void {
   try {
     window.localStorage.setItem(NEW_PLAN_VERSION_STORAGE_KEY, v);

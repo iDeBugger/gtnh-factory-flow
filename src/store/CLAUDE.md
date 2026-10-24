@@ -49,6 +49,9 @@ Every save goes through `persistCanvas` in design-store.ts:
 - Recipe ids are not stable across exports: import keeps an id the dataset still has and
   re-finds a missing one by CONTENT (`resolve-recipes`, then a name search scored by
   content). Never accept a name match alone.
+- A slot whose name differs from its catalog entry's is an NBT variant of that item (a shulker box colour, a
+  sapling): the icon refresh on a dataset load (`refreshResourceIcon`) leaves its own picture alone, so a variant's
+  icon is renewed only by the landing recipe refresh, which brings the recipe's fresh body.
 
 ## Plan version
 
@@ -72,6 +75,9 @@ Every save goes through `persistCanvas` in design-store.ts:
   conversion runs at a time: while it runs the source tab shows the working mark and the key and row read
   "Converting to GTNH <v>...". A failure flashes "Couldn't convert the plan. Try again.", opens nothing and leaves
   Welcome or the library where they were.
+- A card marked on an earlier conversion has no body in the plan: the target is asked for its marker's recipe id, and a
+  hit takes the body and drops the marker (its kept wires are that recipe's handles), so converting a copy back to
+  the version a card came from finds it again. A miss keeps the earlier marker, its name and version.
 - Paste, blueprints and duplicated boards: a `BoardClipboardPayload` carries the version it was copied on
   (`captureBoardSelection` stamps it; absent, as in a blueprint saved before, reads 2.9). Every path that pastes runs
   `preparePayloadForPlan` (`src/lib/datasets/convert-payload-version.ts`) first: Ctrl+V and board duplicates through
@@ -87,6 +93,11 @@ Every save goes through `persistCanvas` in design-store.ts:
   plan the tour throws away. The choice is remembered per device (`gtnh-factory-flow.new-plan-version.v1`;
   allowed, as it has a visible control: the top bar's New plans key, a row of the + menu on a phone). A remembered
   version this site no longer serves, or no manifest yet, reads as 2.9. A pick storage refuses holds for the page.
+  The first-run seed waits for the manifest (at most 3 s) only when the remembered choice is not 2.9. The boot's
+  dataset load starts as the manifest lands unless the plan last open on this device (`open-plan-version.v1`, a boot
+  hint written once the stored plans are in, not a setting) or, with none, the remembered choice is not 2.9; then it
+  waits for the stored plans (`bootWaitsForPlans`). A 2.9 player's catalog never waits, a 2.8.1 player never
+  downloads 2.9.
 - Exam: `new-plan-version.test.ts`, `dataset-cache.test.ts`, `refresh-project-recipes.test.ts`, the "active dataset
   follows the open plan" block of `factory-store.test.ts`, `ModBar.test.tsx` and `ModTabs.test.tsx` (picker, chip,
   + menu), `notices.test.ts` (the unserved notice). In the real app: `scratch/probes/plan-version.mjs`.

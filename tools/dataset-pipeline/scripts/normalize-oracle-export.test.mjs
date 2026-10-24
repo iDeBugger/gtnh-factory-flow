@@ -1334,7 +1334,8 @@ describe("Thaumcraft arcane recipes", () => {
 
 /**
  * A GTNH 2.8.1 export, trimmed from the real one: GT and GT++ maps (GT++ still
- * names its maps gtpp.recipe.* there), the Fluid Canner map 2.9 folded into
+ * names its maps gtpp.recipe.* there; one Cutting Machine recipe with the GT++
+ * Industrial Cutting Factory among its machines), the Fluid Canner map 2.9 folded into
  * the Canner, crafting, Thaumcraft, a bee, an IC2 crop with no CropsNH beside
  * it, and mining with no dimension tiers and small ores named by `dims` alone.
  */
@@ -1442,6 +1443,24 @@ describe("a GTNH 2.8.1 export", () => {
       expect(oven.machineConfigControls.map((control) => control.id)).toEqual(["cokeOvenCasing"]);
       expect(oven.machineConfigControls[0].tiers.map((tier) => tier.key)).toEqual(["18", "30"]);
     }
+  });
+
+  it("a 2.8.1 Industrial Cutting Factory keeps its tooltip stats and offers no sawblade; the same export as 2.9 does", () => {
+    // 5.09.51.476 MTEIndustrialCuttingMachine.java:182-191: 4 parallels per tier, 1/3 time, 75% EU, no sawblade.
+    const factoryOf = (normalized) => {
+      const [saw] = mapsOf(normalized, "gt.recipe.cuttingsaw");
+      return saw.machineHandlers.find((handler) => handler.id === "industrial-cutting-factory");
+    };
+    const factory = factoryOf(dataset);
+    expect(factory.machineConfigControls.map((control) => control.id)).toEqual(["voltageParallel"]);
+    expect(factory.machineConfigControls[0].tiers.map((tier) => tier.parallelPerVoltageTier)).toEqual([4]);
+    expect(factory).toMatchObject({ durationTicks: 33, eut: 6 });
+
+    const as29Export = normalize(oracle281Sample, { id: "local-2.9.0-rc-2", label: "2.9.0-RC-2" });
+    expect(factoryOf(as29Export).machineConfigControls.map((control) => control.id)).toEqual([
+      "voltageParallel",
+      "cuttingSawblade",
+    ]);
   });
 
   it("2.8.1 ore veins and small ores normalize without dimension tiers", () => {

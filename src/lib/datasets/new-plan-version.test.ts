@@ -2,12 +2,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   NEW_PLAN_VERSION_STORAGE_KEY,
+  bootWaitsForPlans,
+  newPlanVersionNeedsManifest,
   readNewPlanVersion,
   resetNewPlanVersionForTests,
   recipesNotOnSiteText,
   servedGameVersions,
   unservedPlanText,
   writeNewPlanVersion,
+  writeOpenPlanVersion,
 } from "./new-plan-version";
 import type { DatasetManifest } from "./types";
 
@@ -69,6 +72,25 @@ describe("the version new plans are made for", () => {
     // No manifest yet: nothing is known to be served.
     window.localStorage.setItem(NEW_PLAN_VERSION_STORAGE_KEY, "2.8.1");
     expect(readNewPlanVersion(undefined)).toBe("2.9");
+  });
+
+  it("only a remembered choice other than 2.9 waits on the manifest (the first-run seed)", () => {
+    expect(newPlanVersionNeedsManifest()).toBe(false);
+    writeNewPlanVersion("2.9");
+    expect(newPlanVersionNeedsManifest()).toBe(false);
+    writeNewPlanVersion("2.8.1");
+    expect(newPlanVersionNeedsManifest()).toBe(true);
+  });
+
+  it("boot waits for the stored plans only when the last open plan, or else the new-plan choice, is not 2.9", () => {
+    expect(bootWaitsForPlans()).toBe(false);
+    writeNewPlanVersion("2.8.1");
+    expect(bootWaitsForPlans()).toBe(true);
+    // The plan open last decides once known: a 2.9 plan open with a 2.8.1 choice loads 2.9 at once.
+    writeOpenPlanVersion("2.9");
+    expect(bootWaitsForPlans()).toBe(false);
+    writeOpenPlanVersion("2.8.1");
+    expect(bootWaitsForPlans()).toBe(true);
   });
 
   it("storage that throws reads the default", () => {

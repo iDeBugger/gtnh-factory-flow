@@ -22,7 +22,7 @@ describe("resource-map.json 2.8.1", () => {
     // 2.8.1 registers no fluid for the two seed oils, so the catalog has only their cells.
     expect(resolvePowerResource("Hemp Seed Oil", "2.8.1")).toBeUndefined();
     expect(resolvePowerResource("Lin Seed Oil", "2.8.1")).toBeUndefined();
-    // 2.8.1 shows bioethanol as "Ethanol", 2.9 as "Bio Ethanol": the same fluid on both.
+    // The workbook's "Ethanol" is bioethanol on both packs, whatever each shows it as.
     expect(resolvePowerResource("Ethanol", "2.8.1")?.id).toBe("bioethanol");
     expect(resolvePowerResource("Poop Juice", "2.9")).toBeUndefined();
   });

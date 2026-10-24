@@ -639,7 +639,10 @@ const MACHINES: Record<string, MachineBehaviour> = {
     overclock: OVERCLOCK.perfect(),
     parallels: 256,
     // MTEMegaChemicalReactor keeps the base hatch amps but its processing
-    // logic sets unlimited tier skips.
+    // logic sets unlimited tier skips. 2.9 also registers bartworks'
+    // MTEMegaChemicalReactorLegacy under the same name (ItemRegistry.java:367-370,
+    // full power pool); it is deprecated, has no recipe of its own and crafts
+    // into this one (MTERecipeLoader.java:1882-1886), so this is the one modelled.
     unlimitedTierSkip: true,
     hidesControls: ["heatingCoil"],
   },

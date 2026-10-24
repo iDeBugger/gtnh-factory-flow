@@ -118,7 +118,7 @@ published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such 
   `machineConfigControlsForOracleRecipe`): the 2.8.1 Industrial Coke Oven has no coils or slices and
   its casing control is keyed `"18"`/`"30"` (the app reads the key as the parallels); the 2.8.1
   Industrial Cutting Factory takes no sawblade (`ABSENT_BY_PACK` in `machine-wiki-stats.mjs`). Exam:
-  `machine-configs-2-8-1.test.mjs`.
+  `machine-configs-2-8-1.test.mjs`, and through the normalizer the 2.8.1 block's Cutting Factory test.
 - Generators named Mark I to IV fold into one tiered family (Plasma Generator Mark, EV to ZPM);
   2.9's Mk-I names keep one family per mark.
 - 2.8.1 registers one arcane wand or sceptre recipe per rod and cap pair, all with the same
@@ -128,6 +128,17 @@ published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such 
   item keeps its own face (`contextualizePreviewRecipe`, `applyUsesResourceContext`,
   `buildRecipeInputOverrides`), as on 2.9's shulker box colours and Forestry saplings. Thaumcraft
   wands render no pixels on 2.8.1 (`dropped-icons.json`), so they have no icon there.
+
+## Comparing two exports (scripts/oracle-diff.mjs)
+
+- A new export of a pack is checked against the previous one before it replaces it:
+  `node tools/dataset-pipeline/scripts/oracle-diff.mjs <old run>/work/raw-export <new run>/work/raw-export`
+  (about 12 GB of heap; it re-runs itself with it). Exit 0 means every difference is a known one: record order
+  the game fills from hash maps, display names an item rolls each start, and the records each rule in
+  `GAME_ROLLED` names. Pixels are not compared (time-driven icons differ every export).
+- Every rule has a ceiling of about twice the worst count seen between exports of one pack; past it the records
+  count as unexpected, so a real loss cannot hide under a rule. Rules seen only on 2.8.1 apply only to a 2.8.1
+  export. A new rule needs the records it covers named and its ceiling measured, never a looser match.
 
 ## Exporting on Apple Silicon
 

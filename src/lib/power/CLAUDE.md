@@ -25,11 +25,17 @@
   workbook's "Amber Gem") goes in that pack's `VERSION_ID_ALIASES`, pinned by id, since the
   display name can collide with other mods' items.
 - The fuel-name and machine-face maps are per pack (`resolvePowerResource(name, gameVersion)`,
-  `getPowerMachineIcon(sourceId, gameVersion)`): 2.9's in `data/`, 2.8.1's in `data/2.8.1/`, made
-  against `local-2.8.1`. Regenerate 2.8.1's after any 2.8.1 dataset rebuild, because icon file
-  names carry a content hash. With `PORT=3622 npm run dev:local` serving the dataset:
+  `getPowerMachineIcon(sourceId, gameVersion)`): 2.9's in `data/`, made against `local-2.9.0-rc-2`, 2.8.1's in
+  `data/2.8.1/`, made against `local-2.8.1`. Regenerate a pack's maps after any rebuild of its dataset, because icon
+  file names carry a content hash, and publish that dataset with the maps that name it: a server without those
+  files draws every power card of that pack as a placeholder. `power-maps-2-9.test.ts` and
+  `power-maps-2-8-1.test.ts` pin each map's dataset and, where the dataset is on disk, that every icon exists. With
+  `PORT=3622 npm run dev:local` serving the datasets:
 
   ```bash
+  npx tsx tools/power-tables-dump.ts 2.9 > scratch/power-tables-2.9.json
+  node tools/power-resource-map.mjs --base http://localhost:3622 --version local-2.9.0-rc-2 --data scratch/power-tables-2.9.json --out src/lib/power/data/resource-map.json
+  node tools/power-machine-icons.mjs --base http://localhost:3622 --version local-2.9.0-rc-2 --game-version 2.9 --out src/lib/power/data/machine-icons.json
   npx tsx tools/power-tables-dump.ts 2.8.1 > scratch/power-tables-2.8.1.json
   node tools/power-resource-map.mjs --base http://localhost:3622 --version local-2.8.1 --data scratch/power-tables-2.8.1.json --out src/lib/power/data/2.8.1/resource-map.json
   node tools/power-machine-icons.mjs --base http://localhost:3622 --version local-2.8.1 --game-version 2.8.1 --out src/lib/power/data/2.8.1/machine-icons.json
@@ -65,12 +71,15 @@
   so a fuel the version lacks is simply absent. 2.8.1 values are a hand read
   of the 2.8.1 Java; the corrections go in the overrides or the extractor, never in
   `power-planner-data.json`.
-- Converting a plan (`convertProjectToVersion`) rewrites each power card's settings with
-  `convertPowerSettings` (`version-settings.ts`): every select the source card read is written, its default
-  too, because an unset fuel means each version's own default. The target card then reads the same choice, or
-  names it with what it uses instead ("Not in GTNH 2.8.1: Ether. Using Solid Super Fuel."). A 2.8.1 boiler's one
-  fuel moves onto 2.9's liquid or solid select, and the HTGR's material onto the other reactor's fuel or pebble
-  by element (Uranium is Uranium-235); one the target lacks is named (`FOREIGN_POWER_SETTINGS`). 2.9 dual fuels
-  on 2.8.1's one-fuel boiler read "GTNH 2.8.1 boilers burn one fuel at a time. Using <fuel>." (`merged()`). On
-  2.9 a stored value or setting is named only when another version's card has it. Exam: the "power card's fuel"
-  block of `src/lib/datasets/convert-plan-version.test.ts`, `power-reader.test.ts`.
+- Converting a plan (`convertProjectToVersion`) rewrites each power card's settings with `convertPowerSettings`
+  (`version-settings.ts`): every select the source card read is written, its default too, because an unset fuel
+  means each version's own default. The target card then reads the same choice, or names it with what it uses
+  instead ("Not in GTNH 2.8.1: Ether. Using Solid Super Fuel."). A 2.8.1 boiler's one fuel moves onto 2.9's liquid
+  or solid select, and the HTGR's material onto the other reactor's fuel or pebble by element (Uranium is
+  Uranium-235); one the target lacks is named (`FOREIGN_POWER_SETTINGS`). A material carried under another name
+  keeps the source key beside it and reads "Not in GTNH 2.9: Uranium. Using Uranium-235." (`sameChoice` in the
+  reader's context); converting back to the card it came from drops both the key and the line. 2.9 dual fuels on
+  2.8.1's one-fuel boiler read "GTNH 2.8.1 boilers burn one fuel at a time. Using <fuel>." (`merged()`), led by "Not
+  in GTNH 2.8.1: <fuel>." for a stored fuel 2.8.1's card lacks. On 2.9 a stored value or setting is named only when
+  another version's card has it. Exam: the "power card's fuel" block of
+  `src/lib/datasets/convert-plan-version.test.ts`, `power-reader.test.ts`.

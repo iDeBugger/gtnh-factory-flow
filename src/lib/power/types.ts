@@ -7,7 +7,7 @@
  * the game source as arbiter (src/lib/power/CLAUDE.md).
  */
 
-import type { GameVersion } from "@/lib/model/game-version";
+import { DEFAULT_GAME_VERSION, type GameVersion } from "@/lib/model/game-version";
 
 export type PowerGroupId =
   | "other"
@@ -116,9 +116,10 @@ export interface PowerSettingsReader {
   missing(): Array<{ settingId: string; stored: string; used: string }>;
   /**
    * Selects that read one of several stored legacy values (2.8.1's one-fuel boiler under 2.9's two
-   * fuels): the values stored, in order, and the one used. Empty while the select's own id is set.
+   * fuels): the values stored, in order, those this version has no option for, and the one used. Empty while
+   * the select's own id is set.
    */
-  merged(): Array<{ settingId: string; stored: string[]; used: string }>;
+  merged(): Array<{ settingId: string; stored: string[]; absent: string[]; used: string }>;
   /**
    * Stored setting ids this version's definition does not have. On 2.9 only the ids another version's
    * card declares (`PowerReaderContext.others`), since 2.9 plans may keep retired ids.
@@ -146,6 +147,11 @@ export interface PowerReaderContext {
   others?: PowerSourceDefinition[];
   /** This version's select id -> the ids another version's card stores the same choice under. */
   foreignIds?: Record<string, string[]>;
+  /**
+   * Whether another version's stored choice is this card's option under another name (the HTGR's Uranium is
+   * Uranium-235 here). A conversion keeps such a choice beside the carried one, and the card names the carry.
+   */
+  sameChoice?: (stored: string, option: string) => boolean;
 }
 
 /** The option a select setting reads as: the stored key, its legacy mapping, or the default. */
@@ -228,7 +234,7 @@ export function buildPowerSettingsReader(
   const byId = new Map(definition.settings.map((setting) => [setting.id, setting]));
   // Only another version than 2.9 is checked in full: plans from before versions were saved on 2.9's definitions,
   // so on 2.9 a stored value is named only when another version offers it (it came from that version's card).
-  const checks = gameVersion !== "2.9";
+  const checks = gameVersion !== DEFAULT_GAME_VERSION;
   const offeredElsewhere = (settingId: string, raw: string) =>
     (context.others ?? []).some((other) =>
       other.settings.some(
@@ -284,6 +290,15 @@ export function buildPowerSettingsReader(
         }
         // An option first, then a legacy key whose option is here too, as selectValue reads them.
         if (optionKeyOf(setting, stored) !== undefined) {
+          // A choice carried from another version under another name is named with the option it became.
+          const used = optionKeyOf(setting, stored)!;
+          for (const id of context.foreignIds?.[setting.id] ?? []) {
+            const raw = storedRaw(values, id);
+            if (raw === undefined || named.has(id) || raw === used || optionKeyOf(setting, raw) !== undefined) continue;
+            if (!context.sameChoice?.(raw, used)) continue;
+            named.add(id);
+            found.push({ settingId: setting.id, stored: raw, used });
+          }
           continue;
         }
         if (!checks && !offeredElsewhere(setting.id, stored)) {
@@ -294,7 +309,7 @@ export function buildPowerSettingsReader(
       return found;
     },
     merged() {
-      const found: Array<{ settingId: string; stored: string[]; used: string }> = [];
+      const found: Array<{ settingId: string; stored: string[]; absent: string[]; used: string }> = [];
       for (const setting of definition.settings) {
         if (setting.type !== "select" || !setting.legacyIds || storedRaw(values, setting.id) !== undefined) {
           continue;
@@ -307,7 +322,8 @@ export function buildPowerSettingsReader(
           .map((id) => storedRaw(values, id))
           .filter((raw): raw is string => raw !== undefined && !setting.legacyUnsetKeys?.includes(raw));
         if (stored.length > 1) {
-          found.push({ settingId: setting.id, stored, used: selectValue(setting, read) });
+          const absent = stored.filter((raw) => optionKeyOf(setting, raw) === undefined);
+          found.push({ settingId: setting.id, stored, absent, used: selectValue(setting, read) });
         }
       }
       return found;

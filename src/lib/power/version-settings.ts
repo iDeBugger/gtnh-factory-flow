@@ -26,6 +26,8 @@ const LARGE_BOILERS = [
 interface ForeignSettings {
   sameChoice?: (stored: string, option: string) => boolean;
   byVersion: Partial<Record<GameVersion, Record<string, string[]>>>;
+  /** A version's number setting -> the other versions' number ids it stands in for (read, never converted). */
+  numbersByVersion?: Partial<Record<GameVersion, Record<string, string[]>>>;
 }
 
 /** A TRISO material by its element: bartworks names the fuel "Uranium", kubatech its pebble "Uranium-235". */
@@ -44,8 +46,20 @@ export const FOREIGN_POWER_SETTINGS: Record<string, ForeignSettings> = {
   ),
   // 2.9 runs kubatech's HTGR on TRISO pebbles, 2.8.1 bartworks' on its three fuels: the same material carries
   // over (Thorium, Uranium-235 as Uranium, Plutonium-239 as Plutonium); one the other reactor lacks is named.
-  htgr: { sameChoice: sameMaterial, byVersion: { "2.9": { pebble: ["fuel"] }, "2.8.1": { fuel: ["pebble"] } } },
+  // The two reactors size their charge differently: kubatech's ball fill and bartworks' pebbles kept are not one
+  // count, so neither converts into the other, but each card names the other's as what it uses instead.
+  htgr: {
+    sameChoice: sameMaterial,
+    byVersion: { "2.9": { pebble: ["fuel"] }, "2.8.1": { fuel: ["pebble"] } },
+    numbersByVersion: { "2.9": { fill: ["pebbles"] }, "2.8.1": { pebbles: ["fill"] } },
+  },
 };
+
+/** The setting of `sourceId`'s card on `gameVersion` that stands in for another version's stored `settingId`. */
+export function standInSetting(sourceId: string, gameVersion: GameVersion, settingId: string): string | undefined {
+  const numbers = FOREIGN_POWER_SETTINGS[sourceId]?.numbersByVersion?.[gameVersion] ?? {};
+  return Object.entries(numbers).find(([, foreign]) => foreign.includes(settingId))?.[0];
+}
 
 /** The versions whose power cards are built from their own tables. */
 const POWER_VERSIONS = Object.keys(POWER_DATA_OVERRIDES);
@@ -57,8 +71,10 @@ export function powerReaderContext(sourceId: string, gameVersion: GameVersion): 
   const others = POWER_VERSIONS.filter((version) => version !== gameVersion)
     .map((version) => getPowerSource(sourceId, version))
     .filter((source) => source !== undefined);
-  const foreignIds = FOREIGN_POWER_SETTINGS[sourceId]?.byVersion[gameVersion];
-  return foreignIds ? { others, foreignIds } : { others };
+  const foreign = FOREIGN_POWER_SETTINGS[sourceId];
+  const foreignIds = foreign?.byVersion[gameVersion];
+  if (!foreignIds) return { others };
+  return foreign.sameChoice ? { others, foreignIds, sameChoice: foreign.sameChoice } : { others, foreignIds };
 }
 
 function stored(values: Record<string, string>, id: string): boolean {
@@ -76,7 +92,7 @@ function offers(setting: PowerSelectSetting, key: string): boolean {
  * select id the target reads that the source card has no select of is a leftover of an earlier conversion and is
  * dropped, so it never overrules what the source card used. A choice the other card keeps under another id (a
  * 2.8.1 boiler's one fuel, the HTGR's fuel or pebble) is put on the target select that offers it, the others of its
- * group set to None, and its old id dropped.
+ * group set to None, and its old id dropped unless the choice changed its name on the way.
  */
 export function convertPowerSettings(
   sourceId: string,
@@ -124,7 +140,10 @@ export function convertPowerSettings(
         if (setting === home.setting) out[setting.id] = home.key!;
         else if (offers(setting, NO_FUEL)) out[setting.id] = NO_FUEL;
       }
-      delete out[foreignId];
+      // A choice carried under another name (Uranium as Uranium-235) stays beside it, so the card says what it
+      // became; on the way back to the card it came from (its own id stored that very option) it goes.
+      const renamed = home.key !== value && values?.[home.setting.id] !== home.key;
+      if (!renamed) delete out[foreignId];
     }
   }
   return out;
