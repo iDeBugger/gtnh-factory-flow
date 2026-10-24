@@ -37,9 +37,25 @@ describe("the client address", () => {
       ),
     ).toBe("198.51.100.7");
     expect(addressFromHeaders(headers({ "x-client-ip": "2001:db8::1, 10.0.0.1" }))).toBe(
-      "2001:db8::1",
+      "2001:db8:0:0::",
     );
     expect(addressFromHeaders(headers({ "x-client-ip": " " }))).toBe(NO_ADDRESS);
+  });
+
+  it("keys an IPv6 address on its /64, the block one connection gets", () => {
+    expect(addressFromHeaders(headers({ "x-client-ip": "2001:db8:abcd:1234:5678::1" }))).toBe(
+      "2001:db8:abcd:1234::",
+    );
+    expect(
+      addressFromHeaders(headers({ "x-client-ip": "2001:db8:abcd:1234:ffff:ffff:ffff:ffff" })),
+    ).toBe("2001:db8:abcd:1234::");
+    expect(
+      addressFromHeaders(headers({ "x-client-ip": "2001:0DB8:0000:0000:0000:0000:0000:0001" })),
+    ).toBe("2001:db8:0:0::");
+    expect(addressFromHeaders(headers({ "x-client-ip": "2001:db8::1" }))).toBe("2001:db8:0:0::");
+    expect(addressFromHeaders(headers({ "x-client-ip": "::1" }))).toBe("0:0:0:0::");
+    expect(addressFromHeaders(headers({ "x-client-ip": "::ffff:203.0.113.9" }))).toBe("0:0:0:0::");
+    expect(addressFromHeaders(headers({ "x-client-ip": "203.0.113.9" }))).toBe("203.0.113.9");
   });
 
   it("reads a Request the same way", () => {
