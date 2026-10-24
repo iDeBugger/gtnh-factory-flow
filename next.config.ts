@@ -13,6 +13,9 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  // The site never uses next/image: pictures are served by the app's own routes or plain <img>.
+  // With the optimizer off, /_next/image answers 404 and no upload or dataset PNG reaches sharp.
+  images: { unoptimized: true },
   async headers() {
     return [
       {

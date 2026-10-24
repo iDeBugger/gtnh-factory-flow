@@ -19,6 +19,9 @@
 - Every server cache is bounded or index-sized (the Node heap is capped at 3 GB). A slow
   site: check the heap first.
 - The OG card route reads fonts through `process.cwd()` (non-standalone build).
+- The image optimizer is off (`images.unoptimized` in next.config.ts): nothing uses next/image, and
+  `/_next/image` would hand any same-origin PNG (uploads, dataset textures) to sharp. Pictures are served
+  by the app's own routes or plain `<img>`; keep it that way.
 
 ## Prewarm (instrumentation.ts, `prewarmDatasetVersions`)
 
