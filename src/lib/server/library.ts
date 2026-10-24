@@ -114,6 +114,23 @@ export function isIsoTimestamp(value: unknown): value is string {
   return typeof value === "string" && value.length <= 40 && Number.isFinite(Date.parse(value));
 }
 
+/** How far ahead of the server a device's clock may run before its stamps are refused. */
+export const STAMP_SKEW_MS = 5 * 60_000;
+
+/**
+ * A stamp from a clock running ahead. Stamps are the client's and the newer
+ * row wins, so one far-future stamp (a member's wrong clock, or on purpose)
+ * would make every later save read as behind and the sync go silently quiet
+ * on every device. Refused, never clamped: the device's local and pushed
+ * stamps must agree or it reads as unsaved forever.
+ */
+export function isFutureStamp(value: string, now = Date.now()): boolean {
+  return Date.parse(value) > now + STAMP_SKEW_MS;
+}
+
+/** What a device with a clock running ahead is told. */
+export const CLOCK_AHEAD_MESSAGE = "This device's clock is ahead. Check its date and time.";
+
 /** Ids are client-minted: a UUID, or the older `design-<base36>` form. */
 export function isLibraryId(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9-]{8,64}$/.test(value);

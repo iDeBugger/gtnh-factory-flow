@@ -10,6 +10,7 @@ import * as library from "./route";
 import * as design from "./designs/[designId]/route";
 import * as members from "./designs/[designId]/members/route";
 import * as member from "./designs/[designId]/members/[userId]/route";
+import * as folder from "./folders/[folderId]/route";
 import * as search from "../accounts/search/route";
 import * as meRoute from "../community/auth/me/route";
 
@@ -247,6 +248,53 @@ describe("cloud plans over REST", () => {
       params({ designId }),
     );
     expect(stranger.status).toBe(404);
+  });
+
+  it("refuses a stamp from the future, from a member or the owner", async () => {
+    const clockAhead = { error: "This device's clock is ahead. Check its date and time." };
+    const farAhead = await design.PUT(
+      request("PUT", `/api/library/designs/${designId}?owner=${users.ann!.id}`, "bob", {
+        ...upsertBody("Frozen", "2999-01-01T00:00:00.000Z"),
+      }),
+      params({ designId }),
+    );
+    expect(farAhead.status).toBe(400);
+    expect(await farAhead.json()).toEqual(clockAhead);
+    const { data } = await getCommunityDb()
+      .from("library_designs")
+      .select("name")
+      .eq("user_id", users.ann!.id)
+      .eq("id", designId)
+      .single();
+    expect(data).toEqual({ name: "Steel by Bob" });
+
+    // A clock a couple of minutes ahead is ordinary skew; ten minutes is a wrong clock.
+    const clockId = "design-clock";
+    const twoMinutes = new Date(Date.now() + 2 * 60_000).toISOString();
+    const skewed = await design.PUT(
+      request("PUT", `/api/library/designs/${clockId}`, "ann", upsertBody("Skewed", twoMinutes)),
+      params({ designId: clockId }),
+    );
+    expect(skewed.status).toBe(200);
+    expect((await skewed.json()).behind).toBe(false);
+    const tenMinutes = new Date(Date.now() + 10 * 60_000).toISOString();
+    const wrong = await design.PUT(
+      request("PUT", `/api/library/designs/${clockId}`, "ann", upsertBody("Wrong", tenMinutes)),
+      params({ designId: clockId }),
+    );
+    expect(wrong.status).toBe(400);
+    expect(await wrong.json()).toEqual(clockAhead);
+
+    const futureFolder = await folder.PUT(
+      request("PUT", "/api/library/folders/folder-clock", "ann", {
+        name: "Later",
+        createdAt: "2026-10-14T10:00:00.000Z",
+        updatedAt: "2999-01-01T00:00:00.000Z",
+      }),
+      params({ folderId: "folder-clock" }),
+    );
+    expect(futureFolder.status).toBe(400);
+    expect(await futureFolder.json()).toEqual(clockAhead);
   });
 
   it("refuses a plan body while the live service holds the lease, and still takes metadata", async () => {

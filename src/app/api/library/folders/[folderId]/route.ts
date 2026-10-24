@@ -11,7 +11,9 @@ import {
   isCommunityConfigured,
 } from "@/lib/server/community";
 import {
+  CLOCK_AHEAD_MESSAGE,
   FOLDER_COLUMNS,
+  isFutureStamp,
   isIsoTimestamp,
   isLibraryId,
   libraryStorageErrorMessage,
@@ -53,6 +55,9 @@ export async function PUT(request: Request, context: RouteContext) {
   }
   if (!isIsoTimestamp(body.createdAt) || !isIsoTimestamp(body.updatedAt)) {
     return NextResponse.json({ error: "Bad timestamps." }, { status: 400 });
+  }
+  if (isFutureStamp(body.createdAt) || isFutureStamp(body.updatedAt)) {
+    return NextResponse.json({ error: CLOCK_AHEAD_MESSAGE }, { status: 400 });
   }
 
   const db = getCommunityDb();

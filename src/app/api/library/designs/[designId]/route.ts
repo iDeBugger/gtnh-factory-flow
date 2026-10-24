@@ -15,7 +15,9 @@ import {
   parseEntryIcon,
 } from "@/lib/server/community";
 import {
+  CLOCK_AHEAD_MESSAGE,
   DESIGN_META_COLUMNS,
+  isFutureStamp,
   isIsoTimestamp,
   isLibraryId,
   libraryStorageErrorMessage,
@@ -133,6 +135,9 @@ export async function PUT(request: Request, context: RouteContext) {
     !isIsoTimestamp(body.planUpdatedAt)
   ) {
     return NextResponse.json({ error: "Bad timestamps." }, { status: 400 });
+  }
+  if ([body.createdAt, body.updatedAt, body.planUpdatedAt].some((stamp) => isFutureStamp(stamp))) {
+    return NextResponse.json({ error: CLOCK_AHEAD_MESSAGE }, { status: 400 });
   }
   if (body.folderId !== null && body.folderId !== undefined && !isLibraryId(body.folderId)) {
     return NextResponse.json({ error: "Bad folder id." }, { status: 400 });
