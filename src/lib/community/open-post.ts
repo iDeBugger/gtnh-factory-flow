@@ -36,9 +36,8 @@ export async function openCommunityPost(plan: {
   let isMine = plan.isMine;
   let name = plan.name;
   if (isMine === undefined) {
-    // A background lookup: opening is what counts the download, and the
-    // download below is that.
-    const summary = await getCommunityPlan(plan.id, { countView: false });
+    // A lookup: the download below is what this counts as, not a view.
+    const summary = await getCommunityPlan(plan.id);
     isMine = summary.isMine === true;
     name = name ?? summary.name;
   }

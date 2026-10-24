@@ -6,6 +6,7 @@ import { useCommunityUser } from "@/components/community/auth";
 import { IconPicker, iconSuggestionsFromStats } from "@/components/IconPicker";
 import { formatRelativeDate } from "@/components/shelf-cards";
 import {
+  countPlanView,
   deleteCommunityPlan,
   getCommunityPlan,
   listCommunityPlans,
@@ -162,7 +163,7 @@ export function SetupsGrid({
     if (scope === "saved") {
       // The bookmarks, fetched one by one: the list is yours and short.
       void Promise.all(
-        savedIds.map((id) => getCommunityPlan(id, { countView: false }).catch(() => undefined)),
+        savedIds.map((id) => getCommunityPlan(id).catch(() => undefined)),
       ).then((plans) => {
         if (cancelled) {
           return;
@@ -288,7 +289,7 @@ export function SetupsGrid({
       return;
     }
     refreshedStatsRef.current.add(planId);
-    void getCommunityPlan(planId, { countView: false }).then(
+    void getCommunityPlan(planId).then(
       (summary) =>
         patchPlan(planId, (entry) => ({
           ...entry,
@@ -617,6 +618,8 @@ export function SetupsGrid({
                     menuOpen={menu?.id === plan.id}
                     onOpen={() => {
                       refreshStats(plan.id);
+                      // The one gesture that is a view: the post's page opening.
+                      countPlanView(plan.id);
                       setDetailId(plan.id);
                     }}
                     onMenu={(left, top) => {

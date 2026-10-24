@@ -65,24 +65,26 @@ export async function listCommunityPlans(
   return parseJsonOrThrow<CommunityPlanListResponse>(response);
 }
 
-export async function getCommunityPlan(
-  planId: string,
-  options: { countView?: boolean } = {},
-): Promise<CommunityPlanSummary> {
+/** A post's summary. A read: it counts nothing (`countPlanView` does). */
+export async function getCommunityPlan(planId: string): Promise<CommunityPlanSummary> {
   const search = new URLSearchParams({ deviceId: getDeviceId() });
   const response = await fetch(
     `/api/community/plans/${encodeURIComponent(planId)}?${search.toString()}`,
   );
   const body = await parseJsonOrThrow<{ plan: CommunityPlanSummary }>(response);
-  // A player opening the post is a view, counted by a write of its own; the
-  // read changes nothing. Background lookups (the plan card refreshing its
-  // post) are not views. Best effort: a lost count costs nothing.
-  if (options.countView !== false) {
-    void fetch(`/api/community/plans/${encodeURIComponent(planId)}/view`, { method: "POST" }).catch(
-      () => undefined,
-    );
-  }
   return body.plan;
+}
+
+/**
+ * Counts one view: a player opened the post's page. A write of its own, sent
+ * from that one gesture, so lookups (a card refreshing its post, the
+ * bookmarks shelf, a copy being made) never count. Best effort: a lost count
+ * costs nothing.
+ */
+export function countPlanView(planId: string): void {
+  void fetch(`/api/community/plans/${encodeURIComponent(planId)}/view`, { method: "POST" }).catch(
+    () => undefined,
+  );
 }
 
 export async function downloadCommunityPlan(

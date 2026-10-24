@@ -174,8 +174,9 @@ The instance is small and has gone down under load. Rules:
   `plan-previews` bucket is private and its pictures are served only by `GET .../preview`, which answers an
   unpublished post's picture to its owner and the admin alone (`Cache-Control: private, no-store`) and 404 `No preview.`
   to everyone else; a deployment whose bucket was created public before this must be switched off in the dashboard.
-  No GET writes: a view is `POST .../view` (60 a minute per address), which the client sends once when a player opens a
-  post and never from a background refresh (`countView: false`).
+  No GET writes: a view is `POST .../view` (60 a minute per address), which the library's grid sends once when a player
+  opens a post's page (`countPlanView` in `src/lib/community/client.ts`, from the tile's open gesture); the drawer, the
+  bookmarks shelf and a copy being made are lookups (`getCommunityPlan`) and count nothing.
   Exam: `community.test.ts`, `app/api/community/images/route.test.ts`, `app/api/community/plans/plan-access.test.ts`.
 - Password derivations run on the threadpool, two at a time with a queue of 32 (`KDF_CONCURRENCY`, `KDF_QUEUE_MAX`):
   the dataset's shard reads share the pool's four threads, so a sign-in flood may never hold them all. Past the

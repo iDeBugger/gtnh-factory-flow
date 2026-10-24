@@ -19,8 +19,9 @@ const VIEWS_PER_MINUTE = 60;
 /**
  * Counts one view of a post. A write of its own, so no read of the post
  * changes anything: a GET that counted was a counter anyone could run up
- * with a link or a loop, and a read must be safe to repeat. The client sends
- * it once when a player opens a post, never from background refreshes.
+ * with a link or a loop, and a read must be safe to repeat. The library's
+ * grid sends it once when a player opens a post's page (`countPlanView`);
+ * every other read of a post is a lookup and counts nothing.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ planId: string }> }) {
   if (!isModAndCommunityOn()) {

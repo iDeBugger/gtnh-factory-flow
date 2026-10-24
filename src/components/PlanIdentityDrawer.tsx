@@ -267,8 +267,8 @@ function LinkedPostStrip({ planId }: { planId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    // A background lookup, not a reader opening the post: no view counted.
-    void getCommunityPlan(planId, { countView: false }).then(
+    // A lookup for the drawer, not a reader opening the post: no view counted.
+    void getCommunityPlan(planId).then(
       (summary) => {
         if (!cancelled) {
           setPost(summary);
