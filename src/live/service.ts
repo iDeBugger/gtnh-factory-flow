@@ -585,11 +585,34 @@ export class LiveService {
   // Sockets
 
   private async handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
-    const url = new URL(req.url ?? "/", "http://live.local");
+    // Until ws takes the socket over nothing listens for its errors, and the
+    // HTTP server has let go of it: a peer resetting the connection while the
+    // account is looked up would otherwise throw out of the event loop and
+    // end the process. ws adds its own listener beside this one.
+    socket.on("error", () => socket.destroy());
     const refuse = (status: number, text: string) => {
-      socket.write(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+      if (!socket.destroyed) {
+        socket.write(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+      }
       socket.destroy();
     };
+    try {
+      await this.upgrade(req, socket, head, refuse);
+    } catch (error) {
+      // A request target that cannot be read, or anything else thrown on the
+      // way: this socket is refused, the service goes on.
+      this.log(`upgrade ${req.url}: ${String(error)}`);
+      refuse(500, "Internal Server Error");
+    }
+  }
+
+  private async upgrade(
+    req: IncomingMessage,
+    socket: Duplex,
+    head: Buffer,
+    refuse: (status: number, text: string) => void,
+  ): Promise<void> {
+    const url = new URL(req.url ?? "/", "http://live.local");
     if (url.pathname !== LIVE_PATH || this.stopping) {
       refuse(404, "Not Found");
       return;

@@ -52,7 +52,7 @@ async function main() {
     .map((origin) => origin.trim())
     .filter(Boolean);
   const maxRooms = Number(process.env.LIVE_MAX_ROOMS || "");
-  let stop: (signal: string) => Promise<void> = async () => undefined;
+  let stop: (signal: string, code?: number) => Promise<void> = async () => undefined;
   const service = new LiveService({
     onShutdownRequest: () => void stop("shutdown request"),
     store: supabasePlanStore(),
@@ -70,18 +70,32 @@ async function main() {
   );
 
   let stopping = false;
-  stop = async (signal: string) => {
+  stop = async (signal: string, code = 0) => {
     if (stopping) {
       return;
     }
     stopping = true;
     console.log(`[live] ${signal}: storing open plans`);
-    await service.stop();
-    console.log("[live] stopped");
-    process.exit(0);
+    try {
+      await service.stop();
+      console.log("[live] stopped");
+    } finally {
+      process.exit(code);
+    }
   };
   process.on("SIGINT", () => void stop("SIGINT"));
   process.on("SIGTERM", () => void stop("SIGTERM"));
+  // A fault nothing caught: store every open plan and let the leases go, then
+  // exit 1 so systemd restarts the service. Exiting without this would leave
+  // the plans to journal replay and REST saves refused until the leases lapse.
+  // A service too broken to stop must still exit, so the exit is timed as well.
+  const bail = (what: string, error: unknown) => {
+    console.error(`[live] ${what}: ${String(error)}`);
+    setTimeout(() => process.exit(1), 10_000).unref();
+    void stop(what, 1);
+  };
+  process.on("uncaughtException", (error) => bail("uncaught exception", error));
+  process.on("unhandledRejection", (reason) => bail("unhandled rejection", reason));
 }
 
 void main().catch((error) => fatal(`could not start: ${String(error)}`));

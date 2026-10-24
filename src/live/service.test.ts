@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { Socket } from "node:net";
+import { connect, type Socket } from "node:net";
 import { WebSocket } from "ws";
 import { LiveClientState } from "@/lib/live/client-state";
 import type { LiveOp, LivePlan } from "@/lib/live/ops";
@@ -255,6 +255,34 @@ const taskPatch = (id: string, f: Record<string, unknown>): LiveOp => ({
   id,
   f,
 });
+
+/** A raw TCP connection asking for a socket upgrade, as a browser would but with any request target. */
+async function rawUpgrade(
+  port: number,
+  target: string,
+  headers: string[] = [],
+): Promise<{ socket: Socket; response: () => string }> {
+  const socket = connect(port, "127.0.0.1");
+  await new Promise<void>((resolve) => socket.once("connect", resolve));
+  let received = "";
+  socket.on("data", (chunk) => (received += chunk.toString()));
+  socket.on("error", () => undefined);
+  socket.write(
+    [
+      `GET ${target} HTTP/1.1`,
+      `Host: 127.0.0.1:${port}`,
+      "Connection: Upgrade",
+      "Upgrade: websocket",
+      "Sec-WebSocket-Version: 13",
+      "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+      `Origin: ${ORIGIN}`,
+      ...headers,
+      "",
+      "",
+    ].join("\r\n"),
+  );
+  return { socket, response: () => received };
+}
 
 beforeAll(async () => {
   vi.stubEnv("LOCAL_DB", "1");
@@ -1148,6 +1176,37 @@ describe("the live service", { timeout: 30_000 }, () => {
     // Ann's cookie in the other tests was made under epoch 0.
     await getCommunityDb().from("community_users").update({ session_epoch: 0 }).eq("id", users.ann!.id);
     forgetSessionUsers();
+  });
+
+  it("survives a connection that drops while its account is being looked up", async () => {
+    const store = supabasePlanStore();
+    const { port } = await startService({
+      store: {
+        ...store,
+        account: (id) =>
+          new Promise((resolve) => setTimeout(() => resolve({ id, username: "ann" }), 500)),
+      },
+    });
+    const { socket } = await rawUpgrade(port, "/live", [`Cookie: ${users.ann!.cookie}`]);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    // A reset, not a close: the error it raises on the server's socket had no
+    // listener while the lookup was pending, and ended the process.
+    socket.resetAndDestroy();
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect((await fetch(`http://127.0.0.1:${port}/live/health`)).status).toBe(200);
+    const bob = await TestClient.open(port, { who: "bob" });
+    await bob.hello();
+  });
+
+  it("refuses a request target it cannot read instead of dying", async () => {
+    const { port } = await startService();
+    // Not a URL: refused as a service error (500), and the service goes on.
+    const { socket, response } = await rawUpgrade(port, "//%/live");
+    await until(() => socket.destroyed || response().length > 0);
+    expect(response().startsWith("HTTP/1.1 500")).toBe(true);
+    expect((await fetch(`http://127.0.0.1:${port}/live/health`)).status).toBe(200);
+    const ann = await TestClient.open(port, { who: "ann" });
+    await ann.hello();
   });
 
   it("answers a join the database cannot open as rate, never as not_found or forbidden", async () => {
