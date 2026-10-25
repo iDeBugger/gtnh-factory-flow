@@ -138,11 +138,11 @@ await shot("whats-new");
 await esc();
 await page.keyboard.press("Escape");
 
-for (const label of ["Source on GitHub", "Discord thread", "Support on Ko-fi"]) {
+for (const label of ["Source on GitHub"]) {
   await helpEntry(label);
 }
 const opened = await page.evaluate(() => window.__opened);
-check("Help's outside links open", opened.length >= 3, opened.join(" "));
+check("Help's outside link opens", opened.length >= 1, opened.join(" "));
 
 await helpEntry("Welcome");
 await shot("welcome");

@@ -169,7 +169,7 @@ describe("the notices' sentences", () => {
     });
     expect(text(note("VALIDATION_FAILED", "residual"))).toMatchObject({
       severity: "error",
-      text: "The planner couldn't solve this plan: please report it in the Discord thread under Help",
+      text: "The planner couldn't solve this plan",
     });
   });
 

@@ -865,7 +865,7 @@ const done: Step = {
   id: "done",
   actions: [closeMenus, A.wait(200)],
   note: {
-    text: "That's everything! *Help* has the tour and every control. Questions about your own setup do well in GTNH Planner's thread on the *GT New Horizons Discord*.",
+    text: "That's everything! *Help* has the tour and every control.",
     at: helpKey,
   },
 };
