@@ -49,6 +49,11 @@ export interface MenuEntry {
   icon?: ReactNode;
   /** A font-family for the label alone (the font picker shows each font in itself). */
   labelFont?: string;
+  /**
+   * The rows of a menu this row opens at its side (the mouse over it, a press, or the right arrow); `onSelect` is not
+   * called for such a row.
+   */
+  submenu?: MenuEntry[];
   onSelect: () => void;
 }
 
@@ -82,6 +87,8 @@ export function ChromeMenu({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // The row whose submenu is open, and whether the keyboard opened it (its first row then takes focus).
+  const [sub, setSub] = useState<{ index: number; focus: boolean }>();
   useDropdownDismiss(true, {
     refs: [ref],
     onClose,
@@ -91,8 +98,7 @@ export function ChromeMenu({
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const menu = ref.current;
-    const rows = menu?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled])');
-    (rows?.[0] ?? menu)?.focus({ preventScroll: true });
+    (ownRows(menu)[0] ?? menu)?.focus({ preventScroll: true });
     return () => {
       const active = document.activeElement;
       // Only take focus back when it was in the menu (a row picked that opened something else keeps its own).
@@ -146,7 +152,7 @@ export function ChromeMenu({
       onContextMenu={(event) => event.preventDefault()}
       tabIndex={-1}
       onKeyDown={(event) => {
-        const rows = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled])') ?? [])];
+        const rows = ownRows(ref.current);
         const at = rows.indexOf(document.activeElement as HTMLElement);
         const step = event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
         if (step) {
@@ -164,7 +170,13 @@ export function ChromeMenu({
       {title ? <div className="mm-title">{title}</div> : null}
       <div className="mm-scroll">
         {entries.map((entry, index) => (
-          <MenuRow key={`${entry.label}:${index}`} entry={entry} onClose={onClose} />
+          <MenuRow
+            key={`${entry.label}:${index}`}
+            entry={entry}
+            onClose={onClose}
+            subOpen={sub?.index === index ? sub : undefined}
+            onSub={(open, focus) => setSub(open ? { index, focus } : undefined)}
+          />
         ))}
       </div>
     </div>,
@@ -172,23 +184,65 @@ export function ChromeMenu({
   );
 }
 
-function MenuRow({ entry, onClose }: { entry: MenuEntry; onClose: () => void }): ReactNode {
+/** A menu's own enabled rows, not those of a submenu open inside it. */
+function ownRows(menu: HTMLElement | null | undefined): HTMLElement[] {
+  if (!menu) return [];
+  return [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled])')].filter(
+    (row) => row.closest('[role="menu"]') === menu,
+  );
+}
+
+function MenuRow({
+  entry,
+  onClose,
+  subOpen,
+  onSub,
+}: {
+  entry: MenuEntry;
+  onClose: () => void;
+  /** This row's submenu is open (`focus`: the keyboard opened it). */
+  subOpen?: { focus: boolean };
+  /** Opens (true) or shuts this row's submenu; any other row shuts the one open. */
+  onSub?: (open: boolean, focus: boolean) => void;
+}): ReactNode {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const hasSub = Boolean(entry.submenu?.length) && !entry.disabled;
   return (
     <>
       {entry.ruleAbove ? <div className="mm-rule" /> : null}
       <div
+        ref={rowRef}
         role="menuitem"
         className="mm-row"
         tabIndex={-1}
-        onKeyDown={activateOnKey}
+        onKeyDown={(event) => {
+          if (hasSub && event.target === event.currentTarget && ["ArrowRight", "Enter", " "].includes(event.key)) {
+            event.preventDefault();
+            event.stopPropagation();
+            onSub?.(true, true);
+            return;
+          }
+          activateOnKey(event);
+        }}
+        onPointerEnter={(event) => {
+          // The mouse opens a submenu by resting on its row, and shuts it on any other row. A finger presses instead.
+          if (event.pointerType === "mouse") onSub?.(hasSub, false);
+        }}
         data-tone={entry.tone}
         data-current={entry.current ? "" : undefined}
         data-off={entry.disabled ? "" : undefined}
+        data-hot={subOpen ? "" : undefined}
         aria-disabled={entry.disabled || undefined}
+        aria-haspopup={hasSub ? "menu" : undefined}
+        aria-expanded={hasSub ? Boolean(subOpen) : undefined}
         {...(entry.tip ? tipAttrs({ id: `menu|${entry.label}`, title: entry.tip }) : {})}
         onClick={() => {
           if (entry.disabled) return;
           playBoardSound("tick");
+          if (hasSub) {
+            onSub?.(!subOpen, false);
+            return;
+          }
           onClose();
           entry.onSelect();
         }}
@@ -200,7 +254,107 @@ function MenuRow({ entry, onClose }: { entry: MenuEntry; onClose: () => void }):
           {entry.label}
         </span>
         {entry.detail ? <span className="mm-detail">{entry.detail}</span> : null}
+        {entry.submenu?.length ? <SubArrow /> : null}
       </div>
+      {hasSub && subOpen ? (
+        <SubMenu
+          row={rowRef}
+          label={entry.label}
+          entries={entry.submenu!}
+          focus={subOpen.focus}
+          onBack={() => {
+            onSub?.(false, false);
+            rowRef.current?.focus({ preventScroll: true });
+          }}
+          onClose={onClose}
+        />
+      ) : null}
     </>
+  );
+}
+
+/**
+ * A row's submenu: the same rows, hung beside the row (to its right, or its left where the window has no room). It is
+ * drawn inside the menu, so a press in it is a press inside, and it wears the menu's zoom: its box is in those pixels.
+ * Picking a row closes the whole menu; the left arrow goes back to the row.
+ */
+function SubMenu({
+  row,
+  label,
+  entries,
+  focus,
+  onBack,
+  onClose,
+}: {
+  row: React.RefObject<HTMLDivElement | null>;
+  label: string;
+  entries: MenuEntry[];
+  focus: boolean;
+  onBack: () => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<{ left: number; top: number }>();
+  const scale = getUiScale() * CHROME_SCREEN_K;
+  useLayoutEffect(() => {
+    const at = row.current?.getBoundingClientRect();
+    const box = ref.current?.getBoundingClientRect();
+    if (!at || !box) return;
+    const margin = 2 * scale;
+    // The menu's top padding (4 GUI px) above its first row, so the first row lines up with the row it hangs from.
+    const pad = 4 * scale;
+    let left = at.right + scale;
+    if (left + box.width > window.innerWidth - margin) left = at.left - scale - box.width;
+    if (left < margin) left = Math.max(margin, window.innerWidth - margin - box.width);
+    const top = Math.max(margin, Math.min(at.top - pad, window.innerHeight - margin - box.height));
+    setPlace({ left: left / scale, top: top / scale });
+    // Measured once as it opens: the menu closes on a scroll, so the row does not move under it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (focus && place) ownRows(ref.current)[0]?.focus({ preventScroll: true });
+    // Only as it lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [place === undefined]);
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      aria-label={label}
+      className="mm mm-sub"
+      tabIndex={-1}
+      style={place ? { left: place.left, top: place.top } : { left: 0, top: 0, visibility: "hidden" }}
+      onKeyDown={(event) => {
+        event.stopPropagation();
+        const rows = ownRows(ref.current);
+        const at = rows.indexOf(document.activeElement as HTMLElement);
+        const step = event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
+        if (step) {
+          event.preventDefault();
+          rows[at < 0 ? (step > 0 ? 0 : rows.length - 1) : (at + step + rows.length) % rows.length]?.focus();
+        } else if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          onBack();
+        } else if (event.key === "Tab") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <div className="mm-scroll">
+        {entries.map((entry, index) => (
+          <MenuRow key={`${entry.label}:${index}`} entry={entry} onClose={onClose} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The pixel chevron of a row that opens a submenu. */
+function SubArrow() {
+  return (
+    <svg className="mm-sub-arrow" width="4" height="7" viewBox="0 0 4 7" shapeRendering="crispEdges" aria-hidden fill="currentColor">
+      <path d="M0 0h1v1h-1zM1 1h1v1h-1zM2 2h1v1h-1zM3 3h1v1h-1zM2 4h1v1h-1zM1 5h1v1h-1zM0 6h1v1h-1z" />
+    </svg>
   );
 }

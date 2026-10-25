@@ -34,8 +34,15 @@ import type { ShareMode } from "@/components/community/SharePlanDialog";
 import { isLiveConfigured } from "@/lib/live/live-config";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { ChecklistIcon } from "./pixel-icons";
-import { convertToLabel, readNewPlanVersion } from "@/lib/datasets/new-plan-version";
-import { convertingLabel, convertPlan, convertTargets, usePendingConversion } from "@/lib/datasets/convert-action";
+import { readNewPlanVersion, servedGameVersions } from "@/lib/datasets/new-plan-version";
+import {
+  convertingLabel,
+  convertPlan,
+  convertTargets,
+  usePendingConversion,
+  type PendingConversion,
+} from "@/lib/datasets/convert-action";
+import type { DatasetManifest } from "@/lib/datasets/types";
 import { DEFAULT_GAME_VERSION, gameVersionLabel, planGameVersion, type GameVersion } from "@/lib/model/game-version";
 
 /** What the tab strip asks of the bar: the dialogs it does not own. */
@@ -386,17 +393,7 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
       { label: "Rename", onSelect: () => setRenaming(m.id) },
       { label: "Copy plan code", detail: "to paste or share", onSelect: () => void copyCode(m.id) },
       // Outside the library rows: converting is not a community feature and shows with it switched off.
-      ...convertTargets(manifest, tabVersion).map(
-        (version): MenuEntry =>
-          converting?.target === version && converting.sourceDesignId === m.id
-            ? { label: convertingLabel(version), disabled: true, onSelect: () => undefined }
-            : {
-                label: convertToLabel(version),
-                detail: "as a new plan",
-                disabled: Boolean(converting),
-                onSelect: () => void convert(m.id, version),
-              },
-      ),
+      ...convertRows(manifest, tabVersion, converting, m.id, (version) => void convert(m.id, version)),
       ...libraryRows(
         Boolean(m.id === activeDesignId ? linkedPostId : designs.find((design) => design.id === m.id)?.communityPlanId),
         (mode) => {
@@ -660,6 +657,42 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
     </div>
   );
 }
+
+/**
+ * The tab menu's Convert to row: a submenu of every version this site serves, the plan's own shown (marked "this
+ * plan") but not picked. None on a site with nothing else to convert to. While this tab's conversion runs the row
+ * says so, greyed; while another tab's runs it is greyed.
+ */
+export function convertRows(
+  manifest: DatasetManifest | undefined,
+  planVersion: GameVersion,
+  converting: PendingConversion | undefined,
+  designId: string,
+  onConvert: (version: GameVersion) => void,
+): MenuEntry[] {
+  if (convertTargets(manifest, planVersion).length === 0) return [];
+  if (converting?.sourceDesignId === designId) {
+    return [{ label: convertingLabel(converting.target), disabled: true, onSelect: () => undefined }];
+  }
+  const served = servedGameVersions(manifest);
+  const versions = served.includes(planVersion) ? served : [planVersion, ...served];
+  return [
+    {
+      label: CONVERT_TO_MENU_LABEL,
+      detail: "as a new plan",
+      disabled: Boolean(converting),
+      onSelect: () => undefined,
+      submenu: versions.map((version) =>
+        version === planVersion
+          ? { label: gameVersionLabel(version), detail: "this plan", current: true, disabled: true, onSelect: () => undefined }
+          : { label: gameVersionLabel(version), onSelect: () => onConvert(version) },
+      ),
+    },
+  ];
+}
+
+/** The Convert row's label; its submenu names the versions. */
+export const CONVERT_TO_MENU_LABEL = "Convert to";
 
 /** The pixel cross of the close key: two five-pixel diagonals. */
 function CloseGlyph() {

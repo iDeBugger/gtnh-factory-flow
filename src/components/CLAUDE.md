@@ -111,6 +111,9 @@ The board has its own notes in `flow/CLAUDE.md`, the Pool worksheet in `pool/CLA
 
 ## Shared UI behaviour
 
+- A `ChromeMenu` row with `submenu` opens its rows beside it (mouse resting on it, a press, Right or Enter; Left goes
+  back). The submenu is drawn inside the menu, so a press in it counts as inside, and it wears the menu's zoom; it hangs
+  right of the row, or left where the window has no room. The tab menu's Convert to is one.
 - Dropdowns dismiss through `useDropdownDismiss`: the mouse fade counts from the nearest
   point the pointer has reached, so a panel that opens away from the pointer can be
   walked to. `fadeKeep` names the element a menu hangs from.

@@ -710,3 +710,16 @@
   box-shadow: 0 0 0 1px var(--mc-key-edge);
   padding: 0 6px;
 }
+
+/* A row that opens a submenu: a chevron at its right end; the submenu hangs beside it, a menu like any other. */
+.mm-sub-arrow {
+  flex: none;
+  margin-left: -6px;
+  color: var(--mc-muted);
+}
+.mm-row[data-off] .mm-sub-arrow {
+  color: inherit;
+}
+.mm.mm-sub {
+  z-index: 1;
+}

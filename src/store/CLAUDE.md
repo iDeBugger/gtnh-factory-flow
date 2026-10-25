@@ -68,8 +68,9 @@ Every save goes through `persistCanvas` in design-store.ts:
   bodies, is never refreshed, and shows `PlanVersionNotice` ("This plan is for GTNH <v>. This site has recipes
   for ..."); the recipe browser, the item list, the crop and mob lists, a marked card and the unconverted-cards notice say
   "Recipes for GTNH <v> are not on this site." The notice's key, Convert to GTNH 2.9, shows while this site serves 2.9.
-- Convert (`src/lib/datasets/convert-action.ts`: the notice's key, and a tab menu's "Convert to GTNH <v>" row for every
-  served version but the plan's, outside the community rows) loads the target's dataset (`ensureDatasetFor`),
+- Convert (`src/lib/datasets/convert-action.ts`: the notice's key, and a tab menu's "Convert to" row, outside the
+  community rows, whose submenu lists every served version, the plan's own shown as "this plan" and not pickable;
+  `convertRows` in `ModTabs.tsx`, no row while there is nothing else to convert to) loads the target's dataset (`ensureDatasetFor`),
   converts a clone (`convertProjectToVersion`) and opens it with `importProjectAsDesign`. The source tab is not
   opened, switched or written: the open tab converts what is on the board, another tab its stored record. One
   conversion runs at a time: while it runs the source tab shows the working mark and the key and row read
