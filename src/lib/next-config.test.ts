@@ -7,8 +7,10 @@ test("the image optimizer is off, so /_next/image is a 404 and no picture reache
   expect(nextConfig.images?.unoptimized).toBe(true);
 });
 
-test("every answer carries Strict-Transport-Security for six months, without includeSubDomains", async () => {
+test("every answer carries Strict-Transport-Security for six months, without includeSubDomains, once", async () => {
   const rules = await nextConfig.headers!();
   const site = rules.find((rule) => rule.source === "/:path*");
-  expect(site?.headers).toEqual([{ key: "Strict-Transport-Security", value: "max-age=15552000" }]);
+  expect(site?.headers).toContainEqual({ key: "Strict-Transport-Security", value: "max-age=15552000" });
+  const hsts = rules.flatMap((rule) => rule.headers).filter((header) => header.key === "Strict-Transport-Security");
+  expect(hsts).toHaveLength(1);
 });

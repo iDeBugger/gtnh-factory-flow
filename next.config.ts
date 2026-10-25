@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { securityHeaders } from "./src/lib/security-headers";
 
 const datasetBackendUrl = process.env.GTNH_DATASET_BACKEND_URL?.replace(/\/+$/, "");
 
@@ -16,15 +17,17 @@ const nextConfig: NextConfig = {
   // The site never uses next/image: pictures are served by the app's own routes or plain <img>.
   // With the optimizer off, /_next/image answers 404 and no upload or dataset PNG reaches sharp.
   images: { unoptimized: true },
+  // The framework's own X-Powered-By names the server software for nothing.
+  poweredByHeader: false,
   async headers() {
+    // The headers are read at build into the routes manifest, which is also when NEXT_PUBLIC_* is fixed.
+    // Security headers first (src/lib/security-headers.ts: the policy, framing, nosniff, referrer, HSTS, and
+    // the solver worker's own policy on the static chunks), then the texture cache rules.
     return [
-      {
-        // Browsers that have seen the site over TLS keep asking for it that way for six months, so a pasted
-        // http:// link or a captive portal never carries the session cookie in the clear. Cloudflare passes
-        // origin headers through. No includeSubDomains: a staging subdomain may not be TLS.
-        source: "/:path*",
-        headers: [{ key: "Strict-Transport-Security", value: "max-age=15552000" }],
-      },
+      ...securityHeaders({
+        production: process.env.NODE_ENV === "production",
+        liveUrl: process.env.NEXT_PUBLIC_LIVE_URL,
+      }),
       {
         source: "/datasets/gtnh/:version/textures/icons/:path*",
         headers: [

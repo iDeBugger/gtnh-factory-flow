@@ -37,6 +37,14 @@
 - The image optimizer is off (`images.unoptimized` in next.config.ts): nothing uses next/image, and
   `/_next/image` would hand any same-origin PNG (uploads, dataset textures) to sharp. Pictures are served
   by the app's own routes or plain `<img>`; keep it that way.
+- Every answer carries the security headers of `src/lib/security-headers.ts` (built into the routes manifest
+  by `next.config.ts` at build): one Content-Security-Policy, `X-Frame-Options: SAMEORIGIN`, nosniff,
+  `Referrer-Policy`, the one HSTS value; `X-Powered-By` is off. The policy allows only the site's own origin for
+  scripts, styles, fonts, fetch/WebSocket and workers (`blob:` workers too), `data:`/`blob:`/`https:` images,
+  and no framing by other origins. `/_next/static/*` gets a second policy with `'unsafe-eval'`: the solver
+  worker evaluates the HiGHS glue, and a worker's policy is its own script's response (a later rule overrides
+  the same key). A third-party script, font, socket or frame needs a change there first, or the browser
+  refuses it. Exam: `security-headers.test.ts`, `next-config.test.ts`, probe `scratch/probes/csp-headers.mjs`.
 - Every dataset route except `prewarm` spends an in-memory work budget per client address (`dataset-rate.ts`):
   3000 units a minute. A base cost goes before any dataset work (1 unit; 25 for a heavy request: a text search
   with a word under three characters or more than three words, `recipe-ids`, `crops`, `resolve-recipes`), then
