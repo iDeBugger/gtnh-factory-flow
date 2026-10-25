@@ -1,6 +1,6 @@
 "use client";
 
-import type { PendingBatch } from "./client-state";
+import { makeCid, type PendingBatch } from "./client-state";
 import { applyOps, type LiveOp, type LivePlan } from "./ops";
 
 /**
@@ -139,6 +139,8 @@ interface StoredBase {
   tabId: string;
   base: LivePlan;
   updatedAt: string;
+  /** New at every write of the base: tells one base from a later one with the same plan. */
+  stamp?: string;
 }
 
 function baseKey(designId: string): string {
@@ -198,12 +200,13 @@ function withBase(
   store: IDBObjectStore,
   designId: string,
   abort: () => void,
-  then: (base: LivePlan | undefined) => void,
+  then: (base: LivePlan | undefined, stamp: string | undefined) => void,
 ): void {
   const request = store.get(baseKey(designId));
   request.onsuccess = () => {
     try {
-      then((request.result as StoredBase | undefined)?.base);
+      const entry = request.result as StoredBase | undefined;
+      then(entry?.base, entry?.stamp);
     } catch {
       abort();
     }
@@ -212,7 +215,14 @@ function withBase(
 
 function putBase(store: IDBObjectStore, designId: string, base: LivePlan): void {
   const key = baseKey(designId);
-  const entry: StoredBase = { key, doc: key, tabId: "", base, updatedAt: new Date().toISOString() };
+  const entry: StoredBase = {
+    key,
+    doc: key,
+    tabId: "",
+    base,
+    updatedAt: new Date().toISOString(),
+    stamp: makeCid(),
+  };
   store.put(entry);
 }
 
@@ -270,16 +280,16 @@ export interface TakenBase {
  */
 export async function takeDetachedBase(
   designId: string,
-  use: (base: LivePlan | undefined) => TakenBase | undefined,
+  use: (base: LivePlan | undefined, stamp: string | undefined) => TakenBase | undefined,
 ): Promise<void> {
   if (!available()) {
-    use(undefined);
+    use(undefined, undefined);
     return;
   }
   await inTurn(designId, () =>
     transact("readwrite", (store, abort) =>
-      withBase(store, designId, abort, (base) => {
-        const taken = use(base);
+      withBase(store, designId, abort, (base, stamp) => {
+        const taken = use(base, stamp);
         if (!base || !taken) {
           return;
         }
@@ -333,13 +343,22 @@ export async function shiftDetachedBase(designId: string, ops: LiveOp[]): Promis
 }
 
 /** The base was used (its edits are batches now) or its design is gone: nothing is waiting. */
-export async function forgetDetachedBase(designId: string): Promise<void> {
+export async function forgetDetachedBase(designId: string, onlyStamp?: string): Promise<void> {
   if (!available()) {
     return;
   }
   await inTurn(designId, () =>
-    transact("readwrite", (store) => {
-      store.delete(baseKey(designId));
+    transact("readwrite", (store, abort) => {
+      if (onlyStamp === undefined) {
+        store.delete(baseKey(designId));
+        return;
+      }
+      // Only the base that was read: one another tab kept since is someone's edits still to send.
+      withBase(store, designId, abort, (base, stamp) => {
+        if (base && stamp === onlyStamp) {
+          store.delete(baseKey(designId));
+        }
+      });
     }),
   );
 }

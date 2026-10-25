@@ -648,7 +648,8 @@ export class LiveSession {
           away[0]!.cid,
           chunkOps(puts).map((chunk): PendingBatch => ({ cid: makeCid(), ops: chunk, inverse: [] })),
         );
-        this.schedulePersist();
+        // Stored at once: a tab that adopts the away batches after a crash takes in their recipes with them.
+        this.persistNow();
       }
       room.away.clear();
     }
@@ -993,6 +994,7 @@ export class LiveSession {
     let awayCids = new Set<string>();
     let used = false;
     let sentHere = false;
+    let takenStamp: string | undefined;
     let snapshotsAtUse = 0;
     const use = (base: LivePlan | undefined) => {
       used = true;
@@ -1016,12 +1018,15 @@ export class LiveSession {
       void forgetDetachedBase(room.designId).catch(() => undefined);
     } else {
       try {
-        await takeDetachedBase(room.designId, (base) => (this.room === room ? use(base) : undefined));
+        await takeDetachedBase(room.designId, (base, stamp) => {
+          takenStamp = stamp;
+          return this.room === room ? use(base) : undefined;
+        });
       } catch {
         if (this.room === room && awayCids.size > 0) {
           if (sentHere || room.snapshots !== snapshotsAtUse) {
-            // Sent already (here, or by a snapshot's resend): the edits are with the service, so the base goes.
-            void forgetDetachedBase(room.designId).catch(() => undefined);
+            // Sent already (here, or by a snapshot's resend): the edits are with the service, so that base goes.
+            void forgetDetachedBase(room.designId, takenStamp ?? "").catch(() => undefined);
           } else {
             // Not taken and not sent: the base stays stored for the next room, so its batches leave this one.
             const before = room.engine.view;

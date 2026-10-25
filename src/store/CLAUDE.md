@@ -225,7 +225,8 @@ changes nothing until then. Architecture and protocol: `docs/live.md`.
   snapshot leave undo when a plan made moments ago takes its snapshot over; the base is one per design, not per tab:
   another open tab's pending batches go before this tab's edits away from the room even when they are newer, and a
   plan reloaded from another tab's save while no room is open leaves the base where it was, so that tab's edits go
-  again as this person's (the same values). Exam: `live-session.test.ts`, `library-sync-live.test.ts`,
+  again as this person's (the same values), and edits a tab has not autosaved yet when another tab's room takes the
+  base are lost (that room's canvas lacks them; the window is one autosave wait). Exam: `live-session.test.ts`, `library-sync-live.test.ts`,
   `src/lib/live/live-pending-store.test.ts` (real IndexedDB through fake-indexeddb).
 - ACCOUNT SYNC never sends the body of a plan open live, here or in another tab (`isDesignOpenLive`, a localStorage
   mark refreshed while open), and a pull of one moves only its metadata. A push answered 409 `{ live: true }` goes

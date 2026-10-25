@@ -247,6 +247,23 @@ function annotations(): FactoryAnnotation[] {
   return useFactoryStore.getState().project.annotations ?? [];
 }
 
+/** Another tab's write of the base, straight to storage, with a stamp of its own. */
+function replaceStoredBase(designId: string, base: LivePlan): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open("gtnh-factory-flow-live");
+    request.onsuccess = () => {
+      const tx = request.result.transaction("pending", "readwrite");
+      const key = `detached|${designId}`;
+      tx.objectStore("pending").put({ key, doc: key, tabId: "", base, updatedAt: "", stamp: "another-tab" });
+      tx.oncomplete = () => {
+        request.result.close();
+        resolve();
+      };
+      tx.onerror = () => reject(tx.error);
+    };
+  });
+}
+
 /** Holds the next take of the base until the returned function is called. */
 function holdTake(store: typeof import("@/lib/live/live-pending-store")): () => void {
   let release: () => void = () => undefined;
@@ -583,8 +600,8 @@ describe("live editing in the store", () => {
     const stored: string[] = [];
     const real = vi.mocked(store.takeDetachedBase).getMockImplementation()!;
     vi.mocked(store.takeDetachedBase).mockImplementationOnce((id, use) =>
-      real(id, (base) => {
-        const taken = use(base);
+      real(id, (base, stamp) => {
+        const taken = use(base, stamp);
         stored.push(...(taken?.pending.map((batch) => batch.cid) ?? []));
         return taken;
       }),
@@ -669,10 +686,14 @@ describe("live editing in the store", () => {
     await keepDetachedBase(DESIGN, () => base);
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => (release = resolve));
-    vi.mocked(store.takeDetachedBase).mockImplementationOnce(async (_id, use) => {
+    const real = vi.mocked(store.takeDetachedBase).getMockImplementation()!;
+    vi.mocked(store.takeDetachedBase).mockImplementationOnce(async (id, use) => {
       await gate;
-      use(base);
-      throw new Error("aborted");
+      // The batches are made, then the transaction aborts: storage keeps the base.
+      return real(id, (read, stamp) => {
+        use(read, stamp);
+        throw new Error("aborted");
+      });
     });
     await openLiveDesign(planWith(annotation("n1", "mine")), planWith(annotation("n1", "live")));
     await new Promise((resolve) => setTimeout(resolve, 3200));
@@ -685,6 +706,65 @@ describe("live editing in the store", () => {
     expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["mine"]);
     expect(annotations().map((note) => note.text)).toEqual(["mine"]);
     expect(await readDetachedBase(DESIGN)).toBeUndefined();
+  });
+
+  it("keeps a base another tab kept after a failed take whose edits went out", async () => {
+    const store = await import("@/lib/live/live-pending-store");
+    await keepDetachedBase(DESIGN, () => liveShape(planWith(annotation("n1", "one"))));
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const real = vi.mocked(store.takeDetachedBase).getMockImplementation()!;
+    const theirs = liveShape(planWith(annotation("n1", "theirs")));
+    vi.mocked(store.takeDetachedBase).mockImplementationOnce(async (id, use) => {
+      await gate;
+      try {
+        return await real(id, (read, stamp) => {
+          use(read, stamp);
+          throw new Error("aborted");
+        });
+      } catch (error) {
+        // Meanwhile another tab used that base and kept a new one for its own edits.
+        await replaceStoredBase(DESIGN, theirs);
+        throw error;
+      }
+    });
+    await openLiveDesign(planWith(annotation("n1", "mine")), planWith(annotation("n1", "live")));
+    await new Promise((resolve) => setTimeout(resolve, 3200));
+    await settle();
+
+    release();
+    await settle(12);
+
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["mine"]);
+    expect(await readDetachedBase(DESIGN)).toEqual(theirs);
+  });
+
+  it("stores the recipe batches the first snapshot adds at once, with the batches they go before", async () => {
+    const press = {
+      id: "press", name: "press", machineType: "Bender", minimumTier: "LV", durationTicks: 20, eut: 30,
+      inputs: [{ kind: "item" as const, id: "plate_in", amount: 1, displayName: "in" }],
+      outputs: [{ kind: "item" as const, id: "plate_out", amount: 1, displayName: "out" }],
+    };
+    const local: FactoryProject = { ...planWith(annotation("n1", "one")), recipes: [press] };
+    await openLiveDesign(local, planWith(annotation("n1", "one")), false);
+    useFactoryStore.setState((state) => ({
+      project: {
+        ...state.project,
+        nodes: [{ id: "m1", recipeId: "press", machineCount: 1, parallel: 1, overclockTier: "LV" as const,
+          enabled: true, position: { x: 0, y: 0 } }],
+      },
+    }));
+    await settle();
+    // A dead link: nothing is confirmed, so what is stored is what a tab after a crash would adopt.
+    const send = service.handle.bind(service);
+    service.handle = (frame) => (frame.t === "ops" ? undefined : send(frame));
+
+    useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
+    await settle(12);
+
+    const stored = (await readPending(DOC)).flatMap((entry) => entry.pending);
+    expect(stored[0]!.ops.map((op) => `${op.o}:${"c" in op ? op.c : ""}`)).toEqual(["put:recipes"]);
+    expect(stored.length).toBeGreaterThan(1);
   });
 
   it("sends a late take's batches before an edit made while the closed tab's entry is being removed", async () => {
