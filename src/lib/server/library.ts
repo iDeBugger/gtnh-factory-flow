@@ -90,24 +90,7 @@ export function rowToFolder(row: FolderRow): RemoteFolder {
   };
 }
 
-/**
- * A missing or stale table says so by name: the schema is pasted by hand,
- * and the app has to tell "not set up yet" from "broken".
- */
-export function libraryStorageErrorMessage(
-  error: { code?: string; message?: string } | null,
-  fallback: string,
-): string {
-  if (error?.code === "PGRST205" || error?.code === "42P01") {
-    return "Plan sync is not set up yet: run supabase/schema.sql in the Supabase SQL editor.";
-  }
-  if (error?.code === "PGRST204" || error?.code === "42703") {
-    return "Plan sync is out of date: re-run the latest supabase/schema.sql in the Supabase SQL editor.";
-  }
-  // Anything else: say what the database said, so the strip's red line
-  // names the cause instead of hiding it behind a fallback.
-  return error?.message ? `${fallback} ${error.message}` : fallback;
-}
+export { libraryStorageErrorMessage } from "./db/errors";
 
 /** True for a well-formed ISO timestamp the client is allowed to stamp. */
 export function isIsoTimestamp(value: unknown): value is string {

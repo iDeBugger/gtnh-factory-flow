@@ -148,22 +148,4 @@ export async function attachMyBlueprintVotes(
   }
 }
 
-/**
- * Turns the two schema-drift Postgres errors into messages that say what to
- * actually do, instead of a generic 500: PGRST205 means the blueprints table
- * has never been created; PGRST204/42703 mean the table predates a column
- * this build reads or writes (schema.sql converges when re-run — its later
- * additions are idempotent ALTERs). Anything else keeps the caller's word.
- */
-export function blueprintStorageErrorMessage(
-  error: { code?: string } | null,
-  fallback: string,
-): string {
-  if (error?.code === "PGRST205") {
-    return "Blueprint storage is not set up yet: run supabase/schema.sql in the Supabase SQL editor.";
-  }
-  if (error?.code === "PGRST204" || error?.code === "42703") {
-    return "Blueprint storage is out of date: re-run the latest supabase/schema.sql in the Supabase SQL editor.";
-  }
-  return fallback;
-}
+export { blueprintStorageErrorMessage } from "./db/errors";
