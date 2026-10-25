@@ -1682,6 +1682,52 @@ describe("project recipe refresh", () => {
       expect(state.selectedNodeId).toBeUndefined();
     });
 
+    for (const waits of ["own recipe", "extra section"] as const) {
+      it(`keeps a migrated sibling's new id while the card's ${waits} waits`, () => {
+        // One section holds a revoked Tin pick; the other's recipe is re-keyed in the same refresh.
+        const named = (id: string, offered: boolean, out = `${id}-out`) => ({ ...solderRecipe(id, offered), id, outputs: [{ kind: "item" as const, id: out, amount: 1 }] });
+        const pick = { "0": { ...tin, amount: 288 } };
+        const own = waits === "own recipe";
+        useFactoryStore.getState().setProject({
+          schemaVersion: PROJECT_SCHEMA_VERSION,
+          id: "deferred-sections-test",
+          name: "Deferred sections test",
+          fuelProfiles: [],
+          recipes: [named("a", true), named(own ? "old-b" : "old-a", false, "b-out")],
+          nodes: [
+            {
+              ...node("n"),
+              recipeId: own ? "a" : "old-a",
+              recipeInputOverrides: own ? pick : undefined,
+              extraRecipes: [{ recipeId: own ? "old-b" : "a", ...(own ? {} : { recipeInputOverrides: pick }) }],
+            },
+          ],
+          edges: [],
+        });
+        const migrated: Record<string, string> = own ? { "old-b": "new-b" } : { "old-a": "new-a" };
+        const { revoked, deferred } = useFactoryStore
+          .getState()
+          .refreshProjectRecipes([named("a", false), named(own ? "new-b" : "new-a", false, "b-out")], migrated);
+
+        const check = () => {
+          const { project } = useFactoryStore.getState();
+          const ids = new Set(project.recipes.map((recipe) => recipe.id));
+          const card = project.nodes[0]!;
+          expect([card.recipeId, ...(card.extraRecipes ?? []).map((extra) => extra.recipeId)].every((id) => ids.has(id))).toBe(true);
+          expect(card.recipeId).toBe(own ? "a" : "new-a");
+          expect(card.extraRecipes?.[0]?.recipeId).toBe(own ? "new-b" : "a");
+        };
+        expect(revoked.map((entry) => entry.section)).toEqual([own ? 0 : 1]);
+        check();
+        // The waiting section still holds its pick until it is settled.
+        const card = useFactoryStore.getState().project.nodes[0]!;
+        expect((own ? card.recipeInputOverrides : card.extraRecipes?.[0]?.recipeInputOverrides)?.["0"]?.id).toBe("molten.tin");
+
+        useFactoryStore.getState().settleRevokedSubstitutes(revoked.map((entry) => ({ revoked: entry })), deferred);
+        check();
+      });
+    }
+
     it("skips a card that changed before its twin arrived", () => {
       const { revoked } = landSolderPlan();
       useFactoryStore.getState().updateNode("solidifier", { recipeInputOverrides: undefined });

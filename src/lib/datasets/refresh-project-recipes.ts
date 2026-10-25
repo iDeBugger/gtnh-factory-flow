@@ -40,10 +40,16 @@ export function recipesToRefresh(
  * version, and which recipe objects were sent. One per page, so a step outside
  * the board (a plan file import) can ask for a recipe again.
  */
-export const landingRefreshMemory = {
-  checked: new Map<string, boolean>(),
-  requested: new WeakSet<Recipe>(),
+export const landingRefreshMemory: { checked: Map<string, boolean>; requested: WeakSet<Recipe> } = {
+  checked: new Map(),
+  requested: new WeakSet(),
 };
+
+/** Empties the page's landing refresh memory: a test that lands plans starts from a fresh page. */
+export function resetLandingRefreshMemory(): void {
+  landingRefreshMemory.checked = new Map();
+  landingRefreshMemory.requested = new WeakSet();
+}
 
 /**
  * Forgets that these stored bodies were checked against `versionId`, so the next

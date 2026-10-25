@@ -30,6 +30,7 @@ import { writeDeviceSettings } from "@/lib/device-settings";
 import { leaveWelcomeTab } from "@/lib/welcome/welcome-tab";
 import { useDesignStore } from "@/store/design-store";
 import { useFactoryStore } from "@/store/factory-store";
+import { resetLandingRefreshMemory } from "@/lib/datasets/refresh-project-recipes";
 
 function setProject(patch: { planMode?: boolean; poolMode?: boolean }) {
   const project = useFactoryStore.getState().project;
@@ -52,6 +53,7 @@ function order(container: HTMLElement): string[] {
 
 describe("workspace layout", () => {
   beforeEach(() => {
+    resetLandingRefreshMemory();
     window.localStorage.clear();
     resetRailViewForTests();
     writeWorkspaceView({ ...DEFAULT_WORKSPACE_VIEW, leftPanelOpen: true, rightPanelOpen: true });

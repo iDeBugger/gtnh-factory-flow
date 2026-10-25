@@ -1533,17 +1533,19 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
             recipes: project.recipes.map((recipe) =>
               waiting.has(recipe.id) ? state.project.recipes.find((entry) => entry.id === recipe.id)! : recipe,
             ),
-            nodes: project.nodes.map((node) =>
-              listNodeRecipeIds(node).some((id) => waiting.has(id)) ? (before.get(node.id) ?? node) : node,
-            ),
+            nodes: project.nodes.map((node) => {
+              const stored = before.get(node.id);
+              return stored ? withWaitingSectionsRestored(node, stored, waiting) : node;
+            }),
           };
-          const waitingNodes = new Set(
-            project.nodes.filter((node) => listNodeRecipeIds(node).some((id) => waiting.has(id))).map((node) => node.id),
+          // A steam move belongs to the card's own recipe: one that waits says it when it is settled.
+          const waitingCards = new Set(
+            state.project.nodes.filter((node) => waiting.has(node.recipeId)).map((node) => node.id),
           );
           steamLines.splice(
             0,
             steamLines.length,
-            ...steamMoves.filter((entry) => !waitingNodes.has(entry.nodeId)).map((entry) => entry.line),
+            ...steamMoves.filter((entry) => !waitingCards.has(entry.nodeId)).map((entry) => entry.line),
           );
         }
       }
@@ -5703,6 +5705,39 @@ function swapMachineRecipeToState(
     ...(options.select === false ? {} : { selectedNodeId: nodeId, selectedRecipeId: recipe.id }),
     lastResult: solveBooks(project),
   });
+}
+
+/**
+ * A card whose sections wait on a revoked pick, as the refresh leaves it: every
+ * section takes the fresh node's recipe id (a migrated sibling keeps its new id),
+ * and a waiting section takes back its stored picks, and for the card's own
+ * recipe its stored machine too, until settleRevokedSubstitutes lands the fresh
+ * body. A waiting section's id is never migrated (only stored ids wait).
+ */
+function withWaitingSectionsRestored(fresh: FactoryNode, stored: FactoryNode, waiting: Set<string>): FactoryNode {
+  const ownWaits = waiting.has(stored.recipeId);
+  const extrasWait = stored.extraRecipes?.some((extra) => waiting.has(extra.recipeId)) ?? false;
+  if (!ownWaits && !extrasWait) return fresh;
+  const { recipeInputOverrides: _overrides, machineHandlerId: _handler, ...rest } = fresh;
+  void _overrides;
+  void _handler;
+  const own = ownWaits ? stored : fresh;
+  return {
+    ...rest,
+    ...(own.recipeInputOverrides ? { recipeInputOverrides: own.recipeInputOverrides } : {}),
+    ...(own.machineHandlerId ? { machineHandlerId: own.machineHandlerId } : {}),
+    ...(fresh.extraRecipes
+      ? {
+          extraRecipes: fresh.extraRecipes.map((extra, index) => {
+            const storedExtra = stored.extraRecipes?.[index];
+            if (!storedExtra || !waiting.has(storedExtra.recipeId)) return extra;
+            const { recipeInputOverrides: _picks, ...keep } = extra;
+            void _picks;
+            return storedExtra.recipeInputOverrides ? { ...keep, recipeInputOverrides: storedExtra.recipeInputOverrides } : keep;
+          }),
+        }
+      : {}),
+  };
 }
 
 /** The card's picks the new recipe can still hold: same slot, same resource in both recipes. */

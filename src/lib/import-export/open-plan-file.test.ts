@@ -1,4 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { resetLandingRefreshMemory } from "@/lib/datasets/refresh-project-recipes";
+
+// An import forgets landing checks in the page's memory: each test starts from a fresh page.
+beforeEach(() => {
+  resetLandingRefreshMemory();
+});
 import type { DatasetManifest, DatasetVersion, RecipeDataset } from "@/lib/datasets";
 import { DatasetCache } from "@/lib/datasets/dataset-cache";
 import { PROJECT_SCHEMA_VERSION, type FactoryProject, type Recipe } from "@/lib/model/types";
