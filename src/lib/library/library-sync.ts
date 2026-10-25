@@ -480,6 +480,10 @@ async function applyDesignAction(action: DesignAction): Promise<boolean> {
       const project = parseFactoryProjectJson(JSON.stringify(plan));
       const existing = await readDesign(action.id);
       const away = await editsMadeAwayFromRoom(action.id, existing?.project, project);
+      if (away === "unknown") {
+        // Storage did not answer: this design waits for the next run, the others go on.
+        return false;
+      }
       const kept = away?.kept;
       await writeDesign({
         ...existing,
@@ -489,7 +493,7 @@ async function applyDesignAction(action: DesignAction): Promise<boolean> {
       });
       if (away) {
         // Only once the record holds the merge: until then the old base still counts every edit made away from it.
-        await moveDetachedBase(action.id, liveShape(project)).catch(() => undefined);
+        await withinBaseWait(moveDetachedBase(action.id, liveShape(project)), undefined);
       }
       if (action.id === store.activeDesignId) {
         await store.reloadActiveDesign();
@@ -598,7 +602,7 @@ async function applyDesignAction(action: DesignAction): Promise<boolean> {
       }
       if (sentPlan) {
         // The account holds this plan now: edits made away from a live room count from here.
-        await moveDetachedBase(record.id, liveShape(record.project)).catch(() => undefined);
+        await withinBaseWait(moveDetachedBase(record.id, liveShape(record.project)), undefined);
       }
       // Re-read before stamping: autosave may have written since.
       const fresh = await readDesign(record.id);
@@ -613,21 +617,51 @@ async function applyDesignAction(action: DesignAction): Promise<boolean> {
   }
 }
 
+const BASE_WAIT_MS = 2_000;
+
+/**
+ * The live store's answer, or `fallback` once BASE_WAIT_MS has passed (or it failed): an IndexedDB that never
+ * answers holds up one design at most, never the whole sync run.
+ */
+async function withinBaseWait<T, F>(work: Promise<T>, fallback: F): Promise<T | F> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work.catch(() => fallback),
+      new Promise<F>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), BASE_WAIT_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * A pull of a plan this device edited while no live room was open for it (`keepDetachedBase`): what this person
  * changed since that base goes on top of the account's plan instead of being overwritten by it (`kept`, newer than the
  * account's copy, so the next run pushes it). The caller moves the base to the pulled plan once the record is
- * written. Undefined: no base, the account's plan wins as it does without live plans.
+ * written. Undefined: no base, the account's plan wins as it does without live plans. "unknown": the live store did
+ * not answer in time.
  */
 async function editsMadeAwayFromRoom(
   designId: string,
   stored: FactoryProject | undefined,
   pulled: FactoryProject,
-): Promise<{ kept?: FactoryProject } | undefined> {
+): Promise<{ kept?: FactoryProject } | undefined | "unknown"> {
   if (!isLiveConfigured()) {
     return undefined;
   }
-  const base = await readDetachedBase(designId).catch(() => undefined);
+  // A failed read is no base; one that does not answer leaves the design for the next run, so a base it could not
+  // see is never overwritten by the pull.
+  const read = await withinBaseWait(
+    readDetachedBase(designId).catch(() => undefined),
+    "unknown" as const,
+  );
+  if (read === "unknown") {
+    return "unknown";
+  }
+  const base = read;
   if (!base) {
     return undefined;
   }

@@ -75,6 +75,32 @@ describe("the base of edits made away from a live room", () => {
     expect(await readDetachedBase("design-1")).toEqual(plan("later"));
   });
 
+  it("loses no edit made while it trusted a base another tab had just taken", async () => {
+    await keepDetachedBase("design-1", () => plan("first"));
+    await deleteFromAnotherTab("design-1");
+    // Within the trusted moment: no read, but the plan before this edit is held.
+    await keepDetachedBase("design-1", () => plan("window"));
+    await keepDetachedBase("design-1", () => plan("later in the window"));
+
+    // Taken now (a room opens here), the held plan is the base.
+    let got: LivePlan | undefined;
+    await takeDetachedBase("design-1", (base) => {
+      got = base;
+      return { doc: DOC, tabId: "tab-a", pending: [] };
+    });
+    expect(got).toEqual(plan("window"));
+  });
+
+  it("stores the held plan once the trusted moment is over, when no base is stored", async () => {
+    await keepDetachedBase("design-1", () => plan("first"));
+    await deleteFromAnotherTab("design-1");
+    await keepDetachedBase("design-1", () => plan("window"));
+
+    await new Promise((resolve) => setTimeout(resolve, 2_300));
+
+    expect(await readDetachedBase("design-1")).toEqual(plan("window"));
+  });
+
   it("opens the database once for a run of edits, not at every step of a drag", async () => {
     await keepDetachedBase("design-1", () => plan("first"));
     const opened = vi.spyOn(globalThis.indexedDB, "open");
@@ -178,3 +204,19 @@ describe("the base of edits made away from a live room", () => {
     await keeping;
   });
 });
+
+/** What another tab's take or forget does to storage, without this tab's memory knowing. */
+function deleteFromAnotherTab(designId: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open("gtnh-factory-flow-live");
+    request.onsuccess = () => {
+      const tx = request.result.transaction("pending", "readwrite");
+      tx.objectStore("pending").delete(`detached|${designId}`);
+      tx.oncomplete = () => {
+        request.result.close();
+        resolve();
+      };
+      tx.onerror = () => reject(tx.error);
+    };
+  });
+}

@@ -66,6 +66,7 @@ vi.mock("@/lib/live/live-pending-store", async (importOriginal) => {
   return {
     ...actual,
     readPending: vi.fn(actual.readPending),
+    deletePending: vi.fn(actual.deletePending),
     takeDetachedBase: vi.fn(actual.takeDetachedBase),
     holdTabLock: vi.fn(),
     aliveTabs: vi.fn(async () => pendingStore.alive),
@@ -579,12 +580,28 @@ describe("live editing in the store", () => {
       },
     }));
     await settle();
+    // What the take stores in place of the base: these ids must be the ones sent, or a crash could apply them twice.
+    const store = await import("@/lib/live/live-pending-store");
+    const stored: string[] = [];
+    const real = vi.mocked(store.takeDetachedBase).getMockImplementation()!;
+    vi.mocked(store.takeDetachedBase).mockImplementationOnce((id, use) =>
+      real(id, (base) => {
+        const taken = use(base);
+        stored.push(...(taken?.pending.map((batch) => batch.cid) ?? []));
+        return taken;
+      }),
+    );
 
     useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
     await settle(12);
 
     expect((service.plan.nodes as Array<{ id: string }>).map((node) => node.id)).toEqual(["m1"]);
     expect((service.plan.recipes as Array<{ id: string }>).map((recipe) => recipe.id)).toEqual(["press"]);
+    expect(stored.length).toBeGreaterThan(0);
+    const sent = service.sent("ops").map((frame) => frame.cid);
+    expect(stored.every((cid) => sent.includes(cid))).toBe(true);
+    // The recipe goes as a batch of its own, ahead of the stored ones.
+    expect(sent.length).toBe(stored.length + 1);
   });
 
   it("joins without waiting for ever on storage that never answers", async () => {
@@ -648,7 +665,7 @@ describe("live editing in the store", () => {
     expect(annotations().map((note) => note.text)).toEqual(["sent", "old"]);
   });
 
-  it("sends nothing of a base it could not take after the join, and leaves the base stored", async () => {
+  it("forgets a base whose take failed after its edits went out in the joined room, so they never go twice", async () => {
     const store = await import("@/lib/live/live-pending-store");
     const base = liveShape(planWith(annotation("n1", "one")));
     await keepDetachedBase(DESIGN, () => base);
@@ -666,9 +683,39 @@ describe("live editing in the store", () => {
     release();
     await settle(12);
 
-    expect(service.sent("ops")).toHaveLength(0);
-    expect(annotations().map((note) => note.text)).toEqual(["live"]);
-    expect(await readDetachedBase(DESIGN)).toEqual(base);
+    // Joined: the edits went at once, so the base is not left for another room to send again.
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["mine"]);
+    expect(annotations().map((note) => note.text)).toEqual(["mine"]);
+    expect(await readDetachedBase(DESIGN)).toBeUndefined();
+  });
+
+  it("sends a late take's batches before an edit made while the closed tab's entry is being removed", async () => {
+    const store = await import("@/lib/live/live-pending-store");
+    await writePending(DOC, "tab-gone", [
+      { cid: "gone-8", ops: [{ o: "patch", c: "annotations", id: "n1", f: { text: "old" } }], inverse: [] },
+    ]);
+    const release = holdTake(store);
+    let releaseDelete: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (releaseDelete = resolve));
+    const realDelete = vi.mocked(store.deletePending).getMockImplementation()!;
+    vi.mocked(store.deletePending).mockImplementationOnce(async (key) => {
+      await gate;
+      return realDelete(key);
+    });
+    await openLiveDesign(planWith(annotation("n1", "old")), planWith(annotation("n1", "one")));
+    await new Promise((resolve) => setTimeout(resolve, 3200));
+    await settle();
+    release();
+    await settle(12);
+    // The take is in; the closed tab's entry is still being removed. The person edits the same note now.
+    useFactoryStore.getState().updateAnnotation("n1", { text: "newest" });
+    await settle(6);
+    releaseDelete();
+    await settle(20);
+
+    expect(service.sent("ops").map((frame) => frame.cid)[0]).toBe("gone-8");
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["newest"]);
+    expect(annotations().map((note) => note.text)).toEqual(["newest"]);
   });
 
   it("splits edits made away from the room again when the recipes they name take them past the batch limit", async () => {

@@ -199,19 +199,13 @@ export class LiveClientState {
     return added;
   }
 
-  /**
-   * Pending batches not sent yet, replaced where the first of them stood by `batches` (the same edits, split again).
-   */
-  replace(cids: string[], batches: PendingBatch[]): void {
-    const gone = new Set(cids);
-    const at = this.pending.findIndex((batch) => gone.has(batch.cid));
-    if (at < 0) {
+  /** Batches put in front of the pending batch `cid` (not sent yet), so they go just before it. */
+  insertBefore(cid: string, batches: PendingBatch[]): void {
+    const at = this.pending.findIndex((batch) => batch.cid === cid);
+    if (at < 0 || batches.length === 0) {
       return;
     }
-    const rest = this.pending.filter((batch) => !gone.has(batch.cid));
-    const kept = this.pending.slice(0, at).filter((batch) => !gone.has(batch.cid)).length;
-    rest.splice(kept, 0, ...batches);
-    this.pending = rest;
+    this.pending.splice(at, 0, ...batches);
     this.shown = null;
   }
 

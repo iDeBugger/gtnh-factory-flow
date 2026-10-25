@@ -195,7 +195,11 @@ export async function deleteDesign(id: string): Promise<void> {
   }
   // Edits made away from a live room count from a base kept per design: a design that is gone leaves none behind for
   // a later design of the same id (a plan shared again reuses its copy's id).
-  await forgetDetachedBase(id).catch(() => undefined);
+  // Best effort and bounded: a live store that does not answer never holds up the deletion.
+  await Promise.race([
+    forgetDetachedBase(id).catch(() => undefined),
+    new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
+  ]);
 }
 
 export async function listDesignFolders(): Promise<DesignFolder[]> {

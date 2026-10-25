@@ -259,6 +259,29 @@ describe("the account sync beside live plans", () => {
     ).toEqual(["one", "built offline"]);
   });
 
+  it("leaves a design for the next run when the live store does not answer, and syncs the others", async () => {
+    vi.stubEnv("NEXT_PUBLIC_LIVE_URL", "ws://live.test/live");
+    storage.records.set(
+      "design-away-2",
+      record("design-away-2", {
+        updatedAt: "2026-10-03T00:00:00.000Z",
+        remoteUpdatedAt: "2026-10-02T00:00:00.000Z",
+        project: withNotes(note("n1", "one"), note("n2", "built offline")),
+      }),
+    );
+    storage.records.set("design-other", record("design-other"));
+    pullAwayDesign();
+    // An IndexedDB whose open never answers.
+    globalThis.indexedDB = { open: () => ({}) } as unknown as IDBFactory;
+
+    await syncLibraryNow();
+
+    expect(remote.pushes.map((push) => push.id)).toContain("design-other");
+    expect(
+      storage.records.get("design-away-2")!.project.annotations?.map((entry) => entry.text),
+    ).toEqual(["one", "built offline"]);
+  }, 15_000);
+
   it("lets the account's plan win a pull when live plans are off, whatever storage holds", async () => {
     storage.records.set(
       "design-away-2",

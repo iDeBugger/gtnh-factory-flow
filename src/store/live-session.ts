@@ -636,14 +636,17 @@ export class LiveSession {
       this.putCanvasFirst(room, frame.seq, snapshotPlan, diffPlans(snapshotPlan, room.seed));
     }
     if (room.away.size > 0) {
-      // Recipe puts in front can take a batch past the size limit: the guarded ops are chunked again.
+      // The recipes the away batches' cards name that the live plan lacks go as batches of their own in front of
+      // them (chunked under the limit). The away batches keep their ids and ops, as stored: a crash after the send
+      // leaves nothing that could apply twice, and a recipe put sent again only writes the same recipe.
       const away = room.engine.pending.filter((batch) => room.away.has(batch.cid));
       const ops = away.flatMap((batch) => batch.ops);
       const guarded = withRecipesTheyName(ops, snapshotPlan, room.seed);
-      if (guarded !== ops) {
-        room.engine.replace(
-          away.map((batch) => batch.cid),
-          chunkOps(guarded).map((chunk): PendingBatch => ({ cid: makeCid(), ops: chunk, inverse: [] })),
+      if (guarded !== ops && away.length > 0) {
+        const puts = guarded.slice(0, guarded.length - ops.length);
+        room.engine.insertBefore(
+          away[0]!.cid,
+          chunkOps(puts).map((chunk): PendingBatch => ({ cid: makeCid(), ops: chunk, inverse: [] })),
         );
         this.schedulePersist();
       }
@@ -987,22 +990,24 @@ export class LiveSession {
       (entry) => entry.tabId === THIS_TAB_ID || (alive !== undefined && !alive.has(entry.tabId)),
     );
     const left = orphans.flatMap((entry) => entry.pending);
-    let queued: PendingBatch[] = [];
     let awayCids = new Set<string>();
     let used = false;
-    // Added before the snapshot: its resend takes them. Added in the room joined (the wait ran out): they go from here.
-    let sendHere = false;
+    let sentHere = false;
     let snapshotsAtUse = 0;
     const use = (base: LivePlan | undefined) => {
       used = true;
-      sendHere = room.joined;
       snapshotsAtUse = room.snapshots;
       // Read here, not before the wait: a snapshot may have landed meanwhile.
       const before = room.engine.view;
       const put = this.putLeftFirst(room, left, base);
-      queued = put.added;
       awayCids = new Set(put.away);
       this.land(before, room.engine.view);
+      if (room.joined) {
+        // Joined already (the wait ran out): they go now, before any edit made from here on. Not joined: the
+        // snapshot's resend takes them, so they go once.
+        put.added.forEach((batch) => this.queueBatch(room, batch));
+        sentHere = put.added.length > 0;
+      }
       return base ? { doc: room.doc, tabId: THIS_TAB_ID, pending: room.engine.pending.slice() } : undefined;
     };
     if (room.fresh) {
@@ -1014,8 +1019,8 @@ export class LiveSession {
         await takeDetachedBase(room.designId, (base) => (this.room === room ? use(base) : undefined));
       } catch {
         if (this.room === room && awayCids.size > 0) {
-          if (room.snapshots !== snapshotsAtUse) {
-            // A snapshot's resend took them out already: the edits are with the service, so the base goes.
+          if (sentHere || room.snapshots !== snapshotsAtUse) {
+            // Sent already (here, or by a snapshot's resend): the edits are with the service, so the base goes.
             void forgetDetachedBase(room.designId).catch(() => undefined);
           } else {
             // Not taken and not sent: the base stays stored for the next room, so its batches leave this one.
@@ -1024,7 +1029,6 @@ export class LiveSession {
               room.engine.refuse(cid);
               room.away.delete(cid);
             }
-            queued = queued.filter((batch) => !awayCids.has(batch.cid));
             this.land(before, room.engine.view);
           }
         }
@@ -1045,9 +1049,6 @@ export class LiveSession {
       return;
     }
     this.persistNow();
-    if (sendHere) {
-      queued.forEach((batch) => this.queueBatch(room, batch));
-    }
     this.publish();
   }
 

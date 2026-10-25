@@ -149,10 +149,26 @@ const keeping = new Map<string, Promise<void>>();
 /** When this tab last saw a base stored per design. Trusted for a short while only: another tab may take it. */
 const seen = new Map<string, number>();
 const SEEN_MS = 2_000;
+/**
+ * Edits made while the note was trusted: the plan before the first of them, checked against storage when the note
+ * runs out. Another tab may have taken the base meanwhile; then this one is kept, so those edits are not lost.
+ */
+const trusted = new Map<string, { base: () => LivePlan; timer: ReturnType<typeof setTimeout> }>();
+
+function dropTrusted(designId: string): void {
+  const entry = trusted.get(designId);
+  if (entry) {
+    clearTimeout(entry.timer);
+    trusted.delete(designId);
+  }
+}
 
 /** What this tab remembers of stored bases, dropped: for tests, which each start on a fresh database. */
 export function forgetBaseMemoryForTests(): void {
   seen.clear();
+  for (const designId of [...trusted.keys()]) {
+    dropTrusted(designId);
+  }
 }
 
 async function settled(designId: string): Promise<void> {
@@ -232,6 +248,20 @@ export function keepDetachedBase(designId: string, base: () => LivePlan): Promis
   }
   const at = seen.get(designId);
   if (at !== undefined && Date.now() - at < SEEN_MS) {
+    if (!trusted.has(designId)) {
+      const timer = setTimeout(
+        () => {
+          const entry = trusted.get(designId);
+          trusted.delete(designId);
+          seen.delete(designId);
+          if (entry) {
+            void keepDetachedBase(designId, entry.base).catch(() => undefined);
+          }
+        },
+        SEEN_MS - (Date.now() - at),
+      );
+      trusted.set(designId, { base, timer });
+    }
     return Promise.resolve();
   }
   const inFlight = keeping.get(designId);
@@ -239,11 +269,14 @@ export function keepDetachedBase(designId: string, base: () => LivePlan): Promis
     // The write in flight keeps a base at least as old as this edit's.
     return inFlight;
   }
+  // The oldest plan of edits not yet checked against storage: the trusted ones, else this edit's.
+  const oldest = trusted.get(designId)?.base ?? base;
+  dropTrusted(designId);
   const write = inTurn(designId, () =>
     transact("readwrite", (store, abort) =>
       withBase(store, designId, abort, (existing) => {
         if (!existing) {
-          putBase(store, designId, base());
+          putBase(store, designId, oldest());
         }
       }),
     ),
@@ -267,7 +300,8 @@ export async function readDetachedBase(designId: string): Promise<LivePlan | und
   await transact("readonly", (store, abort) =>
     withBase(store, designId, abort, (base) => (found = base)),
   );
-  return found;
+  // None stored (another tab took it) but edits made here while the note was trusted: their plan is the base.
+  return found ?? trusted.get(designId)?.base();
 }
 
 /** What a tab stores in place of a base it takes: its pending batches for the plan, made of the base. */
@@ -291,11 +325,20 @@ export async function takeDetachedBase(
     use(undefined);
     return;
   }
-  await inTurn(designId, () =>
-    transact("readwrite", (store, abort) =>
-      withBase(store, designId, abort, (base) => {
+  let unused: (() => LivePlan) | undefined;
+  await inTurn(designId, () => {
+    // Edits made here while the note was trusted count only when no base is stored (another tab took it).
+    const mine = trusted.get(designId)?.base;
+    dropTrusted(designId);
+    return transact("readwrite", (store, abort) =>
+      withBase(store, designId, abort, (stored) => {
+        const base = stored ?? mine?.();
         const taken = use(base);
-        if (!base || !taken) {
+        if (!taken) {
+          unused = stored ? undefined : mine;
+          return;
+        }
+        if (!base) {
           return;
         }
         seen.delete(designId);
@@ -308,8 +351,12 @@ export async function takeDetachedBase(
           store.put(entry);
         }
       }),
-    ),
-  );
+    );
+  });
+  if (unused) {
+    // Not taken after all (the room went): those edits still need a base.
+    await keepDetachedBase(designId, unused).catch(() => undefined);
+  }
 }
 
 /** The account now holds the plan as `base` (a push or a pull went through): later edits count from there. */
@@ -354,6 +401,7 @@ export async function forgetDetachedBase(designId: string): Promise<void> {
     return;
   }
   seen.delete(designId);
+  dropTrusted(designId);
   await inTurn(designId, () =>
     transact("readwrite", (store) => {
       store.delete(baseKey(designId));
