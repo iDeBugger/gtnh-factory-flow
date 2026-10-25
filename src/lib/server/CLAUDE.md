@@ -72,7 +72,9 @@
   kind not listed or a failed file it asks the API as before, and the API routes stay for old tabs; a listing that is
   incomplete or failed is reused for 45 s before the browser asks again (`CLIENT_FILE_LISTING_RETRY_MS`). A write
   that fails (an unwritable cache directory) is logged and the site keeps the API. Each start also removes the
-  directories of versions it no longer serves (`removeUnservedClientFileDirectories`). Outside production each load of
+  directories of versions it no longer serves (`removeUnservedClientFileDirectories`), and never what it did not
+  write: only in a root holding its marker (`.gtnh-client-files`, written before any file), never with no version
+  served, and only a directory holding nothing but client files and their temporaries. Outside production each load of
   the module keys its own listing, so a dev reload of answer code never lists the old code's files. Exam: `client-files.test.ts`,
   `dataset-files/[versionId]/[...assetPath]/client-files.test.ts`, `api/datasets/[versionId]/client-files/route.test.ts`,
   `browser-loader.test.ts`.

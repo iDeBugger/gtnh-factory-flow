@@ -176,21 +176,58 @@ async function removeStaleClientFiles(
 }
 
 /**
+ * The file that marks a root as the site's: written there before any client
+ * file, and the sweep below touches nothing in a root without it, so a
+ * misconfigured `GTNH_CLIENT_FILES_DIR` (a shared data directory) loses nothing.
+ */
+export const CLIENT_FILES_ROOT_MARKER = ".gtnh-client-files";
+
+export async function markClientFilesRoot(root: string): Promise<void> {
+  await fs.mkdir(root, { recursive: true });
+  await fs.writeFile(
+    path.join(root, CLIENT_FILES_ROOT_MARKER),
+    "GTNH Factory Flow writes its content-addressed dataset answers here.\n",
+  );
+}
+
+/** A name the site writes into a version directory: a stored client file or its temporary. */
+function isClientFileEntry(name: string): boolean {
+  const stored = /^(.*)\.(gz|br)(?:\.\d+\.tmp)?$/.exec(name);
+  return Boolean(stored?.[1] && CLIENT_FILE_NAME.test(stored[1]));
+}
+
+/**
  * Removes the directories of versions this site no longer serves (a dataset
  * dropped from the manifest): only a start of a served version sweeps its own
- * directory, so a dropped one would keep its files for good. Anything in the
- * root that is not a directory is left alone.
+ * directory, so a dropped one would keep its files for good. It never deletes
+ * what the site did not write: nothing at all without the root's marker, nothing
+ * with no served version (an empty manifest says nothing about what is stale),
+ * and only a directory holding nothing but client files.
  */
 export async function removeUnservedClientFileDirectories(
   root: string,
   servedVersionIds: readonly string[],
 ): Promise<string[]> {
+  if (servedVersionIds.length === 0) {
+    return [];
+  }
+  const marked = await fs
+    .stat(path.join(root, CLIENT_FILES_ROOT_MARKER))
+    .then((stats) => stats.isFile())
+    .catch(() => false);
+  if (!marked) {
+    return [];
+  }
   const served = new Set(servedVersionIds);
   const removed: string[] = [];
-  const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
-  for (const entry of entries) {
-    if (entry.isDirectory() && isPlainName(entry.name) && !served.has(entry.name)) {
-      await fs.rm(path.join(root, entry.name), { recursive: true, force: true });
+  for (const entry of await fs.readdir(root, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !isPlainName(entry.name) || served.has(entry.name)) {
+      continue;
+    }
+    const directory = path.join(root, entry.name);
+    const contents = await fs.readdir(directory, { withFileTypes: true });
+    if (contents.every((item) => item.isFile() && isClientFileEntry(item.name))) {
+      await fs.rm(directory, { recursive: true, force: true });
       removed.push(entry.name);
     }
   }

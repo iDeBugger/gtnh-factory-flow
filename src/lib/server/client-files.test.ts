@@ -7,6 +7,8 @@ import {
   CLIENT_FILE_NAME,
   clientFileDirectory,
   clientFilesRoot,
+  CLIENT_FILES_ROOT_MARKER,
+  markClientFilesRoot,
   removeUnservedClientFileDirectories,
   resolveClientFilePath,
   clientFileListing,
@@ -142,11 +144,19 @@ describe("the server's content-addressed dataset answers", () => {
 });
 
 describe("the client files of a version no longer served", () => {
-  it("are removed at start, and nothing else in the root is touched", async () => {
-    for (const name of ["local-2.9.0-rc-2", "local-2.8.1", "local-2.9.0-beta-2"]) {
-      await fs.mkdir(path.join(directory, name));
-      await fs.writeFile(path.join(directory, name, "catalog.00000000000000000000.json.gz"), "x");
+  const file = "catalog.00000000000000000000.json";
+  async function version(name: string, entries: string[]) {
+    await fs.mkdir(path.join(directory, name));
+    for (const entry of entries) {
+      await fs.writeFile(path.join(directory, name, entry), "x");
     }
+  }
+
+  it("are removed at start, and nothing else in the root is touched", async () => {
+    await markClientFilesRoot(directory);
+    await version("local-2.9.0-rc-2", [`${file}.gz`]);
+    await version("local-2.8.1", [`${file}.gz`]);
+    await version("local-2.9.0-beta-2", [`${file}.gz`, `${file}.br`, `${file}.br.123.tmp`]);
     await fs.writeFile(path.join(directory, "note.txt"), "x");
     const removed = await removeUnservedClientFileDirectories(directory, [
       "local-2.9.0-rc-2",
@@ -154,10 +164,31 @@ describe("the client files of a version no longer served", () => {
     ]);
     expect(removed).toEqual(["local-2.9.0-beta-2"]);
     expect((await fs.readdir(directory)).sort()).toEqual(
-      ["local-2.8.1", "local-2.9.0-rc-2", "note.txt"].sort(),
+      [CLIENT_FILES_ROOT_MARKER, "local-2.8.1", "local-2.9.0-rc-2", "note.txt"].sort(),
     );
+  });
+
+  it("never delete a foreign directory, or one holding anything the site does not write", async () => {
+    await markClientFilesRoot(directory);
+    await version("postgres", ["PG_VERSION"]);
+    await version("old-build", [`${file}.gz`, "readme.md"]);
+    await version("nested", [`${file}.gz`]);
+    await fs.mkdir(path.join(directory, "nested", "inner"));
+    const removed = await removeUnservedClientFileDirectories(directory, ["local-2.9.0-rc-2"]);
+    expect(removed).toEqual([]);
+    expect((await fs.readdir(directory)).sort()).toEqual(
+      [CLIENT_FILES_ROOT_MARKER, "nested", "old-build", "postgres"].sort(),
+    );
+  });
+
+  it("touch nothing in a root without the site's marker, or when no version is served", async () => {
+    await version("local-2.9.0-beta-2", [`${file}.gz`]);
+    expect(await removeUnservedClientFileDirectories(directory, ["local-2.9.0-rc-2"])).toEqual([]);
+    await markClientFilesRoot(directory);
+    expect(await removeUnservedClientFileDirectories(directory, [])).toEqual([]);
+    expect(await fs.readdir(directory)).toContain("local-2.9.0-beta-2");
     await expect(
-      removeUnservedClientFileDirectories(path.join(directory, "missing"), []),
+      removeUnservedClientFileDirectories(path.join(directory, "missing"), ["v"]),
     ).resolves.toEqual([]);
   });
 });

@@ -3,6 +3,7 @@ import {
   clientFileDirectory,
   clientFilesRoot,
   ensureClientFiles,
+  markClientFilesRoot,
   removeUnservedClientFileDirectories,
   type ClientFileListing,
   type ClientFileSpec,
@@ -63,6 +64,8 @@ function clientDirectory(versionId: string): string | undefined {
   return clientFileDirectory(versionId);
 }
 
+let rootMarked: Promise<void> | undefined;
+
 /** What a served version has written so far; undefined for a version this site does not serve. */
 export async function datasetClientFileListing(
   versionId: string,
@@ -72,6 +75,12 @@ export async function datasetClientFileListing(
   if (!version || !directory) {
     return undefined;
   }
+  if (!rootMarked) {
+    rootMarked = markClientFilesRoot(clientFilesRoot()).catch(() => {
+      // The write that follows logs an unwritable root.
+    });
+  }
+  await rootMarked;
   return clientFileListing(
     stateKey(version),
     version.id,
@@ -87,14 +96,18 @@ export async function datasetClientFileListing(
  * for any file not written yet.
  */
 export async function writeServedDatasetClientFiles(): Promise<void> {
-  const served = await servedDatasetVersionOrder();
+  let served: string[];
   try {
-    const removed = await removeUnservedClientFileDirectories(clientFilesRoot(), served);
+    served = await servedDatasetVersionOrder();
+    const root = clientFilesRoot();
+    const removed = await removeUnservedClientFileDirectories(root, served);
     if (removed.length > 0) {
       console.info(`GTNH client files of unserved versions removed: ${removed.join(", ")}.`);
     }
+    await markClientFilesRoot(root);
   } catch (error) {
-    console.error("GTNH client files of unserved versions were not removed.", error);
+    console.error("GTNH client files were not prepared.", error);
+    return;
   }
   for (const versionId of served) {
     const started = Date.now();
