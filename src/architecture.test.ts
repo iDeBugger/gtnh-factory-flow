@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
  * Tests, `__fixtures__/`, `test-support/` and `src/app/dev/**` are exempt.
  *
  * `ARCH_DUMP=1 npx vitest run src/architecture.test.ts` drops the fixed
- * entries from the allowlist. It never adds one, and `MAX_ALLOWED` below caps
+ * entries from the allowlist. It never adds one, and `MAX_ALLOWED` below holds
  * each rule's entries, so a new exception takes an edit to this file in the
  * same diff. Lower a cap when a task leaves fewer.
  */
@@ -312,7 +312,8 @@ function queryingAppFiles(graph: Map<string, SourceFile>): string[] {
     .filter((file) => file.path.startsWith("src/app/") && !isExempt(file.path))
     .filter(
       (file) =>
-        /\.from\(\s*["'`]/.test(file.text) ||
+        // A static constructor (`Array.from`, `Buffer.from`) is no query.
+        /(?<![A-Z][\w$]*)\.from\(\s*["'`]/.test(file.text) ||
         file.edges.some(
           (edge) => QUERY_PACKAGES.test(edge.to) || /^src\/lib\/server\/(db|repos)\//.test(edge.to),
         ),
@@ -365,13 +366,14 @@ if (process.env.ARCH_DUMP === "1") {
 const allowlist = readAllowlist();
 
 describe("the layers", () => {
-  it("the allowlist holds no more entries per rule than MAX_ALLOWED", () => {
+  it("the allowlist holds exactly MAX_ALLOWED entries per rule", () => {
     const counts: Record<string, number> = { queriesInApp: allowlist.queriesInApp.length };
     for (const edge of allowlist.edges) counts[edge.rule] = (counts[edge.rule] ?? 0) + 1;
-    const over = Object.entries(counts)
-      .filter(([rule, count]) => count > (MAX_ALLOWED[rule] ?? 0))
-      .map(([rule, count]) => `${rule}: ${count} > ${MAX_ALLOWED[rule] ?? 0}`);
-    expect(over).toEqual([]);
+    const rules = new Set([...Object.keys(counts), ...Object.keys(MAX_ALLOWED)]);
+    const off = [...rules]
+      .filter((rule) => (counts[rule] ?? 0) !== (MAX_ALLOWED[rule] ?? 0))
+      .map((rule) => `${rule}: ${counts[rule] ?? 0} listed, cap ${MAX_ALLOWED[rule] ?? 0}`);
+    expect(off, "lower MAX_ALLOWED to what the allowlist holds").toEqual([]);
   });
 
   it("resolves every import inside the repository", () => {

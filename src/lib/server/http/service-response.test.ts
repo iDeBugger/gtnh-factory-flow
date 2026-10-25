@@ -53,6 +53,16 @@ describe("serviceResponse", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
+  it("answers an error's own headers beside no-store", async () => {
+    const response = serviceResponse(
+      fail("rate-limited", "Too many tries.", { headers: { "Retry-After": "60" } }),
+      () => ({}),
+    );
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("60");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
   it("never lets an error's body replace the message", async () => {
     const response = serviceResponse(
       fail("conflict", "This plan is open live.", { body: { error: "other", live: true } }),

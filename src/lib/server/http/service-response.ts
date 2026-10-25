@@ -27,9 +27,12 @@ export function serviceResponse<T>(
   if (result.ok) {
     return NextResponse.json(toBody(result.value), init);
   }
-  const { kind, message, status, body } = result.error;
+  const { kind, message, status, body, headers } = result.error;
   return NextResponse.json(
     { ...body, error: message },
-    { status: status ?? SERVICE_ERROR_STATUS[kind], headers: { "Cache-Control": "no-store" } },
+    {
+      status: status ?? SERVICE_ERROR_STATUS[kind],
+      headers: { ...headers, "Cache-Control": "no-store" },
+    },
   );
 }

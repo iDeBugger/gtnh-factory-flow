@@ -157,7 +157,8 @@ async function seed(db: LocalDatabase["db"]): Promise<void> {
       needs,
       outputs,
       ANN,
-      JSON.stringify({ kind: "fluid", resourceId: "steam", displayName: "Steam" }),
+      // Written out of jsonb's key order, so the answer shows the stored order, not this one.
+      JSON.stringify({ displayName: "Steam", resourceId: "steam", kind: "fluid" }),
       APP_VERSION,
       BOB,
     ],

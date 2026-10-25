@@ -22,6 +22,8 @@ export interface ServiceError {
   status?: number;
   /** Fields answered beside `error`, such as `{ live: true }`; an `error` here never replaces `message`. */
   body?: Record<string, unknown>;
+  /** Headers the error answers with beside `Cache-Control: no-store`, such as `Retry-After`. */
+  headers?: Record<string, string>;
 }
 
 export type ServiceResult<T> = { ok: true; value: T } | { ok: false; error: ServiceError };
@@ -33,7 +35,7 @@ export function ok<T>(value: T): ServiceResult<T> {
 export function fail(
   kind: ServiceErrorKind,
   message: string,
-  extra?: { status?: number; body?: Record<string, unknown> },
+  extra?: { status?: number; body?: Record<string, unknown>; headers?: Record<string, string> },
 ): ServiceResult<never> {
   return { ok: false, error: { kind, message, ...extra } };
 }
