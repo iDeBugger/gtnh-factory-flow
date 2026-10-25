@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ReactFlowProvider } from "@xyflow/react";
@@ -133,6 +134,22 @@ describe("the clean drawer", () => {
     const box = container.querySelector(".cd-box")!;
     expect(box.getAttribute("data-text")).toBe("Voided");
     expect(box.hasAttribute("data-fixed")).toBe(true);
+  });
+
+  it("is grabbed by a grip wider than its bar: past its top and sides, a little into the row, under the keys", () => {
+    load(storage());
+    const { container } = renderDrawer(stored(), "source");
+    // The grip is the drawer's own pseudo-element, so the bar's tip rides the drawer and the bar has none.
+    expect(JSON.parse(container.querySelector(".cd")!.getAttribute("data-tip")!).id).toBe("s1|bar");
+    expect(container.querySelector(".cd-bar")!.hasAttribute("data-tip")).toBe(false);
+    const css = readFileSync(`${process.cwd()}/src/components/flow/clean/drawer/drawer.css`, "utf8");
+    const grip = /\n\.cd::before \{([^}]*)\}/.exec(css)?.[1] ?? "";
+    const value = (name: string) => new RegExp(`\\b${name}: ([^;]+);`).exec(grip)?.[1];
+    expect([value("left"), value("right"), value("top"), value("height")]).toEqual(["-4px", "-4px", "-8px", "21px"]);
+    // Over the row's wiring handle (30), under the delete and side keys (41).
+    expect(Number(value("z-index"))).toBeGreaterThan(30);
+    expect(Number(value("z-index"))).toBeLessThan(41);
+    expect(value("cursor")).toBe("grab");
   });
 
   it("selects, lights and delete-keys through data attributes", () => {

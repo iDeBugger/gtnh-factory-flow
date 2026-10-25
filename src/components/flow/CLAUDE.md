@@ -72,6 +72,8 @@ The board must stay smooth with 100+ cards on weak PCs.
 - A one-port machine card, 6x4 cells: a title bar (move grip, board menu, never starts a
   wire) and a port chip that answers exactly like a port row (`usePortRowBrowse`). Keep
   the two zones separate.
+- The move grip is `.cd::before`, wider than the 7 px bar: 8 px above the drawer, 4 px past each side and 6 px into
+  the row, over the row's wiring handle (z 30) and under the delete and side keys (z 41). The bar's tip rides `.cd`.
 - Solve mode: source and product drawers show a rule row, a rule button (Any / At least /
   Exactly / At most) and a sunken rate box (`RuleInput`, `useRateRule`, `setStorageRule`). A buffer has none: it passes
   what its users take, and the adapter sends it as Any whatever it stores (`docs/buffer-drawers.md`).
