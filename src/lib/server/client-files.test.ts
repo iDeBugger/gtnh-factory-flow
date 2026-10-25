@@ -251,6 +251,41 @@ describe("the client files of a version no longer served", () => {
 });
 
 describe("whose root the client files go into", () => {
+  it("counts a root holding only lost+found as empty", async () => {
+    const volume = path.join(directory, "volume");
+    await fs.mkdir(path.join(volume, "lost+found"), { recursive: true });
+    expect(await claimClientFilesRoot(volume)).toBe(true);
+    expect((await fs.readdir(volume)).sort()).toEqual([CLIENT_FILES_ROOT_MARKER, "lost+found"]);
+    await fs.writeFile(path.join(volume, "other"), "x");
+    // Marked already: still the site's.
+    expect(await claimClientFilesRoot(volume)).toBe(true);
+    const busy = path.join(directory, "busy-volume");
+    await fs.mkdir(path.join(busy, "lost+found"), { recursive: true });
+    await fs.writeFile(path.join(busy, "notes.txt"), "x");
+    expect(await claimClientFilesRoot(busy)).toBe(false);
+  });
+
+  it("takes the marker only as a regular file, in the claim and in the sweep alike", async () => {
+    const file = "catalog.00000000000000000000.json";
+    for (const kind of ["directory", "link"] as const) {
+      const root = path.join(directory, `marker-${kind}`);
+      await fs.mkdir(root, { recursive: true });
+      const marker = path.join(root, CLIENT_FILES_ROOT_MARKER);
+      if (kind === "directory") {
+        await fs.mkdir(marker);
+      } else {
+        const target = path.join(directory, `marker-target-${kind}`);
+        await fs.writeFile(target, "x");
+        await fs.symlink(target, marker);
+      }
+      await fs.mkdir(path.join(root, "old-version"));
+      await fs.writeFile(path.join(root, "old-version", `${file}.gz`), "x");
+      expect(await claimClientFilesRoot(root)).toBe(false);
+      expect(await removeUnservedClientFileDirectories(root, ["local-2.9.0-rc-2"])).toEqual([]);
+      expect(await fs.readdir(path.join(root, "old-version"))).toEqual([`${file}.gz`]);
+    }
+  });
+
   it("is claimed when created or found empty, and a non-empty root that is not the site's stays untouched over two starts", async () => {
     const fresh = path.join(directory, "fresh");
     expect(await claimClientFilesRoot(fresh)).toBe(true);

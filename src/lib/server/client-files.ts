@@ -195,20 +195,44 @@ async function removeStaleClientFiles(
  */
 export const CLIENT_FILES_ROOT_MARKER = ".gtnh-client-files";
 
+/**
+ * What a root may hold and still count as empty: a filesystem's own
+ * `lost+found`, there at the top of every fresh ext volume a container mounts.
+ */
+const EMPTY_ROOT_ENTRIES = new Set(["lost+found"]);
+
+/** Whether the root holds the marker as a regular file, never a link or a directory of that name. */
+function isMarkedRoot(root: string): Promise<boolean> {
+  return fs
+    .lstat(path.join(root, CLIENT_FILES_ROOT_MARKER))
+    .then((stats) => stats.isFile())
+    .catch(() => false);
+}
+
 /** Whether the root is the site's: marked already, or created or found empty and marked now. */
 export async function claimClientFilesRoot(root: string): Promise<boolean> {
   await fs.mkdir(root, { recursive: true });
-  const entries = await fs.readdir(root);
-  if (entries.includes(CLIENT_FILES_ROOT_MARKER)) {
+  if (await isMarkedRoot(root)) {
     return true;
   }
-  if (entries.length > 0) {
+  const entries = await fs.readdir(root);
+  if (entries.some((entry) => !EMPTY_ROOT_ENTRIES.has(entry))) {
     return false;
   }
-  await fs.writeFile(
-    path.join(root, CLIENT_FILES_ROOT_MARKER),
-    "GTNH Factory Flow writes its content-addressed dataset answers here.\n",
-  );
+  // Never through a link planted under the marker's name; another start that
+  // marked it a moment ago leaves the regular file this one would have written.
+  try {
+    await fs.writeFile(
+      path.join(root, CLIENT_FILES_ROOT_MARKER),
+      "GTNH Factory Flow writes its content-addressed dataset answers here.\n",
+      { flag: "wx" },
+    );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      throw error;
+    }
+    return isMarkedRoot(root);
+  }
   return true;
 }
 
@@ -235,11 +259,7 @@ export async function removeUnservedClientFileDirectories(
   if (servedVersionIds.length === 0) {
     return [];
   }
-  const marked = await fs
-    .lstat(path.join(root, CLIENT_FILES_ROOT_MARKER))
-    .then((stats) => stats.isFile())
-    .catch(() => false);
-  if (!marked) {
+  if (!(await isMarkedRoot(root))) {
     return [];
   }
   const served = new Set(servedVersionIds);

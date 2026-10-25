@@ -78,8 +78,9 @@
   incomplete or failed is reused for 45 s before the browser asks again (`CLIENT_FILE_LISTING_RETRY_MS`). A write
   that fails (an unwritable cache directory) is logged and the site keeps the API. Each start also removes the
   directories of versions it no longer serves (`removeUnservedClientFileDirectories`), and never what it did not
-  write. The site claims a root only when it creates it or finds it empty (`claimClientFilesRoot` writes the marker
-  `.gtnh-client-files`); a root that holds anything else and no marker is not the site's: it is logged once and
+  write. The site claims a root only when it creates it or finds it empty (a filesystem's `lost+found` aside;
+  `claimClientFilesRoot` writes the marker `.gtnh-client-files`, a regular file: the claim and the sweep take a link
+  or a directory of that name as no marker); a root that holds anything else and no marker is not the site's: it is logged once and
   nothing is written or swept there, so the API answers. The sweep runs only in a marked root with a served version,
   removes only a non-empty directory holding nothing but client files and their temporaries (never an empty one, a
   link, or what a link points at), and logs and skips a directory it cannot read or remove. Exam:
