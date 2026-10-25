@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { DESIGN_TOO_BIG } from "@/lib/server/too-big";
 import { factoryProjectSchema } from "@/lib/model/schemas";
 import { COMMUNITY_UPLOAD_BODY_MAX_BYTES, COMMUNITY_UPLOAD_MAX_BYTES } from "@/lib/community/types";
 import {
@@ -115,7 +114,7 @@ export async function PUT(request: Request, context: RouteContext) {
   // in characters, which is what the client counts.
   const raw = await readTextCapped(request, COMMUNITY_UPLOAD_BODY_MAX_BYTES);
   if (raw === undefined || raw.length > COMMUNITY_UPLOAD_MAX_BYTES) {
-    return NextResponse.json({ error: DESIGN_TOO_BIG }, { status: 413 });
+    return NextResponse.json({ error: "This design is too large to sync." }, { status: 413 });
   }
   let body: Partial<DesignUpsertBody>;
   try {

@@ -218,10 +218,9 @@ The instance is small and has gone down under load. Rules:
 - Because `src/proxy.ts` runs on every path, Next copies every write body (up to `PROXY_BODY_MAX_BYTES`, 4.5 MiB,
   `experimental.proxyClientMaxBodySize`; the bytes past it are dropped) and waits for its end before any route
   runs. That limit sits just above the largest route cap and must never drop below one: a body cut at it is still
-  over every cap and answers 413, not a 400 for a truncated JSON or form. The proxy refuses a declared
-  `content-length` over it with 413 before waiting for a byte, in the route's own sentence (`too-big.ts`). A slow
-  sender under it is held until it finishes or Node's `requestTimeout` (300 s); only the edge (Caddy's body read
-  timeout) bounds that. Route handlers have no body limit, so every route that reads a body reads it through
+  over every cap and answers 413, not a 400 for a truncated JSON or form. Next awaits the body's end even when the
+  proxy answers itself, so a declared length that never arrives, or a slow sender, is held until it finishes or
+  Node's `requestTimeout` (300 s); only the edge (Caddy's body read timeout) bounds that. Route handlers have no body limit, so every route that reads a body reads it through
   `request-body.ts` (`readJsonCapped`, `readTextCapped`, `readFormDataCapped`) with a cap sized to what the client
   sends: a declared `content-length` over the cap is refused without parsing, a chunked body stops at the cap, and
   the answer is 413 with the route's own sentence. The read happens where it happened before, so every gate, 503 and auth check that ran ahead of it

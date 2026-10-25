@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { PLAN_UPLOAD_TOO_BIG } from "@/lib/server/too-big";
 import { serverErrorResponse } from "@/lib/server/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
@@ -187,7 +186,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ plan
     const { planId } = await params;
     const raw = await readTextCapped(request, COMMUNITY_UPLOAD_BODY_MAX_BYTES);
     if (raw === undefined || raw.length > COMMUNITY_UPLOAD_MAX_BYTES) {
-      return NextResponse.json({ error: PLAN_UPLOAD_TOO_BIG }, { status: 413 });
+      return NextResponse.json({ error: "Upload too large." }, { status: 413 });
     }
 
     const body = JSON.parse(raw) as {

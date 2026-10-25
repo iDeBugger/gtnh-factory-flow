@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
-import { IMAGE_TOO_BIG } from "@/lib/server/too-big";
 import { serverErrorResponse } from "@/lib/server/error-response";
 import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
 import { getCommunityDb, isCommunityConfigured } from "@/lib/server/community";
@@ -84,7 +83,7 @@ export async function POST(request: Request) {
     );
     if (!form) {
       return NextResponse.json(
-        { error: IMAGE_TOO_BIG },
+        { error: "That image is too big: the limit is 4 MB." },
         { status: 413 },
       );
     }
@@ -94,7 +93,7 @@ export async function POST(request: Request) {
     }
     if (file.size > BOARD_IMAGE_MAX_BYTES) {
       return NextResponse.json(
-        { error: IMAGE_TOO_BIG },
+        { error: "That image is too big: the limit is 4 MB." },
         { status: 413 },
       );
     }

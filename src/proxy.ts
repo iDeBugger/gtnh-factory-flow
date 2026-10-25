@@ -1,14 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { decideDatasetPath } from "@/lib/server/dataset-path-gate";
-import { PROXY_BODY_MAX_BYTES, REQUEST_TOO_BIG_MESSAGE } from "@/lib/server/request-body";
-import {
-  BLUEPRINT_TOO_BIG,
-  DESIGN_TOO_BIG,
-  FEEDBACK_TOO_BIG,
-  IMAGE_TOO_BIG,
-  PLAN_UPLOAD_TOO_BIG,
-  PREVIEW_TOO_BIG,
-} from "@/lib/server/too-big";
 
 /**
  * Cross-site writes to the API are refused before any route runs. Sessions
@@ -39,35 +30,7 @@ export function proxy(request: NextRequest): NextResponse {
   if (pathname.startsWith("/api/") && isCrossSiteWrite(request)) {
     return NextResponse.json({ error: "Cross-site request refused." }, { status: 403 });
   }
-  // Next waits for a write's whole body before any route runs (request-body.ts,
-  // PROXY_BODY_MAX_BYTES), so a declared length no route accepts is refused
-  // here, before a byte of it is waited for, in the route's own words.
-  if (!READ_METHODS.has(request.method.toUpperCase()) && declaredLength(request) > PROXY_BODY_MAX_BYTES) {
-    return NextResponse.json({ error: tooBigSentence(pathname) }, { status: 413 });
-  }
   return NextResponse.next();
-}
-
-function declaredLength(request: { headers: { get(name: string): string | null } }): number {
-  const length = Number(request.headers.get("content-length") ?? 0);
-  return Number.isFinite(length) ? length : 0;
-}
-
-/**
- * The 413 sentence of the route at `pathname`, for a body over every cap:
- * the same words the route itself answers past its cap (too-big.ts).
- */
-const TOO_BIG_SENTENCES: [RegExp, string][] = [
-  [/^\/api\/feedback\/?$/, FEEDBACK_TOO_BIG],
-  [/^\/api\/community\/images\/?$/, IMAGE_TOO_BIG],
-  [/^\/api\/community\/plans\/[^/]+\/preview\/?$/, PREVIEW_TOO_BIG],
-  [/^\/api\/community\/plans(\/[^/]+)?\/?$/, PLAN_UPLOAD_TOO_BIG],
-  [/^\/api\/library\/designs\/[^/]+\/?$/, DESIGN_TOO_BIG],
-  [/^\/api\/blueprints(\/[^/]+)?\/?$/, BLUEPRINT_TOO_BIG],
-];
-
-export function tooBigSentence(pathname: string): string {
-  return TOO_BIG_SENTENCES.find(([path]) => path.test(pathname))?.[1] ?? REQUEST_TOO_BIG_MESSAGE;
 }
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
