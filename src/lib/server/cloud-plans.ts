@@ -2,6 +2,7 @@ import { type DbClient, fetchWithDbTimeout } from "./db";
 import { docKey, isAccountId } from "@/lib/live/protocol";
 import type { PlanMember } from "@/lib/library/sync-types";
 import { sameSecret } from "./auth/secret";
+import * as accounts from "./repos/accounts";
 
 // The live service checks its internal token with the same helper.
 export { sameSecret };
@@ -62,24 +63,9 @@ export async function designRole(
   return data ? "editor" : null;
 }
 
-/** Usernames by account id. */
-export async function usernamesFor(
-  db: DbClient,
-  ids: Iterable<string>,
-): Promise<Map<string, string>> {
-  const unique = [...new Set(ids)];
-  const names = new Map<string, string>();
-  if (unique.length === 0) {
-    return names;
-  }
-  const { data, error } = await db.from("community_users").select("id,username").in("id", unique);
-  if (error) {
-    throw new Error(`Account lookup failed: ${error.message}`);
-  }
-  for (const row of (data ?? []) as Array<{ id: string; username: string }>) {
-    names.set(row.id, row.username);
-  }
-  return names;
+/** Usernames by account id (`repos/accounts`; the client argument goes with Task 4's move). */
+export function usernamesFor(_db: DbClient, ids: Iterable<string>): Promise<Map<string, string>> {
+  return accounts.usernamesFor(ids);
 }
 
 /** The accounts a design is shared with, oldest first. */

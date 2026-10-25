@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
-import { isCommunityConfigured } from "@/lib/server/db";
+import { isDatabaseConfigured } from "@/lib/server/services/config";
 import { getFileStore, isFileStoreConfigured } from "@/lib/server/file-store";
 import { claimImageUpload } from "@/lib/server/limits/image-upload-guard";
 import { readFormDataCapped } from "@/lib/server/http/request-body";
@@ -50,7 +50,7 @@ function sniffImageType(bytes: Uint8Array): { contentType: string; ext: string }
 }
 
 export async function POST(request: Request) {
-  if (!isCommunityConfigured() || !isFileStoreConfigured()) {
+  if (!isDatabaseConfigured() || !isFileStoreConfigured()) {
     return NextResponse.json({ error: "Image hosting is not configured." }, { status: 503 });
   }
 

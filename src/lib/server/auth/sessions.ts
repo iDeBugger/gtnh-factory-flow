@@ -1,4 +1,4 @@
-import { getCommunityDb } from "../db";
+import { readSessionAccount, setSessionEpoch, type SessionUser } from "../repos/accounts";
 import {
   makeSessionToken,
   readSessionCookie,
@@ -8,6 +8,7 @@ import {
 } from "./session";
 
 export { makeSessionToken, SESSION_COOKIE };
+export type { SessionUser };
 
 /**
  * The Set-Cookie line that stores or clears the session. In production the
@@ -21,13 +22,6 @@ export function sessionCookieHeader(token: string, clear = false): string {
   return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
 }
 
-export interface SessionUser {
-  id: string;
-  username: string;
-  is_admin: boolean;
-  /** Moves on "Sign out everywhere"; a token made under another value is refused. */
-  session_epoch: number;
-}
 
 /**
  * Verifies the session cookie and loads the user, or returns undefined: no
@@ -62,7 +56,7 @@ export function loadSessionUser(userId: string): Promise<SessionUser | undefined
   // The promise is cached before the read answers, so a "Sign out everywhere"
   // that lands while the read is in flight forgets this entry and nothing
   // writes the pre-bump row back afterwards. A failed read is dropped.
-  const entry = { at: Date.now(), user: readSessionUser(userId) };
+  const entry = { at: Date.now(), user: readSessionAccount(userId) };
   sessionUsers.set(userId, entry);
   entry.user.catch(() => {
     if (sessionUsers.get(userId) === entry) {
@@ -70,19 +64,6 @@ export function loadSessionUser(userId: string): Promise<SessionUser | undefined
     }
   });
   return entry.user;
-}
-
-async function readSessionUser(userId: string): Promise<SessionUser | undefined> {
-  const { data, error } = await getCommunityDb()
-    .from("community_users")
-    .select("id,username,is_admin,session_epoch")
-    .eq("id", userId)
-    .maybeSingle<SessionUser>();
-  if (error) {
-    throw new Error(error.message || "Account lookup failed.");
-  }
-  // bigint arrives as a JSON number; a row from before the column reads as 0.
-  return data ? { ...data, session_epoch: Number(data.session_epoch ?? 0) } : undefined;
 }
 
 /**
@@ -94,13 +75,7 @@ async function readSessionUser(userId: string): Promise<SessionUser | undefined>
  */
 export async function bumpSessionEpoch(userId: string): Promise<number> {
   const epoch = Date.now();
-  const { error } = await getCommunityDb()
-    .from("community_users")
-    .update({ session_epoch: epoch })
-    .eq("id", userId);
-  if (error) {
-    throw new Error(error.message || "Sign out everywhere failed.");
-  }
+  await setSessionEpoch(userId, epoch);
   forgetSessionUser(userId);
   return epoch;
 }

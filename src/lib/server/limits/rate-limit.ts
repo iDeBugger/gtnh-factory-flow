@@ -1,4 +1,4 @@
-import { getCommunityDb } from "../db";
+import * as events from "../repos/events";
 
 /**
  * Work in flight per key, so a count-then-record limit sees every earlier
@@ -44,27 +44,12 @@ export function checkRateLimit(
 
 /** How many times the actor did the action in the last `windowSeconds`. */
 export async function countEvents(actorKey: string, action: string, windowSeconds: number): Promise<number> {
-  const windowStart = new Date(Date.now() - windowSeconds * 1000).toISOString();
-  const { count, error } = await getCommunityDb()
-    .from("community_events")
-    .select("id", { count: "exact", head: true })
-    .eq("actor_key", actorKey)
-    .eq("action", action)
-    .gte("created_at", windowStart);
-  if (error) {
-    throw new Error(`Rate limit check failed: ${error.message}`);
-  }
-  return count ?? 0;
+  return events.countSince(actorKey, action, new Date(Date.now() - windowSeconds * 1000));
 }
 
 /** Records actions for `countEvents`, in one request. */
-export async function recordEvents(events: { actorKey: string; action: string }[]): Promise<void> {
-  const { error } = await getCommunityDb()
-    .from("community_events")
-    .insert(events.map((e) => ({ actor_key: e.actorKey, action: e.action })));
-  if (error) {
-    throw new Error(`Rate limit record failed: ${error.message}`);
-  }
+export async function recordEvents(rows: { actorKey: string; action: string }[]): Promise<void> {
+  await events.insert(rows);
   await pruneEvents();
 }
 
@@ -99,23 +84,15 @@ async function pruneEvents(): Promise<void> {
     return;
   }
   lastPruneAt = now;
-  const before = new Date(now - EVENTS_KEPT_DAYS * 86_400_000).toISOString();
+  const before = new Date(now - EVENTS_KEPT_DAYS * 86_400_000);
   try {
-    const db = getCommunityDb();
     // At least one batch, then more while the budget lasts.
     do {
-      const { data } = await db
-        .from("community_events")
-        .select("id")
-        .lt("created_at", before)
-        .order("created_at", { ascending: true })
-        .limit(PRUNE_BATCH_ROWS)
-        .returns<Array<{ id: number }>>();
-      const ids = (data ?? []).map((row) => row.id);
+      const ids = await events.oldestIdsBefore(before, PRUNE_BATCH_ROWS);
       if (ids.length === 0) {
         return;
       }
-      await db.from("community_events").delete().in("id", ids);
+      await events.deleteIds(ids);
       if (ids.length < PRUNE_BATCH_ROWS) {
         return;
       }

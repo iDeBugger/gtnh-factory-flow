@@ -59,7 +59,9 @@ function cookieOf(response: Response): string {
 }
 
 async function whoAmI(cookie: string): Promise<unknown> {
-  const response = await me.GET(new Request("http://localhost/api/community/auth/me", { headers: { cookie } }));
+  const response = await me.GET(
+    new Request("http://localhost/api/community/auth/me", { headers: { cookie } }),
+  );
   expect(response.status).toBe(200);
   return ((await response.json()) as { user: unknown }).user;
 }
@@ -69,8 +71,15 @@ beforeAll(async () => {
   vi.stubEnv("COMMUNITY_HASH_SALT", "auth-test-salt");
   local = await openLocalDatabase();
   useInProcessLocalDb(async (request) => {
-    if (failAccountWrites && request.method === "PATCH" && request.url.includes("community_users")) {
-      return Response.json({ message: "down", code: "PGRST000", details: "", hint: "" }, { status: 503 });
+    if (
+      failAccountWrites &&
+      request.method === "PATCH" &&
+      request.url.includes("community_users")
+    ) {
+      return Response.json(
+        { message: "down", code: "PGRST000", details: "", hint: "" },
+        { status: 503 },
+      );
     }
     const response = await local.handle(request);
     if (
@@ -123,7 +132,10 @@ describe("signing in", () => {
 
 describe("signing out", () => {
   it("clears the cookie and, without more, changes nothing server-side", async () => {
-    const made = await post(register, "register", { username: "ann_out", password: "ann-password" });
+    const made = await post(register, "register", {
+      username: "ann_out",
+      password: "ann-password",
+    });
     const cookie = cookieOf(made);
     const out = await post(logout, "logout", undefined, { cookie });
     expect(out.status).toBe(200);
@@ -195,7 +207,9 @@ describe("password checks", () => {
     const refused = answers.filter((answer) => answer.status === "rejected");
     expect(refused).toHaveLength(1);
     expect((refused[0] as PromiseRejectedResult).reason).toBeInstanceOf(PasswordCheckBusyError);
-    expect(answers.filter((answer) => answer.status === "fulfilled")).toHaveLength(KDF_CONCURRENCY + KDF_QUEUE_MAX);
+    expect(answers.filter((answer) => answer.status === "fulfilled")).toHaveLength(
+      KDF_CONCURRENCY + KDF_QUEUE_MAX,
+    );
   }, 30_000);
 
   it("past the queue, sign-in and sign-up say the server is busy", async () => {
@@ -208,7 +222,10 @@ describe("password checks", () => {
       const signIn = await post(login, "login", { username: "ann_busy", password: "ann-password" });
       expect(signIn.status).toBe(429);
       expect(await signIn.json()).toEqual({ error: "Sign-in is busy. Try again in a moment." });
-      const signUp = await post(register, "register", { username: "bob_busy", password: "bob-password" });
+      const signUp = await post(register, "register", {
+        username: "bob_busy",
+        password: "bob-password",
+      });
       expect(signUp.status).toBe(429);
       expect(await signUp.json()).toEqual({ error: "Sign-in is busy. Try again in a moment." });
     } finally {
@@ -219,23 +236,37 @@ describe("password checks", () => {
 
 describe("signing out everywhere", () => {
   it("ends every session of the account, and a fresh sign-in works again", async () => {
-    const made = await post(register, "register", { username: "ann_all", password: "ann-password" });
+    const made = await post(register, "register", {
+      username: "ann_all",
+      password: "ann-password",
+    });
     const a = cookieOf(made);
-    const b = cookieOf(await post(login, "login", { username: "ann_all", password: "ann-password" }));
+    const b = cookieOf(
+      await post(login, "login", { username: "ann_all", password: "ann-password" }),
+    );
     const out = await post(logout, "logout", { everywhere: true }, { cookie: a });
     expect(out.status).toBe(200);
     expect(await out.json()).toEqual({ ok: true });
     expect(out.headers.get("set-cookie")).toMatch(/^gtnh_session=; .*Max-Age=0/);
     expect(await whoAmI(a)).toBeNull();
     expect(await whoAmI(b)).toBeNull();
-    const c = cookieOf(await post(login, "login", { username: "ann_all", password: "ann-password" }));
+    const c = cookieOf(
+      await post(login, "login", { username: "ann_all", password: "ann-password" }),
+    );
     expect(await whoAmI(c)).toEqual({ username: "ann_all", isAdmin: false });
     expect(await whoAmI(a)).toBeNull();
   });
 
   it("stops a token minted before epochs existed, which works until then", async () => {
-    const made = await post(register, "register", { username: "ann_old", password: "ann-password" });
-    const { data } = await getCommunityDb().from("community_users").select("id").eq("username", "ann_old").single();
+    const made = await post(register, "register", {
+      username: "ann_old",
+      password: "ann-password",
+    });
+    const { data } = await getCommunityDb()
+      .from("community_users")
+      .select("id")
+      .eq("username", "ann_old")
+      .single();
     const { id } = data as { id: string };
     const payload = `${id}.${Date.now() + 60_000}`;
     const legacy = `gtnh_session=${payload}.${createHmac("sha256", "auth-test-salt").update(payload).digest("hex")}`;
@@ -245,9 +276,16 @@ describe("signing out everywhere", () => {
   });
 
   it("stops a token whose account read was in flight when the sign-out landed", async () => {
-    const made = await post(register, "register", { username: "ann_race", password: "ann-password" });
+    const made = await post(register, "register", {
+      username: "ann_race",
+      password: "ann-password",
+    });
     const cookie = cookieOf(made);
-    const { data } = await getCommunityDb().from("community_users").select("id").eq("username", "ann_race").single();
+    const { data } = await getCommunityDb()
+      .from("community_users")
+      .select("id")
+      .eq("username", "ann_race")
+      .single();
     forgetSessionUsers();
     // A request with the token starts its row read and stalls in the database.
     let release!: () => void;
@@ -265,7 +303,10 @@ describe("signing out everywhere", () => {
   });
 
   it("keeps this browser signed in when the database could not end the others, and says so", async () => {
-    const made = await post(register, "register", { username: "ann_down", password: "ann-password" });
+    const made = await post(register, "register", {
+      username: "ann_down",
+      password: "ann-password",
+    });
     const cookie = cookieOf(made);
     failAccountWrites = true;
     try {
@@ -300,7 +341,10 @@ describe("signing out everywhere", () => {
     vi.stubEnv("LIVE_INTERNAL_URL", `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
     vi.stubEnv("LIVE_INTERNAL_TOKEN", "internal-secret");
     try {
-      const made = await post(register, "register", { username: "ann_live", password: "ann-password" });
+      const made = await post(register, "register", {
+        username: "ann_live",
+        password: "ann-password",
+      });
       await post(logout, "logout", { everywhere: true }, { cookie: cookieOf(made) });
       await expect.poll(() => heard.length).toBe(1);
       expect(heard[0]).toEqual({

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { bumpSessionEpoch, getSessionUser, sessionCookieHeader } from "@/lib/server/auth/sessions";
-import { notifyLive } from "@/lib/server/cloud-plans";
+import { sessionCookieHeader } from "@/lib/server/auth/sessions";
 import { SIGN_OUT_EVERYWHERE_FAILED } from "@/lib/community/types";
 import { readJsonCapped, SMALL_JSON_MAX_BYTES } from "@/lib/server/http/request-body";
+import { serviceResponse } from "@/lib/server/http/service-response";
+import { readViewer } from "@/lib/server/http/viewer";
+import { signOutEverywhere } from "@/lib/server/services/accounts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,14 +26,13 @@ export async function POST(request: Request) {
   if (body?.everywhere !== true) {
     return NextResponse.json({ ok: true }, { headers: clearing });
   }
+  let viewer;
   try {
-    const user = await getSessionUser(request);
-    if (user) {
-      await bumpSessionEpoch(user.id);
-      void notifyLive({ kind: "signed-out", userId: user.id });
-    }
-    return NextResponse.json({ ok: true }, { headers: clearing });
+    viewer = await readViewer(request);
   } catch {
     return NextResponse.json({ error: SIGN_OUT_EVERYWHERE_FAILED }, { status: 503 });
   }
+  return serviceResponse(await signOutEverywhere(viewer), () => ({ ok: true }), {
+    headers: clearing,
+  });
 }

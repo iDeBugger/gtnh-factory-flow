@@ -16,16 +16,18 @@ export const SERVICE_ERROR_STATUS: Record<ServiceErrorKind, number> = {
 /**
  * A service's result as the route's answer: the value through `toBody` with
  * `init` (headers such as a public `Cache-Control` belong to a success
- * only), or `{ ...body, error: message }` at the error's status with
+ * only; a function of the value when they depend on it, such as a
+ * `Set-Cookie`), or `{ ...body, error: message }` at the error's status with
  * `Cache-Control: no-store`, so no cache keeps a refusal or an outage.
  */
 export function serviceResponse<T>(
   result: ServiceResult<T>,
   toBody: (value: T) => unknown,
-  init?: ResponseInit,
+  init?: ResponseInit | ((value: T) => ResponseInit),
 ): NextResponse {
   if (result.ok) {
-    return NextResponse.json(toBody(result.value), init);
+    const ready = typeof init === "function" ? init(result.value) : init;
+    return NextResponse.json(toBody(result.value), ready);
   }
   const { kind, message, status, body, headers } = result.error;
   return NextResponse.json(

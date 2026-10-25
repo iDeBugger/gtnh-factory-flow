@@ -30,7 +30,11 @@ describe("sign out", () => {
   });
 
   it("reads a body over the small cap as a plain sign-out, without reading it", async () => {
-    const { request, counts } = oversizeRequest("http://localhost/api/community/auth/logout", "POST", 9 * 1024 * 1024);
+    const { request, counts } = oversizeRequest(
+      "http://localhost/api/community/auth/logout",
+      "POST",
+      9 * 1024 * 1024,
+    );
     const answer = await POST(request);
     expect(answer.status).toBe(200);
     expect(answer.headers.get("set-cookie")).toContain("gtnh_session=");

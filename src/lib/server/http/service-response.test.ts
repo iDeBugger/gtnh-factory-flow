@@ -12,6 +12,16 @@ describe("serviceResponse", () => {
     expect(await response.json()).toEqual({ plan: { id: "p1" } });
   });
 
+  it("takes the success's init from the value when given a function", async () => {
+    const response = serviceResponse(
+      ok({ token: "t1" }),
+      () => ({ ok: true }),
+      (value) => ({ status: 201, headers: { "Set-Cookie": `s=${value.token}` } }),
+    );
+    expect(response.status).toBe(201);
+    expect(response.headers.get("set-cookie")).toBe("s=t1");
+  });
+
   it.each<[ServiceErrorKind, number]>([
     ["not-found", 404],
     ["forbidden", 403],
