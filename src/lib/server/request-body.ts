@@ -38,12 +38,30 @@ export async function readBodyCapped(
   request: Request,
   max: number,
 ): Promise<Uint8Array | undefined> {
+  const read = await readChunksCapped(request, max);
+  if (!read) {
+    return undefined;
+  }
+  const body = new Uint8Array(read.size);
+  let at = 0;
+  for (const chunk of read.chunks) {
+    body.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return body;
+}
+
+/** The capped body as it arrived, chunk by chunk, so a caller that needs no one buffer copies nothing. */
+async function readChunksCapped(
+  request: Request,
+  max: number,
+): Promise<{ chunks: Uint8Array[]; size: number } | undefined> {
   if (Number(request.headers.get("content-length") ?? 0) > max) {
     return undefined;
   }
   const reader = request.body?.getReader();
   if (!reader) {
-    return new Uint8Array(0);
+    return { chunks: [], size: 0 };
   }
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -59,13 +77,7 @@ export async function readBodyCapped(
     }
     chunks.push(value);
   }
-  const body = new Uint8Array(size);
-  let at = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, at);
-    at += chunk.byteLength;
-  }
-  return body;
+  return { chunks, size };
 }
 
 /** The capped body as text (UTF-8), or undefined past the cap. */
@@ -100,11 +112,12 @@ export async function readFormDataCapped(
   request: Request,
   max: number,
 ): Promise<FormData | undefined> {
-  const bytes = await readBodyCapped(request, max);
-  if (bytes === undefined) {
+  // The chunks go into the Blob as they are: no joined copy of the body first.
+  const read = await readChunksCapped(request, max);
+  if (!read) {
     return undefined;
   }
-  return new Response(new Blob([bytes as BlobPart]), {
+  return new Response(new Blob(read.chunks as BlobPart[]), {
     headers: { "content-type": request.headers.get("content-type") ?? "" },
   }).formData();
 }
