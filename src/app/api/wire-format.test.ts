@@ -96,7 +96,12 @@ async function seed(db: LocalDatabase["db"]): Promise<void> {
     [
       ANN,
       JSON.stringify(project("Steel line")),
-      JSON.stringify({ kind: "item", id: "minecraft:iron_ingot" }),
+      JSON.stringify({
+        kind: "item",
+        resourceId: "minecraft:iron_ingot",
+        displayName: "Iron Ingot",
+        dominantColor: "#d8d8d8",
+      }),
       PLAN_STEEL,
       BOB,
       JSON.stringify(project("Bob's oil")),
@@ -124,7 +129,7 @@ async function seed(db: LocalDatabase["db"]): Promise<void> {
       ANN,
       needs,
       outputs,
-      JSON.stringify({ kind: "item", id: "gregtech:wire" }),
+      JSON.stringify({ kind: "item", resourceId: "gregtech:wire", displayName: "Wire" }),
     ],
   );
   await db.query(
@@ -152,7 +157,7 @@ async function seed(db: LocalDatabase["db"]): Promise<void> {
       needs,
       outputs,
       ANN,
-      JSON.stringify({ kind: "fluid", id: "steam" }),
+      JSON.stringify({ kind: "fluid", resourceId: "steam", displayName: "Steam" }),
       APP_VERSION,
       BOB,
     ],
@@ -221,7 +226,12 @@ describe("the API's JSON", () => {
           {
             "id": "design-steel",
             "name": "Steel line",
-            "icon": null,
+            "icon": {
+              "kind": "item",
+              "resourceId": "minecraft:iron_ingot",
+              "displayName": "Iron Ingot",
+              "dominantColor": "#d8d8d8"
+            },
             "folderId": "folder-main",
             "closed": false,
             "favorite": true,
@@ -325,7 +335,12 @@ describe("the API's JSON", () => {
             "ownerName": "ann",
             "id": "design-steel",
             "name": "Steel line",
-            "icon": null,
+            "icon": {
+              "kind": "item",
+              "resourceId": "minecraft:iron_ingot",
+              "displayName": "Iron Ingot",
+              "dominantColor": "#d8d8d8"
+            },
             "updatedAt": "2026-10-25T17:33:50.431+00:00",
             "planUpdatedAt": "2026-10-25T17:30:00.123456+00:00",
             "members": [
@@ -356,7 +371,12 @@ describe("the API's JSON", () => {
         "design": {
           "id": "design-steel",
           "name": "Steel line",
-          "icon": null,
+          "icon": {
+            "kind": "item",
+            "resourceId": "minecraft:iron_ingot",
+            "displayName": "Iron Ingot",
+            "dominantColor": "#d8d8d8"
+          },
           "folderId": "folder-main",
           "closed": false,
           "favorite": true,
@@ -432,8 +452,9 @@ describe("the API's JSON", () => {
               "lv"
             ],
             "icon": {
-              "id": "gregtech:wire",
-              "kind": "item"
+              "kind": "item",
+              "resourceId": "gregtech:wire",
+              "displayName": "Wire"
             },
             "highestTier": "LV",
             "highestTierIndex": 1
@@ -522,8 +543,9 @@ describe("the API's JSON", () => {
               ],
               "isPublic": true,
               "icon": {
-                "id": "steam",
-                "kind": "fluid"
+                "kind": "fluid",
+                "resourceId": "steam",
+                "displayName": "Steam"
               },
               "needs": [
                 {
@@ -598,8 +620,9 @@ describe("the API's JSON", () => {
             ],
             "isPublic": true,
             "icon": {
-              "id": "steam",
-              "kind": "fluid"
+              "kind": "fluid",
+              "resourceId": "steam",
+              "displayName": "Steam"
             },
             "needs": [
               {

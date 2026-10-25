@@ -5,9 +5,8 @@ import {
   type FolderUpsertBody,
 } from "@/lib/library/sync-types";
 import { checkRateLimit } from "@/lib/server/limits/rate-limit";
-import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { getCommunityDb, isCommunityConfigured, libraryStorageErrorMessage } from "@/lib/server/db";
 import { getSessionUser } from "@/lib/server/auth/sessions";
-import { libraryStorageErrorMessage } from "@/lib/server/db";
 import {
   CLOCK_AHEAD_MESSAGE,
   FOLDER_COLUMNS,

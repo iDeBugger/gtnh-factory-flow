@@ -1,7 +1,6 @@
-import type { DbClient } from "./db";
+import { type DbClient, isMissingColumnError } from "./db";
 import type { EntryIcon } from "@/lib/model/types";
 import type { RemoteDesignMeta, RemoteFolder } from "@/lib/library/sync-types";
-import { isMissingColumnError } from "./db";
 import { parseEntryIcon } from "./community-rows";
 
 /** Everything the list endpoint returns about a design: no plan. */

@@ -8,10 +8,9 @@ import {
 } from "@/lib/library/sync-types";
 import { designRole, leaseHeld, notifyLive, requestedOwner } from "@/lib/server/cloud-plans";
 import { checkRateLimit } from "@/lib/server/limits/rate-limit";
-import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { getCommunityDb, isCommunityConfigured, libraryStorageErrorMessage } from "@/lib/server/db";
 import { getSessionUser } from "@/lib/server/auth/sessions";
 import { parseEntryIcon } from "@/lib/server/community-rows";
-import { libraryStorageErrorMessage } from "@/lib/server/db";
 import {
   CLOCK_AHEAD_MESSAGE,
   DESIGN_META_COLUMNS,
