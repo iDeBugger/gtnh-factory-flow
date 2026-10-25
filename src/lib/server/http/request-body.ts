@@ -13,7 +13,7 @@ export const SMALL_JSON_MAX_BYTES = 16 * 1024;
 export const COMMENT_BODY_MAX_BYTES = 64 * 1024;
 
 /** What Next holds of a write body while the proxy runs (body-limits.config.ts, beside next.config.ts). */
-export { PROXY_BODY_MAX_BYTES } from "../../../body-limits.config";
+export { PROXY_BODY_MAX_BYTES } from "../../../../body-limits.config";
 
 /** The 413 sentence for a body no player-facing limit describes better. */
 export const REQUEST_TOO_BIG_MESSAGE = "The request is too big.";

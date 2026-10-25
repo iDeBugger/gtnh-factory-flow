@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { datasetErrorResponse } from "@/lib/server/error-response";
+import { datasetErrorResponse } from "@/lib/server/http/error-response";
 import {
   RESOLVE_RECIPES_MAX_BYTES,
   RESOLVE_RECIPES_MAX_REFS,
@@ -11,7 +11,7 @@ import {
   meteredDatasetWork,
 } from "@/lib/server/limits/dataset-rate";
 import { checkRecipeRefs } from "@/lib/server/recipe-ref-schema";
-import { readJsonCapped } from "@/lib/server/request-body";
+import { readJsonCapped } from "@/lib/server/http/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

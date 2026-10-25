@@ -12,7 +12,7 @@ import {
   COMMENT_BODY_MAX_BYTES,
   PROXY_BODY_MAX_BYTES,
   SMALL_JSON_MAX_BYTES,
-} from "@/lib/server/request-body";
+} from "@/lib/server/http/request-body";
 import { config, proxy } from "./proxy";
 
 /** A request as Caddy hands it on: the site's Host, whatever the browser sent as Origin. */

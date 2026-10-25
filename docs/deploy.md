@@ -34,7 +34,7 @@ infra commit first.
   `backend` is internal on `172.30.62.0/24`. The subnets are fixed because
   the firewall and `LIVE_TRUSTED_PROXIES` name them.
 - Only site and live publish ports, on loopback; nothing binds a public or ZeroTier address. The site trusts
-  `X-Client-Ip` from any peer (`src/lib/server/client-address.ts`), which is safe only because Caddy and the
+  `X-Client-Ip` from any peer (`src/lib/server/http/client-address.ts`), which is safe only because Caddy and the
   stack's own containers are its only peers. Besides the loopback port, the site container answers on its edge
   address (`172.30.61.x:3000`) to host processes and to the live container; remote hosts are kept off it only by
   Docker's direct-routing guard and the firewall.

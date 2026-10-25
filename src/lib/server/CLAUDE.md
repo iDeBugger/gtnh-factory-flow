@@ -33,11 +33,11 @@
   year-immutable answer URLs, and browsers keep the older build's answers. `next.config.ts`
   imports nothing from `src/` (it reads `version.ts` as text): `next start` loads it again at run time and the site
   image ships no `src/`. Its own modules sit beside it and import nothing (`security-headers.config.ts`,
-  `body-limits.config.ts`, which `request-body.ts` re-exports); the image must copy them with it
+  `body-limits.config.ts`, which `http/request-body.ts` re-exports); the image must copy them with it
   (`next-config.test.ts` pins it). `datasetCacheHeaders` marks an answer immutable for a
   year only when both keys are there and the version is this build's; anything else is `no-store`, so no build that
   changes a ranking is served from another build's URL, even under one APP_VERSION. Exam:
-  `dataset-cache-headers.test.ts`, `browser-loader.test.ts`.
+  `http/dataset-cache-headers.test.ts`, `browser-loader.test.ts`.
 - A new catalog field must be added to `getDatasetCatalog`'s explicit field list (and
   `RecipeDataset` in types.ts) or it never reaches the client.
 - Dataset files other than textures may be replaced in place; textures are
@@ -105,7 +105,7 @@
   worker evaluates the HiGHS glue, and a worker's policy is its own script's response (a later rule overrides
   the same key). A third-party script, font, socket or frame needs a change there first, or the browser
   refuses it. Exam: `security-headers.test.ts`, `next-config.test.ts`, probe `scratch/probes/csp-headers.mjs`.
-- A route's `catch` answers through `error-response.ts`: `serverErrorResponse` gives the route's own fallback
+- A route's `catch` answers through `http/error-response.ts`: `serverErrorResponse` gives the route's own fallback
   sentence and logs the error (a database or file system message names tables or the release path); the one
   sentence passed on is `COMMUNITY_DB_DOWN_MESSAGE`. Dataset routes use `datasetErrorResponse`: an unserved id
   (`DatasetNotFoundError`) is 404 `Dataset not found.`, never the id. `libraryStorageErrorMessage` (the owner's
@@ -224,7 +224,10 @@
 
 Layout: the database client, its breaker and its error copy in `db/` (import it as `@/lib/server/db`);
 passwords, sessions, the admin header and salted keys in `auth/`; rate limits and the event log in `limits/`;
-plan row mapping in `community-rows.ts`. The live service loads `auth/sessions` and `db`, never password code.
+plan row mapping in `community-rows.ts`; route plumbing in `http/` (request bodies, error answers, the client
+address, dataset cache headers, the mod and community gate, `readViewer`, `serviceResponse`). Services return
+`ServiceResult` (`services/result.ts`) and never import `next/*`. The live service loads `auth/sessions` and `db`,
+never password code.
 
 The server and the live service talk to PostgREST at `POSTGREST_URL` through `@supabase/postgrest-js`
 (`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
@@ -300,7 +303,7 @@ which bypasses row security. No anon role exists, so a request without the token
   a moment." Accepted trade-off: a flood past the queue refuses sign-ins for as long as it lasts, and never stalls
   the site. Exam: the "password checks" block of `app/api/community/auth/auth.test.ts`.
 
-## Request bodies (request-body.ts)
+## Request bodies (http/request-body.ts)
 
 - Because `src/proxy.ts` runs on every path, Next copies every write body (up to `PROXY_BODY_MAX_BYTES`, 4.5 MiB,
   `experimental.proxyClientMaxBodySize`; the bytes past it are dropped) and waits for its end before any route runs.
@@ -308,7 +311,7 @@ which bypasses row security. No anon role exists, so a request without the token
   cap and answers 413, not a 400 for a truncated JSON or form. Next awaits the body's end even when the proxy answers
   itself, so a declared length that never arrives, or a slow sender, is held until it finishes or Node's
   `requestTimeout` (300 s); only the edge (Caddy's body read timeout) bounds that. Route handlers have no body limit,
-  so every route that reads a body reads it through `request-body.ts` (`readJsonCapped`, `readTextCapped`,
+  so every route that reads a body reads it through `http/request-body.ts` (`readJsonCapped`, `readTextCapped`,
   `readFormDataCapped`) with a cap sized to what the client sends: a declared `content-length` over the cap is refused
   without parsing, a chunked body stops at the cap, and the answer is 413 with the route's own sentence. The read
   happens where it happened before, so every gate, 503 and auth check that ran ahead of it still does. Caps: plan uploads and synced designs `COMMUNITY_UPLOAD_BODY_MAX_BYTES` (4 MiB of bytes,
@@ -353,11 +356,11 @@ which bypasses row security. No anon role exists, so a request without the token
 - Tests run with the default (off). A test of a gated feature calls `withModAndCommunityOn()`
   (`src/test-support/mod-and-community.ts`); a test of the off side calls `withModAndCommunityUnset()`.
 
-## Client address (client-address.ts)
+## Client address (http/client-address.ts)
 
 - The client address is Caddy's `X-Client-Ip` (its `client_ip`: the peer, or behind Cloudflare its
   CF-Connecting-IP, trusted only from Cloudflare's ranges), then CF-Connecting-IP, each only as an IP literal; nothing else is read (X-Forwarded-For names a
-  Cloudflare edge or the client's own chain, nothing sets X-Real-Ip). One module, `client-address.ts`
+  Cloudflare edge or the client's own chain, nothing sets X-Real-Ip). One module, `http/client-address.ts`
   (`clientAddress`), used by every per-address rule on the site; an IPv6 literal is
   keyed on its /64; a request with neither header is `"local"` (`NO_ADDRESS`), which the dataset budget never
   refuses. It is trustworthy only because Caddy and the stack's own containers are the site's only peers: compose

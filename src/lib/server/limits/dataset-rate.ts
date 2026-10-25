@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { clientAddress, NO_ADDRESS } from "../client-address";
+import { clientAddress, NO_ADDRESS } from "../http/client-address";
 
 /**
  * A work budget per address for the dataset routes, kept in this process's

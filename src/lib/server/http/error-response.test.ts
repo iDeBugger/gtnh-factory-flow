@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { COMMUNITY_DB_DOWN_MESSAGE } from "./db/errors";
-import { DatasetNotFoundError } from "./dataset-query";
+import { COMMUNITY_DB_DOWN_MESSAGE } from "../db/errors";
+import { DatasetNotFoundError } from "../dataset-query";
 import { datasetErrorResponse, serverErrorResponse } from "./error-response";
 
 describe("a route's answer for an unexpected error", () => {

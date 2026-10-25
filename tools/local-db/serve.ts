@@ -12,7 +12,7 @@
 import { createServer } from "node:http";
 import path from "node:path";
 import { openLocalDatabase } from "../../src/lib/server/local-db/database";
-import { BodyTooLargeError, sendWebResponse, toWebRequest } from "../../src/lib/server/node-http";
+import { BodyTooLargeError, sendWebResponse, toWebRequest } from "@/lib/server/http/node-http";
 
 async function main() {
   const port = Number(process.env.LOCAL_DB_PORT ?? 54329);

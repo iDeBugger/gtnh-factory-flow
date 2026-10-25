@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { datasetErrorResponse } from "@/lib/server/error-response";
+import { datasetErrorResponse } from "@/lib/server/http/error-response";
 import { prewarmDatasetVersion } from "@/lib/server/dataset-query";
 import { getResourcePopularity } from "@/lib/server/resource-popularity";
 

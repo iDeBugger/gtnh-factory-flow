@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { serverErrorResponse } from "@/lib/server/error-response";
+import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { isAccountId } from "@/lib/live/protocol";
 import { LIBRARY_MAX_MEMBERS } from "@/lib/library/sync-types";
 import { designRole, listMembers, notifyLive, requestedOwner } from "@/lib/server/cloud-plans";

@@ -21,7 +21,7 @@ import {
   readJsonCapped,
   REQUEST_TOO_BIG_MESSAGE,
   SMALL_JSON_MAX_BYTES,
-} from "@/lib/server/request-body";
+} from "@/lib/server/http/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

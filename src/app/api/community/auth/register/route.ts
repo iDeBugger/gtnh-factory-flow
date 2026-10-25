@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { serverErrorResponse } from "@/lib/server/error-response";
+import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { PASSWORD_MIN_LENGTH, SIGN_IN_BUSY } from "@/lib/community/types";
 import { checkRateLimit } from "@/lib/server/limits/rate-limit";
 import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
@@ -10,7 +10,7 @@ import {
   readJsonCapped,
   REQUEST_TOO_BIG_MESSAGE,
   SMALL_JSON_MAX_BYTES,
-} from "@/lib/server/request-body";
+} from "@/lib/server/http/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -1,4 +1,4 @@
-import { clientAddress } from "../client-address";
+import { clientAddress } from "../http/client-address";
 import { countEvents, recordEvents, serially } from "./rate-limit";
 import { saltedKey } from "../auth/keys";
 

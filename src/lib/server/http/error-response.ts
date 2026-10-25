@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { COMMUNITY_DB_DOWN_MESSAGE } from "./db/errors";
-import { DatasetNotFoundError } from "./dataset-query";
+import { COMMUNITY_DB_DOWN_MESSAGE } from "../db/errors";
+import { DatasetNotFoundError } from "../dataset-query";
 
 /**
  * A route's answer for an error it did not expect: the route's own fallback

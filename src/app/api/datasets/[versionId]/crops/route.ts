@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { datasetErrorResponse } from "@/lib/server/error-response";
-import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
+import { datasetErrorResponse } from "@/lib/server/http/error-response";
+import { datasetCacheHeaders } from "@/lib/server/http/dataset-cache-headers";
 import { listDatasetCropFarmRecipes } from "@/lib/server/dataset-query";
 import {
   datasetBudgetRefusal,

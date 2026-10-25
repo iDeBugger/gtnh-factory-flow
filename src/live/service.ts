@@ -18,7 +18,7 @@ import {
   type LiveMember,
   type ServerFrame,
 } from "@/lib/live/protocol";
-import { addressFromHeaders, NO_ADDRESS } from "@/lib/server/client-address";
+import { addressFromHeaders, NO_ADDRESS } from "@/lib/server/http/client-address";
 import { sameSecret } from "@/lib/server/cloud-plans";
 import { readSessionCookie, verifySessionToken, type SessionClaims } from "@/lib/server/auth/session";
 import { FlushQueue } from "./flush-queue";

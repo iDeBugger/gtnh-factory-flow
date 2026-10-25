@@ -21,7 +21,7 @@ import {
   rowToBlueprintSummary,
   type BlueprintRow,
 } from "@/lib/server/blueprints";
-import { readJsonCapped } from "@/lib/server/request-body";
+import { readJsonCapped } from "@/lib/server/http/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

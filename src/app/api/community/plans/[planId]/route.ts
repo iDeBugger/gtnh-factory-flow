@@ -1,8 +1,8 @@
 import type { DbClient } from "@/lib/server/db";
 import { NextResponse } from "next/server";
-import { serverErrorResponse } from "@/lib/server/error-response";
+import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
+import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import { factoryProjectSchema } from "@/lib/model/schemas";
 import { normalizeLoadedProject } from "@/lib/model/project-normalize";
 import { ensurePlanEngine, solvePlanStats } from "@/lib/server/plan-engine";
@@ -36,7 +36,7 @@ import { getSessionUser } from "@/lib/server/auth/sessions";
 import { isAdminRequest } from "@/lib/server/auth/admin";
 import { makeVoterKey } from "@/lib/server/auth/keys";
 import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
-import { readTextCapped } from "@/lib/server/request-body";
+import { readTextCapped } from "@/lib/server/http/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

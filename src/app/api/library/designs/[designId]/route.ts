@@ -22,7 +22,7 @@ import {
   rowToDesignMeta,
   type DesignRow,
 } from "@/lib/server/library";
-import { readTextCapped } from "@/lib/server/request-body";
+import { readTextCapped } from "@/lib/server/http/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

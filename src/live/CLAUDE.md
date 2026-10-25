@@ -35,7 +35,7 @@ the game is `docs/design/cloud-live.md` in the game's repository: frames and ops
   (`isModAndCommunityOn`, read at runtime here); off, that upgrade, a `client:"game"` hello and `/live/nearby` are
   refused. Tests of the game paths turn it on with `withModAndCommunityOn()` (`src/test-support/`). Limits that
   need no database come before any lookup (upgrades per address and account, sockets per account); accounts are
-  cached a minute. The client address is read by the site's shared rule (`src/lib/server/client-address.ts`:
+  cached a minute. The client address is read by the site's shared rule (`src/lib/server/http/client-address.ts`:
   `X-Client-Ip`, else `CF-Connecting-IP`, IP literals only, IPv6 on its /64) only on requests from loopback
   or from a peer `LIVE_TRUSTED_PROXIES` names (`trusted-proxies.ts`; in Docker it is the `edge` network's gateway,
   the address docker-proxy dials from); any other peer is its own address, and one sending `X-Client-Ip` is warned

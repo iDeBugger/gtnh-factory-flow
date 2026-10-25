@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
+import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import { checkRateLimit } from "@/lib/server/limits/rate-limit";
 import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
 import { getSessionUser } from "@/lib/server/auth/sessions";

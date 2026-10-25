@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { serverErrorResponse } from "@/lib/server/error-response";
+import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
+import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import { factoryProjectSchema } from "@/lib/model/schemas";
 import { normalizeLoadedProject } from "@/lib/model/project-normalize";
 import { ensurePlanEngine, solvePlanStats } from "@/lib/server/plan-engine";
@@ -35,7 +35,7 @@ import {
   type PlanRow,
 } from "@/lib/server/community-rows";
 import { invalidatePlanListCache, readPlanListCache, writePlanListCache } from "@/lib/server/plan-list-cache";
-import { readTextCapped } from "@/lib/server/request-body";
+import { readTextCapped } from "@/lib/server/http/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -3,7 +3,7 @@ import path from "node:path";
 import { ImageResponse } from "next/og";
 import { NextResponse } from "next/server";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
+import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import { PNG } from "pngjs";
 import { GT_TIER_COLORS } from "@/components/flow/tier-colors";
 import { getPlanPreviewPng, getPublicPlanRow, sizePlanPreview } from "@/lib/server/plan-preview";

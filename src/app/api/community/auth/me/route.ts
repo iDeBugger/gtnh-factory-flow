@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { serverErrorResponse } from "@/lib/server/error-response";
+import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { getSessionUser } from "@/lib/server/auth/sessions";
 import { isCommunityConfigured } from "@/lib/server/db";
 

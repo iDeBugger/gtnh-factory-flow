@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
+import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import type { CommunityVoteResponse } from "@/lib/community/types";
 import { checkRateLimit } from "@/lib/server/limits/rate-limit";
-import { clientAddress } from "@/lib/server/client-address";
+import { clientAddress } from "@/lib/server/http/client-address";
 import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
 import { getSessionUser } from "@/lib/server/auth/sessions";
 import { isAdminRequest } from "@/lib/server/auth/admin";
@@ -17,7 +17,7 @@ import {
   readJsonCapped,
   REQUEST_TOO_BIG_MESSAGE,
   SMALL_JSON_MAX_BYTES,
-} from "@/lib/server/request-body";
+} from "@/lib/server/http/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { applyPlanSearch, parsePlanSearch } from "@/lib/community/search-query";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
+import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import { boardSelectionPayloadSchema } from "@/lib/model/schemas";
 import {
   BLUEPRINT_BODY_MAX_BYTES,
@@ -28,7 +28,7 @@ import {
   rowToBlueprintSummary,
   type BlueprintRow,
 } from "@/lib/server/blueprints";
-import { readJsonCapped } from "@/lib/server/request-body";
+import { readJsonCapped } from "@/lib/server/http/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { clientAddress } from "../client-address";
+import { clientAddress } from "../http/client-address";
 import { sessionSecret } from "./session";
 import { getSessionUser } from "./sessions";
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { serverErrorResponse } from "@/lib/server/error-response";
+import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
+import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
 import {
   PLAN_PREVIEW_BUCKET,
@@ -9,7 +9,7 @@ import {
   getPlanPreviewPng,
   readPngHeader,
 } from "@/lib/server/plan-preview";
-import { readFormDataCapped } from "@/lib/server/request-body";
+import { readFormDataCapped } from "@/lib/server/http/request-body";
 import { getFileStore, isFileStoreConfigured } from "@/lib/server/file-store";
 import { checkRateLimit } from "@/lib/server/limits/rate-limit";
 import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
