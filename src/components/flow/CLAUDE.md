@@ -48,6 +48,9 @@ The board must stay smooth with 100+ cards on weak PCs.
 
 ## Cards and ports
 
+- A wired port keeps its row at any rate (`buildRailPorts`): the row holds the handle its wire is drawn to, and a card
+  the plan runs at almost nothing would otherwise drop it and leave the wire undrawn while the plan still runs it.
+  Exam: `flow-explainers.test.ts`.
 - The port ROW is the control: click = what makes it, right click = what uses it, R / U
   over the hovered row, long press = menu, drag = wire. The icon is `pointer-events-none`.
   `port-browse.ts` holds the hovered row imperatively; do not subscribe cards to it.

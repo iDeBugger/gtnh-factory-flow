@@ -2063,8 +2063,11 @@ export function buildRailPorts(
     };
 
     if (flows) {
+      // A wired port keeps its row at any rate: its row holds the handle the wire is drawn to, and a card the plan runs
+      // at almost nothing (an edit elsewhere) would otherwise lose it, leaving the wire undrawn while the plan runs it.
+      const wiredKeys = new Set<string>(sideEdges.map((edge) => makeResourceKey(edge.resourceKind, edge.resourceId)));
       for (const [key, flow] of Object.entries(flows)) {
-        if (flow.amountPerSecond <= RATE_EPSILON) {
+        if (flow.amountPerSecond <= RATE_EPSILON && !wiredKeys.has(key)) {
           continue;
         }
         pushPort(key, flow.kind, flow.resourceId, flow.displayName, flow.amountPerSecond);

@@ -182,6 +182,44 @@ describe("explainPort — outputs", () => {
   });
 });
 
+describe("buildRailPorts — a card the plan runs at almost nothing", () => {
+  it("keeps the row of a wired port (its wire is drawn to it), and drops an unwired one", () => {
+    const { proj } = sulfuricFixture();
+    // An edit elsewhere left the tower at almost nothing: every flow under the noise floor.
+    const result = throughput(
+      {
+        Tower: nodeResult({
+          nodeId: "Tower",
+          utilization: 0,
+          theoreticalMachinesRequired: 0.0000001,
+          outputs: {
+            "fluid:sulfuricgas": flow("fluid", "sulfuricgas", 0.0000001),
+            "fluid:spare": flow("fluid", "spare", 0.0000001),
+          },
+        }),
+        LCR: nodeResult({ nodeId: "LCR" }),
+      },
+      { eGas: edgeResult({}) },
+    );
+    const verdict = deriveNodeVerdict(proj, result, "Tower");
+    const rails = buildRailPorts(
+      proj,
+      result,
+      "Tower",
+      {
+        inputs: [],
+        outputs: [
+          { kind: "fluid", id: "sulfuricgas", amount: 1 },
+          { kind: "fluid", id: "spare", amount: 1 },
+        ],
+      } as unknown as Parameters<typeof buildRailPorts>[3],
+      verdict,
+    );
+    expect(rails.outputs.map((port) => port.key)).toEqual(["fluid:sulfuricgas"]);
+    expect(rails.outputs[0]!.connected).toBe(true);
+  });
+});
+
 describe("explainPort — inputs", () => {
   it("names the maker, the shortfall and what it holds the machine at", () => {
     const { proj, result } = sulfuricFixture();
