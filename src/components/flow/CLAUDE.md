@@ -170,7 +170,7 @@ The board must stay smooth with 100+ cards on weak PCs.
   over the cards fed by `src/lib/live/live-presence.ts`, never by a board store, so a remote pointer never re-renders
   a card. Its outline selector costs one length check while nobody else has anything selected.
 - Delete and Backspace take React Flow's selection only, never the store's `selectedNodeId` (never drawn), and do
-  nothing while the recipe search, Library, Welcome, a task board or a focused menu or dialog covers the board
+  nothing while the recipe search, Library, Welcome, a task board, an open menu or a focused dialog covers the board
   (`isBoardCovered`); the search walks back on a bare Backspace. Escape lets go of the selection unless a popup took
   it (`defaultPrevented`). Exam: `board-delete-key.test.ts`.
 - One right-click menu, `BoardContextMenu.tsx`. A control with its own right click calls

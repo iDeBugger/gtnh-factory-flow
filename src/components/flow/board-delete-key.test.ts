@@ -174,7 +174,7 @@ describe("the board's Delete and Backspace", () => {
     expect(cards()).toEqual(ALL);
   });
 
-  it("leave the board alone while a menu or dialog holds the focus", () => {
+  it("leave the board alone while a menu is open or a dialog holds the focus", () => {
     boardWithPlan();
     selectOnBoard(["m2"]);
     for (const role of ["menu", "dialog"]) {
@@ -190,6 +190,12 @@ describe("the board's Delete and Backspace", () => {
       });
       popup.remove();
     }
+    // A card's right-click menu keeps no focus: open on the page is enough.
+    const menu = document.createElement("div");
+    menu.setAttribute("role", "menu");
+    document.body.append(menu);
+    press("Delete");
+    menu.remove();
     expect(cards()).toEqual(ALL);
     // With the menu gone, the selection is still there to delete.
     press("Delete");
