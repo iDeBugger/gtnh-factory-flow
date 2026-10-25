@@ -1,0 +1,538 @@
+{
+  "edges": [
+    {
+      "from": "src/lib/model/board-windows.ts",
+      "to": "src/lib/board-grid.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/model/cell-wires.ts",
+      "to": "src/components/flow/board-placement.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/model/cell-wires.ts",
+      "to": "src/lib/board-grid.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/model/project-normalize.ts",
+      "to": "src/lib/board-grid.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/search/resource-search-engine.ts",
+      "to": "src/lib/server/bounded-lru.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/solver/hatch-supply.ts",
+      "to": "src/components/flow/resource-handles.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/clean/clean-model.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/clean/rail/notices.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/clean/rail/rail-model.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/node-verdict.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/resource-handles.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/blueprints/types.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "2"
+    },
+    {
+      "from": "src/app/api/accounts/search/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/blueprints/[blueprintId]/download/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/blueprints/[blueprintId]/download/route.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/blueprints/[blueprintId]/publish/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/blueprints/[blueprintId]/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/blueprints/[blueprintId]/route.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/blueprints/[blueprintId]/vote/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/blueprints/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/community/auth/login/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/community/auth/logout/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/community/auth/me/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/community/auth/register/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/community/images/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/community/plans/[planId]/card/route.tsx",
+      "to": "src/components/flow/tier-colors.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/community/plans/[planId]/comments/[commentId]/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/community/plans/[planId]/comments/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/community/plans/[planId]/download/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/community/plans/[planId]/preview/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/community/plans/[planId]/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/community/plans/[planId]/view/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/community/plans/[planId]/vote/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/community/plans/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/library/designs/[designId]/members/[userId]/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/library/designs/[designId]/members/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/library/designs/[designId]/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/library/folders/[folderId]/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/api/library/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/llms.txt/route.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/app/sitemap.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/live/main.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "5"
+    },
+    {
+      "from": "src/live/main.ts",
+      "to": "src/lib/server/local-db/client.ts",
+      "rule": "5"
+    },
+    {
+      "from": "src/live/main.ts",
+      "to": "src/lib/server/session.ts",
+      "rule": "5"
+    },
+    {
+      "from": "src/live/service.ts",
+      "to": "src/lib/server/client-address.ts",
+      "rule": "5"
+    },
+    {
+      "from": "src/live/service.ts",
+      "to": "src/lib/server/cloud-plans.ts",
+      "rule": "5"
+    },
+    {
+      "from": "src/live/service.ts",
+      "to": "src/lib/server/session.ts",
+      "rule": "5"
+    },
+    {
+      "from": "src/live/store.ts",
+      "to": "src/lib/server/cloud-plans.ts",
+      "rule": "5"
+    },
+    {
+      "from": "src/live/store.ts",
+      "to": "src/lib/server/community.ts",
+      "rule": "5"
+    },
+    {
+      "from": "src/lib/search/resource-search-engine.ts",
+      "to": "src/lib/server/bounded-lru.ts",
+      "rule": "6"
+    },
+    {
+      "from": "src/store/design-store.ts",
+      "to": "src/components/flow/board-view.ts",
+      "rule": "7"
+    },
+    {
+      "from": "src/store/factory-store.ts",
+      "to": "src/components/flow/board-placement.ts",
+      "rule": "7"
+    },
+    {
+      "from": "src/store/factory-store.ts",
+      "to": "src/components/flow/clean/group/group-model.ts",
+      "rule": "7"
+    },
+    {
+      "from": "src/store/solve-books.worker.ts",
+      "to": "src/components/flow/clog-lock.ts",
+      "rule": "7"
+    },
+    {
+      "from": "src/lib/arrange-job.ts",
+      "to": "src/components/flow/grid-edge-router.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/arrange-job.ts",
+      "to": "src/components/flow/router-tuning.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/blueprints/client.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/blueprints/io-stats.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/blueprints/types.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/board-arrange-free.ts",
+      "to": "src/components/flow/router-tuning.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/board-arrange-optimize.ts",
+      "to": "src/components/flow/grid-edge-router.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/board-arrange-optimize.ts",
+      "to": "src/components/flow/router-tuning.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/board-arrange.ts",
+      "to": "src/components/flow/router-tuning.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/community/open-post.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/community/open-post.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/community/plan-preview-capture.ts",
+      "to": "src/components/flow/board-view.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/community/plan-preview-capture.ts",
+      "to": "src/components/flow/canvas-themes.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/datasets/convert-action.ts",
+      "to": "src/components/flow/clean/rail/NoticeBar.tsx",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/datasets/convert-action.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/datasets/convert-action.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/datasets/convert-payload-version.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/designs/design-camera.ts",
+      "to": "src/components/flow/board-camera.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/import-export/open-plan-file.ts",
+      "to": "src/components/flow/clean/rail/NoticeBar.tsx",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/import-export/open-plan-file.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/import-export/open-plan-file.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/import-export/recipe-migration.ts",
+      "to": "src/components/flow/resource-handles.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/library/library-sync.ts",
+      "to": "src/store/community-auth-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/library/library-sync.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/library/library-sync.ts",
+      "to": "src/store/live-edit-gate.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/library/open-shared.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/model/cell-wires.ts",
+      "to": "src/components/flow/board-placement.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/open-plan-code.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/plan-view.ts",
+      "to": "src/components/flow/board-view.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/plan-view.ts",
+      "to": "src/components/flow/canvas-themes.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/plan-view.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/route-judge.ts",
+      "to": "src/components/flow/grid-edge-router.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/route-judge.ts",
+      "to": "src/components/flow/router-tuning.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/solver/hatch-supply.ts",
+      "to": "src/components/flow/resource-handles.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/clean/clean-model.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/clean/rail/notices.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/clean/rail/rail-model.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/node-verdict.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/resource-handles.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/make-task.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/make-task.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/make-task.ts",
+      "to": "src/store/live-session.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/open-link.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/open-link.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/open-link.ts",
+      "to": "src/store/live-session.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/task-link-index.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/task-link-index.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/task-link-index.ts",
+      "to": "src/store/live-session.ts",
+      "rule": "8"
+    }
+  ],
+  "queriesInApp": [
+    "src/app/api/accounts/search/route.ts",
+    "src/app/api/blueprints/[blueprintId]/download/route.ts",
+    "src/app/api/blueprints/[blueprintId]/publish/route.ts",
+    "src/app/api/blueprints/[blueprintId]/route.ts",
+    "src/app/api/blueprints/[blueprintId]/vote/route.ts",
+    "src/app/api/blueprints/route.ts",
+    "src/app/api/community/auth/login/route.ts",
+    "src/app/api/community/auth/register/route.ts",
+    "src/app/api/community/plans/[planId]/comments/[commentId]/route.ts",
+    "src/app/api/community/plans/[planId]/comments/route.ts",
+    "src/app/api/community/plans/[planId]/download/route.ts",
+    "src/app/api/community/plans/[planId]/preview/route.ts",
+    "src/app/api/community/plans/[planId]/route.ts",
+    "src/app/api/community/plans/[planId]/view/route.ts",
+    "src/app/api/community/plans/[planId]/vote/route.ts",
+    "src/app/api/community/plans/route.ts",
+    "src/app/api/library/designs/[designId]/members/[userId]/route.ts",
+    "src/app/api/library/designs/[designId]/route.ts",
+    "src/app/api/library/folders/[folderId]/route.ts",
+    "src/app/api/library/route.ts",
+    "src/app/llms.txt/route.ts",
+    "src/app/sitemap.ts"
+  ]
+}

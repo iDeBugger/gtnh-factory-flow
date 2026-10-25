@@ -26,6 +26,32 @@ before changing that area; it names the tests that pin its behaviour.
 Longer references, read on demand: `docs/solver-equations.md` (solver doctrine),
 `docs/power-planner-math.md` (the decoded power workbook), `docs/COMMUNITY.md`.
 
+## Layers
+
+`src/architecture.test.ts` holds these over the import graph of `src/` and `tools/`
+(tests, `__fixtures__/`, `test-support/` and `src/app/dev/` exempt):
+
+1. The domain (`src/lib/{model,machines,power,solver,search,board}`) imports the domain and
+   `src/lib/<feature>/types.ts` only, and no React, Zustand, React Flow, Node, Next, `ws` or
+   database package.
+2. Contracts (feature `types.ts`, `library/sync-types.ts`, `datasets/resolve-recipes-limits.ts`,
+   `live/{ops,protocol,validate}.ts`) import the domain and contracts only.
+3. `src/lib/server/**` never imports `src/{components,store,app,live}` or React.
+4. Route handlers never import the database layer (`lib/server/db`, `lib/server/repos`), the UI
+   or the stores, and send no query themselves (no `.from("`, no database package).
+5. `src/live` uses `lib/server/{repos,services,auth}`, `db/index.ts` and `http/client-address.ts`
+   only, never the app, the UI or the stores.
+6. Browser code (the UI, the stores, every `"use client"` file and worker, and what they load
+   at run time) never reaches `src/lib/server` or a Node built-in.
+7. The stores never import the UI.
+8. Non-UI `src/lib` never imports the UI or the stores.
+
+Services (`lib/server/services`) never import `next/*`, with no exceptions. Today's exceptions
+to the rules above are listed in `src/architecture-allowlist.json`, and the list only shrinks:
+a fixed edge still listed fails, so drop it in the same commit
+(`ARCH_DUMP=1 npx vitest run src/architecture.test.ts` rewrites the list; its diff must only
+remove lines).
+
 ## Commands
 
 ```bash
