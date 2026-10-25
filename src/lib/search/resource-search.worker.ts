@@ -57,18 +57,27 @@ function refreshPopularity() {
 }
 
 /**
- * Queries waiting to run. A message only queues its query; the queue runs in a
- * later task, so a cancel that arrived meanwhile (the player typed on) drops
- * its query before the walk instead of after it.
+ * Queries waiting to run. A message only queues its query, and each task
+ * answers one, so a cancel that arrives while another query walks (the player
+ * typed on) still drops its query before the walk.
  */
 const waiting: Array<{ id: number; request: Omit<ResourceSearchRequest, "popularity"> }> = [];
 let draining = false;
 
-function drain() {
+function schedule() {
+  if (!draining && waiting.length > 0) {
+    draining = true;
+    setTimeout(drainOne, 0);
+  }
+}
+
+function drainOne() {
   draining = false;
-  for (let next = waiting.shift(); next; next = waiting.shift()) {
+  const next = waiting.shift();
+  if (next) {
     answer(next.id, next.request);
   }
+  schedule();
 }
 
 function answer(id: number, request: Omit<ResourceSearchRequest, "popularity">) {
@@ -130,8 +139,5 @@ self.onmessage = async (event: MessageEvent<ResourceSearchWorkerMessage>) => {
     return;
   }
   waiting.push({ id: message.id, request: message.request });
-  if (!draining) {
-    draining = true;
-    setTimeout(drain, 0);
-  }
+  schedule();
 };

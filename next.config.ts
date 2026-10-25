@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import type { NextConfig } from "next";
 import { securityHeaders } from "./src/lib/security-headers";
 import { PROXY_BODY_MAX_BYTES } from "./src/lib/server/request-body";
-import { APP_VERSION } from "./src/lib/version";
 
 const datasetBackendUrl = process.env.GTNH_DATASET_BACKEND_URL?.replace(/\/+$/, "");
 
@@ -11,22 +12,45 @@ const datasetBackendUrl = process.env.GTNH_DATASET_BACKEND_URL?.replace(/\/+$/, 
  * dataset answers' cache key (`src/lib/datasets/answer-version.ts`), so two
  * builds that share an APP_VERSION never share a cached answer. The deploy
  * passes `GTNH_BUILD_ID` (`<version>-<sha8>`, the same value its image labels
- * and `/api/version` report); a checkout builds `<version>-<sha8>` from git,
- * and a tree without git the version alone.
+ * and `/api/version` report; a build from `git archive` has no git to ask); a
+ * checkout builds `<version>-<sha8>`, with `-dirty` for uncommitted changes.
+ *
+ * The version is read as text, never imported: `next start` loads this file
+ * again at run time, and the site image ships only the src/ modules listed in
+ * `next-config.test.ts`. Where neither the version nor git is there (that
+ * run-time load) the value is unused: `env` is inlined at build.
  */
 function buildIdentity(): string {
   const configured = process.env.GTNH_BUILD_ID?.trim();
   if (configured) {
     return configured;
   }
+  const version = readAppVersion();
+  const sha = git(["rev-parse", "--short=8", "HEAD"]);
+  if (!sha) {
+    return version;
+  }
+  const dirty = git(["status", "--porcelain", "--untracked-files=no"]) ? "-dirty" : "";
+  return `${version}-${sha}${dirty}`;
+}
+
+function readAppVersion(): string {
   try {
-    const sha = execFileSync("git", ["rev-parse", "--short=8", "HEAD"], {
+    const source = readFileSync(path.join(process.cwd(), "src", "lib", "version.ts"), "utf8");
+    return /APP_VERSION\s*=\s*"([^"]+)"/.exec(source)?.[1] ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function git(args: string[]): string {
+  try {
+    return execFileSync("git", args, {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
-    return sha ? `${APP_VERSION}-${sha}` : APP_VERSION;
   } catch {
-    return APP_VERSION;
+    return "";
   }
 }
 

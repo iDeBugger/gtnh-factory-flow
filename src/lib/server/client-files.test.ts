@@ -7,6 +7,7 @@ import {
   CLIENT_FILE_NAME,
   clientFileDirectory,
   clientFilesRoot,
+  removeUnservedClientFileDirectories,
   resolveClientFilePath,
   clientFileListing,
   clientFileName,
@@ -137,5 +138,26 @@ describe("the server's content-addressed dataset answers", () => {
       files: {},
     });
     expect(error).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the client files of a version no longer served", () => {
+  it("are removed at start, and nothing else in the root is touched", async () => {
+    for (const name of ["local-2.9.0-rc-2", "local-2.8.1", "local-2.9.0-beta-2"]) {
+      await fs.mkdir(path.join(directory, name));
+      await fs.writeFile(path.join(directory, name, "catalog.00000000000000000000.json.gz"), "x");
+    }
+    await fs.writeFile(path.join(directory, "note.txt"), "x");
+    const removed = await removeUnservedClientFileDirectories(directory, [
+      "local-2.9.0-rc-2",
+      "local-2.8.1",
+    ]);
+    expect(removed).toEqual(["local-2.9.0-beta-2"]);
+    expect((await fs.readdir(directory)).sort()).toEqual(
+      ["local-2.8.1", "local-2.9.0-rc-2", "note.txt"].sort(),
+    );
+    await expect(
+      removeUnservedClientFileDirectories(path.join(directory, "missing"), []),
+    ).resolves.toEqual([]);
   });
 });

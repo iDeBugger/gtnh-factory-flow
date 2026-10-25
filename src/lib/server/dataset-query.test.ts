@@ -21,6 +21,7 @@ import {
   prewarmInOrder,
   queryCatalogResources,
   createRankedRecipeSearchCache,
+  keptRecipeSearch,
   RECIPE_SEARCH_CACHE_BYTES,
   rankedRecipeSearchBytes,
   rankedRecipeSearchKey,
@@ -613,5 +614,34 @@ describe("the kept recipe searches", () => {
     // "a" was read last, so "b" is the oldest and goes.
     expect(cache.keys()).toEqual(["a", "c"]);
     expect(cache.totalSize).toBeLessThanOrEqual(size * 2.5);
+  });
+
+  it("rank two identical cold searches once, keep the answer, and let a failed ranking be tried again", async () => {
+    const answer = {
+      order: Int32Array.from([3, 1, 2]),
+      recipeMaps: ["Assembler"],
+      recipeMapCounts: { Assembler: 3 },
+      outcome: { searchPhase: "exact" as const, corrections: [] },
+    };
+    const kept = createRankedRecipeSearchCache();
+    const ranking = new Map();
+    let release: () => void = () => {};
+    const rank = vi.fn(
+      () => new Promise<typeof answer>((resolve) => (release = () => resolve(answer))),
+    );
+    const first = keptRecipeSearch(kept, ranking, "k", rank);
+    const second = keptRecipeSearch(kept, ranking, "k", rank);
+    release();
+    await expect(Promise.all([first, second])).resolves.toEqual([answer, answer]);
+    expect(rank).toHaveBeenCalledTimes(1);
+    expect(ranking.size).toBe(0);
+    await expect(keptRecipeSearch(kept, ranking, "k", rank)).resolves.toBe(answer);
+    expect(rank).toHaveBeenCalledTimes(1);
+
+    const failing = vi.fn(() => Promise.reject(new Error("shard missing")));
+    await expect(keptRecipeSearch(kept, ranking, "bad", failing)).rejects.toThrow("shard missing");
+    expect(ranking.size).toBe(0);
+    await expect(keptRecipeSearch(kept, ranking, "bad", failing)).rejects.toThrow("shard missing");
+    expect(failing).toHaveBeenCalledTimes(2);
   });
 });

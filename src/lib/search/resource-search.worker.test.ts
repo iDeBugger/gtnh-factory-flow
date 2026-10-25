@@ -78,4 +78,17 @@ describe("the item search worker", () => {
       resources: [{ id: "gregtech:steel" }],
     });
   });
+
+  it("answers one query a task, so a cancel sent while one walks still drops the next", async () => {
+    await loadWorker(1);
+    const request = { query: "steel", offset: 0, limit: 120 };
+    await onmessage({ data: { type: "query", id: 1, request } });
+    await onmessage({ data: { type: "query", id: 2, request } });
+    await onmessage({ data: { type: "query", id: 3, request } });
+    await vi.advanceTimersToNextTimerAsync();
+    expect(replies.slice(1).map((reply) => reply.id)).toEqual([1]);
+    await onmessage({ data: { type: "cancel", id: 2 } });
+    await vi.runAllTimersAsync();
+    expect(replies.slice(1).map((reply) => reply.id)).toEqual([1, 3]);
+  });
 });

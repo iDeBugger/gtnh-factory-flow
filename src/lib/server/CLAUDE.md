@@ -15,7 +15,7 @@
   text (case and outer spaces folded), the clauses, side ops, all-maps flag, map selection, map and tier; offset and
   limit are not in it, so every page of a search is one entry. Bounded at `RECIPE_SEARCH_CACHE_BYTES` (32 MB) by
   `rankedRecipeSearchBytes` (4 bytes a match, each map's name and count, the corrections; the widest, "s" over 2.9,
-  is about 1.1 MB). Two identical searches ranking at once share one ranking (`rankingRecipeSearches`). Module scope, not
+  is about 1.1 MB). Two identical searches ranking at once share one ranking (`keptRecipeSearch`). Module scope, not
   `globalThis`: only the recipes route fills it, and a dev reload of search code starts it empty. Measured on 2.9:
   "s" 219 ms uncached, 0.6 ms kept; "st" 186 ms, 7 ms. The route's base cost is spent before the lookup, so a kept
   answer still pays it. Exam: `dataset-query.test.ts` "the kept recipe searches", `recipes/route.test.ts`, the
@@ -26,8 +26,11 @@
   cache keys (`addDatasetCacheKey` in `browser-loader.ts`): `datasetHash` and the answer version
   (`appVersion=<build>`, `src/lib/datasets/answer-version.ts`). The answer version is the build, not the release
   number: `next.config.ts` bakes `NEXT_PUBLIC_GTNH_BUILD_ID` into the server and browser bundles, from
-  `GTNH_BUILD_ID` (the deploy's `<version>-<sha8>`, the value `/api/version` reports) or else
-  `<APP_VERSION>-<git sha8>`, or `APP_VERSION` with no git. `datasetCacheHeaders` marks an answer immutable for a
+  `GTNH_BUILD_ID` (the deploy's `<version>-<sha8>`, the value `/api/version` reports; an image built from `git
+  archive` has no git, so its Dockerfile must pass `ARG GTNH_BUILD_ID` to the build) or else
+  `<APP_VERSION>-<git sha8>` (`-dirty` with uncommitted changes), or `APP_VERSION` with neither. `next.config.ts`
+  imports nothing from `src/` (it reads `version.ts` as text): `next start` loads it again at run time and the site
+  image ships no `src/` (`next-config.test.ts` pins it). `datasetCacheHeaders` marks an answer immutable for a
   year only when both keys are there and the version is this build's; anything else is `no-store`, so no build that
   changes a ranking is served from another build's URL, even under one APP_VERSION. Exam:
   `dataset-cache-headers.test.ts`, `browser-loader.test.ts`.
@@ -68,7 +71,8 @@
   route (`immutable` for a year, brotli or gzip by Accept-Encoding, ETag `"<hash>-<br|gz>"`); with no listing, a
   kind not listed or a failed file it asks the API as before, and the API routes stay for old tabs; a listing that is
   incomplete or failed is reused for 45 s before the browser asks again (`CLIENT_FILE_LISTING_RETRY_MS`). A write
-  that fails (an unwritable cache directory) is logged and the site keeps the API. Outside production each load of
+  that fails (an unwritable cache directory) is logged and the site keeps the API. Each start also removes the
+  directories of versions it no longer serves (`removeUnservedClientFileDirectories`). Outside production each load of
   the module keys its own listing, so a dev reload of answer code never lists the old code's files. Exam: `client-files.test.ts`,
   `dataset-files/[versionId]/[...assetPath]/client-files.test.ts`, `api/datasets/[versionId]/client-files/route.test.ts`,
   `browser-loader.test.ts`.
@@ -127,7 +131,8 @@
   version's query ends it; the next typed query starts that version's: two indexes would hold twice the memory).
   Measured in headless Chromium through CDP (`scratch/probes/worker-heap.mjs`): the worker's JS heap after a GC is
   62 MB with the 2.9 index built, 64 MB after a few searches. Never where the browser reports under 4 GB
-  (`navigator.deviceMemory`, Chromium only). An aborted query is cancelled in the worker before it runs. Until it is ready, for
+  (`navigator.deviceMemory`, Chromium only). The worker answers one query a task, so an aborted query is dropped
+  before it runs even while another walks. Until it is ready, for
   a popular sort before the popularity map has arrived (`/api/resource-popularity`, the same 30-minute policy as a
   popular `/resources` answer), and after any failure, the API answers. The route stays for old tabs, the
   fallback and bots, with its budget. A change to the item search must keep both sides equal: `resource-search-engine.test.ts`

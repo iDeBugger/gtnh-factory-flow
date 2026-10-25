@@ -176,6 +176,28 @@ async function removeStaleClientFiles(
 }
 
 /**
+ * Removes the directories of versions this site no longer serves (a dataset
+ * dropped from the manifest): only a start of a served version sweeps its own
+ * directory, so a dropped one would keep its files for good. Anything in the
+ * root that is not a directory is left alone.
+ */
+export async function removeUnservedClientFileDirectories(
+  root: string,
+  servedVersionIds: readonly string[],
+): Promise<string[]> {
+  const served = new Set(servedVersionIds);
+  const removed: string[] = [];
+  const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    if (entry.isDirectory() && isPlainName(entry.name) && !served.has(entry.name)) {
+      await fs.rm(path.join(root, entry.name), { recursive: true, force: true });
+      removed.push(entry.name);
+    }
+  }
+  return removed;
+}
+
+/**
  * One version's files as this process knows them, kept on `globalThis`: Next.js
  * bundles `instrumentation.ts` apart from the routes, and the start-up write
  * must fill the listing the route reads.

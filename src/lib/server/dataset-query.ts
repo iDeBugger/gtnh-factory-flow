@@ -1141,7 +1141,7 @@ export async function listDatasetEecMobs(versionId: string) {
  * is a slice of `order` with its summaries read then, so a kept search holds
  * no recipe bodies.
  */
-interface RankedRecipeSearch {
+export interface RankedRecipeSearch {
   order: Int32Array;
   recipeMaps: string[];
   recipeMapCounts: Record<string, number>;
@@ -1213,6 +1213,35 @@ export function createRankedRecipeSearchCache(limit = RECIPE_SEARCH_CACHE_BYTES)
   return new BoundedLru<string, RankedRecipeSearch>(limit);
 }
 
+/**
+ * A kept search, or the one being ranked for the same key, or a new ranking
+ * that is kept once done: two identical cold searches at once rank once.
+ */
+export async function keptRecipeSearch(
+  kept: BoundedLru<string, RankedRecipeSearch>,
+  ranking: Map<string, Promise<RankedRecipeSearch>>,
+  key: string,
+  rank: () => Promise<RankedRecipeSearch>,
+): Promise<RankedRecipeSearch> {
+  const hit = kept.get(key);
+  if (hit) {
+    return hit;
+  }
+  let pending = ranking.get(key);
+  if (!pending) {
+    pending = rank()
+      .then((search) => {
+        kept.set(key, search, rankedRecipeSearchBytes(key, search));
+        return search;
+      })
+      .finally(() => {
+        ranking.delete(key);
+      });
+    ranking.set(key, pending);
+  }
+  return pending;
+}
+
 /** Test seam: forgets every kept recipe search. */
 export function clearRankedRecipeSearches(): void {
   rankedRecipeSearches.clear();
@@ -1234,22 +1263,9 @@ async function queryDatasetRecipesFromLookup(
   }
 
   const key = rankedRecipeSearchKey(catalog.version, request);
-  let ranked = rankedRecipeSearches.get(key);
-  if (!ranked) {
-    let ranking = rankingRecipeSearches.get(key);
-    if (!ranking) {
-      ranking = rankLookupRecipes(catalog, request, parsedQuery, clauses)
-        .then((search) => {
-          rankedRecipeSearches.set(key, search, rankedRecipeSearchBytes(key, search));
-          return search;
-        })
-        .finally(() => {
-          rankingRecipeSearches.delete(key);
-        });
-      rankingRecipeSearches.set(key, ranking);
-    }
-    ranked = await ranking;
-  }
+  const ranked = await keptRecipeSearch(rankedRecipeSearches, rankingRecipeSearches, key, () =>
+    rankLookupRecipes(catalog, request, parsedQuery, clauses),
+  );
 
   const pageRecipeIndexes = [
     ...ranked.order.subarray(request.offset, request.offset + request.limit),

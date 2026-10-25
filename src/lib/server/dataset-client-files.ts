@@ -1,7 +1,9 @@
 import {
   clientFileListing,
   clientFileDirectory,
+  clientFilesRoot,
   ensureClientFiles,
+  removeUnservedClientFileDirectories,
   type ClientFileListing,
   type ClientFileSpec,
 } from "./client-files";
@@ -85,7 +87,16 @@ export async function datasetClientFileListing(
  * for any file not written yet.
  */
 export async function writeServedDatasetClientFiles(): Promise<void> {
-  for (const versionId of await servedDatasetVersionOrder()) {
+  const served = await servedDatasetVersionOrder();
+  try {
+    const removed = await removeUnservedClientFileDirectories(clientFilesRoot(), served);
+    if (removed.length > 0) {
+      console.info(`GTNH client files of unserved versions removed: ${removed.join(", ")}.`);
+    }
+  } catch (error) {
+    console.error("GTNH client files of unserved versions were not removed.", error);
+  }
+  for (const versionId of served) {
     const started = Date.now();
     try {
       // Joins the background prewarm of this version, or finds it done.

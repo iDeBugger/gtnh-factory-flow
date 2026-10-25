@@ -57,3 +57,44 @@ describe("how the served dataset files reach a browser", () => {
     }
   });
 });
+
+describe("the build identity the config bakes in", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("imports from src/ only modules that import nothing themselves: next start loads the config again at run time", async () => {
+    // A site image that ships no src/ crashes on its first request at a
+    // config import it lacks, so every src/ module the config imports must
+    // be a self-contained file the image copies (the deploy's Dockerfile).
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(new URL("../../../next.config.ts", import.meta.url), "utf8");
+    const imports = [...source.matchAll(/^\s*import[^;]*?from\s+["']([^"']+)["']/gm)].map(
+      (match) => match[1] ?? "",
+    );
+    const fromSrc = imports.filter((specifier) => /^(\.|@\/)/.test(specifier));
+    expect(fromSrc.sort()).toEqual(["./src/lib/security-headers", "./src/lib/server/request-body"]);
+    for (const specifier of fromSrc) {
+      const module = readFileSync(
+        new URL(`../../../${specifier.slice(2)}.ts`, import.meta.url),
+        "utf8",
+      );
+      expect(module, specifier).not.toMatch(/^\s*import\s(?!type\b)/m);
+    }
+    expect(source).not.toMatch(/require\(\s*["'](\.|@\/)/);
+  });
+
+  it("is the deploy's GTNH_BUILD_ID when set", async () => {
+    vi.stubEnv("GTNH_BUILD_ID", "4.4.1-5efe0a3c");
+    vi.resetModules();
+    const config = (await import("../../../next.config")).default;
+    expect(config.env?.NEXT_PUBLIC_GTNH_BUILD_ID).toBe("4.4.1-5efe0a3c");
+  });
+
+  it("is the version and commit of a checkout otherwise", async () => {
+    vi.stubEnv("GTNH_BUILD_ID", "");
+    vi.resetModules();
+    const config = (await import("../../../next.config")).default;
+    expect(config.env?.NEXT_PUBLIC_GTNH_BUILD_ID).toMatch(/^\d+\.\d+\.\d+-[0-9a-f]{8}(-dirty)?$/);
+  });
+});
