@@ -46,11 +46,12 @@ Longer references, read on demand: `docs/solver-equations.md` (solver doctrine),
 7. The stores never import the UI.
 8. Non-UI `src/lib` never imports the UI or the stores.
 
-Services (`lib/server/services`) never import `next/*`, with no exceptions. Today's exceptions
-to the rules above are listed in `src/architecture-allowlist.json`, and the list only shrinks:
-a fixed edge still listed fails, so drop it in the same commit
-(`ARCH_DUMP=1 npx vitest run src/architecture.test.ts` rewrites the list; its diff must only
-remove lines).
+Services (`lib/server/services`) never import `next/*`, with no exceptions, and the live service
+never loads `auth/passwords.ts`. Today's exceptions to the rules above are listed in
+`src/architecture-allowlist.json`, and the list only shrinks: a fixed edge still listed fails, the
+dump (`ARCH_DUMP=1 npx vitest run src/architecture.test.ts`) only removes fixed entries, and
+`MAX_ALLOWED` in the test caps each rule's count, so a new exception needs an edit to the test in
+the same diff. Lower the cap when you remove entries.
 
 ## Commands
 
