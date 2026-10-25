@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { isAdminRequest } from "./community";
+import { isAdminRequest } from "./admin";
 import { sameSecret } from "./secret";
 
 afterEach(() => {

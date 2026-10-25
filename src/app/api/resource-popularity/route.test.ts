@@ -4,7 +4,7 @@ import {
   DATASET_BUDGET_REFUSAL,
   resetDatasetBudget,
   spendDatasetBudget,
-} from "@/lib/server/dataset-rate";
+} from "@/lib/server/limits/dataset-rate";
 import { getResourcePopularity } from "@/lib/server/resource-popularity";
 import { GET } from "./route";
 

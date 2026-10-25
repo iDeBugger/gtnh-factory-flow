@@ -1,8 +1,8 @@
-import type { DbClient } from "./community";
+import type { DbClient } from "./db";
 import { docKey, isAccountId } from "@/lib/live/protocol";
 import type { PlanMember } from "@/lib/library/sync-types";
-import { fetchWithDbTimeout } from "./community";
-import { sameSecret } from "./secret";
+import { fetchWithDbTimeout } from "./db";
+import { sameSecret } from "./auth/secret";
 
 // The live service checks its internal token with the same helper.
 export { sameSecret };

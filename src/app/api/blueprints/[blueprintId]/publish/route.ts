@@ -2,15 +2,12 @@ import { NextResponse } from "next/server";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import { BLUEPRINT_DESCRIPTION_MAX_LENGTH } from "@/lib/blueprints/types";
-import {
-  checkRateLimit,
-  getCommunityDb,
-  getSessionUser,
-  isCommunityConfigured,
-} from "@/lib/server/community";
+import { checkRateLimit } from "@/lib/server/limits/rate-limit";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { blueprintStorageErrorMessage } from "@/lib/server/db";
 import {
   BLUEPRINT_SUMMARY_COLUMNS,
-  blueprintStorageErrorMessage,
   rowToBlueprintSummary,
   type BlueprintRow,
 } from "@/lib/server/blueprints";

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { checkRateLimit, serially } from "./community";
+import { checkRateLimit, serially } from "./limits/rate-limit";
 
 /**
  * The database-backed limits count then record, so requests for one key that

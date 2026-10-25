@@ -1,5 +1,5 @@
 import { getFilledCellFluidEquivalent } from "@/lib/model/resources";
-import { getCommunityDb, isCommunityConfigured } from "@/lib/server/community";
+import { getCommunityDb, isCommunityConfigured } from "./db";
 
 /**
  * What the community actually builds: a per-resource popularity score

@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import { COMMUNITY_COMMENT_MAX_LENGTH, type CommunityComment } from "@/lib/community/types";
+import { checkRateLimit } from "@/lib/server/limits/rate-limit";
 import {
-  checkRateLimit,
   communityStorageErrorMessage,
   getCommunityDb,
-  getSessionUser,
   isCommunityConfigured,
-  recountPlanComments,
-} from "@/lib/server/community";
+} from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { recountPlanComments } from "@/lib/server/community-rows";
 import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
 import {
   COMMENT_BODY_MAX_BYTES,

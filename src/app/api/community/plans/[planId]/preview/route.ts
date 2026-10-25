@@ -11,13 +11,10 @@ import {
 } from "@/lib/server/plan-preview";
 import { readFormDataCapped } from "@/lib/server/request-body";
 import { getFileStore, isFileStoreConfigured } from "@/lib/server/file-store";
-import {
-  checkRateLimit,
-  getCommunityDb,
-  getSessionUser,
-  isAdminRequest,
-  isCommunityConfigured,
-} from "@/lib/server/community";
+import { checkRateLimit } from "@/lib/server/limits/rate-limit";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { isAdminRequest } from "@/lib/server/auth/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

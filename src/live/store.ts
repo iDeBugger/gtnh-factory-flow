@@ -1,7 +1,8 @@
 import type { LivePlan } from "@/lib/live/ops";
 import type { LiveMember } from "@/lib/live/protocol";
 import { designRole, listMembers, usernamesFor, type DesignRole } from "@/lib/server/cloud-plans";
-import { forgetSessionUser, getCommunityDb, loadSessionUser } from "@/lib/server/community";
+import { forgetSessionUser, loadSessionUser } from "@/lib/server/auth/sessions";
+import { getCommunityDb } from "@/lib/server/db";
 
 /**
  * The live service's reads and writes, all through the server's PostgREST

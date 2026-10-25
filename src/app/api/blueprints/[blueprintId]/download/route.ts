@@ -3,10 +3,11 @@ import { serverErrorResponse } from "@/lib/server/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import type { BoardClipboardPayload } from "@/store/factory-store";
-import { getCommunityDb, getSessionUser, isCommunityConfigured } from "@/lib/server/community";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { blueprintStorageErrorMessage } from "@/lib/server/db";
 import {
   BLUEPRINT_SUMMARY_COLUMNS,
-  blueprintStorageErrorMessage,
   rowToBlueprintSummary,
   type BlueprintRow,
 } from "@/lib/server/blueprints";

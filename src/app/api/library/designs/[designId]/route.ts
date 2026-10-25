@@ -7,20 +7,17 @@ import {
   type DesignUpsertBody,
 } from "@/lib/library/sync-types";
 import { designRole, leaseHeld, notifyLive, requestedOwner } from "@/lib/server/cloud-plans";
-import {
-  checkRateLimit,
-  getCommunityDb,
-  getSessionUser,
-  isCommunityConfigured,
-  parseEntryIcon,
-} from "@/lib/server/community";
+import { checkRateLimit } from "@/lib/server/limits/rate-limit";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { parseEntryIcon } from "@/lib/server/community-rows";
+import { libraryStorageErrorMessage } from "@/lib/server/db";
 import {
   CLOCK_AHEAD_MESSAGE,
   DESIGN_META_COLUMNS,
   isFutureStamp,
   isIsoTimestamp,
   isLibraryId,
-  libraryStorageErrorMessage,
   readDesignRow,
   rowToDesignMeta,
   type DesignRow,

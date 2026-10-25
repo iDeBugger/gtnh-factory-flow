@@ -4,13 +4,13 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { getCommunityDb } from "@/lib/server/community";
+import { getCommunityDb } from "@/lib/server/db";
 import {
   forgetImageCapWarnings,
   IMAGES_PER_DAY,
   IMAGES_PER_HOUR,
   SITE_IMAGES_PER_HOUR,
-} from "@/lib/server/image-upload-guard";
+} from "@/lib/server/limits/image-upload-guard";
 import { withModAndCommunityUnset } from "@/test-support/mod-and-community";
 import { countedBody } from "@/test-support/request-bodies";
 import { POST } from "./route";

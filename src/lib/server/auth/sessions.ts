@@ -5,7 +5,7 @@ import {
   SESSION_COOKIE,
   SESSION_DAYS,
   verifySessionToken,
-} from "../session";
+} from "./session";
 
 export { makeSessionToken, SESSION_COOKIE };
 

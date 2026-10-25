@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { COMMUNITY_DB_DOWN_MESSAGE } from "./community-db-down";
+import { COMMUNITY_DB_DOWN_MESSAGE } from "./db/errors";
 import { DatasetNotFoundError } from "./dataset-query";
 
 /**
@@ -7,7 +7,7 @@ import { DatasetNotFoundError } from "./dataset-query";
  * sentence and the error itself to the log only. A database, file system or
  * gzip message names tables, columns or the release's absolute path, and an
  * error built from request text would echo it. The one sentence passed on is
- * the database-down line (community.ts), which the server writes itself and
+ * the database-down line (db/rest.ts), which the server writes itself and
  * the player is meant to read, wherever a route's error wraps it.
  */
 export function serverErrorResponse(

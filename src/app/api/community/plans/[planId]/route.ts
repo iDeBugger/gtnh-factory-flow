@@ -1,4 +1,4 @@
-import type { DbClient } from "@/lib/server/community";
+import type { DbClient } from "@/lib/server/db";
 import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
@@ -20,19 +20,21 @@ import { PLAN_PREVIEW_BUCKET } from "@/lib/server/plan-preview";
 import { getFileStore } from "@/lib/server/file-store";
 import {
   attachMyVotes,
-  communityStorageErrorMessage,
-  getCommunityDb,
-  getSessionUser,
-  isAdminRequest,
-  isCommunityConfigured,
-  makeVoterKey,
   parseEntryIcon,
-  isMissingColumnError,
   PLAN_SUMMARY_COLUMNS,
   PLAN_SUMMARY_COLUMNS_LEGACY,
   rowToPlanSummary,
   type PlanRow,
-} from "@/lib/server/community";
+} from "@/lib/server/community-rows";
+import {
+  communityStorageErrorMessage,
+  getCommunityDb,
+  isCommunityConfigured,
+  isMissingColumnError,
+} from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { isAdminRequest } from "@/lib/server/auth/admin";
+import { makeVoterKey } from "@/lib/server/auth/keys";
 import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
 import { readTextCapped } from "@/lib/server/request-body";
 

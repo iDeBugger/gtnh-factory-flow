@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/error-response";
 import { designRole, listMembers, requestedOwner, usernamesFor } from "@/lib/server/cloud-plans";
-import { getCommunityDb, getSessionUser, isCommunityConfigured } from "@/lib/server/community";
-import { libraryStorageErrorMessage, readDesignRow } from "@/lib/server/library";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { libraryStorageErrorMessage } from "@/lib/server/db";
+import { readDesignRow } from "@/lib/server/library";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

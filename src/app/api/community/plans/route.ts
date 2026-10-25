@@ -17,22 +17,23 @@ import {
 } from "@/lib/community/types";
 import { normalizeBlueprintTags } from "@/lib/blueprints/types";
 import { applyPlanSearch, parsePlanSearch } from "@/lib/community/search-query";
+import { checkRateLimit } from "@/lib/server/limits/rate-limit";
 import {
-  checkRateLimit,
   communityStorageErrorMessage,
   getCommunityDb,
-  getSessionUser,
   isCommunityConfigured,
-  makeActorKey,
-  makeVoterKey,
-  parseEntryIcon,
   isMissingColumnError,
+} from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { makeActorKey, makeVoterKey } from "@/lib/server/auth/keys";
+import {
+  parseEntryIcon,
   PLAN_ACTIVITY_COLUMNS,
   PLAN_SUMMARY_COLUMNS,
   PLAN_SUMMARY_COLUMNS_LEGACY,
   rowToPlanSummary,
   type PlanRow,
-} from "@/lib/server/community";
+} from "@/lib/server/community-rows";
 import { invalidatePlanListCache, readPlanListCache, writePlanListCache } from "@/lib/server/plan-list-cache";
 import { readTextCapped } from "@/lib/server/request-body";
 

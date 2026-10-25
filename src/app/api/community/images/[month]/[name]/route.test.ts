@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { resetDatasetBudget } from "@/lib/server/dataset-rate";
+import { resetDatasetBudget } from "@/lib/server/limits/dataset-rate";
 import { getFileStore } from "@/lib/server/file-store";
 import { GET } from "./route";
 

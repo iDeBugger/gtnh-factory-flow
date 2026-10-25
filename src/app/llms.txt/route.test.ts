@@ -10,9 +10,9 @@ const rows = [
   },
 ];
 
-vi.mock("@/lib/server/community", () => ({
+vi.mock("@/lib/server/community-rows", () => ({ PLAN_SUMMARY_COLUMNS: "*" }));
+vi.mock("@/lib/server/db", () => ({
   isCommunityConfigured: () => true,
-  PLAN_SUMMARY_COLUMNS: "*",
   getCommunityDb: () => {
     const query = {
       select: () => query,

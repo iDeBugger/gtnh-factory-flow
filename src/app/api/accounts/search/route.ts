@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getCommunityDb, getSessionUser, isCommunityConfigured } from "@/lib/server/community";
-import { takeMemoryToken } from "@/lib/server/memory-rate";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { takeMemoryToken } from "@/lib/server/limits/memory-rate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

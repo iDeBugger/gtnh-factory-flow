@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { oversizeRequest } from "@/test-support/request-bodies";
 
 const bumpSessionEpoch = vi.fn(async (_id: string) => undefined);
-vi.mock("@/lib/server/community", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/server/community")>();
+vi.mock("@/lib/server/auth/sessions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/server/auth/sessions")>();
   return {
     ...actual,
     getSessionUser: vi.fn(async () => ({ id: "u1", username: "ann" })),

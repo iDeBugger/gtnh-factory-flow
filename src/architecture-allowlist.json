@@ -62,12 +62,12 @@
     },
     {
       "from": "src/app/api/accounts/search/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/blueprints/[blueprintId]/download/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
@@ -77,12 +77,12 @@
     },
     {
       "from": "src/app/api/blueprints/[blueprintId]/publish/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/blueprints/[blueprintId]/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
@@ -92,37 +92,32 @@
     },
     {
       "from": "src/app/api/blueprints/[blueprintId]/vote/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/blueprints/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/community/auth/login/route.ts",
-      "to": "src/lib/server/community.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/community/auth/logout/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/community/auth/me/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/community/auth/register/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/community/images/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
@@ -132,92 +127,82 @@
     },
     {
       "from": "src/app/api/community/plans/[planId]/comments/[commentId]/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/community/plans/[planId]/comments/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/community/plans/[planId]/download/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/community/plans/[planId]/preview/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/community/plans/[planId]/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/community/plans/[planId]/view/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/community/plans/[planId]/vote/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/community/plans/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/library/designs/[designId]/members/[userId]/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/library/designs/[designId]/members/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/library/designs/[designId]/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/library/folders/[folderId]/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/api/library/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/llms.txt/route.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/app/sitemap.ts",
-      "to": "src/lib/server/community.ts",
+      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
       "from": "src/live/main.ts",
-      "to": "src/lib/server/community.ts",
-      "rule": "5"
-    },
-    {
-      "from": "src/live/main.ts",
       "to": "src/lib/server/local-db/client.ts",
-      "rule": "5"
-    },
-    {
-      "from": "src/live/main.ts",
-      "to": "src/lib/server/session.ts",
       "rule": "5"
     },
     {
@@ -231,18 +216,8 @@
       "rule": "5"
     },
     {
-      "from": "src/live/service.ts",
-      "to": "src/lib/server/session.ts",
-      "rule": "5"
-    },
-    {
       "from": "src/live/store.ts",
       "to": "src/lib/server/cloud-plans.ts",
-      "rule": "5"
-    },
-    {
-      "from": "src/live/store.ts",
-      "to": "src/lib/server/community.ts",
       "rule": "5"
     },
     {
@@ -519,7 +494,9 @@
     "src/app/api/blueprints/[blueprintId]/vote/route.ts",
     "src/app/api/blueprints/route.ts",
     "src/app/api/community/auth/login/route.ts",
+    "src/app/api/community/auth/me/route.ts",
     "src/app/api/community/auth/register/route.ts",
+    "src/app/api/community/images/route.ts",
     "src/app/api/community/plans/[planId]/comments/[commentId]/route.ts",
     "src/app/api/community/plans/[planId]/comments/route.ts",
     "src/app/api/community/plans/[planId]/download/route.ts",
@@ -529,6 +506,7 @@
     "src/app/api/community/plans/[planId]/vote/route.ts",
     "src/app/api/community/plans/route.ts",
     "src/app/api/library/designs/[designId]/members/[userId]/route.ts",
+    "src/app/api/library/designs/[designId]/members/route.ts",
     "src/app/api/library/designs/[designId]/route.ts",
     "src/app/api/library/folders/[folderId]/route.ts",
     "src/app/api/library/route.ts",

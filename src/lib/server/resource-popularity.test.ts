@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({ page: vi.fn() }));
-vi.mock("@/lib/server/community", () => ({
+vi.mock("@/lib/server/db", () => ({
   isCommunityConfigured: () => true,
   getCommunityDb: () => {
     const query = {

@@ -2,19 +2,16 @@ import { NextResponse } from "next/server";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import type { CommunityVoteResponse } from "@/lib/community/types";
+import { checkRateLimit } from "@/lib/server/limits/rate-limit";
+import { clientAddress } from "@/lib/server/client-address";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { isAdminRequest } from "@/lib/server/auth/admin";
+import { makeActorKey, makeVoterKey, saltedKey } from "@/lib/server/auth/keys";
 import {
-  checkRateLimit,
-  clientAddress,
-  getCommunityDb,
-  getSessionUser,
-  isAdminRequest,
-  isCommunityConfigured,
-  makeActorKey,
-  makeVoterKey,
-  saltedKey,
   NETWORK_VOTES_SPENT,
   VOTES_PER_ADDRESS_PER_PLAN_PER_DAY,
-} from "@/lib/server/community";
+} from "@/lib/server/community-rows";
 import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
 import {
   readJsonCapped,

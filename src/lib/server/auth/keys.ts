@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { clientAddress } from "../client-address";
-import { sessionSecret } from "../session";
+import { sessionSecret } from "./session";
 import { getSessionUser } from "./sessions";
 
 /**

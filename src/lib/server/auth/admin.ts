@@ -1,4 +1,4 @@
-import { sameSecret } from "../secret";
+import { sameSecret } from "./secret";
 
 /** The admin header, checked in constant time; with no token configured nobody is admin. */
 export function isAdminRequest(request: Request): boolean {

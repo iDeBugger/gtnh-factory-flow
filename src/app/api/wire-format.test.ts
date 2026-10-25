@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { makeSessionToken, saltedKey } from "@/lib/server/community";
+import { makeSessionToken } from "@/lib/server/auth/sessions";
+import { saltedKey } from "@/lib/server/auth/keys";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
 import { APP_VERSION } from "@/lib/version";
 import { withModAndCommunityOn } from "@/test-support/mod-and-community";

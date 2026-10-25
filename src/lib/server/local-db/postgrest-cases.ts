@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import type { DbClient } from "../community";
+import type { DbClient } from "../db";
 
 /**
  * The query shapes the server sends, each named after the route it mirrors,

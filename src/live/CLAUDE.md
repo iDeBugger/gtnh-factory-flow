@@ -29,7 +29,7 @@ the game is `docs/design/cloud-live.md` in the game's repository: frames and ops
   refused as the batch is read (`readOps`).
 - The server writes comment stamps and a task's `createdBy`; the client's values are replaced.
 - Flushes, renewals and lease takes only touch designs that are not tombstoned: a deleted plan is never written back.
-- Sessions: `src/lib/server/session.ts`, the website's own check (constant time); a token whose epoch is not the
+- Sessions: `src/lib/server/auth/session.ts`, the website's own check (constant time); a token whose epoch is not the
   account's (signed out everywhere) is refused as no sign-in (4001). Origins: `LIVE_ALLOWED_ORIGINS`; a
   client sending no Origin (the game) is let in only while `NEXT_PUBLIC_MOD_AND_COMMUNITY` is `on`
   (`isModAndCommunityOn`, read at runtime here); off, that upgrade, a `client:"game"` hello and `/live/nearby` are

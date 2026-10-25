@@ -1,10 +1,6 @@
 import type { PlanResourceStat } from "@/lib/community/types";
-import {
-  getCommunityDb,
-  isCommunityConfigured,
-  PLAN_SUMMARY_COLUMNS,
-  type PlanRow,
-} from "./community";
+import { getCommunityDb, isCommunityConfigured } from "./db";
+import { PLAN_SUMMARY_COLUMNS, type PlanRow } from "./community-rows";
 import { getFileStore, isFileStoreConfigured, type FileBucket } from "./file-store";
 
 /**

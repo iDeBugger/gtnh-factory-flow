@@ -2,21 +2,16 @@ import { NextResponse } from "next/server";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import type { BlueprintVoteResponse } from "@/lib/blueprints/types";
+import { checkRateLimit } from "@/lib/server/limits/rate-limit";
+import { clientAddress } from "@/lib/server/client-address";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { makeActorKey, makeVoterKey, saltedKey } from "@/lib/server/auth/keys";
 import {
-  checkRateLimit,
-  clientAddress,
-  getCommunityDb,
-  getSessionUser,
-  isCommunityConfigured,
-  makeActorKey,
-  makeVoterKey,
-  saltedKey,
   NETWORK_VOTES_SPENT,
   VOTES_PER_ADDRESS_PER_PLAN_PER_DAY,
-} from "@/lib/server/community";
-import {
-  blueprintStorageErrorMessage,
-} from "@/lib/server/blueprints";
+} from "@/lib/server/community-rows";
+import { blueprintStorageErrorMessage } from "@/lib/server/db";
 import {
   readJsonCapped,
   REQUEST_TOO_BIG_MESSAGE,

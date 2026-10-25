@@ -1,4 +1,6 @@
-import { clientAddress, countEvents, recordEvents, saltedKey, serially } from "./community";
+import { clientAddress } from "../client-address";
+import { countEvents, recordEvents, serially } from "./rate-limit";
+import { saltedKey } from "../auth/keys";
 
 /**
  * What stands between an anonymous board-image upload and the public bucket.

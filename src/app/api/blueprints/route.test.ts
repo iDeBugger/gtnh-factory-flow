@@ -30,14 +30,26 @@ function query(): unknown {
 const sessionUser = vi.fn<() => { id: string; username: string } | undefined>(() => undefined);
 const storage = { configured: true };
 
-vi.mock("@/lib/server/community", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/server/community")>();
+vi.mock("@/lib/server/db", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/server/db")>();
   return {
     ...actual,
     isCommunityConfigured: () => storage.configured,
     getCommunityDb: () => query(),
-    getSessionUser: vi.fn(async () => sessionUser()),
-    checkRateLimit: vi.fn(async () => true),
+  };
+});
+vi.mock("@/lib/server/auth/sessions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/server/auth/sessions")>();
+  return { ...actual, getSessionUser: vi.fn(async () => sessionUser()) };
+});
+vi.mock("@/lib/server/limits/rate-limit", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/server/limits/rate-limit")>();
+  return { ...actual, checkRateLimit: vi.fn(async () => true) };
+});
+vi.mock("@/lib/server/auth/keys", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/server/auth/keys")>();
+  return {
+    ...actual,
     makeVoterKey: vi.fn(async () => "voter"),
     makeActorKey: vi.fn(() => "actor"),
   };

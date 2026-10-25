@@ -9,7 +9,7 @@ import {
   datasetBudgetRefusal,
   HEAVY_REQUEST_COST,
   meteredDatasetWork,
-} from "@/lib/server/dataset-rate";
+} from "@/lib/server/limits/dataset-rate";
 import { checkRecipeRefs } from "@/lib/server/recipe-ref-schema";
 import { readJsonCapped } from "@/lib/server/request-body";
 

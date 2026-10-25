@@ -1,10 +1,6 @@
 import { siteUrl } from "@/lib/site-url";
-import {
-  getCommunityDb,
-  isCommunityConfigured,
-  PLAN_SUMMARY_COLUMNS,
-  type PlanRow,
-} from "@/lib/server/community";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { PLAN_SUMMARY_COLUMNS, type PlanRow } from "@/lib/server/community-rows";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { describePlanRow, quietMarkdown } from "@/lib/server/plan-preview";
 import { APP_VERSION } from "@/lib/version";

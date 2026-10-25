@@ -4,10 +4,10 @@ import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate"
 import {
   communityStorageErrorMessage,
   getCommunityDb,
-  getSessionUser,
   isCommunityConfigured,
-  recountPlanComments,
-} from "@/lib/server/community";
+} from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { recountPlanComments } from "@/lib/server/community-rows";
 import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
 
 export const runtime = "nodejs";

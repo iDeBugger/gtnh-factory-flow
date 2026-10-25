@@ -2,12 +2,9 @@ import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
-import {
-  getCommunityDb,
-  getSessionUser,
-  isAdminRequest,
-  isCommunityConfigured,
-} from "@/lib/server/community";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { isAdminRequest } from "@/lib/server/auth/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

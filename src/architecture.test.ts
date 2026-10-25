@@ -185,12 +185,8 @@ const isRouteHandler = (file: string): boolean =>
 
 const isUiOrStore = (file: string): boolean => /^src\/(components|store)\//.test(file);
 
-/**
- * What only repositories may hold: the database client and its SQL. Until the
- * split, `community.ts` is where the client lives.
- */
-const isDatabaseLayer = (file: string): boolean =>
-  /^src\/lib\/server\/(db|repos)\//.test(file) || file === "src/lib/server/community.ts";
+/** What only repositories may hold: the database client and its SQL. */
+const isDatabaseLayer = (file: string): boolean => /^src\/lib\/server\/(db|repos)\//.test(file);
 
 /** Packages the domain and the contracts never load: they stay pure. */
 function isImpurePackage(name: string): boolean {

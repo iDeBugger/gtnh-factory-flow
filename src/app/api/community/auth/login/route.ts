@@ -1,20 +1,16 @@
 import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/error-response";
 import { SIGN_IN_BUSY } from "@/lib/community/types";
+import { checkPassword, PasswordCheckBusyError } from "@/lib/server/auth/passwords";
 import {
-  checkPassword,
   checkRateLimit,
   countEvents,
-  getCommunityDb,
-  isCommunityConfigured,
-  makeActorKey,
-  makeSessionToken,
-  PasswordCheckBusyError,
   recordEvents,
-  saltedKey,
   serially,
-  sessionCookieHeader,
-} from "@/lib/server/community";
+} from "@/lib/server/limits/rate-limit";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { makeActorKey, saltedKey } from "@/lib/server/auth/keys";
+import { makeSessionToken, sessionCookieHeader } from "@/lib/server/auth/sessions";
 import {
   readJsonCapped,
   REQUEST_TOO_BIG_MESSAGE,

@@ -1,6 +1,6 @@
 import { PostgrestClient } from "@supabase/postgrest-js";
 import { afterAll, beforeAll, describe, it } from "vitest";
-import type { DbClient } from "../community";
+import type { DbClient } from "../db";
 import { openLocalDatabase, type LocalDatabase } from "./database";
 import { postgrestCases } from "./postgrest-cases";
 

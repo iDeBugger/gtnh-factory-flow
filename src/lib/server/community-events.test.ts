@@ -4,10 +4,10 @@ import { useInProcessLocalDb } from "@/lib/server/local-db/client";
 import {
   EVENTS_KEPT_DAYS,
   forgetEventPrune,
-  getCommunityDb,
   PRUNE_BATCH_ROWS,
   recordEvents,
-} from "./community";
+} from "./limits/rate-limit";
+import { getCommunityDb } from "./db";
 
 /**
  * The rate-limit events table against the local database: a record prunes

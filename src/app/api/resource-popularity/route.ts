@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { datasetBudgetRefusal } from "@/lib/server/dataset-rate";
+import { datasetBudgetRefusal } from "@/lib/server/limits/dataset-rate";
 import { getResourcePopularity } from "@/lib/server/resource-popularity";
 
 export const runtime = "nodejs";

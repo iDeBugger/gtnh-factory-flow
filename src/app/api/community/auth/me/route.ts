@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/error-response";
-import { getSessionUser, isCommunityConfigured } from "@/lib/server/community";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { isCommunityConfigured } from "@/lib/server/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

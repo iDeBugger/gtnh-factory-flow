@@ -22,9 +22,9 @@
  *   memory limit and the heap from it.
  */
 import path from "node:path";
-import { isCommunityConfigured } from "@/lib/server/community";
+import { isCommunityConfigured } from "@/lib/server/db";
 import { assertLocalDbAllowed } from "@/lib/server/local-db/client";
-import { sessionSecret } from "@/lib/server/session";
+import { sessionSecret } from "@/lib/server/auth/session";
 import { LiveService } from "./service";
 import { databasePlanStore } from "./store";
 import { parseTrustedProxies, type TrustedProxies } from "./trusted-proxies";

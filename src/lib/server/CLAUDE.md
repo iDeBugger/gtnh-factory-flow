@@ -113,7 +113,7 @@
   `datasets/[versionId]/catalog/route.test.ts`.
 - Every dataset route except `prewarm`, and `/api/resource-popularity` (the browser item search's popularity map,
   1 unit, outside `/api/datasets/` so an edge rule on that prefix does not cover it), spends an in-memory work
-  budget per client address (`dataset-rate.ts`):
+  budget per client address (`limits/dataset-rate.ts`):
   3000 units a minute. A base cost goes before any dataset work (1 unit; 25 for a heavy request: a text search
   with a word under three characters or more than three words, `recipe-ids`, `crops`, `resolve-recipes`), then
   one unit per 10 ms the answer took past a free 50 ms (`meteredDatasetWork`; wall time holds the wait behind
@@ -220,7 +220,11 @@
   Both hold: both versions are prewarmed in full. If one fails, 2.8.1 is prewarmed second with its catalog
   only. Measure again when a dataset grows or a third version is served.
 
-## Database (PostgREST: community.ts, resource-popularity.ts)
+## Database (PostgREST: db/, resource-popularity.ts)
+
+Layout: the database client, its breaker and its error copy in `db/` (import it as `@/lib/server/db`);
+passwords, sessions, the admin header and salted keys in `auth/`; rate limits and the event log in `limits/`;
+plan row mapping in `community-rows.ts`. The live service loads `auth/sessions` and `db`, never password code.
 
 The server and the live service talk to PostgREST at `POSTGREST_URL` through `@supabase/postgrest-js`
 (`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
@@ -231,7 +235,7 @@ which bypasses row security. No anon role exists, so a request without the token
   JSON (a proxy's error page, often text/plain) becomes the same plain JSON error, so no
   route shows a player that page; so do PostgREST's own connection errors (PGRST000-003).
   Exam: `community-db-fetch.test.ts`.
-- After 5 failures in a row the client's breaker answers at once for 15 s without sending (`fetchFromDb`): a
+- After 5 failures in a row the client's breaker answers at once for 15 s without sending (`fetchFromDb`, `db/breaker.ts`): a
   stalled database recovers only once demand drops, and every tab keeps asking.
 - A failed account lookup throws, never reads as signed out (`loadSessionUser`); accounts are
   cached a minute, as the lookup's promise from before it answers, so forgetting an account mid-read
@@ -249,7 +253,7 @@ which bypasses row security. No anon role exists, so a request without the token
   `2026-10-25-community-events-created-at.sql`, mirrored in `schema.sql`), and a failed prune never fails a save. Exam:
   `community-events.test.ts`.
 
-## Sessions and secrets (session.ts)
+## Sessions and secrets (auth/)
 
 - `sessionSecret()` is the one owner of `COMMUNITY_HASH_SALT`: the session HMAC, `saltedKey` (rate-limit and voter
   keys) and nothing else read it. In production a missing, blank or development value throws
@@ -274,7 +278,7 @@ which bypasses row security. No anon role exists, so a request without the token
   `rate-limit.test.ts`, `app/api/community/auth/login/route.test.ts`.
 - A rate-limit key never holds a string the client chooses: `makeActorKey(request)` is the salted address alone, and a
   signed-in write is keyed `user:<id>` (the community plan POST: 10 an hour per account). A device id in a key is a
-  fresh count per made-up id. Board images (`image-upload-guard.ts`, open to anonymous players) are 30 an hour and 60
+  fresh count per made-up id. Board images (`limits/image-upload-guard.ts`, open to anonymous players) are 30 an hour and 60
   a day per address and 120 an hour and 400 a day for the whole site, counted after the size and magic-byte checks so
   junk spends no share. A vote lands only on a post that exists and is public (or the voter's own), with the same
   404 either way and a fixed 500 sentence, so the route is no oracle for ids; an anonymous address casts or switches
@@ -354,7 +358,7 @@ which bypasses row security. No anon role exists, so a request without the token
 - The client address is Caddy's `X-Client-Ip` (its `client_ip`: the peer, or behind Cloudflare its
   CF-Connecting-IP, trusted only from Cloudflare's ranges), then CF-Connecting-IP, each only as an IP literal; nothing else is read (X-Forwarded-For names a
   Cloudflare edge or the client's own chain, nothing sets X-Real-Ip). One module, `client-address.ts`
-  (`clientAddress`, re-exported by community.ts), used by every per-address rule on the site; an IPv6 literal is
+  (`clientAddress`), used by every per-address rule on the site; an IPv6 literal is
   keyed on its /64; a request with neither header is `"local"` (`NO_ADDRESS`), which the dataset budget never
   refuses. It is trustworthy only because Caddy and the stack's own containers are the site's only peers: compose
   publishes the site on `127.0.0.1:3300` only and the firewall drops outside traffic to it (`docs/deploy.md`). Exam: `client-address.test.ts`.
@@ -406,6 +410,6 @@ which bypasses row security. No anon role exists, so a request without the token
 - Deleting a design deletes its member rows (designs are tombstoned, so the foreign key's cascade never fires) and
   tells the live service; sharing changes tell it too (`notifyLive`, only with `LIVE_INTERNAL_URL` and
   `LIVE_INTERNAL_TOKEN`). A failed notice loses nothing: the service checks membership on every join.
-- Account search is limited in memory (`memory-rate.ts`): a share box asks on every keystroke. A prefix is two
+- Account search is limited in memory (`limits/memory-rate.ts`): a share box asks on every keystroke. A prefix is two
   characters at least (the box asks from the second), so one character does not list a thirtieth of every account.
 - Exam: `app/api/library/cloud-plans.test.ts` (against the local database).

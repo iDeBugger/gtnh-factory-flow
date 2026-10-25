@@ -6,7 +6,7 @@ import {
   datasetBudgetRefusal,
   meteredDatasetWork,
   searchRequestCost,
-} from "@/lib/server/dataset-rate";
+} from "@/lib/server/limits/dataset-rate";
 import { getResourcePopularity } from "@/lib/server/resource-popularity";
 import { normalizeResourceSearchRequest } from "@/lib/search/resource-search";
 import { parseSearchQuery } from "@/lib/search/text-search";

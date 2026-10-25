@@ -1,7 +1,8 @@
-import type { DbClient } from "./community";
+import type { DbClient } from "./db";
 import type { EntryIcon } from "@/lib/model/types";
 import type { RemoteDesignMeta, RemoteFolder } from "@/lib/library/sync-types";
-import { isMissingColumnError, parseEntryIcon } from "./community";
+import { isMissingColumnError } from "./db";
+import { parseEntryIcon } from "./community-rows";
 
 /** Everything the list endpoint returns about a design: no plan. */
 export const DESIGN_META_COLUMNS =
@@ -89,8 +90,6 @@ export function rowToFolder(row: FolderRow): RemoteFolder {
     deletedAt: row.deleted_at,
   };
 }
-
-export { libraryStorageErrorMessage } from "./db/errors";
 
 /** True for a well-formed ISO timestamp the client is allowed to stamp. */
 export function isIsoTimestamp(value: unknown): value is string {

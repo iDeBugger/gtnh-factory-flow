@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { sessionCookieHeader } from "./community";
+import { sessionCookieHeader } from "./sessions";
 
 afterEach(() => {
   vi.unstubAllEnvs();

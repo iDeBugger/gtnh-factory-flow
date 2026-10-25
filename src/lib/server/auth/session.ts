@@ -10,7 +10,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * three parts and read as epoch 0, the column's default, until they expire or
  * the account signs out everywhere. The website keeps the token in the
  * `gtnh_session` cookie; the game sends the same cookie, the live socket's
- * upgrade included. Shared by the Next.js routes (community.ts) and the live
+ * upgrade included. Shared by the Next.js routes (sessions.ts) and the live
  * service, so both accept exactly the same tokens. No database here.
  */
 

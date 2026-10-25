@@ -7,7 +7,7 @@ import {
   fetchWithDbTimeout,
   getCommunityDb,
   resetDbBreaker,
-} from "./community";
+} from "./db";
 
 // A proxy's answer when the database behind it does not respond: an HTML
 // page, sent as text/plain.

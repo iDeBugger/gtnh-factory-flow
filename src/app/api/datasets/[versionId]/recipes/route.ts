@@ -6,7 +6,7 @@ import {
   datasetBudgetRefusal,
   meteredDatasetWork,
   searchRequestCost,
-} from "@/lib/server/dataset-rate";
+} from "@/lib/server/limits/dataset-rate";
 import { parseSearchQuery } from "@/lib/search/text-search";
 import {
   MAX_RECIPE_QUERY_CLAUSES,

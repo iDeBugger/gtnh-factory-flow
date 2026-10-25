@@ -2,16 +2,13 @@ import { NextResponse } from "next/server";
 import type { LibraryListResponse, PlanMember, SharedDesign } from "@/lib/library/sync-types";
 import { LIBRARY_MAX_DESIGNS, LIBRARY_MAX_FOLDERS } from "@/lib/library/sync-types";
 import { usernamesFor } from "@/lib/server/cloud-plans";
-import {
-  getCommunityDb,
-  getSessionUser,
-  isCommunityConfigured,
-  parseEntryIcon,
-} from "@/lib/server/community";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { parseEntryIcon } from "@/lib/server/community-rows";
+import { libraryStorageErrorMessage } from "@/lib/server/db";
 import {
   DESIGN_META_COLUMNS,
   FOLDER_COLUMNS,
-  libraryStorageErrorMessage,
   rowToDesignMeta,
   rowToFolder,
   type DesignRow,

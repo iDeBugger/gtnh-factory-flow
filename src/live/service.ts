@@ -20,7 +20,7 @@ import {
 } from "@/lib/live/protocol";
 import { addressFromHeaders, NO_ADDRESS } from "@/lib/server/client-address";
 import { sameSecret } from "@/lib/server/cloud-plans";
-import { readSessionCookie, verifySessionToken, type SessionClaims } from "@/lib/server/session";
+import { readSessionCookie, verifySessionToken, type SessionClaims } from "@/lib/server/auth/session";
 import { FlushQueue } from "./flush-queue";
 import { Journal } from "./journal";
 import { Room, type RoomPeer, type RoomTiming } from "./room";

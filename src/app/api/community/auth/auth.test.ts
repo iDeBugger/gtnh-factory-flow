@@ -4,18 +4,16 @@ import type { AddressInfo } from "node:net";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
+import { bumpSessionEpoch, forgetSessionUsers } from "@/lib/server/auth/sessions";
 import {
-  bumpSessionEpoch,
   checkPassword,
-  forgetSessionUsers,
-  getCommunityDb,
   hashPassword,
   KDF_CONCURRENCY,
   KDF_QUEUE_MAX,
   PasswordCheckBusyError,
   passwordChecksInFlight,
-  resetDbBreaker,
-} from "@/lib/server/community";
+} from "@/lib/server/auth/passwords";
+import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
 import * as login from "./login/route";
 import * as logout from "./logout/route";
 import * as me from "./me/route";

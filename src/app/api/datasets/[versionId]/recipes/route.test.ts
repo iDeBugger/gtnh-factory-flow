@@ -4,7 +4,7 @@ import {
   datasetBudgetSpent,
   HEAVY_REQUEST_COST,
   resetDatasetBudget,
-} from "@/lib/server/dataset-rate";
+} from "@/lib/server/limits/dataset-rate";
 import { GET } from "./route";
 
 vi.mock("@/lib/server/dataset-query", () => ({

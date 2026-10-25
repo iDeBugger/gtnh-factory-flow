@@ -1,7 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { forgetSessionUsers, getCommunityDb, hashPassword, resetDbBreaker } from "@/lib/server/community";
+import { forgetSessionUsers } from "@/lib/server/auth/sessions";
+import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
+import { hashPassword } from "@/lib/server/auth/passwords";
 import { POST } from "./route";
 
 /**

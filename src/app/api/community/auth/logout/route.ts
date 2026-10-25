@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { bumpSessionEpoch, getSessionUser, sessionCookieHeader } from "@/lib/server/community";
+import { bumpSessionEpoch, getSessionUser, sessionCookieHeader } from "@/lib/server/auth/sessions";
 import { notifyLive } from "@/lib/server/cloud-plans";
 import { SIGN_OUT_EVERYWHERE_FAILED } from "@/lib/community/types";
 import { readJsonCapped, SMALL_JSON_MAX_BYTES } from "@/lib/server/request-body";

@@ -8,7 +8,7 @@ import {
 import type { EntryIcon } from "@/lib/community/types";
 import { getNodeMachineBuildCount } from "@/lib/model/passive-production";
 import type { FactoryNode, Recipe } from "@/lib/model/types";
-import { getCommunityDb } from "@/lib/server/community";
+import { getCommunityDb } from "./db";
 
 /**
  * Client-computed stat lines (same trust model as community plan stats).
@@ -147,5 +147,3 @@ export async function attachMyBlueprintVotes(
     blueprint.myVote = votes.get(blueprint.id);
   }
 }
-
-export { blueprintStorageErrorMessage } from "./db/errors";

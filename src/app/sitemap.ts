@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { getCommunityDb, isCommunityConfigured } from "@/lib/server/community";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
 import { siteUrl } from "@/lib/site-url";
 
 /** Re-query the plan list at most hourly, so crawl bursts cost one DB read. */

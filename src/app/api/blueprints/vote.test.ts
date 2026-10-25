@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { forgetSessionUsers, getCommunityDb, makeSessionToken, resetDbBreaker } from "@/lib/server/community";
+import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
+import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
 import { withModAndCommunityOn } from "@/test-support/mod-and-community";
 import * as vote from "./[blueprintId]/vote/route";
 

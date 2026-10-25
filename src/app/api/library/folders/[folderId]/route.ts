@@ -4,19 +4,16 @@ import {
   LIBRARY_MAX_FOLDERS,
   type FolderUpsertBody,
 } from "@/lib/library/sync-types";
-import {
-  checkRateLimit,
-  getCommunityDb,
-  getSessionUser,
-  isCommunityConfigured,
-} from "@/lib/server/community";
+import { checkRateLimit } from "@/lib/server/limits/rate-limit";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { libraryStorageErrorMessage } from "@/lib/server/db";
 import {
   CLOCK_AHEAD_MESSAGE,
   FOLDER_COLUMNS,
   isFutureStamp,
   isIsoTimestamp,
   isLibraryId,
-  libraryStorageErrorMessage,
   rowToFolder,
   type FolderRow,
 } from "@/lib/server/library";

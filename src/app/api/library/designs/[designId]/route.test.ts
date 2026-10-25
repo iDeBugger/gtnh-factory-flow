@@ -3,7 +3,8 @@ import { planWithAdditions } from "@/lib/model/__fixtures__/plan-additions";
 import type { FactoryProject } from "@/lib/model/types";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { getCommunityDb, makeSessionToken } from "@/lib/server/community";
+import { getCommunityDb } from "@/lib/server/db";
+import { makeSessionToken } from "@/lib/server/auth/sessions";
 import { oversizeRequest } from "@/test-support/request-bodies";
 import { GET, PUT } from "./route";
 

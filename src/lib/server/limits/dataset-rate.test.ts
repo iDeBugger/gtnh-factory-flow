@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseSearchQuery } from "@/lib/search/text-search";
-import { NO_ADDRESS } from "./client-address";
+import { NO_ADDRESS } from "../client-address";
 import {
   BUDGET_PER_MINUTE,
   DATASET_BUDGET_REFUSAL,

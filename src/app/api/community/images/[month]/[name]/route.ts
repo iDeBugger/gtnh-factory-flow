@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { BOARD_IMAGE_NAME, BOARD_IMAGE_MONTH, BOARD_IMAGE_TYPES } from "@/lib/server/board-images";
-import { datasetBudgetRefusal } from "@/lib/server/dataset-rate";
+import { datasetBudgetRefusal } from "@/lib/server/limits/dataset-rate";
 import { getFileStore, isFileStoreConfigured } from "@/lib/server/file-store";
 
 export const runtime = "nodejs";

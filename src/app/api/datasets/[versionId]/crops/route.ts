@@ -6,7 +6,7 @@ import {
   datasetBudgetRefusal,
   HEAVY_REQUEST_COST,
   meteredDatasetWork,
-} from "@/lib/server/dataset-rate";
+} from "@/lib/server/limits/dataset-rate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

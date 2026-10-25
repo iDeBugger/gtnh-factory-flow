@@ -8,16 +8,13 @@ import {
   BLUEPRINT_PAYLOAD_MAX_BYTES,
   normalizeBlueprintTags,
 } from "@/lib/blueprints/types";
-import {
-  checkRateLimit,
-  getCommunityDb,
-  getSessionUser,
-  isCommunityConfigured,
-  parseEntryIcon,
-} from "@/lib/server/community";
+import { checkRateLimit } from "@/lib/server/limits/rate-limit";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { getSessionUser } from "@/lib/server/auth/sessions";
+import { parseEntryIcon } from "@/lib/server/community-rows";
+import { blueprintStorageErrorMessage } from "@/lib/server/db";
 import {
   BLUEPRINT_SUMMARY_COLUMNS,
-  blueprintStorageErrorMessage,
   countBlueprintMachines,
   parseHighestTier,
   parseResourceStats,

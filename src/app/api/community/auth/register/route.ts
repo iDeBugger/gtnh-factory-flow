@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/error-response";
 import { PASSWORD_MIN_LENGTH, SIGN_IN_BUSY } from "@/lib/community/types";
-import {
-  checkRateLimit,
-  getCommunityDb,
-  hashPassword,
-  isCommunityConfigured,
-  makeActorKey,
-  makeSessionToken,
-  PasswordCheckBusyError,
-  sessionCookieHeader,
-} from "@/lib/server/community";
+import { checkRateLimit } from "@/lib/server/limits/rate-limit";
+import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
+import { hashPassword, PasswordCheckBusyError } from "@/lib/server/auth/passwords";
+import { makeActorKey } from "@/lib/server/auth/keys";
+import { makeSessionToken, sessionCookieHeader } from "@/lib/server/auth/sessions";
 import {
   readJsonCapped,
   REQUEST_TOO_BIG_MESSAGE,
