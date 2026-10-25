@@ -37,7 +37,10 @@ the game is `docs/design/cloud-live.md` in the game's repository: frames and ops
   need no database come before any lookup (upgrades per address and account, sockets per account); accounts are
   cached a minute. The client address is read by the site's shared rule (`src/lib/server/client-address.ts`:
   `X-Client-Ip`, else `CF-Connecting-IP`, IP literals only, IPv6 on its /64) only on requests from loopback
-  (Caddy); any other peer is its own address. Exam: `service.test.ts` "where a request came from".
+  or from a peer `LIVE_TRUSTED_PROXIES` names (`trusted-proxies.ts`; in Docker it is the `edge` network's gateway,
+  the address docker-proxy dials from); any other peer is its own address, and one sending `X-Client-Ip` is warned
+  about once. Keep the list to the proxy's address: a wide subnet lets every container on it name any address.
+  Exam: `service.test.ts` "where a request came from", `trusted-proxies.test.ts`.
 - Every cost an account can cause has a limit charged before the cost: frames by size before decoding (the intake
   budget), plan opens per minute before the membership query, plan bytes held across open rooms
   (`LIVE_MAX_PLAN_BYTES`; memory is about four times it) before a room opens and again once it holds its plan

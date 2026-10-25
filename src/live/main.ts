@@ -12,6 +12,10 @@
  * - LIVE_JOURNAL_DIR: where unflushed batches are kept (required in production).
  * - LIVE_INTERNAL_TOKEN: shared with the website for /internal/*.
  * - LIVE_ALLOWED_ORIGINS: comma-separated browser origins (default: localhost:3000).
+ * - LIVE_TRUSTED_PROXIES: comma-separated addresses and CIDR subnets whose
+ *   X-Client-Ip is believed, besides loopback (in Docker: the bridge gateway
+ *   docker-proxy dials from). Keep it narrow: every peer inside may name any
+ *   client address. A bad entry stops the service.
  * - LIVE_MAX_ROOMS: plans open at once in the whole service (default 500).
  * - LIVE_MAX_PLAN_BYTES: plan JSON held in open rooms, in bytes (default 64 MB).
  *   Resident memory is about four times it plus the baseline: size the unit's
@@ -23,6 +27,7 @@ import { assertLocalDbAllowed } from "@/lib/server/local-db/client";
 import { sessionSecret } from "@/lib/server/session";
 import { LiveService } from "./service";
 import { supabasePlanStore } from "./store";
+import { parseTrustedProxies, type TrustedProxies } from "./trusted-proxies";
 
 function fatal(message: string): never {
   console.error(`[live] ${message}`);
@@ -34,10 +39,12 @@ async function main() {
   if (!process.env.COMMUNITY_HASH_SALT) {
     fatal("COMMUNITY_HASH_SALT is not set: sessions could not be checked.");
   }
+  let trustedProxies: TrustedProxies;
   try {
     // The website's rule: in production a blank or development value refuses every token.
     sessionSecret();
     assertLocalDbAllowed();
+    trustedProxies = parseTrustedProxies(process.env.LIVE_TRUSTED_PROXIES);
   } catch (error) {
     fatal((error as Error).message);
   }
@@ -68,6 +75,7 @@ async function main() {
     journalDir: path.resolve(journalDir ?? path.join("scratch", "local-db", "live-journal")),
     allowedOrigins,
     internalToken: process.env.LIVE_INTERNAL_TOKEN || undefined,
+    trustedProxies,
     limits: {
       ...(maxRooms ? { maxRooms } : {}),
       ...(maxOpenPlanBytes ? { maxOpenPlanBytes } : {}),
@@ -78,7 +86,7 @@ async function main() {
     process.env.LIVE_HOST ?? "127.0.0.1",
   );
   console.log(
-    `[live] listening on ${process.env.LIVE_HOST ?? "127.0.0.1"}:${port}, origins ${allowedOrigins.join(" ")}`,
+    `[live] listening on ${process.env.LIVE_HOST ?? "127.0.0.1"}:${port}, origins ${allowedOrigins.join(" ")}, trusted proxies: ${trustedProxies.describe()}`,
   );
 
   let stopping = false;

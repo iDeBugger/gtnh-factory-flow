@@ -25,6 +25,7 @@ import { FlushQueue } from "./flush-queue";
 import { Journal } from "./journal";
 import { Room, type RoomPeer, type RoomTiming } from "./room";
 import type { PlanStore } from "./store";
+import { LOOPBACK_ONLY, type TrustedProxies } from "./trusted-proxies";
 
 /**
  * The live service: one process beside Next.js holding every open plan in
@@ -121,6 +122,8 @@ export interface LiveServiceOptions {
   /** Called on POST /internal/shutdown (how dev-local stops it where signals do not reach). */
   onShutdownRequest?: () => void;
   log?: (message: string) => void;
+  /** Peers whose X-Client-Ip is believed (default: loopback only). */
+  trustedProxies?: TrustedProxies;
 }
 
 const DEFAULT_TIMING: RoomTiming = {
@@ -303,20 +306,31 @@ class OpensInFlight {
   }
 }
 
-const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+let warnedUntrustedPeer = false;
 
 /**
- * Where a request came from. Behind Caddy (the service listens on loopback)
- * that is what the site's one address rule reads (client-address.ts): the
- * X-Client-Ip header Caddy sets from Cloudflare's client address, overwriting
+ * Where a request came from. Behind a trusted proxy (loopback, or a peer
+ * `LIVE_TRUSTED_PROXIES` names) that is what the site's one address rule
+ * reads (client-address.ts): the X-Client-Ip header Caddy sets, overwriting
  * whatever the client sent, else CF-Connecting-IP, IP literals only, IPv6 on
- * its /64; with neither, the loopback peer itself. A request not from
- * loopback came straight to the service: its own address, whatever headers
- * it carries.
+ * its /64; with neither, the proxy peer itself. Any other peer came straight
+ * to the service: its own address, whatever headers it carries. An untrusted
+ * peer sending X-Client-Ip is warned about once, naming the peer and never the
+ * header: it is how a proxy missing from the list shows (every player would
+ * share the proxy's address and its limits).
  */
-export function clientAddress(req: Pick<IncomingMessage, "headers" | "socket">): string {
+export function clientAddress(
+  req: Pick<IncomingMessage, "headers" | "socket">,
+  trusted: TrustedProxies = LOOPBACK_ONLY,
+): string {
   const peer = req.socket.remoteAddress ?? "unknown";
-  if (!LOOPBACK.has(peer)) {
+  if (!trusted.has(peer)) {
+    if (!warnedUntrustedPeer && req.headers["x-client-ip"] !== undefined) {
+      warnedUntrustedPeer = true;
+      console.warn(
+        `[live] X-Client-Ip from untrusted peer ${peer}: set LIVE_TRUSTED_PROXIES to the proxy's address.`,
+      );
+    }
     return peer;
   }
   const address = addressFromHeaders((name) => {
@@ -540,7 +554,7 @@ export class LiveService {
       if (!isModAndCommunityOn()) {
         return { status: 404, body: { error: "Not found" } };
       }
-      if (!this.nearbyByAddress.take(clientAddress(req))) {
+      if (!this.nearbyByAddress.take(clientAddress(req, this.options.trustedProxies))) {
         return { status: 429, body: { error: "Too many asks. Try again in a minute." } };
       }
       const session = this.session(req);
@@ -777,7 +791,7 @@ export class LiveService {
     }
     // Limits first, all without the database: an address, then the account
     // the session names (its signature checked here), then its sockets.
-    if (!this.upgradesByAddress.take(clientAddress(req))) {
+    if (!this.upgradesByAddress.take(clientAddress(req, this.options.trustedProxies))) {
       refuse(429, "Too Many Requests");
       return;
     }

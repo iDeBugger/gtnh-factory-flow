@@ -17,6 +17,7 @@ import * as memberRoute from "@/app/api/library/designs/[designId]/members/[user
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 import { Journal } from "./journal";
 import { clientAddress, LiveService, type LiveServiceOptions } from "./service";
+import { parseTrustedProxies } from "./trusted-proxies";
 import { supabasePlanStore, type PlanStore } from "./store";
 
 /** The real store, counting each kind of call. */
@@ -1542,5 +1543,42 @@ describe("where a request came from", () => {
   it("keys a peer that is not loopback on itself, whatever it sends", () => {
     expect(clientAddress(request("198.51.100.20", { "x-client-ip": "203.0.113.9" }))).toBe("198.51.100.20");
     expect(clientAddress(request("198.51.100.20", { "cf-connecting-ip": "203.0.113.9" }))).toBe("198.51.100.20");
+  });
+
+  it("reads the headers from a configured proxy", () => {
+    const trusted = parseTrustedProxies("172.30.61.1");
+    expect(clientAddress(request("172.30.61.1", { "x-client-ip": "203.0.113.9" }), trusted)).toBe("203.0.113.9");
+    expect(clientAddress(request("::ffff:172.30.61.1", { "x-client-ip": "203.0.113.9" }), trusted)).toBe(
+      "203.0.113.9",
+    );
+    expect(clientAddress(request("127.0.0.1", { "x-client-ip": "203.0.113.9" }), trusted)).toBe("203.0.113.9");
+  });
+
+  it("keys a peer outside the list on itself whatever it sends", () => {
+    const trusted = parseTrustedProxies("172.30.61.1");
+    expect(clientAddress(request("172.30.61.5", { "x-client-ip": "203.0.113.9" }), trusted)).toBe("172.30.61.5");
+    expect(clientAddress(request("172.30.61.5", { "cf-connecting-ip": "203.0.113.9" }), trusted)).toBe(
+      "172.30.61.5",
+    );
+  });
+
+  it("warns once when an untrusted peer sends X-Client-Ip", async () => {
+    // A fresh module: the warning is once per process.
+    vi.resetModules();
+    const fresh = await import("./service");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      expect(fresh.clientAddress(request("172.30.61.5"))).toBe("172.30.61.5");
+      expect(warn).not.toHaveBeenCalled();
+      expect(fresh.clientAddress(request("172.30.61.5", { "x-client-ip": "203.0.113.9" }))).toBe("172.30.61.5");
+      expect(fresh.clientAddress(request("172.30.61.6", { "x-client-ip": "203.0.113.9" }))).toBe("172.30.61.6");
+      expect(warn).toHaveBeenCalledTimes(1);
+      const message = String(warn.mock.calls[0][0]);
+      expect(message).toContain("LIVE_TRUSTED_PROXIES");
+      expect(message).toContain("172.30.61.5");
+      expect(message).not.toContain("203.0.113.9");
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
