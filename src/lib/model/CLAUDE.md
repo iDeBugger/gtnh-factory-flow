@@ -36,6 +36,11 @@ Types, Zod schemas, resource keys, recipe rules, and the load funnel
 - Unresolved oredict slots cycle their ART only; names stay "Any ...", and rates, wire
   colours, handles and solver identity stay fixed. Never store animation frames or invent a
   concrete source for an icon (`category-presentation.ts`).
+- A slot never switches to its own recipe's product (`switchesSlotToOwnProduct`): a pick
+  from "what makes X" leaves X out of the inputs, and the funnel lets go of saved ones
+  and the wires that fed them (`release-input-overrides.ts`). The recipe refresh likewise
+  lets go of a pick the stored body offered in that slot and the fresh body does not
+  (`releaseRevokedSubstitutes`): the funnel alone cannot tell such a pick from a real one.
 
 ## Shared machines (shared-machine.ts)
 

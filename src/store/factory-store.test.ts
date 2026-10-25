@@ -1501,6 +1501,150 @@ describe("project recipe refresh", () => {
     );
   });
 
+  it("never fills an input with the product a makes-search was for", () => {
+    useFactoryStore.getState().setProject({
+      schemaVersion: PROJECT_SCHEMA_VERSION,
+      id: "add-context-self-loop-test",
+      name: "Add context self loop test",
+      fuelProfiles: [],
+      recipes: [],
+      nodes: [],
+      edges: [],
+    });
+
+    // Picked from what makes Distilled Water, with a Water slot that also
+    // lists Distilled Water: the card makes it from Water.
+    useFactoryStore.getState().addNodeForRecipeObject(
+      {
+        id: "distillery-distilled-water",
+        name: "Distillery: Distilled Water",
+        machineType: "Distillery",
+        minimumTier: "ULV",
+        durationTicks: 25,
+        eut: 7,
+        inputs: [
+          {
+            kind: "fluid",
+            id: "water",
+            amount: 10,
+            displayName: "Water",
+            alternatives: [
+              { kind: "fluid", id: "water", displayName: "Water", amount: 1 },
+              { kind: "fluid", id: "ic2distilledwater", displayName: "Distilled Water", amount: 1 },
+            ],
+          },
+        ],
+        outputs: [{ kind: "fluid", id: "ic2distilledwater", amount: 10, displayName: "Distilled Water" }],
+      },
+      { kind: "fluid", id: "ic2distilledwater", displayName: "Distilled Water", mode: "recipes" },
+    );
+
+    expect(useFactoryStore.getState().project.nodes[0]?.recipeInputOverrides).toBeUndefined();
+  });
+
+  it("lets go of a substitute the refreshed recipe no longer offers, and of its wire", () => {
+    const solder = { kind: "fluid", id: "molten.solderingalloy", displayName: "Molten Soldering Alloy" } as const;
+    const tin = { kind: "fluid", id: "molten.tin", displayName: "Molten Tin" } as const;
+    const lead = { kind: "fluid", id: "molten.lead", displayName: "Molten Lead" } as const;
+    const recipe = (id: string, leaked: boolean) => ({
+      id,
+      name: id,
+      machineType: id === "solidifier" ? "Fluid Solidifier" : "Assembler",
+      minimumTier: "LV",
+      durationTicks: 20,
+      eut: 8,
+      inputs: [
+        {
+          ...solder,
+          amount: 144,
+          // Saved when the dataset gave every solder slot the Assembler's substitutes.
+          alternatives:
+            leaked || id === "assembler"
+              ? [{ ...solder, amount: 1 }, { ...tin, amount: 2 }, { ...lead, amount: 4 }]
+              : undefined,
+        },
+      ],
+      outputs: [{ kind: "item" as const, id: `${id}-out`, amount: 1 }],
+    });
+    const node = (id: string) => ({
+      id,
+      recipeId: id,
+      machineCount: 1,
+      parallel: 1,
+      overclockTier: "LV",
+      enabled: true,
+      position: { x: 0, y: 0 },
+      recipeInputOverrides: { "0": { ...tin, amount: 288 } },
+    });
+    const wire = (target: string) => ({
+      id: `tin-${target}`,
+      source: "drawer",
+      target,
+      sourceHandle: "output:fluid:molten.tin",
+      targetHandle: "input:fluid:molten.tin",
+      resourceKind: "fluid" as const,
+      resourceId: "molten.tin",
+    });
+    useFactoryStore.getState().setProject({
+      schemaVersion: PROJECT_SCHEMA_VERSION,
+      id: "revoked-substitute-test",
+      name: "Revoked substitute test",
+      fuelProfiles: [],
+      recipes: [recipe("solidifier", true), recipe("assembler", true)],
+      nodes: [node("solidifier"), node("assembler")],
+      storages: [{ id: "drawer", kind: "fluid", resourceId: "molten.tin", position: { x: -400, y: 0 } }],
+      edges: [wire("solidifier"), wire("assembler")],
+    });
+
+    // The rebuilt dataset keeps the Assembler's own substitutes and gives the
+    // Fluid Solidifier's slot none.
+    useFactoryStore.getState().refreshProjectRecipes([recipe("solidifier", false), recipe("assembler", false)]);
+
+    const { nodes, edges } = useFactoryStore.getState().project;
+    expect(nodes.find((entry) => entry.id === "solidifier")?.recipeInputOverrides).toBeUndefined();
+    expect(nodes.find((entry) => entry.id === "assembler")?.recipeInputOverrides?.["0"]?.id).toBe("molten.tin");
+    expect(edges.map((edge) => edge.id)).toEqual(["tin-assembler"]);
+  });
+
+  it("keeps every substitute while the refreshed recipe still offers it", () => {
+    const water = { kind: "fluid", id: "water", displayName: "Water" } as const;
+    const distilled = { kind: "fluid", id: "ic2distilledwater", displayName: "Distilled Water" } as const;
+    const cutter = {
+      id: "cutter",
+      name: "Cutting Machine: Plank",
+      machineType: "Cutting Machine",
+      minimumTier: "LV",
+      durationTicks: 20,
+      eut: 8,
+      inputs: [{ ...water, amount: 4, alternatives: [{ ...water, amount: 1 }, { ...distilled, amount: 1 }] }],
+      outputs: [{ kind: "item" as const, id: "plank", amount: 1 }],
+    };
+    useFactoryStore.getState().setProject({
+      schemaVersion: PROJECT_SCHEMA_VERSION,
+      id: "kept-substitute-test",
+      name: "Kept substitute test",
+      fuelProfiles: [],
+      recipes: [cutter],
+      nodes: [
+        {
+          id: "cutter",
+          recipeId: "cutter",
+          machineCount: 1,
+          parallel: 1,
+          overclockTier: "LV",
+          enabled: true,
+          position: { x: 0, y: 0 },
+          recipeInputOverrides: { "0": { ...distilled, amount: 4 } },
+        },
+      ],
+      edges: [],
+    });
+
+    useFactoryStore.getState().refreshProjectRecipes([{ ...cutter }]);
+
+    expect(useFactoryStore.getState().project.nodes[0]?.recipeInputOverrides?.["0"]?.id).toBe("ic2distilledwater");
+  });
+
   it("stores concrete uses inputs on connected recipe nodes", () => {
     useFactoryStore.getState().setProject({
       schemaVersion: PROJECT_SCHEMA_VERSION,

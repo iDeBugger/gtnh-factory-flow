@@ -3,6 +3,8 @@ import { normalizeProductionGroups } from "./production-groups";
 import { normalizeFullFarms } from "./full-farms";
 import { normalizeProjectHatchInputs } from "@/lib/solver/hatch-input";
 import type { FactoryProject } from "./types";
+import { releaseInputOverrides } from "./release-input-overrides";
+import { switchesSlotToOwnProduct } from "./recipe-input-overrides";
 import { energyHatchTypeExistsAtTier } from "@/lib/machines/energy-hatches";
 import { normalizeProjectFuelProfiles } from "./fuels";
 import { isCustomRateRecipe, releaseCustomRates } from "./custom-rate";
@@ -104,6 +106,7 @@ function normalizeLegacyProject(project: FactoryProject): FactoryProject {
   const gameVersion = planGameVersion(project);
   project = normalizeProductionGroups(project);
   project = repairWiredInputOverrides(project);
+  project = dropSelfLoopInputOverrides(project);
   return normalizeProjectHatchInputs(
     snapProjectToGrid(
       repairPocketReferences(
@@ -139,6 +142,17 @@ function normalizeLegacyProject(project: FactoryProject): FactoryProject {
     ),
     true,
   );
+}
+
+/**
+ * Lets go of a slot pick that names the card's own product, and of the wires
+ * that brought the product to that slot: the slot goes back to its own
+ * resource. Such picks came from a recipe search for the product, which put it
+ * in an input listing it as a substitute (a Distillation Tower making
+ * Distilled Water from Distilled Water). Unwired drawers stay where they are.
+ */
+function dropSelfLoopInputOverrides(project: FactoryProject): FactoryProject {
+  return releaseInputOverrides(project, (recipe, input, override) => switchesSlotToOwnProduct(recipe, input, override));
 }
 
 /**

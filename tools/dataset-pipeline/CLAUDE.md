@@ -229,6 +229,9 @@ on a case-sensitive Docker volume: the pack has file names that differ only in c
   (`recipe-map-amperage.mjs`, keyed by `gtnhVersion`, pinned to the app's table by its test);
   multiblock handlers keep the tier of the whole EU/t.
 - Concrete items carry their oredict membership.
+- What a slot accepts (2.9's `SubstituteFluidStack`, `mOreDictAlt`) stays on that recipe's input. The
+  catalog and the resource index carry only item-level alternatives (ore dictionary groups): the server
+  gives every slot without its own the index entry's. Exam: `build-resource-index.test.mjs`.
 - NEI layout: keep exported slot positions and progress bars; empty slots stay visible;
   non-consumed slots stay visible except TGS tool placeholders; never replace a real slot
   with a fake label.
