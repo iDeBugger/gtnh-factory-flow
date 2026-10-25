@@ -57,6 +57,8 @@ describe("parsePlanSearch", () => {
     expect(search.tags).toEqual(["a b"]);
     expect(search.text).toBe("oil  50");
     expect(search.author).toBe("a_b");
+    expect(parsePlanSearch("a,b(c)d\\e").text).toBe("a b c d e");
+    expect(parsePlanSearch("a*b").text).toBe("a b");
   });
 
   it("ignores stray whitespace and caps the length", () => {
@@ -87,6 +89,18 @@ describe("applyPlanSearch", () => {
     };
     return query;
   }
+
+  it("an or() value can never close its filter", () => {
+    const query = recorder();
+    applyPlanSearch(query, parsePlanSearch("x,y)z,is_public.eq.false"));
+    const filters = query.calls.find((call) => call.startsWith("or "))!.slice(3);
+    expect(filters.match(/\.ilike\./g)).toHaveLength(3);
+    const values = [...filters.matchAll(/%([^%]*)%/g)].map((match) => match[1]);
+    expect(values).toHaveLength(3);
+    for (const value of values) {
+      expect(/[,()]/.test(value)).toBe(false);
+    }
+  });
 
   it("narrows by every tag, then the creator, then the text", () => {
     const query = recorder();

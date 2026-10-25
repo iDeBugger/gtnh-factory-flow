@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { applyPlanSearch, parsePlanSearch } from "@/lib/community/search-query";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import { boardSelectionPayloadSchema } from "@/lib/model/schemas";
@@ -88,12 +89,9 @@ async function listPublicBlueprints(request: Request, url: URL) {
   const sortParam = url.searchParams.get("sort");
   const sort: PublicBlueprintSort =
     sortParam === "newest" || sortParam === "downloads" ? sortParam : "top";
-  // ilike patterns and PostgREST's or() syntax both have magic characters;
-  // stripping them beats escaping them for a search box.
-  const search = (url.searchParams.get("search") ?? "")
-    .replace(/[,()%_\\]/g, " ")
-    .trim()
-    .slice(0, 80);
+  // The community search language (search-query.ts), which also scrubs the
+  // characters that would let the text out of its or() filter.
+  const search = parsePlanSearch(url.searchParams.get("search") ?? "");
   const page = Math.max(0, Number.parseInt(url.searchParams.get("page") ?? "0", 10) || 0);
   const deviceId = (url.searchParams.get("deviceId") ?? "").slice(0, 64);
 
@@ -102,18 +100,9 @@ async function listPublicBlueprints(request: Request, url: URL) {
     .from("blueprints")
     .select(BLUEPRINT_SUMMARY_COLUMNS)
     .eq("is_public", true);
-  // Tag-aware search: a plain term matches names, descriptions and tags;
-  // a leading # narrows to tags alone.
-  if (search.startsWith("#")) {
-    const tagTerm = search.slice(1).trim();
-    if (tagTerm) {
-      query = query.ilike("tags_text", `%${tagTerm}%`);
-    }
-  } else if (search) {
-    query = query.or(
-      `name.ilike.%${search}%,description.ilike.%${search}%,tags_text.ilike.%${search}%`,
-    );
-  }
+  // A plain term matches names, descriptions and tags; #tag narrows to tags,
+  // @name to that creator.
+  query = applyPlanSearch(query, search);
   if (sort === "top") {
     query = query.order("score", { ascending: false }).order("published_at", { ascending: false });
   } else if (sort === "downloads") {

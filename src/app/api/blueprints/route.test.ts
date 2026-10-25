@@ -144,6 +144,24 @@ describe("blueprints with the setting on", () => {
     expect(calls).toContainEqual(["or", [`is_public.eq.true,user_id.eq.${ann.id}`]]);
   });
 
+  it("keeps a shelf search inside its own or() filter", async () => {
+    const shelf = await list.GET(get("/api/blueprints?scope=public&search=oil,is_public.eq.false"));
+    expect(shelf.status).toBe(200);
+    const filters = calls.filter(([name]) => name === "or").map(([, args]) => String(args[0]));
+    expect(filters).toHaveLength(1);
+    expect(filters[0]).toContain("name.ilike.%oil is");
+    expect(filters[0]).not.toContain("is_public");
+
+    // The shelf reads the search as the community does: `*` is a wildcard to PostgREST, a #tag narrows tags.
+    calls.length = 0;
+    await list.GET(get("/api/blueprints?scope=public&search=" + encodeURIComponent("#fuel a*b")));
+    expect(calls).toContainEqual(["ilike", ["tags_text", "%fuel%"]]);
+    expect(calls).toContainEqual([
+      "or",
+      ["name.ilike.%a b%,description.ilike.%a b%,tags_text.ilike.%a b%"],
+    ]);
+  });
+
   it("reaches publishing, voting and placing", async () => {
     sessionUser.mockReturnValue(ann);
     const answers = [

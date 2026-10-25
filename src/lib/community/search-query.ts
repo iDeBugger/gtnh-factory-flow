@@ -24,11 +24,15 @@ export const PLAN_SEARCH_MAX_LENGTH = 120;
 
 /**
  * ilike patterns and PostgREST's or() syntax both have magic characters;
- * stripping them beats escaping them for a search box. Applied to free
- * text and tags, never to the author, whose underscores are real.
+ * stripping them beats escaping them for a search box. The or() template
+ * puts the text in unquoted, so `,` `(` `)` would end the value and start a
+ * filter of the reader's own; `%` `_` and `*` (PostgREST reads it as `%`)
+ * only widen a match; `\` escapes nothing there. Applied to free text and
+ * tags, never to the author, whose underscores are real (it goes to eq(),
+ * a parameter of its own).
  */
 function scrub(term: string): string {
-  return term.replace(/[,()%_\\]/g, " ").trim();
+  return term.replace(/[,()%_\\*]/g, " ").trim();
 }
 
 export function parsePlanSearch(raw: string): PlanSearch {
