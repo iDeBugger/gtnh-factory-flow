@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PROJECT_SCHEMA_VERSION, type FactoryProject } from "@/lib/model/types";
-import { isBeeSpeciesInput, isFreeRecipeInput, isRecipeInputConsumed } from "@/lib/model";
+import { freeInputRowLabel, isBeeSpeciesInput, isFreeRecipeInput, isRecipeInputConsumed } from "@/lib/model";
 import { calculateThroughput } from "@/lib/solver/throughput";
 import { buildRailPorts, deriveNodeVerdict, findUnwiredNodeIds } from "./node-verdict";
 
@@ -136,5 +136,11 @@ describe("a bee card's species", () => {
     expect(port.unsupplied).toBe(false);
     expect(port.nameplatePerSecond).toBe(0);
     expect(findUnwiredNodeIds(proj, result)).toEqual([]);
+  });
+
+  it("reads where each free row's item sits", () => {
+    expect(freeInputRowLabel({ kind: "item", id: SALT })).toBe("in housing");
+    expect(freeInputRowLabel({ kind: "item", id: "factoryflow:eec_mob:zombie" })).toBe("in controller");
+    expect(freeInputRowLabel({ kind: "item", id: "gregtech:gt.metaitem.02@32765" })).toBe("free");
   });
 });

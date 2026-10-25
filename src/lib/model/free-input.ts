@@ -47,3 +47,14 @@ export function isFreeRecipeInput(resource: InputRef): boolean {
     isControllerSlotInput(resource)
   );
 }
+
+/**
+ * What a free row prints in its number column: where the item sits, since none
+ * is ever supplied. The crusher's spawner is in its controller, a bee in its
+ * housing; anything else the game hands out for nothing.
+ */
+export function freeInputRowLabel(resource: InputRef): string {
+  if (isControllerSlotInput(resource)) return "in controller";
+  if (isBeeSpeciesInput(resource)) return "in housing";
+  return "free";
+}

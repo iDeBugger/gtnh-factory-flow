@@ -37,7 +37,7 @@ const TASKS_ENABLED = isLiveConfigured();
 import { checklistLocked } from "../RecipeNode";
 import { wheelChangesValues } from "@/lib/device-settings";
 import { MobPickerMenu } from "../MobPickerMenu";
-import { isBeeSpeciesInput, isControllerSlotInput } from "@/lib/model/free-input";
+import { freeInputRowLabel, isBeeSpeciesInput, isControllerSlotInput } from "@/lib/model/free-input";
 import type {
   CleanCardActions,
   CleanCardContext,
@@ -190,7 +190,7 @@ export function CleanPortRow({
       >
         {port.resource ? <PortIcon resource={port.resource} iconProps={iconProps} /> : null}
         <span className="cc-num" data-small="" data-unit="">
-          {controller ? "in controller" : bee ? "Not used" : "free"}
+          {port.resource ? freeInputRowLabel(port.resource) : "free"}
         </span>
         <span
           className="cc-pname"
