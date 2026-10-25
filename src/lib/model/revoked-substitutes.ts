@@ -3,7 +3,7 @@ import type { PlanConversionNotice } from "@/lib/solver/plan/to-plan";
 import type { RecipeSummary } from "@/lib/datasets/types";
 import { listNodeSections } from "./shared-machine";
 import { resourceLabel } from "./resources";
-import { getRecipeMachineHandlers, isSteamMachineHandler } from "./recipe-rules";
+import { getRecipeMachineHandlers, isSteamMachineHandler, steamMultiblockMissingHatch } from "./recipe-rules";
 
 /**
  * A slot pick the dataset no longer offers: the body the plan held listed it
@@ -103,11 +103,12 @@ export function steamHandlerMovedLine(
   card: Pick<Recipe, "name">,
   saved: Pick<MachineHandler, "label">,
   now: Pick<MachineHandler, "label">,
+  missing: "input" | "output" = "input",
 ): string {
-  return `${card.name} now runs on the ${now.label}: the ${saved.label} has no fluid input hatch.`;
+  return `${card.name} now runs on the ${now.label}: the ${saved.label} has no fluid ${missing} hatch.`;
 }
 
-export const STEAM_HANDLER_NOTICE = "Some cards moved off a steam machine that cannot take their fluid.";
+export const STEAM_HANDLER_NOTICE = "Some cards moved off a steam machine that has no hatch for their fluid.";
 
 /** A notice with these lines: one more set of lines under the notice already shown, or a notice of its own. */
 export function withNoticeLines(
@@ -143,10 +144,18 @@ export function findSteamHandlerMoves(
       : undefined;
     const fresh = freshById.get(node.recipeId);
     if (!saved || !fresh || saved.kind !== "multiblock" || !isSteamMachineHandler(saved)) continue;
-    if (!fresh.inputs.some((input) => input.kind === "fluid")) continue;
+    const fluidIn = fresh.inputs.some((input) => input.kind === "fluid");
+    const fluidOut = fresh.outputs.some((output) => output.kind === "fluid");
+    // The app's set covers both versions; the pipeline drops the per-version rest (2.8.1's Squasher and
+    // Presser take no input hatch), so a steam machine the fresh body no longer lists left for a fluid too.
+    const droppedByDataset = !(fresh.machineHandlers ?? []).some((handler) => handler.id === saved.id);
+    const missing =
+      steamMultiblockMissingHatch({ kind: saved.kind, machineType: saved.machineType ?? saved.label }, fluidIn, fluidOut) ??
+      (droppedByDataset && (fluidIn || fluidOut) ? (fluidIn ? "input" : "output") : undefined);
+    if (!missing) continue;
     const offered = getRecipeMachineHandlers(fresh);
     if (offered.some((handler) => handler.id === saved.id) || !offered[0]) continue;
-    moves.push({ nodeId: node.id, line: steamHandlerMovedLine(fresh, saved, offered[0]) });
+    moves.push({ nodeId: node.id, line: steamHandlerMovedLine(fresh, saved, offered[0], missing) });
   }
   return moves;
 }

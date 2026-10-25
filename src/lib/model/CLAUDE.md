@@ -45,7 +45,12 @@ Types, Zod schemas, resource keys, recipe rules, and the load funnel
   nothing). `settleRevokedSubstitutes` then moves a card onto its one same-map twin that takes
   the pick in that slot (`swapMachineRecipe`: wires kept, one undo step, sent to a live room as
   an edit, which every client makes the same way, so the plan never differs between them) and
-  leaves any other card as it is; the plan notice names each card.
+  leaves any other card as it is; the plan notice names each card. A move keeps the card's picks
+  on slots the twin shares and selects nothing. Until the lookup answers, a card holding a revoked
+  pick keeps its stored body and node (the only evidence); a failed lookup or a plan no longer on the
+  board forgets the check (`forgetRecipeChecks`), so the next landing finds it again. A plan file
+  import keeps the file's body for such a recipe for the same reason. A migrated id cannot wait and is
+  settled from that one refresh.
 
 ## Shared machines (shared-machine.ts)
 

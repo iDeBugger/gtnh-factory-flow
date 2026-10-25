@@ -9,14 +9,15 @@ import type { DatasetVersion } from "./types";
  * Each revoked pick with the recipe it really belongs to, when the dataset has
  * exactly one on the card's map (`revokedSubstituteTwin`). Only a card's own
  * recipe is asked about: a shared machine's sections are never moved. A failed
- * lookup is no twin, so the card stays and the notice names it.
+ * lookup says so (`failed`): the pick is neither moved nor named, and is asked
+ * about again at the next landing.
  */
 export async function findRevokedSubstituteTwins(
   manifestUrl: string,
   version: DatasetVersion,
   project: FactoryProject,
   revoked: RevokedSubstitute[],
-): Promise<Array<{ revoked: RevokedSubstitute; twin?: Recipe }>> {
+): Promise<Array<{ revoked: RevokedSubstitute; twin?: Recipe; failed?: true }>> {
   return Promise.all(
     revoked.map(async (entry) => {
       const recipe = project.recipes.find((candidate) => candidate.id === entry.recipeId);
@@ -28,7 +29,7 @@ export async function findRevokedSubstituteTwins(
         const summary = revokedSubstituteTwin(recipe, entry, candidates);
         return summary ? { revoked: entry, twin: await getRecipeDatasetRecipe(manifestUrl, version, summary.id) } : { revoked: entry };
       } catch {
-        return { revoked: entry };
+        return { revoked: entry, failed: true as const };
       }
     }),
   );

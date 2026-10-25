@@ -1594,7 +1594,7 @@ describe("project recipe refresh", () => {
     }
 
     it("is reported, and the refresh changes neither the pick nor the wire", () => {
-      const revoked = landSolderPlan();
+      const { revoked } = landSolderPlan();
 
       expect(revoked.map((entry) => [entry.nodeId, entry.slot, entry.pick.id])).toEqual([["solidifier", 0, "molten.tin"]]);
       const { nodes, edges } = useFactoryStore.getState().project;
@@ -1602,9 +1602,23 @@ describe("project recipe refresh", () => {
       expect(edges.map((edge) => edge.id).sort()).toEqual(["tin-assembler", "tin-solidifier"]);
     });
 
+    it("keeps the card's stored body until it is settled, then lands the fresh one", () => {
+      const { revoked, deferred } = landSolderPlan();
+      const stored = () =>
+        useFactoryStore.getState().project.recipes.find((recipe) => recipe.id === "solidifier")?.inputs[0]?.alternatives;
+      // The stored body is the evidence: a lookup that fails leaves it for the next landing to find again.
+      expect(stored()?.map((entry) => entry.id)).toEqual(["molten.solderingalloy", "molten.tin", "molten.lead"]);
+      expect(deferred.map((recipe) => recipe.id)).toEqual(["solidifier"]);
+
+      useFactoryStore.getState().settleRevokedSubstitutes(revoked.map((entry) => ({ revoked: entry })), deferred);
+
+      expect(stored()).toBeUndefined();
+      expect(useFactoryStore.getState().planNotice?.details).toHaveLength(1);
+    });
+
     it("leaves a card with no twin as it is and names it in the plan notice", () => {
-      const revoked = landSolderPlan();
-      useFactoryStore.getState().settleRevokedSubstitutes(revoked.map((entry) => ({ revoked: entry })));
+      const { revoked, deferred } = landSolderPlan();
+      useFactoryStore.getState().settleRevokedSubstitutes(revoked.map((entry) => ({ revoked: entry })), deferred);
 
       const state = useFactoryStore.getState();
       expect(state.project.nodes.find((entry) => entry.id === "solidifier")?.recipeInputOverrides?.["0"]?.id).toBe(
@@ -1621,7 +1635,7 @@ describe("project recipe refresh", () => {
     });
 
     it("moves a card onto the recipe that takes its pick, wire kept, as one undoable edit", () => {
-      const revoked = landSolderPlan();
+      const { revoked } = landSolderPlan();
       const twin = { ...solderRecipe("tin-ingot", false, tin), inputs: [{ ...tin, amount: 288 }] };
       useFactoryStore.getState().settleRevokedSubstitutes(revoked.map((entry) => ({ revoked: entry, twin })));
 
@@ -1640,8 +1654,36 @@ describe("project recipe refresh", () => {
       );
     });
 
+    it("moves a card without selecting it, keeping a pick the twin's slot still takes", () => {
+      const plate = { kind: "item", id: "oredict:plateTin", displayName: "Ore Dictionary: plateTin" } as const;
+      const concrete = { kind: "item", id: "gregtech:tin-plate", displayName: "Tin Plate", amount: 1 } as const;
+      const withPlate = (recipe: ReturnType<typeof solderRecipe>) => ({
+        ...recipe,
+        inputs: [...recipe.inputs, { ...plate, amount: 1, alternatives: [concrete] }],
+      });
+      useFactoryStore.getState().setProject({
+        schemaVersion: PROJECT_SCHEMA_VERSION,
+        id: "twin-picks-test",
+        name: "Twin picks test",
+        fuelProfiles: [],
+        recipes: [withPlate(solderRecipe("solidifier", true))],
+        nodes: [{ ...node("solidifier"), recipeInputOverrides: { "0": { ...tin, amount: 288 }, "1": concrete } }],
+        edges: [],
+      });
+      useFactoryStore.getState().selectNode(undefined);
+      const { revoked } = useFactoryStore.getState().refreshProjectRecipes([withPlate(solderRecipe("solidifier", false))]);
+      const twin = withPlate({ ...solderRecipe("tin-ingot", false, tin), inputs: [{ ...tin, amount: 288, alternatives: undefined }] });
+      useFactoryStore.getState().settleRevokedSubstitutes(revoked.map((entry) => ({ revoked: entry, twin })));
+
+      const state = useFactoryStore.getState();
+      const card = state.project.nodes.find((entry) => entry.id === "solidifier");
+      expect(card?.recipeId).toBe("tin-ingot");
+      expect(card?.recipeInputOverrides?.["1"]?.id).toBe("gregtech:tin-plate");
+      expect(state.selectedNodeId).toBeUndefined();
+    });
+
     it("skips a card that changed before its twin arrived", () => {
-      const revoked = landSolderPlan();
+      const { revoked } = landSolderPlan();
       useFactoryStore.getState().updateNode("solidifier", { recipeInputOverrides: undefined });
       useFactoryStore.getState().settleRevokedSubstitutes(revoked.map((entry) => ({ revoked: entry })));
 
@@ -1701,7 +1743,7 @@ describe("project recipe refresh", () => {
       expect(state.project.nodes[0]?.machineHandlerId).toBeUndefined();
       expect(state.planNotice).toEqual({
         origin: "plan",
-        text: "Some cards moved off a steam machine that cannot take their fluid.",
+        text: "Some cards moved off a steam machine that has no hatch for their fluid.",
         details: [line],
       });
     });
@@ -1711,6 +1753,38 @@ describe("project recipe refresh", () => {
       useFactoryStore.getState().refreshProjectRecipes([centrifuge(["Centrifuge"])]);
 
       expect(useFactoryStore.getState().planNotice?.details).toEqual([line]);
+    });
+
+    it("names the hatch a 2.8.1 Squasher or a Presser lacks", () => {
+      const hammer = (handlers: string[], fluid: "input" | "output") => ({
+        id: "hammer",
+        name: "Forge Hammer: Plate",
+        machineType: "Forge Hammer",
+        minimumTier: "LV",
+        durationTicks: 20,
+        eut: 8,
+        inputs: [{ kind: "item" as const, id: "ingot", amount: 1 }, ...(fluid === "input" ? [{ kind: "fluid" as const, id: "lubricant", amount: 10 }] : [])],
+        outputs: [{ kind: "item" as const, id: "plate", amount: 1 }, ...(fluid === "output" ? [{ kind: "fluid" as const, id: "molten", amount: 10 }] : [])],
+        machineHandlers: handlers.map((label) => handler(label, label === "Forge Hammer" ? "single" : "multiblock")),
+      });
+      for (const fluid of ["input", "output"] as const) {
+        useFactoryStore.getState().setProject({
+          schemaVersion: PROJECT_SCHEMA_VERSION,
+          id: `hammer-${fluid}`,
+          name: "Hammer",
+          fuelProfiles: [],
+          recipes: [hammer(["Forge Hammer", "Steam Presser"], fluid)],
+          nodes: [{ id: "h", recipeId: "hammer", machineCount: 1, parallel: 1, overclockTier: "LV", machineHandlerId: "steam-presser", enabled: true, position: { x: 0, y: 0 } }],
+          edges: [],
+        });
+        useFactoryStore.getState().dismissPlanNotice();
+        // 2.8.1's pipeline drops the Presser from a fluid-input recipe; both packs drop it from a fluid output.
+        useFactoryStore.getState().refreshProjectRecipes([hammer(["Forge Hammer"], fluid)]);
+
+        expect(useFactoryStore.getState().planNotice?.details).toEqual([
+          `Forge Hammer: Plate now runs on the Forge Hammer: the Steam Presser has no fluid ${fluid} hatch.`,
+        ]);
+      }
     });
   });
 

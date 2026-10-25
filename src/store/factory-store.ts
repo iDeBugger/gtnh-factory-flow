@@ -355,13 +355,17 @@ interface FactoryStore {
    * it follow to the new id.
    */
   /** The recipe refresh; answers the slot picks the fresh bodies no longer offer, for settleRevokedSubstitutes. */
-  refreshProjectRecipes: (recipes: Recipe[], migration?: Record<string, string>) => RevokedSubstitute[];
+  refreshProjectRecipes: (
+    recipes: Recipe[],
+    migration?: Record<string, string>,
+    options?: { defer?: boolean },
+  ) => { revoked: RevokedSubstitute[]; deferred: Recipe[] };
   /**
    * Settles revoked picks once their twins are known: a card whose pick has one twin on its own map moves onto it
    * as an edit (wires kept, one undo step, sent to a live room like any edit); any other card stays as it is. The
    * plan notice names every card either way.
    */
-  settleRevokedSubstitutes: (settled: Array<{ revoked: RevokedSubstitute; twin?: Recipe }>) => void;
+  settleRevokedSubstitutes: (settled: Array<{ revoked: RevokedSubstitute; twin?: Recipe }>, fresh?: Recipe[]) => void;
   /** Adds the lines saying where cards saved on a steam machine went (`findSteamHandlerMoves`) to the plan notice. */
   noteSteamHandlerMoves: (lines: string[]) => void;
   clearDataset: () => void;
@@ -1442,8 +1446,9 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
       return undefined;
     }
   },
-  refreshProjectRecipes: (recipes, migration = {}) => quietly(() => {
+  refreshProjectRecipes: (recipes, migration = {}, options = {}) => quietly(() => {
     let revoked: RevokedSubstitute[] = [];
+    let deferred: Recipe[] = [];
     setPresentation((state) => {
       if (recipes.length === 0) {
         return state;
@@ -1513,6 +1518,35 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
       // A substitute the fresh body no longer lists is one the game never took. The card keeps it here (the
       // refresh is quiet, so it must not rewire anything); settleRevokedSubstitutes moves or names it.
       revoked = findRevokedSubstitutes(state.project, project);
+      // The stored body is the only evidence of a revoked pick, so a card holding one keeps its stored body and
+      // node until settleRevokedSubstitutes has an answer (a failed or dropped lookup asks again at the next
+      // landing). A migrated id cannot wait: its node already follows the new id, so it is settled from this
+      // refresh alone.
+      if (options.defer !== false) {
+        const storedIds = new Set(state.project.recipes.map((recipe) => recipe.id));
+        const waiting = new Set(revoked.map((entry) => entry.recipeId).filter((id) => storedIds.has(id)));
+        if (waiting.size > 0) {
+          deferred = project.recipes.filter((recipe) => waiting.has(recipe.id));
+          const before = new Map(state.project.nodes.map((node) => [node.id, node]));
+          project = {
+            ...project,
+            recipes: project.recipes.map((recipe) =>
+              waiting.has(recipe.id) ? state.project.recipes.find((entry) => entry.id === recipe.id)! : recipe,
+            ),
+            nodes: project.nodes.map((node) =>
+              listNodeRecipeIds(node).some((id) => waiting.has(id)) ? (before.get(node.id) ?? node) : node,
+            ),
+          };
+          const waitingNodes = new Set(
+            project.nodes.filter((node) => listNodeRecipeIds(node).some((id) => waiting.has(id))).map((node) => node.id),
+          );
+          steamLines.splice(
+            0,
+            steamLines.length,
+            ...steamMoves.filter((entry) => !waitingNodes.has(entry.nodeId)).map((entry) => entry.line),
+          );
+        }
+      }
 
       return {
         project,
@@ -1522,14 +1556,13 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
           : {}),
       };
     });
-    return revoked;
+    return { revoked, deferred };
   }),
   noteSteamHandlerMoves: (lines) => {
     if (lines.length === 0) return;
     set((state) => ({ planNotice: withNoticeLines(state.planNotice, STEAM_HANDLER_NOTICE, lines) }));
   },
-  settleRevokedSubstitutes: (settled) => {
-    if (settled.length === 0) return;
+  settleRevokedSubstitutes: (settled, fresh = []) => {
     const lines: string[] = [];
     for (const { revoked, twin } of settled) {
       const state = get();
@@ -1544,11 +1577,15 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
       // Only a card's own recipe, on a card that runs no other, moves: a shared machine's sections must all
       // fit its machine, which a swap here would not check.
       if (twin && revoked.section === 0 && !node.extraRecipes?.length && !state.isReadOnly && !refusesDatasetRecipe(state, twin)) {
-        set((current) => swapMachineRecipeToState(current, node.id, twin));
+        set((current) => swapMachineRecipeToState(current, node.id, twin, { keepPicksFrom: recipe, select: false }));
         lines.push(movedSubstituteLine(recipe, revoked.pick));
       } else {
         lines.push(keptSubstituteLine(recipe, revoked));
       }
+    }
+    // The waiting fresh bodies land now, quietly, as the refresh would have landed them.
+    if (fresh.length > 0) {
+      get().refreshProjectRecipes(fresh, {}, { defer: false });
     }
     if (lines.length > 0) {
       set((state) => ({ planNotice: withNoticeLines(state.planNotice, REVOKED_SUBSTITUTES_NOTICE, lines) }));
@@ -5627,6 +5664,12 @@ function swapMachineRecipeToState(
   state: FactoryStore,
   nodeId: string,
   recipe: Recipe,
+  options: {
+    /** The card's recipe before the swap: its picks on slots whose resource the new recipe shares stay. */
+    keepPicksFrom?: Recipe;
+    /** False on a swap the player did not make: the board's selection and inspector stay as they are. */
+    select?: boolean;
+  } = {},
 ): Partial<FactoryStore> {
   const node = state.project.nodes.find((entry) => entry.id === nodeId);
   if (!node || node.recipeId === recipe.id) {
@@ -5645,7 +5688,9 @@ function swapMachineRecipeToState(
               )
             : [...state.project.recipes, recipe],
           nodes: state.project.nodes.map((entry) =>
-            entry.id === nodeId ? { ...entry, recipeId: recipe.id, recipeInputOverrides: undefined } : entry,
+            entry.id === nodeId
+              ? { ...entry, recipeId: recipe.id, recipeInputOverrides: keptPicks(entry, options.keepPicksFrom, recipe) }
+              : entry,
           ),
           edges: [...state.project.edges.filter((edge) => !touching.includes(edge)), ...carried],
         },
@@ -5655,10 +5700,22 @@ function swapMachineRecipeToState(
   );
   return withProjectHistory(state, {
     project,
-    selectedNodeId: nodeId,
-    selectedRecipeId: recipe.id,
+    ...(options.select === false ? {} : { selectedNodeId: nodeId, selectedRecipeId: recipe.id }),
     lastResult: solveBooks(project),
   });
+}
+
+/** The card's picks the new recipe can still hold: same slot, same resource in both recipes. */
+function keptPicks(node: FactoryNode, from: Recipe | undefined, to: Recipe): FactoryNode["recipeInputOverrides"] {
+  if (!from || !node.recipeInputOverrides) return undefined;
+  const kept = Object.fromEntries(
+    Object.entries(node.recipeInputOverrides).filter(([slot]) => {
+      const before = from.inputs[Number(slot)];
+      const after = to.inputs[Number(slot)];
+      return before !== undefined && after !== undefined && before.kind === after.kind && before.id === after.id;
+    }),
+  );
+  return Object.keys(kept).length > 0 ? kept : undefined;
 }
 
 /**
