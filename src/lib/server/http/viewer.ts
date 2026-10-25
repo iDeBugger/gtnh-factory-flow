@@ -22,3 +22,10 @@ export async function readViewer(request: Request): Promise<Viewer> {
   }
   return { userId: user.id, username: user.username, isAdmin: user.is_admin, adminToken };
 }
+
+/** A viewer with an account. */
+export type SignedIn = Viewer & { userId: string; username: string };
+
+export function isSignedIn(viewer: Viewer): viewer is SignedIn {
+  return viewer.userId !== undefined && viewer.username !== undefined;
+}

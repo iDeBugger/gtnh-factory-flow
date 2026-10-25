@@ -141,31 +141,6 @@
       "rule": "4"
     },
     {
-      "from": "src/app/api/library/designs/[designId]/members/[userId]/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/library/designs/[designId]/members/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/library/designs/[designId]/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/library/folders/[folderId]/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/library/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
       "from": "src/app/llms.txt/route.ts",
       "to": "src/lib/server/db/index.ts",
       "rule": "4"
@@ -178,11 +153,6 @@
     {
       "from": "src/live/main.ts",
       "to": "src/lib/server/local-db/client.ts",
-      "rule": "5"
-    },
-    {
-      "from": "src/live/store.ts",
-      "to": "src/lib/server/cloud-plans.ts",
       "rule": "5"
     },
     {
@@ -465,11 +435,6 @@
     "src/app/api/community/plans/[planId]/view/route.ts",
     "src/app/api/community/plans/[planId]/vote/route.ts",
     "src/app/api/community/plans/route.ts",
-    "src/app/api/library/designs/[designId]/members/[userId]/route.ts",
-    "src/app/api/library/designs/[designId]/members/route.ts",
-    "src/app/api/library/designs/[designId]/route.ts",
-    "src/app/api/library/folders/[folderId]/route.ts",
-    "src/app/api/library/route.ts",
     "src/app/llms.txt/route.ts",
     "src/app/sitemap.ts"
   ]

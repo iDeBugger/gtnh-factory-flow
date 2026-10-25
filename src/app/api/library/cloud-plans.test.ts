@@ -454,6 +454,37 @@ describe("cloud plans over REST", () => {
     expect(last).toBe(429);
   });
 
+  it("lists a member only the design shared with them, not another owner's design with the same id", async () => {
+    await makeUser("twin_ann");
+    await makeUser("twin_bob");
+    await makeUser("twin_mem");
+    const designId = "design-twin-1";
+    for (const owner of ["twin_ann", "twin_bob"]) {
+      const saved = await design.PUT(
+        request("PUT", `/api/library/designs/${designId}`, owner, upsertBody(owner, "2026-10-20T11:00:00.000Z")),
+        params({ designId }),
+      );
+      expect(saved.status).toBe(200);
+    }
+    const shared = await member.PUT(
+      request("PUT", `/api/library/designs/${designId}/members/${users.twin_mem!.id}`, "twin_ann"),
+      params({ designId, userId: users.twin_mem!.id }),
+    );
+    expect(shared.status).toBe(200);
+
+    const listed = await (await library.GET(request("GET", "/api/library", "twin_mem"))).json();
+    expect(listed.shared).toEqual([
+      expect.objectContaining({
+        ownerId: users.twin_ann!.id,
+        id: designId,
+        name: "twin_ann",
+        members: [{ id: users.twin_mem!.id, username: "twin_mem" }],
+      }),
+    ]);
+    const bobs = await (await library.GET(request("GET", "/api/library", "twin_bob"))).json();
+    expect(bobs.designs).toEqual([expect.objectContaining({ id: designId, members: [] })]);
+  });
+
   it("holds an owner to 30 new shares an hour, however often they unshare", async () => {
     await makeUser("erin");
     const designId = "design-share-spam";

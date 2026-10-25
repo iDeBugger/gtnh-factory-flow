@@ -14,6 +14,7 @@ export {
   blueprintStorageErrorMessage,
   COMMUNITY_DB_DOWN_MESSAGE,
   communityStorageErrorMessage,
+  DbQueryError,
   isMissingColumnError,
   libraryStorageErrorMessage,
 } from "./errors";

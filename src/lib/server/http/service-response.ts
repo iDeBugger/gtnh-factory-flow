@@ -17,7 +17,7 @@ export const SERVICE_ERROR_STATUS: Record<ServiceErrorKind, number> = {
  * A service's result as the route's answer: the value through `toBody` with
  * `init` (headers such as a public `Cache-Control` belong to a success
  * only; a function of the value when they depend on it, such as a
- * `Set-Cookie`), or `{ ...body, error: message }` at the error's status with
+ * `Set-Cookie`), or `{ error: message, ...body }` at the error's status with
  * `Cache-Control: no-store`, so no cache keeps a refusal or an outage.
  */
 export function serviceResponse<T>(
@@ -30,8 +30,10 @@ export function serviceResponse<T>(
     return NextResponse.json(toBody(result.value), ready);
   }
   const { kind, message, status, body, headers } = result.error;
+  // The message first and never replaced: `error` in `body` is dropped.
+  const { error: _replaced, ...rest } = body ?? {};
   return NextResponse.json(
-    { ...body, error: message },
+    { error: message, ...rest },
     {
       status: status ?? SERVICE_ERROR_STATUS[kind],
       headers: { ...headers, "Cache-Control": "no-store" },

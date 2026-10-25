@@ -226,7 +226,8 @@ Layout: the database client, its breaker and its error copy in `db/` (import it 
 passwords, sessions, the admin header and salted keys in `auth/`; rate limits and the event log in `limits/`;
 plan row mapping in `community-rows.ts`; route plumbing in `http/` (request bodies, error answers, the client
 address, dataset cache headers, the mod and community gate, `readViewer`, `serviceResponse`). Queries live in `repos/` (one file per table family:
-`accounts`, `events` so far), the rules in `services/` (`accounts`), which return `ServiceResult`
+`accounts`, `events`, `designs` with every lease write, `design-members`, `folders` so far), the rules in
+`services/` (`accounts`, `library`; the live service's `PlanStore` is an adapter over the same repositories), which return `ServiceResult`
 (`services/result.ts`) and never import `next/*`; a route only gates, parses, calls the service and answers
 (`serviceResponse`). A route asks whether there is a database through `services/config.ts`, never `db/`. The live service loads `auth/sessions` and `db`,
 never password code.
@@ -397,7 +398,7 @@ which bypasses row security. No anon role exists, so a request without the token
   runs against the stand-in and `postgrest-real.local.test.ts` against a real PostgREST (`REAL_POSTGREST_URL`,
   `REAL_POSTGREST_TOKEN`; the Docker rehearsal).
 
-## Cloud plans (cloud-plans.ts, app/api/library, app/api/accounts)
+## Cloud plans (services/library.ts, repos/designs.ts, app/api/library, app/api/accounts)
 
 - A design id is unique per owner only: every route under `/api/library/designs/[id]` takes `?owner=<ownerId>`
   (absent: the caller's own). Owners and members read; members save the plan and its name, never the owner's folders,

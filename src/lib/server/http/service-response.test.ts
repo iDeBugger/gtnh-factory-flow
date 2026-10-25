@@ -37,13 +37,13 @@ describe("serviceResponse", () => {
     expect(await response.json()).toEqual({ error: "Plan not found." });
   });
 
-  it("merges the error's body beside the message", async () => {
+  it("merges the error's body after the message", async () => {
     const response = serviceResponse(
       fail("conflict", "This plan is open live.", { body: { live: true } }),
       () => ({}),
     );
     expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: "This plan is open live.", live: true });
+    expect(await response.text()).toBe('{"error":"This plan is open live.","live":true}');
   });
 
   it("lets the error name its own status", async () => {

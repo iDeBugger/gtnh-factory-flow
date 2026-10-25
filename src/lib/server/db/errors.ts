@@ -63,3 +63,19 @@ export function blueprintStorageErrorMessage(
   }
   return fallback;
 }
+
+/**
+ * A query the database refused or could not answer, thrown by a repository
+ * with the database's own code and message, so a service can still word it
+ * (`libraryStorageErrorMessage`) as the route did. A failed write that came
+ * back with no row and no error carries an empty message.
+ */
+export class DbQueryError extends Error {
+  readonly code?: string;
+
+  constructor(error: { code?: string; message?: string } | null | undefined) {
+    super(error?.message ?? "");
+    this.name = "DbQueryError";
+    this.code = error?.code;
+  }
+}
