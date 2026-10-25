@@ -93,7 +93,9 @@ export function getRecipeMachineHandlers(
  * MTESteamMacerator, MTESteamAlloySmelter and MTESteamFurnaceMulti in GT5U
  * 5.09.54.205; 5.09.51.476's GT++ classes also require mInputHatches.isEmpty().
  * The Squasher and Presser take an input hatch in 2.9 but not in 2.8.1, and the
- * Purifier and Blender take one on both.
+ * Purifier and Blender take one on both. The pipeline applies the whole rule per
+ * pack (`steam-fluid-hatches.mjs`, the 2.8.1 Squasher and Presser included);
+ * this set covers stored bodies from datasets built before it, on any version.
  */
 const STEAM_MULTIBLOCKS_WITHOUT_FLUID_INPUT = new Set(["Steam Separator", "Steam Grinder", "Steam Fuser", "Steam Hearth"]);
 

@@ -135,8 +135,12 @@ computes in float: replicate it.
 - Steam: the 8 steam multis are table entries (8 parallels, no OC, shared pressure
   control); steam singleblocks are synthesized in `src/lib/model/recipe-rules.ts`. The Separator,
   Grinder, Fuser and Hearth have no fluid input hatch on either version, so `getRecipeMachineHandlers`
-  never offers them for a recipe with a fluid input (2.8.1's Squasher and Presser lack one too; not yet
-  applied, the handler list takes no game version). EU stays
+  never offers them for a recipe with a fluid input. The pipeline drops them per pack
+  (`tools/dataset-pipeline/scripts/steam-fluid-hatches.mjs`), 2.8.1's Squasher and Presser too; the app's
+  version-free set covers older stored bodies. A card saved on one moves to the map's first machine at the
+  recipe refresh, and the plan notice says so. No output-side rule: a steam multi without an output hatch
+  still runs a recipe with a fluid output when its voiding mode allows (steam bases support void
+  protection), losing the fluid. EU stays
   zero on steam cards; litres are billed instead, never both.
 - Crafting maps run on GT++'s Auto Workbench (synthesized in `recipe-rules.ts`, flat 2048 EU
   per craft) with instant hand-craft as the second handler.

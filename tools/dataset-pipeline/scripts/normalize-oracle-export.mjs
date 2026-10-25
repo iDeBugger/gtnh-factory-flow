@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { existsSync } from "node:fs";
 import { writeDatasetJson } from "./dataset-json-writer.mjs";
 import { recipeMapAmperage } from "./recipe-map-amperage.mjs";
+import { withoutSteamHandlersLackingFluidInput } from "./steam-fluid-hatches.mjs";
 import { spargeRolledOutputs } from "./sparge-byproducts.mjs";
 import { stageRenderedIcons as stageIconsOnWorkers } from "./stage-rendered-icons.mjs";
 import {
@@ -256,13 +257,17 @@ function normalizeGregtech(domain) {
       const minimumTier = mapAmps > 1 ? voltageTierForEu((Number(rawRecipe.eut) || 0) / mapAmps) : drawTier;
       const durationTicks = positiveInt(rawRecipe.durationTicks, 1);
       const eut = Math.max(0, Number(rawRecipe.eut) || 0);
-      const machineHandlers = instantiateRecipeMachineHandlers(handlerTemplates, {
-        minimumTier,
-        drawTier,
-        durationTicks,
-        eut,
-        machineConfigControls,
-      });
+      const machineHandlers = withoutSteamHandlersLackingFluidInput(
+        instantiateRecipeMachineHandlers(handlerTemplates, {
+          minimumTier,
+          drawTier,
+          durationTicks,
+          eut,
+          machineConfigControls,
+        }),
+        inputs,
+        gtnhVersion,
+      );
       addRecipe({
         contentId: {
           idParts: ["gregtech", gameRecipeMapId(recipeMap.id)],

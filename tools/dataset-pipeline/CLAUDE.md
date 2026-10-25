@@ -232,6 +232,9 @@ on a case-sensitive Docker volume: the pack has file names that differ only in c
 - What a slot accepts (2.9's `SubstituteFluidStack`, `mOreDictAlt`) stays on that recipe's input. The
   catalog and the resource index carry only item-level alternatives (ore dictionary groups): the server
   gives every slot without its own the index entry's. Exam: `build-resource-index.test.mjs`.
+- A steam multiblock with no fluid input hatch leaves a recipe with a fluid input, per pack
+  (`steam-fluid-hatches.mjs`: 2.9 the Separator, Grinder, Fuser and Hearth; 2.8.1 also the Squasher and
+  Presser). NEI lists them on the whole map. Exam: `steam-fluid-hatches.test.mjs`.
 - NEI layout: keep exported slot positions and progress bars; empty slots stay visible;
   non-consumed slots stay visible except TGS tool placeholders; never replace a real slot
   with a fake label.
