@@ -113,7 +113,7 @@ describe("a dataset file's path", () => {
     await symlink("../../outside.json", path.join(root, "v1", "escape.json"));
     await symlink(path.join(tree, "outside.json"), path.join(root, "v1", "shards", "absolute.json"));
     await symlink("a.json", path.join(root, "v1", "inside.json"));
-    // The dataset root itself is a symlink on the droplet.
+    // The dataset root itself may be a symlink.
     await symlink(root, path.join(tree, "linked-root"));
     // And each version in it is a link into the shared datasets directory.
     await mkdir(path.join(tree, "shared", "v3"), { recursive: true });

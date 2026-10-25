@@ -54,7 +54,6 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 dev-server*.log
-.deploy-exotiserver*.sh
 
 # env files (can opt-in for committing if needed)
 .env*

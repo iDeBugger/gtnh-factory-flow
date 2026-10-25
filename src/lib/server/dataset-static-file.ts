@@ -131,8 +131,8 @@ export function isSafePathSegment(value: string) {
  * version's directory or names nothing. Checked twice: lexically, then by
  * the real path, so a symlink inside the tree (rsync -a keeps them) cannot
  * point a read outside it. The real file is compared with the real version
- * directory, not the lexical one: the dataset root itself is a symlink on
- * the droplet.
+ * directory, not the lexical one: the dataset root itself may be a symlink
+ * (a deployment's link to its shared datasets).
  */
 export function resolveDatasetChildPath(versionId: string, ...segments: string[]) {
   return resolveDatasetChildPathIn(datasetRoot, versionId, ...segments);

@@ -1,8 +1,8 @@
 /**
- * The live service's entry point (systemd unit `gtnh-live` in production,
+ * The live service's entry point (the `live` container in production,
  * `npm run dev:local` here). Development: `tsx src/live/main.ts`. Production:
  * `npm run build:live` bundles this to `dist-live/live.mjs`, run with plain
- * `node dist-live/live.mjs` from the release directory.
+ * `node dist-live/live.mjs` from the image's working directory.
  *
  * Environment:
  * - COMMUNITY_HASH_SALT: the session secret, the same as the website's.
@@ -18,8 +18,8 @@
  *   client address. A bad entry stops the service.
  * - LIVE_MAX_ROOMS: plans open at once in the whole service (default 500).
  * - LIVE_MAX_PLAN_BYTES: plan JSON held in open rooms, in bytes (default 64 MB).
- *   Resident memory is about four times it plus the baseline: size the unit's
- *   MemoryMax and the heap from it.
+ *   Resident memory is about four times it plus the baseline: size the container's
+ *   memory limit and the heap from it.
  */
 import path from "node:path";
 import { isCommunityConfigured } from "@/lib/server/community";
@@ -110,7 +110,7 @@ async function main() {
   process.on("SIGINT", () => void stop("SIGINT"));
   process.on("SIGTERM", () => void stop("SIGTERM"));
   // A fault nothing caught: store every open plan and let the leases go, then
-  // exit 1 so systemd restarts the service. Exiting without this would leave
+  // exit 1 so the restart policy restarts the service. Exiting without this would leave
   // the plans to journal replay and REST saves refused until the leases lapse.
   // A service too broken to stop must still exit, so the exit is timed as well.
   const bail = (what: string, error: unknown) => {
