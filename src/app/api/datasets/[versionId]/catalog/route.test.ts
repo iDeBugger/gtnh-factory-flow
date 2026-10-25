@@ -6,7 +6,9 @@ vi.mock("@/lib/server/dataset-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/server/dataset-query")>();
   return {
     DatasetNotFoundError: actual.DatasetNotFoundError,
-    prewarmDatasetVersion: vi.fn(async () => undefined),
+    prewarmDatasetVersion: vi.fn(async () => {
+      throw new actual.DatasetNotFoundError();
+    }),
     getDatasetCatalog: vi.fn(async () => {
       throw new actual.DatasetNotFoundError();
     }),
@@ -24,6 +26,7 @@ describe("the dataset catalog route", () => {
   });
 
   it("answers an unknown dataset id with 404 and a fixed sentence that never repeats the id", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     for (const versionId of ["does-not-exist", "<b>x</b>"]) {
       const response = await call(versionId);
       expect(response.status).toBe(404);
@@ -32,6 +35,9 @@ describe("the dataset catalog route", () => {
       expect(JSON.stringify(body)).not.toContain(versionId);
     }
     expect(new DatasetNotFoundError().name).toBe("DatasetNotFoundError");
+    // The background prewarm of an unserved id logs nothing: the id is request text.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(log).not.toHaveBeenCalled();
   });
 
   it("answers any other failure with its fallback sentence, and the error goes to the log only", async () => {

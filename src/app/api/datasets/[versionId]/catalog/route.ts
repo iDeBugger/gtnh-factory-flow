@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { datasetErrorResponse } from "@/lib/server/error-response";
 import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
-import { getDatasetCatalog, prewarmDatasetVersion } from "@/lib/server/dataset-query";
+import { DatasetNotFoundError, getDatasetCatalog, prewarmDatasetVersion } from "@/lib/server/dataset-query";
 import { datasetBudgetRefusal, meteredDatasetWork } from "@/lib/server/dataset-rate";
 
 export const runtime = "nodejs";
@@ -17,8 +17,12 @@ export async function GET(
     if (refusal) {
       return refusal;
     }
+    // An unserved id is the request's own text and is not logged; any other failure is, with the id quoted and
+    // clipped so it cannot write a line of its own.
     void prewarmDatasetVersion(versionId).catch((error) => {
-      console.error(`Dataset ${versionId} prewarm failed.`, error);
+      if (!(error instanceof DatasetNotFoundError)) {
+        console.error(`Dataset ${JSON.stringify(versionId.slice(0, 80))} prewarm failed.`, error);
+      }
     });
     const catalog = await meteredDatasetWork(request, () => getDatasetCatalog(versionId));
     return NextResponse.json(catalog, {
