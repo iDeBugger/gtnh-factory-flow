@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { FEEDBACK_TOO_BIG } from "@/lib/server/too-big";
 import { encodePlanCode, planCodeLink } from "@/lib/import-export/plan-code";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { clientAddress, isCommunityConfigured, saltedKey } from "@/lib/server/community";
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
   if (!isModAndCommunityOn()) {
     early = await readTextCapped(request, FEEDBACK_MAX_BYTES);
     if (early === undefined) {
-      return NextResponse.json({ error: "The report is too big. Send fewer plans." }, { status: 413 });
+      return NextResponse.json({ error: FEEDBACK_TOO_BIG }, { status: 413 });
     }
     let peek: unknown;
     try {
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
     }
     const raw = early ?? (await readTextCapped(request, FEEDBACK_MAX_BYTES));
     if (raw === undefined) {
-      return refuse(sender, 413, "The report is too big. Send fewer plans.");
+      return refuse(sender, 413, FEEDBACK_TOO_BIG);
     }
     let json: unknown;
     try {

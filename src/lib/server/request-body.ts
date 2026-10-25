@@ -1,11 +1,9 @@
 /**
  * Reading a request body under a byte cap. Next.js route handlers have no
  * body limit of their own, so `request.json()`, `request.text()` and
- * `request.formData()` buffer whatever arrives before any check can run: a
- * handful of 100 MB posts is hundreds of MB of the one heap that also holds
- * the datasets. Every route that reads a body reads it through here, with a
- * cap sized to what the client legitimately sends, and refuses the rest as
- * 413 before a byte past the cap is kept.
+ * `request.formData()` parse whatever Next hands them. Every route that reads
+ * a body reads it through here, with a cap sized to what the client
+ * legitimately sends, and refuses the rest as 413.
  */
 
 /** Sign-in, votes, folder names, a publish flag: a few hundred bytes, never kilobytes. */
@@ -14,13 +12,27 @@ export const SMALL_JSON_MAX_BYTES = 16 * 1024;
 /** A 2,000-character comment is at most 24 KiB of escaped JSON. */
 export const COMMENT_BODY_MAX_BYTES = 64 * 1024;
 
+/**
+ * What Next keeps of a write body while `src/proxy.ts` runs
+ * (`experimental.proxyClientMaxBodySize` in next.config.ts). Because a proxy
+ * runs on every path, Next copies each write body up to this size and waits
+ * for its end before any route reads it, and drops the bytes past it. It sits
+ * just above the largest route cap (an image or preview upload, 4 MiB plus
+ * the form's 64 KiB), never below one: a body cut at this size is still over
+ * every cap and still answers 413, not a 400 for a truncated JSON or form.
+ * The proxy refuses a declared length over it before the body is read.
+ */
+export const PROXY_BODY_MAX_BYTES = 4.5 * 1024 * 1024;
+
 /** The 413 sentence for a body no player-facing limit describes better. */
 export const REQUEST_TOO_BIG_MESSAGE = "The request is too big.";
 
 /**
  * The body's bytes, or undefined once it passes `max`: a declared length over
- * the cap is refused unread, and a body with no length (chunked) stops being
- * read at the cap rather than buffered whole. No body reads as empty.
+ * the cap is refused without reading what Next holds, and a body with no
+ * length (chunked) stops being read at the cap. No body reads as empty. The
+ * proxy has already waited for the whole body, up to `PROXY_BODY_MAX_BYTES`,
+ * before a route gets here.
  */
 export async function readBodyCapped(
   request: Request,

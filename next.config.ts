@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { securityHeaders } from "./src/lib/security-headers";
+import { PROXY_BODY_MAX_BYTES } from "./src/lib/server/request-body";
 
 const datasetBackendUrl = process.env.GTNH_DATASET_BACKEND_URL?.replace(/\/+$/, "");
 
@@ -19,6 +20,11 @@ const nextConfig: NextConfig = {
   images: { unoptimized: true },
   // The framework's own X-Powered-By names the server software for nothing.
   poweredByHeader: false,
+  experimental: {
+    // src/proxy.ts runs on every path, so Next holds each write body up to this size before a route runs
+    // (default 10 MB). Just above the largest route cap, never below one (request-body.ts).
+    proxyClientMaxBodySize: PROXY_BODY_MAX_BYTES,
+  },
   async headers() {
     // The headers are read at build into the routes manifest, which is also when NEXT_PUBLIC_* is fixed.
     // Security headers first (src/lib/security-headers.ts: the policy, framing, nosniff, referrer, HSTS, and

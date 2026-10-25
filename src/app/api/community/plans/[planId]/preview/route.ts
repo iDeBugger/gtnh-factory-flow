@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { PREVIEW_TOO_BIG } from "@/lib/server/too-big";
 import { serverErrorResponse } from "@/lib/server/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
@@ -98,7 +99,7 @@ export async function POST(
     );
     if (!form) {
       return NextResponse.json(
-        { error: "That preview is too big: the limit is 4 MB." },
+        { error: PREVIEW_TOO_BIG },
         { status: 413 },
       );
     }
@@ -108,7 +109,7 @@ export async function POST(
     }
     if (file.size > BOARD_IMAGE_MAX_BYTES) {
       return NextResponse.json(
-        { error: "That preview is too big: the limit is 4 MB." },
+        { error: PREVIEW_TOO_BIG },
         { status: 413 },
       );
     }

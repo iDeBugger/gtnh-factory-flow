@@ -1,5 +1,28 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
+import nextConfig from "../next.config";
+import { BLUEPRINT_BODY_MAX_BYTES } from "@/lib/blueprints/types";
+import {
+  BOARD_IMAGE_MAX_BYTES,
+  COMMUNITY_UPLOAD_BODY_MAX_BYTES,
+  UPLOAD_FORM_OVERHEAD_BYTES,
+} from "@/lib/community/types";
+import { RESOLVE_RECIPES_MAX_BYTES } from "@/lib/datasets/resolve-recipes-limits";
+import { FEEDBACK_MAX_BYTES } from "@/lib/server/feedback";
+import {
+  COMMENT_BODY_MAX_BYTES,
+  PROXY_BODY_MAX_BYTES,
+  REQUEST_TOO_BIG_MESSAGE,
+  SMALL_JSON_MAX_BYTES,
+} from "@/lib/server/request-body";
+import {
+  BLUEPRINT_TOO_BIG,
+  DESIGN_TOO_BIG,
+  FEEDBACK_TOO_BIG,
+  IMAGE_TOO_BIG,
+  PLAN_UPLOAD_TOO_BIG,
+  PREVIEW_TOO_BIG,
+} from "@/lib/server/too-big";
 import { config, proxy } from "./proxy";
 
 /** A request as Caddy hands it on: the site's Host, whatever the browser sent as Origin. */
@@ -117,5 +140,55 @@ describe("the dataset gate in the proxy", () => {
       expect(answer.status, pathname).toBe(200);
       expect(answer.headers.get("x-middleware-next")).toBe("1");
     }
+  });
+});
+
+describe("a write body over every route's cap", () => {
+  const write = (pathname: string, length: number, method = "POST") =>
+    proxy(
+      new NextRequest(`https://gtnhplanner.com${pathname}`, {
+        method,
+        headers: { host: "gtnhplanner.com", "content-length": String(length) },
+      }),
+    );
+
+  it("is refused before Next waits for it, in the route's own words", async () => {
+    for (const [pathname, sentence] of [
+      ["/api/feedback", FEEDBACK_TOO_BIG],
+      ["/api/community/images", IMAGE_TOO_BIG],
+      ["/api/community/plans/p1/preview", PREVIEW_TOO_BIG],
+      ["/api/community/plans", PLAN_UPLOAD_TOO_BIG],
+      ["/api/community/plans/p1", PLAN_UPLOAD_TOO_BIG],
+      ["/api/library/designs/d1", DESIGN_TOO_BIG],
+      ["/api/blueprints", BLUEPRINT_TOO_BIG],
+      ["/api/blueprints/b1", BLUEPRINT_TOO_BIG],
+      ["/api/community/auth/register", REQUEST_TOO_BIG_MESSAGE],
+      ["/api/datasets/v/resolve-recipes", REQUEST_TOO_BIG_MESSAGE],
+    ] as const) {
+      const answer = write(pathname, 100_000_000);
+      expect(answer.status, pathname).toBe(413);
+      expect(await answer.json()).toEqual({ error: sentence });
+    }
+    expect(write("/api/library/designs/d1", PROXY_BODY_MAX_BYTES + 1, "PUT").status).toBe(413);
+  });
+
+  it("passes a body at the limit, and a read whatever it declares", () => {
+    expect(write("/api/feedback", PROXY_BODY_MAX_BYTES).status).toBe(200);
+    expect(write("/api/feedback", 100_000_000, "GET").status).toBe(200);
+  });
+
+  it("sits above every route's cap, so a body Next cut at it still answers 413", () => {
+    for (const cap of [
+      FEEDBACK_MAX_BYTES,
+      COMMUNITY_UPLOAD_BODY_MAX_BYTES,
+      BOARD_IMAGE_MAX_BYTES + UPLOAD_FORM_OVERHEAD_BYTES,
+      BLUEPRINT_BODY_MAX_BYTES,
+      RESOLVE_RECIPES_MAX_BYTES,
+      COMMENT_BODY_MAX_BYTES,
+      SMALL_JSON_MAX_BYTES,
+    ]) {
+      expect(PROXY_BODY_MAX_BYTES).toBeGreaterThan(cap);
+    }
+    expect(nextConfig.experimental?.proxyClientMaxBodySize).toBe(PROXY_BODY_MAX_BYTES);
   });
 });

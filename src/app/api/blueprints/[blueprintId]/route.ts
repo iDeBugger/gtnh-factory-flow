@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { BLUEPRINT_TOO_BIG } from "@/lib/server/too-big";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import type { BoardClipboardPayload } from "@/store/factory-store";
 import { boardSelectionPayloadSchema } from "@/lib/model/schemas";
@@ -104,7 +105,7 @@ export async function PUT(request: Request, context: RouteContext) {
   const read = await readJsonCapped(request, BLUEPRINT_BODY_MAX_BYTES);
   if (!read.ok) {
     return read.status === 413
-      ? NextResponse.json({ error: "Blueprint is too large to save." }, { status: 413 })
+      ? NextResponse.json({ error: BLUEPRINT_TOO_BIG }, { status: 413 })
       : NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
   const body = read.value;
@@ -142,7 +143,7 @@ export async function PUT(request: Request, context: RouteContext) {
   }
   if (payload !== undefined) {
     if (JSON.stringify(payload ?? null).length > BLUEPRINT_PAYLOAD_MAX_BYTES) {
-      return NextResponse.json({ error: "Blueprint is too large to save." }, { status: 413 });
+      return NextResponse.json({ error: BLUEPRINT_TOO_BIG }, { status: 413 });
     }
     const parsedPayload = boardSelectionPayloadSchema.safeParse(payload);
     if (!parsedPayload.success) {
