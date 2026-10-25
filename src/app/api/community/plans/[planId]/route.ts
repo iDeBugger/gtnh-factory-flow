@@ -1,45 +1,24 @@
-import {
-  type DbClient,
-  communityStorageErrorMessage,
-  getCommunityDb,
-  isCommunityConfigured,
-  isMissingColumnError,
-} from "@/lib/server/db";
 import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
-import { factoryProjectSchema } from "@/lib/model/schemas";
-import { normalizeLoadedProject } from "@/lib/model/project-normalize";
-import { ensurePlanEngine, solvePlanStats } from "@/lib/server/plan-engine";
-import { computeCommunityPlanStats } from "@/lib/community/plan-stats";
-import type { CommunityPlanSummary } from "@/lib/community/types";
-import { APP_VERSION } from "@/lib/version";
+import { COMMUNITY_UPLOAD_BODY_MAX_BYTES, COMMUNITY_UPLOAD_MAX_BYTES } from "@/lib/community/types";
+import { isDatabaseConfigured } from "@/lib/server/services/config";
 import {
-  COMMUNITY_DESCRIPTION_MAX_LENGTH,
-  COMMUNITY_NAME_MAX_LENGTH,
-  COMMUNITY_UPLOAD_BODY_MAX_BYTES,
-  COMMUNITY_UPLOAD_MAX_BYTES,
-} from "@/lib/community/types";
-import { normalizeBlueprintTags } from "@/lib/blueprints/types";
-import { PLAN_PREVIEW_BUCKET } from "@/lib/server/plan-preview";
-import { getFileStore } from "@/lib/server/file-store";
-import {
-  attachMyVotes,
-  parseEntryIcon,
-  PLAN_SUMMARY_COLUMNS,
-  PLAN_SUMMARY_COLUMNS_LEGACY,
-  rowToPlanSummary,
-  type PlanRow,
-} from "@/lib/server/community-rows";
-import { getSessionUser } from "@/lib/server/auth/sessions";
-import { isAdminRequest } from "@/lib/server/auth/admin";
-import { makeVoterKey } from "@/lib/server/auth/keys";
-import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
+  deletePlan,
+  editPlan,
+  readPlan,
+  type PlanPostBody,
+} from "@/lib/server/services/community-plans";
+import { readViewer } from "@/lib/server/http/viewer";
+import { serviceResponse } from "@/lib/server/http/service-response";
 import { readTextCapped } from "@/lib/server/http/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const unconfigured = () =>
+  NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
 
 /**
  * Plan detail. A read that writes nothing: a view is counted by
@@ -51,128 +30,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ plan
   if (!isModAndCommunityOn()) {
     return modAndCommunityOffResponse();
   }
-  if (!isCommunityConfigured()) {
-    return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
+  if (!isDatabaseConfigured()) {
+    return unconfigured();
   }
 
   try {
     const { planId } = await params;
-    const url = new URL(request.url);
-    const deviceId = url.searchParams.get("deviceId") ?? undefined;
-    const db = getCommunityDb();
-
-    let { data, error } = await db
-      .from("community_plans")
-      .select(PLAN_SUMMARY_COLUMNS)
-      .eq("id", planId)
-      .single<PlanRow>();
-    if (error && isMissingColumnError(error)) {
-      // The activity columns are not there yet: answer with the rest.
-      ({ data, error } = await db
-        .from("community_plans")
-        .select(PLAN_SUMMARY_COLUMNS_LEGACY)
-        .eq("id", planId)
-        .single<PlanRow>());
-    }
-
-    if (error || !data) {
-      return NextResponse.json({ error: "Plan not found." }, { status: 404 });
-    }
-
-    const sessionUser = await getSessionUser(request);
-    // Unpublished posts exist only for their owner (and the site admin).
-    if (
-      data.is_public === false &&
-      data.user_id !== sessionUser?.id &&
-      !sessionUser?.is_admin &&
-      !isAdminRequest(request)
-    ) {
-      return NextResponse.json({ error: "Plan not found." }, { status: 404 });
-    }
-
-    const plan = rowToPlanSummary(data, sessionUser?.id);
-    await refreshStaleStats(db, planId, plan);
-    if (deviceId) {
-      await attachMyVotes([plan], await makeVoterKey(request, deviceId));
-    }
-
-    return NextResponse.json({ plan }, { headers: { "Cache-Control": "no-store" } });
+    const deviceId = new URL(request.url).searchParams.get("deviceId") ?? undefined;
+    const viewer = await readViewer(request);
+    const result = await readPlan(viewer, planId, deviceId, request);
+    return serviceResponse(result, (value) => value, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return serverErrorResponse(error, "Loading the plan failed.");
-  }
-}
-
-/**
- * Saved stat cards go stale as the solver changes. On preview open, recompute
- * from the stored plan JSON with this release's solver (once per plan per
- * release) and persist the result. Best-effort: a missing stats_version
- * column, an unparseable plan or a failed write leave the saved card as is,
- * though freshly computed numbers still go out in this response.
- */
-async function refreshStaleStats(
-  db: DbClient,
-  planId: string,
-  plan: CommunityPlanSummary,
-): Promise<void> {
-  try {
-    const { data, error } = await db
-      .from("community_plans")
-      .select("stats_version")
-      .eq("id", planId)
-      .single<{ stats_version: string | null }>();
-    if (error || data?.stats_version === APP_VERSION) {
-      return;
-    }
-
-    const { data: planRow } = await db
-      .from("community_plans")
-      .select("plan")
-      .eq("id", planId)
-      .single<{ plan: unknown }>();
-    const parsed = factoryProjectSchema.safeParse(planRow?.plan);
-    if (!parsed.success) {
-      return;
-    }
-
-    // The same funnel the board runs a loaded plan through, so the card and
-    // the opened tab compute from the identical project.
-    const project = normalizeLoadedProject(parsed.data);
-    await ensurePlanEngine(project);
-    const solve = solvePlanStats(project);
-    // The clock is not the plan: a stored card that solved before is better than the failed plan's.
-    if (solve.outOfTime) {
-      return;
-    }
-    const stats = computeCommunityPlanStats(project, solve.result);
-    plan.needs = stats.needs;
-    plan.outputs = stats.outputs;
-    plan.totalEuT = stats.totalEuT;
-    plan.machineCount = stats.machineCount;
-    plan.nodeCount = stats.nodeCount;
-    plan.storageCount = stats.storageCount;
-    plan.edgeCount = stats.edgeCount;
-    plan.highestTier = stats.highestTier;
-    plan.highestTierIndex = stats.highestTierIndex;
-
-    // Not an author edit: updated_at stays untouched.
-    await db
-      .from("community_plans")
-      .update({
-        needs: stats.needs,
-        outputs: stats.outputs,
-        total_eu_t: stats.totalEuT,
-        machine_count: stats.machineCount,
-        node_count: stats.nodeCount,
-        storage_count: stats.storageCount,
-        edge_count: stats.edgeCount,
-        highest_tier: stats.highestTier ?? null,
-        highest_tier_index: stats.highestTierIndex,
-        stats_version: APP_VERSION,
-      })
-      .eq("id", planId);
-    invalidatePlanListCache();
-  } catch {
-    // A plan today's solver chokes on keeps its saved card.
   }
 }
 
@@ -181,8 +50,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ plan
   if (!isModAndCommunityOn()) {
     return modAndCommunityOffResponse();
   }
-  if (!isCommunityConfigured()) {
-    return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
+  if (!isDatabaseConfigured()) {
+    return unconfigured();
   }
 
   try {
@@ -191,135 +60,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ plan
     if (raw === undefined || raw.length > COMMUNITY_UPLOAD_MAX_BYTES) {
       return NextResponse.json({ error: "Upload too large." }, { status: 413 });
     }
-
-    const body = JSON.parse(raw) as {
-      name?: unknown;
-      description?: unknown;
-      gameVersion?: unknown;
-      datasetVersionId?: unknown;
-      plan?: unknown;
-      tags?: unknown;
-      isPublic?: unknown;
-      icon?: unknown;
-    };
-
-    const sessionUser = await getSessionUser(request);
-    if (!sessionUser) {
-      return NextResponse.json({ error: "Sign in to update your post." }, { status: 401 });
-    }
-
-    const db = getCommunityDb();
-    const { data: existing } = await db
-      .from("community_plans")
-      .select("id,user_id")
-      .eq("id", planId)
-      .single<{ id: string; user_id: string | null }>();
-
-    if (!existing) {
-      return NextResponse.json({ error: "Plan not found." }, { status: 404 });
-    }
-
-    if (existing.user_id !== sessionUser.id) {
-      return NextResponse.json({ error: "You don't own this post." }, { status: 403 });
-    }
-
-    // Field-wise update: the share dialog re-sends everything, while the
-    // shelf's tag editor sends tags alone — no need to round-trip the plan
-    // JSON just to relabel a post.
-    const now = new Date().toISOString();
-    const update: Record<string, unknown> = { updated_at: now, last_activity_at: now };
-
-    if (body.name !== undefined) {
-      const name = typeof body.name === "string" ? body.name.trim() : "";
-      if (!name || name.length > COMMUNITY_NAME_MAX_LENGTH) {
-        return NextResponse.json(
-          { error: "Plan name is required (max 80 chars)." },
-          { status: 400 },
-        );
-      }
-      update.name = name;
-    }
-
-    if (body.description !== undefined) {
-      update.description =
-        typeof body.description === "string"
-          ? body.description.trim().slice(0, COMMUNITY_DESCRIPTION_MAX_LENGTH)
-          : "";
-    }
-
-    if (body.gameVersion !== undefined) {
-      update.game_version = typeof body.gameVersion === "string" ? body.gameVersion.slice(0, 60) : "";
-    }
-
-    if (body.datasetVersionId !== undefined) {
-      update.dataset_version =
-        typeof body.datasetVersionId === "string" ? body.datasetVersionId.slice(0, 120) : "";
-    }
-
-    if (body.tags !== undefined) {
-      const tags = normalizeBlueprintTags(body.tags);
-      update.tags = tags;
-      update.tags_text = tags.join(" ");
-    }
-
-    if (typeof body.isPublic === "boolean") {
-      update.is_public = body.isPublic;
-    }
-
-    if (body.icon !== undefined) {
-      // A valid icon sets it; null (or junk) clears it.
-      update.icon = parseEntryIcon(body.icon);
-    }
-
-    if (body.plan !== undefined) {
-      const parsedPlan = factoryProjectSchema.safeParse(body.plan);
-      if (!parsedPlan.success) {
-        return NextResponse.json({ error: "Plan JSON is not a valid project." }, { status: 400 });
-      }
-
-      const project = parsedPlan.data;
-      if (project.nodes.length === 0) {
-        return NextResponse.json({ error: "Refusing to share an empty plan." }, { status: 400 });
-      }
-
-      const solved = normalizeLoadedProject(project);
-      await ensurePlanEngine(solved);
-      const stats = computeCommunityPlanStats(solved, solvePlanStats(solved).result);
-      Object.assign(update, {
-        plan: project,
-        needs: stats.needs,
-        outputs: stats.outputs,
-        total_eu_t: stats.totalEuT,
-        machine_count: stats.machineCount,
-        node_count: stats.nodeCount,
-        storage_count: stats.storageCount,
-        edge_count: stats.edgeCount,
-        highest_tier: stats.highestTier ?? null,
-        highest_tier_index: stats.highestTierIndex,
-        stats_version: APP_VERSION,
-      });
-    }
-
-    let { error } = await db.from("community_plans").update(update).eq("id", planId);
-    if (error && isMissingColumnError(error) && "last_activity_at" in update) {
-      // The activity column is not there yet: the edit still lands.
-      const { last_activity_at: dropped, ...rest } = update;
-      void dropped;
-      ({ error } = await db.from("community_plans").update(rest).eq("id", planId));
-    }
-
-    if (error) {
-      throw new Error(communityStorageErrorMessage(error, "Updating the plan failed."));
-    }
-
-    invalidatePlanListCache();
-    return NextResponse.json({ id: planId });
+    const body = JSON.parse(raw) as PlanPostBody;
+    const viewer = await readViewer(request);
+    const result = await editPlan(viewer, planId, body);
+    return serviceResponse(result, (value) => ({ id: value.id }));
   } catch (error) {
     return serverErrorResponse(error, "Updating the plan failed.");
   }
 }
 
-/** Deletes a post: the signed-in owner or the site admin (env token). */
+/** Deletes a post: the signed-in owner or the site admin (account or header). */
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ planId: string }> },
@@ -327,47 +77,15 @@ export async function DELETE(
   if (!isModAndCommunityOn()) {
     return modAndCommunityOffResponse();
   }
-  if (!isCommunityConfigured()) {
-    return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
+  if (!isDatabaseConfigured()) {
+    return unconfigured();
   }
 
   try {
     const { planId } = await params;
-    const db = getCommunityDb();
-    if (!isAdminRequest(request)) {
-      const sessionUser = await getSessionUser(request);
-      if (!sessionUser) {
-        return NextResponse.json({ error: "Sign in to take down your post." }, { status: 401 });
-      }
-
-      const { data: existing } = await db
-        .from("community_plans")
-        .select("user_id")
-        .eq("id", planId)
-        .single<{ user_id: string | null }>();
-
-      if (!existing) {
-        return NextResponse.json({ error: "Plan not found." }, { status: 404 });
-      }
-
-      if (existing.user_id !== sessionUser.id && !sessionUser.is_admin) {
-        return NextResponse.json({ error: "You don't own this post." }, { status: 403 });
-      }
-    }
-
-    const { error } = await db.from("community_plans").delete().eq("id", planId);
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    // The post's board photograph goes with it. Best-effort: a missing
-    // object (pre-preview posts) is the normal case, not a failure.
-    await getFileStore()
-      .remove(PLAN_PREVIEW_BUCKET, [`${planId}.png`])
-      .catch(() => undefined);
-
-    invalidatePlanListCache();
-    return NextResponse.json({ ok: true });
+    const viewer = await readViewer(request);
+    const result = await deletePlan(viewer, planId);
+    return serviceResponse(result, (value) => value);
   } catch (error) {
     return serverErrorResponse(error, "Deleting the plan failed.");
   }

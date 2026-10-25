@@ -101,42 +101,7 @@
       "rule": "4"
     },
     {
-      "from": "src/app/api/community/plans/[planId]/comments/[commentId]/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/community/plans/[planId]/comments/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/community/plans/[planId]/download/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/community/plans/[planId]/preview/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/community/plans/[planId]/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/community/plans/[planId]/view/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
       "from": "src/app/api/community/plans/[planId]/vote/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/community/plans/route.ts",
       "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
@@ -457,14 +422,7 @@
     "src/app/api/blueprints/[blueprintId]/route.ts",
     "src/app/api/blueprints/[blueprintId]/vote/route.ts",
     "src/app/api/blueprints/route.ts",
-    "src/app/api/community/plans/[planId]/comments/[commentId]/route.ts",
-    "src/app/api/community/plans/[planId]/comments/route.ts",
-    "src/app/api/community/plans/[planId]/download/route.ts",
-    "src/app/api/community/plans/[planId]/preview/route.ts",
-    "src/app/api/community/plans/[planId]/route.ts",
-    "src/app/api/community/plans/[planId]/view/route.ts",
     "src/app/api/community/plans/[planId]/vote/route.ts",
-    "src/app/api/community/plans/route.ts",
     "src/app/api/library/designs/[designId]/members/[userId]/route.ts",
     "src/app/api/library/designs/[designId]/members/route.ts",
     "src/app/api/library/designs/[designId]/route.ts",

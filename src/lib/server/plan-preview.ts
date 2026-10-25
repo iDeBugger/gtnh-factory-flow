@@ -1,6 +1,7 @@
 import type { PlanResourceStat } from "@/lib/community/types";
-import { getCommunityDb, isCommunityConfigured } from "./db";
-import { PLAN_SUMMARY_COLUMNS, type PlanRow } from "./community-rows";
+import { isCommunityConfigured } from "./db";
+import type { PlanRow } from "./community-rows";
+import * as plans from "./repos/plans";
 import { getFileStore, isFileStoreConfigured, type FileBucket } from "./file-store";
 
 /**
@@ -101,15 +102,11 @@ export async function getPublicPlanRow(planId: string): Promise<PlanRow | undefi
   }
 
   try {
-    const { data, error } = await getCommunityDb()
-      .from("community_plans")
-      .select(PLAN_SUMMARY_COLUMNS)
-      .eq("id", planId)
-      .single<PlanRow>();
-    if (error || !data || data.is_public === false) {
+    const row = await plans.readSummary(planId);
+    if (!row || row.is_public === false) {
       return undefined;
     }
-    return data;
+    return row;
   } catch {
     return undefined;
   }

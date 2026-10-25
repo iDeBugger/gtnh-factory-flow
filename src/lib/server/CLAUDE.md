@@ -226,7 +226,9 @@ Layout: the database client, its breaker and its error copy in `db/` (import it 
 passwords, sessions, the admin header and salted keys in `auth/`; rate limits and the event log in `limits/`;
 plan row mapping in `community-rows.ts`; route plumbing in `http/` (request bodies, error answers, the client
 address, dataset cache headers, the mod and community gate, `readViewer`, `serviceResponse`). Queries live in `repos/` (one file per table family:
-`accounts`, `events` so far), the rules in `services/` (`accounts`), which return `ServiceResult`
+`accounts`, `events`, `plans`, `comments` so far, plus `visibility.ts`, the access rules as query filters), the
+rules in `services/` (`accounts`, `community-plans`, `comments`; `access.ts` holds each access rule once, as a pure
+function: `canSeePlan` is the one answer to "who may see an unpublished post"), which return `ServiceResult`
 (`services/result.ts`) and never import `next/*`; a route only gates, parses, calls the service and answers
 (`serviceResponse`). A route asks whether there is a database through `services/config.ts`, never `db/`. The live service loads `auth/sessions` and `db`,
 never password code.
