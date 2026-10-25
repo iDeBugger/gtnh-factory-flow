@@ -11,6 +11,13 @@ import { getUiScalePercent } from "@/lib/ui-scale";
 import { areBoardSoundsEnabled, getBoardSoundVolume } from "@/lib/board-sounds";
 import { OPEN_CONTROLS_EVENT } from "./chrome-events";
 import { ModSettings } from "./ModSettings";
+import {
+  NEW_PLAN_VERSION_STORAGE_KEY,
+  readNewPlanVersion,
+  resetNewPlanVersionForTests,
+} from "@/lib/datasets/new-plan-version";
+import type { DatasetManifest } from "@/lib/datasets/types";
+import { useFactoryStore } from "@/store/factory-store";
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -173,5 +180,58 @@ describe("the settings box", () => {
     window.removeEventListener(OPEN_CONTROLS_EVENT, heard);
     fireEvent.keyDown(window, { key: "Escape" });
     expect(close).toHaveBeenCalledTimes(2);
+  });
+});
+
+function datasetVersion(id: string, gtnhVersion: string) {
+  return {
+    id,
+    gtnhVersion,
+    channel: "stable" as const,
+    publishedAt: "2026-10-20T00:00:00.000Z",
+    manifestPath: "/datasets/gtnh/datasets.manifest.json",
+    recipeDatasetPath: `/datasets/gtnh/${id}/recipes.json.gz`,
+    sourceInfo: { sourceId: "recex" as const, generatedAt: "2026-10-20T00:00:00.000Z" },
+  };
+}
+const bothVersions: DatasetManifest = {
+  schemaVersion: 1,
+  latestStableVersion: "local-2.9.0-rc-2",
+  versions: [datasetVersion("local-2.9.0-rc-2", "2.9.0-RC-2"), datasetVersion("local-2.8.1", "2.8.1")],
+};
+
+describe("the version for new plans", () => {
+  beforeEach(() => {
+    resetNewPlanVersionForTests();
+    useFactoryStore.setState({ datasetManifest: bothVersions });
+  });
+  afterEach(() => useFactoryStore.setState({ datasetManifest: undefined }));
+
+  it("is the Plans section's New plans choice, which remembers the pick", () => {
+    render(<ModSettings onClose={vi.fn()} />);
+    expect(sections()).toEqual(["Board", "Plans", "Minimap", "Sound", "Controls"]);
+    fireEvent.click(screen.getByText("Plans"));
+    expect(rowLabels()).toEqual(["New plans"]);
+    expect(document.querySelector(".ms-intro")?.textContent).toBe(
+      "Open plans keep their own version. A recipe picked on Welcome opens on the version you browsed it on.",
+    );
+    const choices = () => screen.getAllByRole("radio").map((radio) => [radio.textContent, radio.getAttribute("aria-checked")]);
+    expect(choices()).toEqual([
+      ["GTNH 2.9", "true"],
+      ["GTNH 2.8.1", "false"],
+    ]);
+    fireEvent.click(screen.getByRole("radio", { name: "GTNH 2.8.1" }));
+    expect(window.localStorage.getItem(NEW_PLAN_VERSION_STORAGE_KEY)).toBe("2.8.1");
+    expect(readNewPlanVersion(bothVersions)).toBe("2.8.1");
+    expect(choices()).toEqual([
+      ["GTNH 2.9", "false"],
+      ["GTNH 2.8.1", "true"],
+    ]);
+  });
+
+  it("is not offered on a site with one version", () => {
+    useFactoryStore.setState({ datasetManifest: { ...bothVersions, versions: [bothVersions.versions[0]!] } });
+    render(<ModSettings onClose={vi.fn()} />);
+    expect(sections()).toEqual(["Board", "Minimap", "Sound", "Controls"]);
   });
 });

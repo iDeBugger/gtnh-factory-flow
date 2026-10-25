@@ -34,8 +34,7 @@ import type { ShareMode } from "@/components/community/SharePlanDialog";
 import { isLiveConfigured } from "@/lib/live/live-config";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { ChecklistIcon } from "./pixel-icons";
-import { useIsCompactViewport } from "@/lib/compact-view";
-import { convertToLabel, readNewPlanVersion, servedGameVersions, useNewPlanVersion, writeNewPlanVersion } from "@/lib/datasets/new-plan-version";
+import { convertToLabel, readNewPlanVersion } from "@/lib/datasets/new-plan-version";
 import { convertingLabel, convertPlan, convertTargets, usePendingConversion } from "@/lib/datasets/convert-action";
 import { DEFAULT_GAME_VERSION, gameVersionLabel, planGameVersion, type GameVersion } from "@/lib/model/game-version";
 
@@ -72,7 +71,6 @@ const TAB_GAP = 2;
 
 type TabMenu =
   | { kind: "plus"; anchor: ChromeAnchor }
-  | { kind: "version"; anchor: ChromeAnchor }
   | { kind: "tab"; anchor: ChromeAnchor; id: string; name: string }
   | { kind: "delete"; anchor: ChromeAnchor; id: string; name: string };
 
@@ -94,11 +92,7 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
   const solving = useSolvingBooks();
   const converting = usePendingConversion();
   const manifest = useFactoryStore((state) => state.datasetManifest);
-  const newPlanVersion = useNewPlanVersion(manifest);
-  const servedVersions = servedGameVersions(manifest);
-  // A phone's bar has no room for the New plans picker: it is a row of the + menu there.
-  const compact = useIsCompactViewport();
-  /** New plans are made for the picker's version, read at the moment of the press. */
+  /** New plans are made for the version chosen in Settings, read at the moment of the press. */
   const newPlanOptions = () => ({ gameVersion: readNewPlanVersion(useFactoryStore.getState().datasetManifest) });
 
   const [menu, setMenu] = useState<TabMenu>();
@@ -347,9 +341,6 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
   };
 
   const entries = (m: TabMenu): MenuEntry[] => {
-    if (m.kind === "version") {
-      return newPlanVersionEntries(servedVersions, newPlanVersion);
-    }
     if (m.kind === "plus") {
       return [
         {
@@ -361,15 +352,6 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
             void addDesign(newPlanOptions());
           },
         },
-        ...(compact && servedVersions.length > 1
-          ? [
-              {
-                label: `New plans: ${gameVersionLabel(newPlanVersion)}`,
-                tip: "The GTNH version a new plan is made for. A recipe picked on Welcome opens on the version you browsed it on.",
-                onSelect: () => setMenu({ kind: "version", anchor: m.anchor }),
-              } satisfies MenuEntry,
-            ]
-          : []),
         // Task boards come with live plans (the mod's + list has the same row).
         ...(isLiveConfigured()
           ? [
@@ -669,26 +651,14 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
         <ChromeMenu
           anchor={menu.anchor}
           entries={entries(menu)}
-          label={menu.kind === "plus" ? "New plan" : menu.kind === "version" ? "New plans" : `Plan options for ${menu.name}`}
-          title={menu.kind === "delete" ? `Delete '${menu.name}' for good?` : menu.kind === "version" ? "New plans" : undefined}
-          minWidth={menu.kind === "plus" ? 190 : menu.kind === "delete" ? 150 : menu.kind === "version" ? 120 : 170}
+          label={menu.kind === "plus" ? "New plan" : `Plan options for ${menu.name}`}
+          title={menu.kind === "delete" ? `Delete '${menu.name}' for good?` : undefined}
+          minWidth={menu.kind === "plus" ? 190 : menu.kind === "delete" ? 150 : 170}
           onClose={closeMenu}
         />
       ) : null}
     </div>
   );
-}
-
-/** The New plans picker's rows: one per version this site serves, the chosen one marked. */
-export function newPlanVersionEntries(served: readonly string[], chosen: string): MenuEntry[] {
-  return served.map((version) => ({
-    label: gameVersionLabel(version),
-    current: version === chosen,
-    onSelect: () => {
-      playSfx("ui.tick");
-      writeNewPlanVersion(version);
-    },
-  }));
 }
 
 /** The pixel cross of the close key: two five-pixel diagonals. */

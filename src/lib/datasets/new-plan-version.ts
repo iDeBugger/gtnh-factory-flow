@@ -4,8 +4,8 @@ import { HIDDEN_DATASET_VERSION_IDS, pickDatasetVersionFor } from "./remote";
 import type { DatasetManifest } from "./types";
 
 /**
- * The game version new plans are made for, remembered per device. It has a visible control (the
- * top bar's New plans picker, or the + menu's row on a phone), so persisting it is allowed.
+ * The game version new plans are made for, remembered per device. It has a visible control (Settings,
+ * Plans, New plans, on a desktop and a phone alike), so persisting it is allowed.
  */
 export const NEW_PLAN_VERSION_STORAGE_KEY = "gtnh-factory-flow.new-plan-version.v1";
 

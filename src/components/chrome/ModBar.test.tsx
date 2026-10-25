@@ -5,7 +5,6 @@ import { useFactoryStore } from "@/store/factory-store";
 import { useDesignStore } from "@/store/design-store";
 import { writeWorkspaceView } from "@/lib/workspace-view";
 import { ModBar, plansTip } from "./ModBar";
-import { NEW_PLAN_VERSION_STORAGE_KEY } from "@/lib/datasets/new-plan-version";
 import type { DatasetManifest } from "@/lib/datasets/types";
 import { useCommunityAuthStore } from "@/store/community-auth-store";
 import { openLibrary, readLibraryTabState } from "@/lib/library/library-tab";
@@ -430,17 +429,6 @@ describe("the top bar's one row", () => {
     ]);
   });
 
-  it("the New plans picker shows its version alone in the icons dress", () => {
-    useFactoryStore.setState({ datasetManifest: bothVersions });
-    renderBar();
-    resize(900);
-    expect(key("new-plan-version").textContent).toBe("New plans: GTNH 2.9");
-    resize(300);
-    expect(fit()).not.toBe("roomy");
-    expect(key("new-plan-version").textContent).toBe("2.9");
-    expect(key("new-plan-version").getAttribute("aria-label")).toBe("New plans: GTNH 2.9");
-  });
-
   it("each icon key keeps its name for a screen reader and leads its tip with it", () => {
     renderBar();
     resize(ICONS_BELOW - 1);
@@ -556,30 +544,16 @@ const bothVersions: DatasetManifest = {
   versions: [datasetVersion("local-2.9.0-rc-2", "2.9.0-RC-2"), datasetVersion("local-2.8.1", "2.8.1")],
 };
 
-describe("the New plans picker", () => {
-  it("the picker is visible and writes the choice", () => {
+describe("the version for new plans", () => {
+  it("is in Settings, not on the bar, on a desktop or a phone", () => {
     useFactoryStore.setState({ datasetManifest: bothVersions });
-    renderBar();
-    // Between the tabs' + and the account's keys.
-    const order = [...document.querySelectorAll("[data-mb]")].map((element) => element.getAttribute("data-mb"));
-    expect(order[0]).toBe("new-plan-version");
-    expect(key("new-plan-version").textContent).toBe("New plans: GTNH 2.9");
-    fireEvent.click(key("new-plan-version"));
-    const items = [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')];
-    expect(items.map((item) => item.textContent)).toEqual(["GTNH 2.9", "GTNH 2.8.1"]);
-    fireEvent.click(items[1]!);
-    expect(window.localStorage.getItem(NEW_PLAN_VERSION_STORAGE_KEY)).toBe("2.8.1");
-    expect(key("new-plan-version").textContent).toBe("New plans: GTNH 2.8.1");
-  });
-
-  it("is not on a site with one version, nor on a phone's bar (the + menu has it there)", () => {
-    useFactoryStore.setState({ datasetManifest: { ...bothVersions, versions: [bothVersions.versions[0]!] } });
     renderBar();
     expect(document.querySelector('[data-mb="new-plan-version"]')).toBeNull();
+    expect([...document.querySelectorAll("[data-mb]")].some((element) => element.textContent?.includes("New plans"))).toBe(false);
     cleanup();
     viewport.compact = true;
-    useFactoryStore.setState({ datasetManifest: bothVersions });
     renderBar();
     expect(document.querySelector('[data-mb="new-plan-version"]')).toBeNull();
   });
 });
+

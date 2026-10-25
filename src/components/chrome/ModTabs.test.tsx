@@ -371,29 +371,13 @@ describe("plans on two game versions", () => {
     expect(lastLine("Old steel")).toBe("GTNH 2.8.1");
   });
 
-  it("a phone's + menu has the New plans row, which picks the version", () => {
-    viewport.compact = true;
-    useFactoryStore.setState({ datasetManifest: bothVersions });
-    render(<ModTabs {...props} />);
-    fireEvent.click(screen.getByLabelText("New plan"));
-    expect(rows()).toContain("New plans: GTNH 2.9");
-    fireEvent.click(menuItem("New plans: GTNH 2.9"));
-    expect(rows()).toEqual(["GTNH 2.9", "GTNH 2.8.1"]);
-    fireEvent.click(menuItem("GTNH 2.8.1"));
-    fireEvent.click(screen.getByLabelText("New plan"));
-    expect(rows()).toContain("New plans: GTNH 2.8.1");
-    fireEvent.click(menuItem("New plan"));
-    expect(actions.addDesign).toHaveBeenCalledWith({ gameVersion: "2.8.1" });
-  });
-
-  it("the desktop + menu and a site with one version have no New plans row", () => {
+  it("no + menu has a New plans row: the choice is in Settings", () => {
     useFactoryStore.setState({ datasetManifest: bothVersions });
     render(<ModTabs {...props} />);
     fireEvent.click(screen.getByLabelText("New plan"));
     expect(rows().some((row) => row?.startsWith("New plans"))).toBe(false);
     cleanup();
     viewport.compact = true;
-    useFactoryStore.setState({ datasetManifest: { ...bothVersions, versions: [bothVersions.versions[0]!] } });
     render(<ModTabs {...props} />);
     fireEvent.click(screen.getByLabelText("New plan"));
     expect(rows().some((row) => row?.startsWith("New plans"))).toBe(false);

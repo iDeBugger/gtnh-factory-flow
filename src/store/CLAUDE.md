@@ -91,7 +91,8 @@ Every save goes through `persistCanvas` in design-store.ts:
   (`src/lib/datasets/new-plan-version.ts`), and so do the blank plans the library makes itself (the seed after the
   last plan is deleted, the first-run seed). The tour's sandbox plan stays unstamped on purpose: it is a scratch 2.9
   plan the tour throws away. The choice is remembered per device (`gtnh-factory-flow.new-plan-version.v1`;
-  allowed, as it has a visible control: the top bar's New plans key, a row of the + menu on a phone). A remembered
+  allowed, as it has a visible control: Settings > Plans > New plans, a choice shown while the site serves more
+  than one version, on a desktop and a phone alike). A remembered
   version this site no longer serves, or no manifest yet, reads as 2.9. A pick storage refuses holds for the page.
   The first-run seed waits for the manifest (at most 3 s) only when the remembered choice is not 2.9. The boot's
   dataset load starts as the manifest lands unless the plan last open on this device (`open-plan-version.v1`, a boot
@@ -100,8 +101,9 @@ Every save goes through `persistCanvas` in design-store.ts:
   waits for the stored plans (`bootWaitsForPlans`). A 2.9 player's catalog never waits, a 2.8.1 player never
   downloads 2.9.
 - Exam: `new-plan-version.test.ts`, `dataset-cache.test.ts`, `refresh-project-recipes.test.ts`, the "active dataset
-  follows the open plan" block of `factory-store.test.ts`, `ModBar.test.tsx` and `ModTabs.test.tsx` (picker, chip,
-  + menu), `notices.test.ts` (the unserved notice). In the real app: `scratch/probes/plan-version.mjs`.
+  follows the open plan" block of `factory-store.test.ts`, `ModSettings.test.tsx` (the New plans choice),
+  `ModTabs.test.tsx` (chip, + menu, Convert to), `notices.test.ts` (the unserved notice). In the real app:
+  `scratch/probes/plan-version.mjs`.
 
 ## Library posts are copies
 

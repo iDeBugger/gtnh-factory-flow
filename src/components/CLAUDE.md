@@ -141,9 +141,7 @@ The board has its own notes in `flow/CLAUDE.md`, the Pool worksheet in `pool/CLA
 Everything here renders only with `isLiveConfigured()`; without it the app looks exactly as before. Store rules are
 in `src/store/CLAUDE.md` (Live plans, Task boards).
 
-- The mod's top bar (`chrome/ModBar.tsx`) holds the ACCOUNT's things only, in this order: the plan tabs and +, the New
-  plans picker (the GTNH version new plans are made for; only while the site serves more than one; its version alone in
-  the icons dress; on a phone a row of the + menu instead), the live
+- The mod's top bar (`chrome/ModBar.tsx`) holds the ACCOUNT's things only, in this order: the plan tabs and +, the live
   state as a dot and the faces of who else is here (`LivePresence`: one square per account, initials in their colour; a
   tip says Live, Connecting or Offline with edits waiting), Library, Share, the account key, settings, help.
   The account key (`chrome/AccountKey.tsx`) reads "Sign in" signed out (it opens `SignInPanel`, the form that used to
