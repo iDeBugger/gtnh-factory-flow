@@ -1,13 +1,18 @@
-.git
-.github
-.gh-artifacts-*
-.next
-.pipeline
-.tmp
+# The deploy streams `git archive HEAD` as the build context, which holds none
+# of these; this guards a build from a working tree.
 node_modules
-coverage
-*.tar
-*.log
+.next
+dist-live
+public/datasets
+public/highs.wasm
+public/highs.js
+scratch
+.superpowers
+.worktrees
+.pipeline
+.cache
+.git
 .env*
-dev-server*.log
-public/datasets/gtnh
+*.log
+tools/parity/out
+tsconfig.tsbuildinfo
