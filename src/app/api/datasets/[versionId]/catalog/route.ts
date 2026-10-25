@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { datasetErrorResponse } from "@/lib/server/error-response";
 import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
 import { getDatasetCatalog, prewarmDatasetVersion } from "@/lib/server/dataset-query";
 import { datasetBudgetRefusal, meteredDatasetWork } from "@/lib/server/dataset-rate";
@@ -24,9 +25,6 @@ export async function GET(
       headers: datasetCacheHeaders(request),
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Dataset catalog failed." },
-      { status: 500 },
-    );
+    return datasetErrorResponse(error, "Dataset catalog failed.");
   }
 }

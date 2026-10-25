@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { datasetErrorResponse } from "@/lib/server/error-response";
 import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
 import { listDatasetEecMobs } from "@/lib/server/dataset-query";
 import { datasetBudgetRefusal, meteredDatasetWork } from "@/lib/server/dataset-rate";
@@ -21,9 +22,6 @@ export async function GET(
       headers: datasetCacheHeaders(request),
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Mob query failed." },
-      { status: 500 },
-    );
+    return datasetErrorResponse(error, "Mob query failed.");
   }
 }

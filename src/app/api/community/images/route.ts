@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
+import { serverErrorResponse } from "@/lib/server/error-response";
 import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
 import { getCommunityDb, isCommunityConfigured } from "@/lib/server/community";
 import { claimImageUpload } from "@/lib/server/image-upload-guard";
@@ -120,8 +121,9 @@ export async function POST(request: Request) {
       upsert: false,
     });
     if (error) {
+      console.error("Image upload failed.", error);
       return NextResponse.json(
-        { error: `Image upload failed: ${error.message}` },
+        { error: "Image upload failed." },
         { status: 500 },
       );
     }
@@ -129,9 +131,6 @@ export async function POST(request: Request) {
     const { data } = db.storage.from(BUCKET).getPublicUrl(path);
     return NextResponse.json({ url: data.publicUrl });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Image upload failed." },
-      { status: 500 },
-    );
+    return serverErrorResponse(error, "Image upload failed.");
   }
 }

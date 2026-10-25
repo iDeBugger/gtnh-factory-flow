@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverErrorResponse } from "@/lib/server/error-response";
 import { SIGN_IN_BUSY } from "@/lib/community/types";
 import {
   checkPassword,
@@ -106,9 +107,6 @@ export async function POST(request: Request) {
     if (error instanceof PasswordCheckBusyError) {
       return NextResponse.json({ error: SIGN_IN_BUSY }, { status: 429 });
     }
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Sign in failed." },
-      { status: 500 },
-    );
+    return serverErrorResponse(error, "Sign in failed.");
   }
 }

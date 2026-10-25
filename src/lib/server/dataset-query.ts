@@ -1883,18 +1883,35 @@ async function loadManifest(): Promise<DatasetManifest> {
   return manifest;
 }
 
+/**
+ * A dataset id the server does not serve (unknown, hidden, or listed without
+ * its index). Its message is a fixed sentence: the id is request text, and an
+ * answer never repeats it.
+ */
+export class DatasetNotFoundError extends Error {
+  constructor() {
+    super("Dataset not found.");
+    this.name = "DatasetNotFoundError";
+  }
+}
+
 async function loadCatalog(versionId: string): Promise<LoadedRecipeIndex> {
   // A hidden version is never loaded for a request: a loaded catalog stays in
   // the heap for the life of the process, and the heap budget counts only the
   // served versions. The client never asks for one. Every other load
   // (loadRecipeIndex, the lookup index, shards) starts here.
   if (HIDDEN_DATASET_VERSION_IDS.has(versionId)) {
-    throw new Error(`Dataset ${versionId} is not served.`);
+    throw new DatasetNotFoundError();
   }
   const manifest = await loadManifest();
   const version = manifest.versions.find((entry) => entry.id === versionId);
-  if (!version?.resourceIndexPath) {
-    throw new Error(`Dataset ${versionId} has no server resource index.`);
+  if (!version) {
+    throw new DatasetNotFoundError();
+  }
+  if (!version.resourceIndexPath) {
+    // A listed version without its index is the server's own fault: the log names it, the answer does not.
+    console.warn(`Dataset ${versionId} is listed but has no server resource index.`);
+    throw new DatasetNotFoundError();
   }
 
   const resourceIndexPath = version.resourceIndexPath;

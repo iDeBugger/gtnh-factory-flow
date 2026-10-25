@@ -45,6 +45,12 @@
   worker evaluates the HiGHS glue, and a worker's policy is its own script's response (a later rule overrides
   the same key). A third-party script, font, socket or frame needs a change there first, or the browser
   refuses it. Exam: `security-headers.test.ts`, `next-config.test.ts`, probe `scratch/probes/csp-headers.mjs`.
+- A route's `catch` answers through `error-response.ts`: `serverErrorResponse` gives the route's own fallback
+  sentence and logs the error (a database or file system message names tables or the release path); the one
+  sentence passed on is `COMMUNITY_DB_DOWN_MESSAGE`. Dataset routes use `datasetErrorResponse`: an unserved id
+  (`DatasetNotFoundError`) is 404 `Dataset not found.`, never the id. `libraryStorageErrorMessage` (the owner's
+  own account) and fixed 4xx copy stay as they are. Exam: `error-response.test.ts`,
+  `datasets/[versionId]/catalog/route.test.ts`.
 - Every dataset route except `prewarm` spends an in-memory work budget per client address (`dataset-rate.ts`):
   3000 units a minute. A base cost goes before any dataset work (1 unit; 25 for a heavy request: a text search
   with a word under three characters or more than three words, `recipe-ids`, `crops`, `resolve-recipes`), then

@@ -20,6 +20,10 @@ import {
   verifySessionToken,
 } from "./session";
 import { sameSecret } from "./secret";
+import { COMMUNITY_DB_DOWN_MESSAGE } from "./community-db-down";
+
+// Its own module, so a route can name it without loading the database client.
+export { COMMUNITY_DB_DOWN_MESSAGE };
 
 export { makeSessionToken, SESSION_COOKIE };
 
@@ -39,9 +43,6 @@ let cachedClient: SupabaseClient | undefined;
  * stall.
  */
 export const COMMUNITY_DB_TIMEOUT_MS = 20_000;
-
-/** What a player reads when the database cannot be reached. */
-export const COMMUNITY_DB_DOWN_MESSAGE = "The community database is not responding. Try again in a few minutes.";
 
 const DB_DOWN_HEADER = "x-community-db-down";
 

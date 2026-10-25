@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverErrorResponse } from "@/lib/server/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -94,10 +95,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ plan
 
     return NextResponse.json({ plan }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Loading the plan failed." },
-      { status: 500 },
-    );
+    return serverErrorResponse(error, "Loading the plan failed.");
   }
 }
 
@@ -309,10 +307,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ plan
     invalidatePlanListCache();
     return NextResponse.json({ id: planId });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Updating the plan failed." },
-      { status: 500 },
-    );
+    return serverErrorResponse(error, "Updating the plan failed.");
   }
 }
 
@@ -367,9 +362,6 @@ export async function DELETE(
     invalidatePlanListCache();
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Deleting the plan failed." },
-      { status: 500 },
-    );
+    return serverErrorResponse(error, "Deleting the plan failed.");
   }
 }

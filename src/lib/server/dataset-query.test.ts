@@ -8,6 +8,7 @@ import {
   createBlankResourceSearchCache,
   createShardCache,
   datasetPrewarmOrder,
+  DatasetNotFoundError,
   ensureLookupSearchIndex,
   getChoiceAlternativesByKey,
   getDatasetCatalog,
@@ -331,7 +332,9 @@ describe("which datasets the server prewarms", () => {
 
   it("never loads a hidden version for a request", async () => {
     // Refused before any disk read: no manifest is needed here.
-    await expect(getDatasetCatalog("local-2.8.4")).rejects.toThrow("not served");
+    const refusal = getDatasetCatalog("local-2.8.4");
+    await expect(refusal).rejects.toBeInstanceOf(DatasetNotFoundError);
+    await expect(refusal).rejects.toThrow("Dataset not found.");
   });
 
   it("logs a failed 2.8.1 prewarm and carries on", async () => {

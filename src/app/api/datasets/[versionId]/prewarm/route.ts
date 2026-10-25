@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { datasetErrorResponse } from "@/lib/server/error-response";
 import { prewarmDatasetVersion } from "@/lib/server/dataset-query";
 import { getResourcePopularity } from "@/lib/server/resource-popularity";
 
@@ -39,10 +40,7 @@ export async function GET(
       { headers: datasetCacheHeaders() },
     );
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Dataset prewarm failed." },
-      { status: 500, headers: datasetCacheHeaders() },
-    );
+    return datasetErrorResponse(error, "Dataset prewarm failed.", datasetCacheHeaders());
   }
 }
 

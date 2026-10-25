@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { datasetErrorResponse } from "@/lib/server/error-response";
 import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
 import { queryDatasetResources } from "@/lib/server/dataset-query";
 import {
@@ -60,10 +61,7 @@ export async function GET(
           : datasetCacheHeaders(request),
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Resource query failed." },
-      { status: 500 },
-    );
+    return datasetErrorResponse(error, "Resource query failed.");
   }
 }
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverErrorResponse } from "@/lib/server/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import type { BoardClipboardPayload } from "@/store/factory-store";
@@ -70,9 +71,6 @@ export async function POST(
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Downloading the blueprint failed." },
-      { status: 500 },
-    );
+    return serverErrorResponse(error, "Downloading the blueprint failed.");
   }
 }

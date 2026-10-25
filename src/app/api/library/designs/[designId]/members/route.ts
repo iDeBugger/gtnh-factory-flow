@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverErrorResponse } from "@/lib/server/error-response";
 import { designRole, listMembers, requestedOwner, usernamesFor } from "@/lib/server/cloud-plans";
 import { getCommunityDb, getSessionUser, isCommunityConfigured } from "@/lib/server/community";
 import { libraryStorageErrorMessage, readDesignRow } from "@/lib/server/library";
@@ -41,9 +42,6 @@ export async function GET(request: Request, context: RouteContext) {
     ]);
     return NextResponse.json({ ownerId, ownerName: owner.get(ownerId) ?? "", role, members });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "The plan's members could not be loaded." },
-      { status: 500 },
-    );
+    return serverErrorResponse(error, "The plan's members could not be loaded.");
   }
 }

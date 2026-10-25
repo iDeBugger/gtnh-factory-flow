@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverErrorResponse } from "@/lib/server/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import { factoryProjectSchema } from "@/lib/model/schemas";
@@ -232,10 +233,7 @@ export async function GET(request: Request) {
     };
     return NextResponse.json(response, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Listing community plans failed." },
-      { status: 500 },
-    );
+    return serverErrorResponse(error, "Listing community plans failed.");
   }
 }
 
@@ -356,9 +354,6 @@ export async function POST(request: Request) {
     invalidatePlanListCache();
     return NextResponse.json({ id: data.id }, { status: 201 });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Sharing the plan failed." },
-      { status: 500 },
-    );
+    return serverErrorResponse(error, "Sharing the plan failed.");
   }
 }

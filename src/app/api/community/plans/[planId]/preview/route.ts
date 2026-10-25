@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverErrorResponse } from "@/lib/server/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
 import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
@@ -140,18 +141,16 @@ export async function POST(
         upsert: true,
       });
     if (error) {
+      console.error("Preview upload failed.", error);
       return NextResponse.json(
-        { error: `Preview upload failed: ${error.message}` },
+        { error: "Preview upload failed." },
         { status: 500 },
       );
     }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Preview upload failed." },
-      { status: 500 },
-    );
+    return serverErrorResponse(error, "Preview upload failed.");
   }
 }
 

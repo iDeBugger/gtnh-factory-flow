@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverErrorResponse } from "@/lib/server/error-response";
 import { PASSWORD_MIN_LENGTH, SIGN_IN_BUSY } from "@/lib/community/types";
 import {
   checkRateLimit,
@@ -68,8 +69,11 @@ export async function POST(request: Request) {
 
     if (error || !data) {
       const taken = error?.message.includes("duplicate") || error?.code === "23505";
+      if (!taken) {
+        console.error("Sign up failed.", error);
+      }
       return NextResponse.json(
-        { error: taken ? "That username is taken." : (error?.message ?? "Sign up failed.") },
+        { error: taken ? "That username is taken." : "Sign up failed." },
         { status: taken ? 409 : 500 },
       );
     }
@@ -82,9 +86,6 @@ export async function POST(request: Request) {
     if (error instanceof PasswordCheckBusyError) {
       return NextResponse.json({ error: SIGN_IN_BUSY }, { status: 429 });
     }
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Sign up failed." },
-      { status: 500 },
-    );
+    return serverErrorResponse(error, "Sign up failed.");
   }
 }

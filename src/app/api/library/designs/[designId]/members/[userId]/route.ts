@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverErrorResponse } from "@/lib/server/error-response";
 import { isAccountId } from "@/lib/live/protocol";
 import { LIBRARY_MAX_MEMBERS } from "@/lib/library/sync-types";
 import { designRole, listMembers, notifyLive, requestedOwner } from "@/lib/server/cloud-plans";
@@ -137,10 +138,7 @@ export async function PUT(request: Request, context: RouteContext) {
     });
     return NextResponse.json({ members });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "The plan could not be shared." },
-      { status: 500 },
-    );
+    return serverErrorResponse(error, "The plan could not be shared.");
   }
 }
 
@@ -180,9 +178,6 @@ export async function DELETE(request: Request, context: RouteContext) {
     await notifyLive({ kind: "members", ownerId, designId, members, removed: [userId] });
     return NextResponse.json({ members });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Sharing could not be changed." },
-      { status: 500 },
-    );
+    return serverErrorResponse(error, "Sharing could not be changed.");
   }
 }

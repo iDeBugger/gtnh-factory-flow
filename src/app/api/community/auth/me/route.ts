@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverErrorResponse } from "@/lib/server/error-response";
 import { getSessionUser, isCommunityConfigured } from "@/lib/server/community";
 
 export const runtime = "nodejs";
@@ -17,9 +18,9 @@ export async function GET(request: Request) {
     );
   } catch (error) {
     // Not "signed out": the client asks again rather than showing Sign in.
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Account lookup failed." },
-      { status: 503, headers: { "Cache-Control": "no-store" } },
-    );
+    return serverErrorResponse(error, "Account lookup failed.", {
+      status: 503,
+      headers: { "Cache-Control": "no-store" },
+    });
   }
 }
