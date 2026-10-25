@@ -28,7 +28,6 @@ describe("how the served dataset files reach a browser", () => {
     vi.stubEnv("GTNH_DATASET_BACKEND_URL", "");
     const plain = await loadConfig();
     expect(plain.rewrites.beforeFiles).toEqual([]);
-    expect(plain.rewrites.afterFiles.map((rule) => rule.source)).toContain("/umami");
 
     vi.stubEnv("GTNH_DATASET_BACKEND_URL", "https://example.test/");
     const proxied = await loadConfig();
@@ -115,5 +114,22 @@ describe("the build identity the config bakes in", () => {
     vi.resetModules();
     const config = (await import("../../../next.config")).default;
     expect(config.env?.NEXT_PUBLIC_GTNH_BUILD_ID).toMatch(/^\d+\.\d+\.\d+-[0-9a-f]{8}(-dirty)?$/);
+  });
+});
+
+describe("the site's rewrites", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("has no analytics rewrites", async () => {
+    for (const backend of ["", "https://example.test/"]) {
+      vi.stubEnv("GTNH_DATASET_BACKEND_URL", backend);
+      const { rewrites } = await loadConfig();
+      for (const rule of [...rewrites.beforeFiles, ...rewrites.afterFiles]) {
+        expect(`${rule.source} ${rule.destination}`).not.toMatch(/umami|8582/i);
+      }
+      expect(rewrites.afterFiles).toEqual([]);
+    }
   });
 });

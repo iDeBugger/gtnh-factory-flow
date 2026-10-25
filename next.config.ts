@@ -121,21 +121,6 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
-    const appRewrites = [
-      {
-        source: "/umami",
-        destination: "http://127.0.0.1:8582/umami",
-      },
-      {
-        source: "/umami/:path*",
-        destination: "http://127.0.0.1:8582/umami/:path*",
-      },
-      {
-        source: "/_umami/:path*",
-        destination: "http://127.0.0.1:8582/umami/:path*",
-      },
-    ];
-
     // Dataset data files are not gated here: a rewrite matches the path as
     // sent and is bypassed by percent-encoding. src/proxy.ts does that on the
     // decoded path; it runs before these rules, so the dev proxy below never
@@ -157,7 +142,7 @@ const nextConfig: NextConfig = {
             },
           ]
         : [],
-      afterFiles: appRewrites,
+      afterFiles: [],
     };
   },
 };

@@ -19,11 +19,7 @@ export const GITHUB_URL = "https://github.com/jackwrichards/gtnh-factory-flow";
  */
 export const DISCORD_THREAD_URL = "https://discord.com/channels/181078474394566657/1531402304530682036";
 
-/**
- * The tip jar. Clicks are counted through Umami's `data-umami-event`
- * auto-tracking (they land in the dashboard's Events panel, split by the
- * `source` field); the attribute is inert when the analytics script is off.
- */
+/** The tip jar. */
 export const KOFI_URL = "https://ko-fi.com/gtnhplanner";
 
 /**
@@ -62,8 +58,6 @@ export function SupportButton() {
       rel="noreferrer noopener"
       title="Support on Ko-fi"
       aria-label="Support GTNH Planner on Ko-fi"
-      data-umami-event="support-kofi"
-      data-umami-event-source="header"
       className="inline-flex h-5 shrink-0 items-center gap-1.5 rounded border border-pink-800 bg-pink-950 px-2 text-xs font-semibold text-pink-300 hover:border-pink-600 hover:bg-pink-900 hover:text-pink-200 snug:w-5 snug:justify-center snug:px-0"
     >
       <Heart className="h-3.5 w-3.5 fill-current" aria-hidden />
@@ -132,7 +126,6 @@ export function MenuLinks({ onAction, auxiliary = false }: { onAction?: () => vo
         href={KOFI_URL}
         label="Support GTNH Planner"
         tone="support"
-        umamiEvent="support-kofi"
       >
         <Heart className="h-3.5 w-3.5 fill-current" aria-hidden />
       </MenuLink> : null}
@@ -160,14 +153,11 @@ function MenuLink({
   href,
   label,
   tone,
-  umamiEvent,
   children,
 }: {
   href: string;
   label: string;
   tone?: "danger" | "support";
-  /** Umami auto-tracks clicks on elements carrying this event name. */
-  umamiEvent?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -175,8 +165,6 @@ function MenuLink({
       href={href}
       target="_blank"
       rel="noreferrer noopener"
-      data-umami-event={umamiEvent}
-      data-umami-event-source={umamiEvent ? "menu" : undefined}
       className={[
         "flex h-10 items-center gap-2.5 rounded px-2 text-sm hover:bg-surface-sunken",
         tone === "danger" ? "text-red-300" : tone === "support" ? "text-pink-300" : "text-fg-subtle",

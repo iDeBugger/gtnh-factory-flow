@@ -21,8 +21,6 @@ import {
   PHONE_MAX_WIDTH,
   SNUG_MAX_WIDTH,
 } from "@/lib/viewport-breakpoints";
-import { Analytics } from "./Analytics";
-import { AnalyticsHeartbeat } from "./AnalyticsHeartbeat";
 import { WhatsNewGate } from "@/components/WhatsNewGate";
 import { GlobalTitleTooltip } from "@/components/nei/GlobalTitleTooltip";
 import "./globals.css";
@@ -202,8 +200,6 @@ export default function RootLayout({
         {/* Every `title` attribute in the app, worn as the planner's own
             tooltip: the browser's grey box never renders again. */}
         <GlobalTitleTooltip />
-        <Analytics />
-        <AnalyticsHeartbeat />
       </body>
     </html>
   );
