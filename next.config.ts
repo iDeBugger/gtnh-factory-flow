@@ -22,11 +22,13 @@ const API_SEGMENT = "[^/.%][^/]*";
  * bare APP_VERSION, and two deploys under one version share year-immutable
  * answer URLs.
  *
- * The version is read as text, never imported: `next start` loads this file
- * again at run time, and the site image ships no src/: beside this file it
- * copies only `security-headers.config.ts` and `body-limits.config.ts`, which
- * import nothing (`next-config.test.ts` pins both). Where neither the version nor git is there (that
- * run-time load) the value is unused: `env` is inlined at build.
+ * The version is read as text, never imported: `next start` and the tests load
+ * this file outside a build, so it imports only `security-headers.config.ts`
+ * and `body-limits.config.ts` beside it, which import nothing
+ * (`next-config.test.ts` pins both). The site image's standalone `server.js`
+ * reads no config file: it carries this one, serialized at build. Where
+ * neither the version nor git is there the value is unused: `env` is inlined
+ * at build.
  */
 function buildIdentity(): string {
   const configured = process.env.GTNH_BUILD_ID?.trim();
@@ -70,6 +72,10 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_MOD_AND_COMMUNITY: process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY ?? "",
     NEXT_PUBLIC_GTNH_BUILD_ID: buildIdentity(),
   },
+  // The site image runs `.next/standalone/server.js`: the traced server files and only the packages they
+  // load, so a deploy whose lockfile is unchanged copies no node_modules. Its config is this one, serialized
+  // at build into the server (required-server-files.json); nothing reads next.config.ts at run time.
+  output: "standalone",
   outputFileTracingRoot: process.cwd(),
   turbopack: {
     root: process.cwd(),

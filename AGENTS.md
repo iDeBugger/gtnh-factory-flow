@@ -116,5 +116,6 @@ Scratch harnesses are `*.local.test.ts` (excluded from the suite); run one with
   its own `npm install`: never junction `node_modules` into one (Turbopack crashes, and
   `git worktree remove --force` follows the junction and empties the main repo's
   `node_modules`). Diff exported plans rather than trusting "same board" by eye.
-- Measure performance on `next start` with `GTNH_PREWARM_ON_STARTUP=1`, after prewarm,
-  not on the dev server.
+- Measure performance on a production server with `GTNH_PREWARM_ON_STARTUP=1`, after prewarm,
+  not on the dev server: `next start` (it warns that the build is standalone, and serves it) or, as
+  the site image runs it, `node .next/standalone/server.js` with `.next/static` and `public/` copied beside it.

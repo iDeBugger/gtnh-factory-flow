@@ -31,10 +31,10 @@
   `<APP_VERSION>-<git sha8>` (`-dirty` with uncommitted changes), or `APP_VERSION` with neither. A deploy must
   set `GTNH_BUILD_ID` or build inside a git checkout: with neither, two deploys under one `APP_VERSION` share
   year-immutable answer URLs, and browsers keep the older build's answers. `next.config.ts`
-  imports nothing from `src/` (it reads `version.ts` as text): `next start` loads it again at run time and the site
-  image ships no `src/`. Its own modules sit beside it and import nothing (`security-headers.config.ts`,
-  `body-limits.config.ts`, which `request-body.ts` re-exports); the image must copy them with it
-  (`next-config.test.ts` pins it). `datasetCacheHeaders` marks an answer immutable for a
+  imports nothing from `src/` (it reads `version.ts` as text): `next start` and the test suite load it outside a
+  build. Its own modules sit beside it and import nothing (`security-headers.config.ts`, `body-limits.config.ts`,
+  which `request-body.ts` re-exports; `next-config.test.ts` pins it). The site image runs the standalone
+  `server.js`, which carries the config serialized at build and reads no config file. `datasetCacheHeaders` marks an answer immutable for a
   year only when both keys are there and the version is this build's; anything else is `no-store`, so no build that
   changes a ranking is served from another build's URL, even under one APP_VERSION. Exam:
   `dataset-cache-headers.test.ts`, `browser-loader.test.ts`.
@@ -90,7 +90,8 @@
   `api/datasets/[versionId]/client-files/route.test.ts`, `browser-loader.test.ts`.
 - Every server cache is bounded or index-sized (the Node heap is capped at 3 GB). A slow
   site: check the heap first.
-- The OG card route reads fonts through `process.cwd()` (non-standalone build).
+- The OG card route reads fonts through `process.cwd()`: the site image copies `src/app/fonts` beside the standalone
+  `server.js` (`Dockerfile`).
 - The image optimizer is off (`images.unoptimized` in next.config.ts): nothing uses next/image, and
   `/_next/image` would hand any same-origin PNG (uploads, dataset textures) to sharp. Pictures are served
   by the app's own routes or plain `<img>`; keep it that way.

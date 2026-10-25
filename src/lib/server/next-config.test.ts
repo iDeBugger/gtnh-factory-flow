@@ -96,9 +96,9 @@ describe("the build identity the config bakes in", () => {
   });
 
   it("imports nothing from src/, only self-contained files beside it: next start loads the config again at run time", async () => {
-    // A site image that ships no src/ crashes on its first request at a
-    // config import it lacks, so the config's own files sit beside it (the
-    // deploy's Dockerfile copies them) and import nothing themselves.
+    // `next start` and the tests load the config outside a build, where an
+    // import of app code would pull the app into it; the config's own files
+    // sit beside it and import nothing themselves.
     const { readFileSync } = await import("node:fs");
     const read = (file: string) =>
       readFileSync(new URL(`../../../${file}`, import.meta.url), "utf8");
@@ -153,5 +153,12 @@ describe("the site's rewrites", () => {
     vi.resetModules();
     const config = (await import("../../../next.config")).default;
     expect(config.experimental?.isrFlushToDisk).toBe(false);
+  });
+
+  it("builds the standalone server the site image runs", async () => {
+    // The Dockerfile copies .next/standalone and runs its server.js.
+    vi.resetModules();
+    const config = (await import("../../../next.config")).default;
+    expect(config.output).toBe("standalone");
   });
 });

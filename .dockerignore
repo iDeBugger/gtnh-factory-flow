@@ -1,5 +1,6 @@
-# The deploy streams `git archive HEAD` as the build context, which holds none
-# of these; this guards a build from a working tree.
+# What the images never read. The deploy sends `git archive HEAD` (docs/deploy.md); whatever is left
+# out here is neither sent nor hashed, and a commit that changes only these files leaves `COPY . .`
+# and `next build` cached. Generated and local files (a build from a working tree):
 node_modules
 .next
 dist-live
@@ -16,3 +17,26 @@ scratch
 *.log
 tools/parity/out
 tsconfig.tsbuildinfo
+# The build's own files: changing them must not rebuild the app.
+Dockerfile
+.dockerignore
+.github
+# Docs, notes and tests: no route, bundle or build step reads them.
+**/*.md
+docs
+mockups
+**/*.test.ts
+**/*.test.tsx
+**/*.test.mjs
+src/test-support
+src/lib/solver/plan/__fixtures__/corpus
+vitest.config.ts
+vitest.local.config.ts
+eslint.config.mjs
+# Of tools/, the build needs its prebuild step, the site image the env check and the service token,
+# the migrate image the database setup.
+tools/*
+!tools/copy-highs-wasm.mjs
+!tools/deploy/check-env.mjs
+!tools/deploy/service-token.mjs
+!tools/deploy/db

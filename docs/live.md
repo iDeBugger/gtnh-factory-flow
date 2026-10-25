@@ -274,9 +274,9 @@ $C --user ann --password annpass1 send <doc> '[{"o":"meta","f":{"primaryView":"t
 
 ## Production
 
-`npm run build:live` bundles the service to `dist-live/live.mjs` (esbuild; packages stay in `node_modules`), run with
-`node dist-live/live.mjs` in the `live` container (`docs/deploy.md`), published on 127.0.0.1:3301. `next build` and `next start` are
-unchanged. Environment: `COMMUNITY_HASH_SALT`, `POSTGREST_URL`, `POSTGREST_SERVICE_TOKEN`, `LIVE_PORT`,
+`npm run build:live` bundles the service to `dist-live/live.mjs` (esbuild; packages stay in `node_modules`, and the
+image ships only the ones the bundle loads), run with `node dist-live/live.mjs` in the `live` container
+(`docs/deploy.md`), published on 127.0.0.1:3301. The site runs Next's standalone `server.js` in its own container. Environment: `COMMUNITY_HASH_SALT`, `POSTGREST_URL`, `POSTGREST_SERVICE_TOKEN`, `LIVE_PORT`,
 `LIVE_HOST`, `LIVE_JOURNAL_DIR`, `LIVE_INTERNAL_TOKEN`, `LIVE_ALLOWED_ORIGINS`, `LIVE_TRUSTED_PROXIES` (optional, loopback is always trusted), `LIVE_MAX_ROOMS` (optional, default 500),
 `LIVE_MAX_PLAN_BYTES` (optional, default 64 MB of plan JSON in open rooms), `NODE_ENV=production`. `LOCAL_DB=1` with `NODE_ENV=production` stops both the website and the service at startup. The website
 needs `LIVE_INTERNAL_URL` and `LIVE_INTERNAL_TOKEN` at run time and `NEXT_PUBLIC_LIVE_URL` at build time (unset:

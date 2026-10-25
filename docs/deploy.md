@@ -43,15 +43,15 @@ infra commit first.
   plus 150 MB; its heap is 480 MB under 600 MB.
 - One site container and one live service, never replicas: the rate limits serialise in process, and one live
   service owns each database's leases.
-- Every container runs under `init: true` (tini; the site image sets `TINI_KILL_PROCESS_GROUP=1`, so the
-  `next-server` child gets SIGTERM too), `no-new-privileges`, no capabilities (`cap_drop: ALL`), `restart: unless-stopped`, json-file logs of
+- Every container runs under `init: true` (tini, which hands SIGTERM to the site's `server.js` and to live; the
+  site image also sets `TINI_KILL_PROCESS_GROUP=1`), `no-new-privileges`, no capabilities (`cap_drop: ALL`), `restart: unless-stopped`, json-file logs of
   3 x 10 MB. Every container's root filesystem is read-only: site and live with tmpfs `/tmp` (and the site's
   `.next/cache`), postgres with tmpfs `/tmp` and its socket directory. Site and live run as uid 1000 over
   root-owned files. PostgREST's admin server is off (nothing reads it, and every backend container could). The
   site keeps revalidated pages (the sitemap, llms.txt) in memory (`isrFlushToDisk: false`), since its `.next` is
   read-only. The site stops within its 20 s grace; live within 30 s, storing every open plan and releasing
   its leases on SIGTERM.
-- The image runs `npm ci` with its own npm (11.19), which needs lockfile entries an older npm leaves out (the
+- The images run `npm ci` with their own npm (11.19), which needs lockfile entries an older npm leaves out (the
   `@emnapi` packages): a lockfile an older npm rewrote fails the image build. Regenerate it with the image's npm:
   `docker run --rm -v "$PWD":/w -w /w <the Dockerfile's NODE_IMAGE> npm install --package-lock-only --ignore-scripts`.
 - The site and live never chmod or chown their volumes: the infra role creates `files`, `client-files` and
@@ -140,13 +140,18 @@ here uses sudo or edits a file the role manages.
 tools/deploy/deploy.sh stage
 ```
 
-Each step prints its name; the first failure stops the deploy with a non-zero exit and says which check failed.
+Each step prints its name and, when it ends, its time; the first failure stops the deploy with a non-zero exit and
+says which check failed. The site's restart prints how long it took to turn healthy, which is how long the site is
+down (below).
 
 1. The tree: no uncommitted tracked change, the `main` branch, HEAD on `origin/main` (push first).
 2. The server's `/opt/gtnh/docker-compose.yml` is the same bytes as `tools/deploy/docker-compose.yml` at HEAD.
 3. `TAG=<APP_VERSION>-<sha8>`; the site, live and migrate images are built on the server's Docker daemon
-   (`docker -H ssh://...`) from `git archive HEAD`, with the target's build values and `GTNH_BUILD_ID=$TAG`. The
-   images hold exactly the committed tree; the server needs no checkout.
+   (`docker -H ssh://... buildx bake`, `tools/deploy/docker-bake.hcl`) from `git archive HEAD`, with the target's
+   build values and `GTNH_BUILD_ID=$TAG`. The images hold exactly the committed tree; the server needs no checkout.
+   One bake builds all three, so the context goes over once and the site and live share one build (Build cache,
+   below). The build's log is printed only on a failure. The server's Docker needs the buildx plugin
+   (`docker buildx version`), which Docker's own packages install with the engine.
 4. The env check runs in a one-off `gtnh-site:$TAG` container against `/opt/gtnh/.env`, with the image's
    mod-and-community label; the image's site URL must be the target's.
 5. `release.env` gets `GTNH_TAG=$TAG` and the previous tag (0600, written through a temp file).
@@ -158,6 +163,39 @@ Each step prints its name; the first failure stops the deploy with a non-zero ex
    under the same `APP_VERSION` is a failure, never a success.
 9. The three newest tags of each image are kept, older ones removed (one still used by a stopped container
    stays, with a note).
+
+### Build cache
+
+The Dockerfile is laid out so a deploy rebuilds and rewrites only what its commit changed:
+
+- `.dockerignore` keeps docs, notes (`*.md`), tests and fixtures, `tools/` (but the prebuild step, the env check,
+  the service token and `tools/deploy/db`), the Dockerfile and the bake file out of the context: they are neither
+  sent nor hashed, and a commit that changes only those leaves `COPY . .` and `next build` cached.
+- `npm ci` depends on `package.json` and `package-lock.json` alone, with npm's download cache in a BuildKit cache
+  mount (`gtnh-npm`): a deploy with the same lockfile reuses the install.
+- `next build` keeps `.next/cache` (Turbopack's cache and the type check's state) in a cache mount
+  (`gtnh-next-cache`), so it compiles only what changed.
+- The site image is Next's standalone output (`output: "standalone"` in `next.config.ts`): `server.js`, the traced
+  server files and only the packages they load (about 60 MB, against the 470 MB the whole run-time install was),
+  then `.next/static`, `public/` and the card route's fonts. The config is serialized into `server.js` at build;
+  nothing reads `next.config.ts` at run time. The layers that rarely change (packages, public files, fonts) come
+  first, so a deploy that leaves them alone reuses them.
+- The live image holds `dist-live/` and only the packages its bundle loads (`ws`, `zod`,
+  `@supabase/postgrest-js`, `tslib`; the `live-deps` stage), a layer that changes only with the lockfile. Its build
+  imports every package esbuild's metafile lists, so a package missing from that list fails the build, not the
+  service.
+- Nothing is pruned at build: the old `npm prune --omit=dev` after `next build` ran on every deploy.
+
+The cache lives in the server's BuildKit store; `docker builder prune` empties it, and the next deploy builds from
+scratch (correctly, only slower).
+
+### Downtime
+
+The site and live run one container each, with fixed names and fixed loopback ports (`127.0.0.1:3300`, `:3301`) that
+the firewall and Caddy name. `compose up -d site` stops the old container (it finishes its open requests and exits
+143) and starts the new one, which answers once the default dataset is prewarmed. Caddy's `lb_try_duration 30s` holds
+requests over that gap; a request that waits longer gets a 502. Running the new container beside the old one would
+need a second port or name and a Caddy upstream switch, which this layout does not have.
 
 A failure after step 5 leaves `release.env` naming the release that failed, so a later `compose up` would start
 it; the script then prints the rollback to the previous release (`deploy.sh <target> --rollback <previous>`).
@@ -220,7 +258,8 @@ itself is the infra role's.
 `tools/deploy/compose.rehearsal.yml` runs the real compose file on OrbStack or Docker Desktop with its volumes
 under `scratch/rehearsal/`, the site and live on `127.0.0.1:3480` and `:3481`, and PostgREST on `:3482`:
 
-1. Build the three images from HEAD with `NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3480`, tag them `<tag>`.
+1. Build the three images from HEAD as the deploy does: in a directory holding `git archive HEAD`,
+   `TAG=<tag> SITE_URL=http://127.0.0.1:3480 docker buildx bake -f tools/deploy/docker-bake.hcl`.
 2. `scratch/rehearsal/.env` from `env.example` with real random values, `LIVE_ALLOWED_ORIGINS=http://127.0.0.1:3480`;
    `release.env` with `GTNH_TAG=<tag>`; `scratch/rehearsal/postgres` owned `5432:5432` (a non-root postgres cannot
    chown its directory, so a root-owned bind mount or named volume fails its initdb).

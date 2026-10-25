@@ -1,15 +1,21 @@
 # The site, the live service and the database setup, built from the
-# committed tree (the deploy streams `git archive HEAD` as the context;
-# docs/deploy.md). The site and live targets share one build:
+# committed tree (the deploy sends `git archive HEAD` as the context and
+# builds the three targets in one bake: docs/deploy.md). By hand:
 #
-#   docker build --target site --build-arg NEXT_PUBLIC_SITE_URL=https://... --build-arg GTNH_BUILD_ID=<version>-<sha8> -
-#   docker build --target live ... -
-#   docker build --target migrate --build-arg GTNH_BUILD_ID=... -
+#   docker build --target site --build-arg NEXT_PUBLIC_SITE_URL=https://... --build-arg GTNH_BUILD_ID=<version>-<sha8> .
+#   docker build --target live ... .
+#   docker build --target migrate --build-arg GTNH_BUILD_ID=... .
 #
 # Both run as the image's `node` user (uid 1000) with root-owned, read-only
 # application files. Datasets, uploaded files, client files and the live
 # journal are mounted volumes; nothing in the image is written at run time
 # but /tmp and the site's .next/cache (tmpfs in compose).
+#
+# Layers are ordered so a deploy rewrites only what changed: the package
+# installs depend on package.json and package-lock.json alone, npm's download
+# cache and Next's build cache (Turbopack's and the type check's) persist in
+# BuildKit cache mounts between builds, and the run images copy their
+# unchanging parts first.
 
 # Node 24 as CI. Pinned by digest: a tag can be moved, a digest cannot.
 ARG NODE_IMAGE=node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
@@ -19,7 +25,17 @@ ARG POSTGRES_IMAGE=postgres:17.10-bookworm@sha256:9b18b78397054fce88a9552e9d5a3a
 FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN --mount=type=cache,id=gtnh-npm,target=/root/.npm,sharing=locked \
+    npm ci --no-audit --no-fund
+
+# The live service's run-time packages: its bundle keeps them external
+# (esbuild --packages=external), and these are all it loads, with what they
+# load in turn. A layer of a few MB that changes only with the lockfile; the
+# live image's build imports each of the bundle's packages, so one missing
+# here fails the build, never the service.
+FROM deps AS live-deps
+RUN mkdir /live \
+ && cp -a --parents node_modules/ws node_modules/zod node_modules/@supabase/postgrest-js node_modules/tslib /live/
 
 FROM deps AS build
 # Build values: baked into the bundles, the same for every container of the image.
@@ -35,41 +51,43 @@ RUN test -n "$NEXT_PUBLIC_SITE_URL" || { echo "NEXT_PUBLIC_SITE_URL is required"
 # The image has no git, so next.config.ts takes the build's identity from here.
 RUN test -n "$GTNH_BUILD_ID" || { echo "GTNH_BUILD_ID is required (<version>-<sha8>)" >&2; exit 1; }
 COPY . .
-RUN NEXT_PUBLIC_SITE_URL="$NEXT_PUBLIC_SITE_URL" \
+# .next/cache is a cache mount: `next build` reuses the previous build's
+# Turbopack cache and type-check state, and none of it lands in a layer.
+# Modes only for what comes from the git tree, whose files can be 664: the
+# run images copy them as they are, and a chmod there would rewrite a layer.
+RUN --mount=type=cache,id=gtnh-next-cache,target=/app/.next/cache,sharing=locked \
+    NEXT_PUBLIC_SITE_URL="$NEXT_PUBLIC_SITE_URL" \
     NEXT_PUBLIC_LIVE_URL="$NEXT_PUBLIC_LIVE_URL" \
     NEXT_PUBLIC_MOD_AND_COMMUNITY="$NEXT_PUBLIC_MOD_AND_COMMUNITY" \
     NEXT_PUBLIC_GTNH_DATASET_MANIFEST_URL="$NEXT_PUBLIC_GTNH_DATASET_MANIFEST_URL" \
     GTNH_BUILD_ID="$GTNH_BUILD_ID" \
     NEXT_TELEMETRY_DISABLED=1 \
     npm run build \
- && npm run build:live \
- && npm prune --omit=dev --no-audit --no-fund \
- && rm -rf .next/cache
+ && npm run build:live -- --metafile=dist-live/meta.json \
+ && chmod -R a+rX,go-w public src/app/fonts tools/deploy
 
 FROM ${NODE_IMAGE} AS site
-ARG NEXT_PUBLIC_SITE_URL
-ARG NEXT_PUBLIC_MOD_AND_COMMUNITY=
-ARG GTNH_BUILD_ID
 WORKDIR /app
-# What `next start` reads: the build, public files (no datasets: they are a
-# volume), the run-time packages, and the config with the two files it
-# imports (it is loaded again at run time). The card route reads its fonts
-# through process.cwd(); nothing else from src/ is needed.
-COPY --from=build /app/.next ./.next
+RUN mkdir -p /app/public/datasets/gtnh /app/.next/cache /data/files /data/client-files \
+ && chown node:node /app/.next/cache /data/files /data/client-files
+# Next's standalone output (next.config.ts): server.js with the traced server
+# files and the packages they load, the config serialized inside. Next leaves
+# the client files and public/ to be copied beside it. Public files carry no
+# datasets: they are a volume. The card route reads its fonts through
+# process.cwd(). Unchanging parts first: a deploy whose packages, public
+# files and fonts are the same reuses those layers.
+COPY --from=build /app/.next/standalone/node_modules ./node_modules
 COPY --from=build /app/public ./public
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/package.json /app/next.config.ts /app/security-headers.config.ts /app/body-limits.config.ts ./
 COPY --from=build /app/src/app/fonts ./src/app/fonts
 # The deploy runs the env check in this image, against the server's .env.
 COPY --from=build /app/tools/deploy/check-env.mjs /app/tools/deploy/service-token.mjs ./deploy/
-# Modes only for what comes from the git tree (its files can be 664): .next
-# and node_modules are written by root at 644/755 in the build stage, and a
-# chmod over them would copy every file into a new layer.
-RUN mkdir -p /app/public/datasets/gtnh /app/.next/cache /data/files /data/client-files \
- && chown node:node /app/.next/cache /data/files /data/client-files \
- && chmod -R a+rX,go-w /app/*.ts /app/package.json /app/src /app/public /app/deploy
+COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/.next/standalone/server.js /app/.next/standalone/package.json ./
+COPY --from=build /app/.next/standalone/.next ./.next
+# HOSTNAME: Docker sets it to the container id, and server.js listens on it.
 ENV NODE_ENV=production \
     PORT=3000 \
+    HOSTNAME=0.0.0.0 \
     NEXT_TELEMETRY_DISABLED=1 \
     GTNH_PREWARM_ON_STARTUP=1 \
     NODE_OPTIONS=--max-old-space-size=3072 \
@@ -77,32 +95,40 @@ ENV NODE_ENV=production \
     FILE_STORE_DIR=/data/files \
     GTNH_CLIENT_FILES_DIR=/data/client-files \
     TINI_KILL_PROCESS_GROUP=1
+# Declared here, after every RUN and COPY: a build argument in scope is part
+# of each later RUN's cache key, and the build id changes with every commit.
+ARG NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_MOD_AND_COMMUNITY=
+ARG GTNH_BUILD_ID
 LABEL org.gtnh.build=$GTNH_BUILD_ID \
       org.gtnh.mod-and-community=$NEXT_PUBLIC_MOD_AND_COMMUNITY \
       org.gtnh.site-url=$NEXT_PUBLIC_SITE_URL
 USER node
 EXPOSE 3000
-# Run under compose's `init: true` (tini): TINI_KILL_PROCESS_GROUP sends the
-# stop signal to the whole group, so the next-server child the CLI starts
-# gets it too. No npm wrapper, which would swallow the signal.
-CMD ["node", "node_modules/next/dist/bin/next", "start", "-H", "0.0.0.0", "-p", "3000"]
+# Run under compose's `init: true` (tini), which hands SIGTERM to server.js:
+# it stops taking connections, finishes the open requests and exits 143.
+# TINI_KILL_PROCESS_GROUP also reaches anything it starts. No npm wrapper,
+# which would swallow the signal.
+CMD ["node", "server.js"]
 
 FROM ${NODE_IMAGE} AS live
-ARG NEXT_PUBLIC_SITE_URL
-ARG NEXT_PUBLIC_MOD_AND_COMMUNITY=
-ARG GTNH_BUILD_ID
 WORKDIR /app
-# The bundle keeps its packages external (esbuild --packages=external): the
-# pruned run-time node_modules holds them.
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist-live ./dist-live
+RUN mkdir -p /data/live-journal && chown node:node /data/live-journal
+COPY --from=live-deps /live/node_modules ./node_modules
 COPY --from=build /app/package.json ./
-RUN mkdir -p /data/live-journal && chown node:node /data/live-journal && chmod a+r,go-w /app/package.json
+COPY --from=build /app/dist-live ./dist-live
+# Every package the bundle imports loads here (esbuild's metafile lists them).
+RUN node --input-type=module -e 'import { readFileSync } from "node:fs"; const meta = JSON.parse(readFileSync("dist-live/meta.json", "utf8")); const packages = new Set(Object.values(meta.outputs).flatMap((output) => output.imports).filter((entry) => entry.external && !entry.path.startsWith("node:")).map((entry) => entry.path)); for (const name of packages) { await import(name); } console.log("live packages:", [...packages].join(" "));'
 ENV NODE_ENV=production \
     LIVE_HOST=0.0.0.0 \
     LIVE_PORT=3001 \
     LIVE_JOURNAL_DIR=/data/live-journal \
     NODE_OPTIONS=--max-old-space-size=480
+# Declared here, after every RUN and COPY: a build argument in scope is part
+# of each later RUN's cache key, and the build id changes with every commit.
+ARG NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_MOD_AND_COMMUNITY=
+ARG GTNH_BUILD_ID
 LABEL org.gtnh.build=$GTNH_BUILD_ID \
       org.gtnh.mod-and-community=$NEXT_PUBLIC_MOD_AND_COMMUNITY \
       org.gtnh.site-url=$NEXT_PUBLIC_SITE_URL
@@ -113,11 +139,11 @@ CMD ["node", "dist-live/live.mjs"]
 # The database's setup, run once per deploy (`docker compose run --rm
 # migrate`): the SQL travels in the image, so the server needs no checkout.
 FROM ${POSTGRES_IMAGE} AS migrate
-ARG GTNH_BUILD_ID
 COPY supabase/schema.sql /deploy/schema.sql
 COPY supabase/migrations/ /deploy/migrations/
 COPY tools/deploy/db/ /deploy/db/
 RUN chmod -R a+rX,go-w /deploy && chmod 0755 /deploy/db/migrate.sh
+ARG GTNH_BUILD_ID
 LABEL org.gtnh.build=$GTNH_BUILD_ID
 USER postgres
 CMD ["sh", "/deploy/db/migrate.sh"]
