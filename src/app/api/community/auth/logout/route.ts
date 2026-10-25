@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { bumpSessionEpoch, getSessionUser, sessionCookieHeader } from "@/lib/server/community";
 import { notifyLive } from "@/lib/server/cloud-plans";
 import { SIGN_OUT_EVERYWHERE_FAILED } from "@/lib/community/types";
+import { readJsonCapped, SMALL_JSON_MAX_BYTES } from "@/lib/server/request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +18,9 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: Request) {
   const clearing = { "Set-Cookie": sessionCookieHeader("", true) };
-  const body = (await request.json().catch(() => undefined)) as { everywhere?: unknown } | undefined;
+  // A body that is too big or not JSON is a plain sign-out, like no body at all.
+  const read = await readJsonCapped(request, SMALL_JSON_MAX_BYTES);
+  const body = read.ok ? (read.value as { everywhere?: unknown } | null) : undefined;
   if (body?.everywhere !== true) {
     return NextResponse.json({ ok: true }, { headers: clearing });
   }
