@@ -506,7 +506,7 @@ export const CHANGELOG: ChangelogRelease[] = [
     actions: [
       {
         label: "Full engineering notes",
-        href: "https://github.com/jackwrichards/gtnh-factory-flow/blob/main/docs/releases/3.1.4.md",
+        href: "https://github.com/iDeBugger/gtnh-factory-flow/blob/main/docs/releases/3.1.4.md",
       },
     ],
   },
