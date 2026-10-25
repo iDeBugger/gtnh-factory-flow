@@ -4,7 +4,8 @@
 # then a schema reload for PostgREST. Every file is idempotent and additive,
 # as the local database's every-open load assumes, so a second run changes
 # nothing. Connection: PGHOST, PGUSER, PGPASSWORD; the authenticator's
-# password: POSTGREST_AUTHENTICATOR_PASSWORD.
+# password: POSTGREST_AUTHENTICATOR_PASSWORD, which roles.sql reads from the
+# environment (never on a command line).
 set -eu
 
 : "${POSTGREST_AUTHENTICATOR_PASSWORD:?POSTGREST_AUTHENTICATOR_PASSWORD is not set}"
@@ -14,8 +15,7 @@ export PGOPTIONS="${PGOPTIONS:-} -c client_min_messages=warning"
 
 apply() {
   echo "migrate: $1"
-  psql -X -q -v ON_ERROR_STOP=1 -v authenticator_password="$POSTGREST_AUTHENTICATOR_PASSWORD" \
-    -d postgres -f "$root/$1"
+  psql -X -q -v ON_ERROR_STOP=1 -d postgres -f "$root/$1"
 }
 
 apply db/roles.sql

@@ -17,6 +17,9 @@ x-service: &service
   restart: unless-stopped
   security_opt:
     - no-new-privileges:true
+  # No service needs a capability: all run as non-root users on ports above 1024.
+  cap_drop:
+    - ALL
   logging:
     driver: json-file
     options:
@@ -36,6 +39,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set}
     volumes:
       - /srv/gtnh/postgres:/var/lib/postgresql/data
+    # Writes only its data directory, its socket and temporary files.
+    read_only: true
+    tmpfs:
+      - /var/run/postgresql:uid=5432,gid=5432,mode=0755
+      - /tmp
     networks:
       - backend
     # Over TCP: the socket also answers while the image's first-start init
@@ -63,6 +71,8 @@ services:
       POSTGREST_AUTHENTICATOR_PASSWORD: ${POSTGREST_AUTHENTICATOR_PASSWORD:?POSTGREST_AUTHENTICATOR_PASSWORD is not set}
     networks:
       - backend
+    read_only: true
+    mem_limit: 256m
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,12 +88,13 @@ services:
       PGRST_JWT_SECRET: ${POSTGREST_JWT_SECRET:?POSTGREST_JWT_SECRET is not set}
       PGRST_DB_POOL: "10"
       PGRST_SERVER_PORT: "3000"
-      PGRST_ADMIN_SERVER_PORT: "3001"
+      # No admin server: nothing reads /ready, and every backend container could reach it.
       PGRST_LOG_LEVEL: warn
     networks:
       - backend
-    # No healthcheck: the image ships no client to ask its /ready with. The
+    # No healthcheck: the image ships no client to ask a /ready with. The
     # site's database timeout and breaker cover a PostgREST still starting.
+    read_only: true
     mem_limit: 256m
     depends_on:
       postgres:

@@ -33,6 +33,10 @@ while [ $# -gt 0 ]; do
     *) echo "deploy: unknown option $1" >&2; exit 2 ;;
   esac
 done
+if [ -n "$rollback" ] && ! [[ "$rollback" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9a-f]{8}$ ]]; then
+  echo "deploy: --rollback takes a release tag, <version>-<sha8>." >&2
+  exit 2
+fi
 if [ -z "$target" ]; then
   echo "Usage: tools/deploy/deploy.sh <target> [--rollback <tag>] [--measure-peer]" >&2
   exit 2
@@ -52,7 +56,22 @@ MOD_AND_COMMUNITY="${MOD_AND_COMMUNITY:-}"
 SITE_URL="${SITE_URL%/}"
 
 step() { printf '\n== deploy: %s\n' "$*"; }
-fail() { printf 'deploy: FAILED: %s\n' "$*" >&2; exit 1; }
+# Set once release.env names the new tag: a failure after that leaves it
+# there, so any later `compose up` would start the release that failed.
+release_written=0
+previous=""
+fail() {
+  printf 'deploy: FAILED: %s\n' "$*" >&2
+  if [ "$release_written" = 1 ]; then
+    printf 'deploy: release.env now names %s, which did not finish.' "$TAG" >&2
+    if [ -n "$previous" ]; then
+      printf ' Go back with: tools/deploy/deploy.sh %s --rollback %s\n' "$target" "$previous" >&2
+    else
+      printf ' There is no earlier release to go back to.\n' >&2
+    fi
+  fi
+  exit 1
+}
 # DEPLOY_SSH=local runs the server side on this machine (the workstation rehearsal).
 remote() {
   if [ "$DEPLOY_SSH" = local ]; then bash -c "$*"; else ssh -o BatchMode=yes "$DEPLOY_SSH" "$@"; fi
@@ -149,6 +168,7 @@ if [ "$previous" = "$TAG" ]; then
   previous="$(remote "sed -n 's/^GTNH_PREVIOUS_TAG=//p' '$DEPLOY_DIR/release.env' 2>/dev/null" || true)"
 fi
 remote "umask 077 && printf 'GTNH_TAG=%s\nGTNH_PREVIOUS_TAG=%s\n' '$TAG' '$previous' > '$DEPLOY_DIR/release.env.tmp' && mv '$DEPLOY_DIR/release.env.tmp' '$DEPLOY_DIR/release.env'"
+release_written=1
 echo "GTNH_TAG=$TAG GTNH_PREVIOUS_TAG=${previous:-none}"
 
 # --- 6. Database -------------------------------------------------------------
@@ -198,7 +218,12 @@ for image in site live migrate; do
   remote "docker image ls 'gtnh-$image' --format '{{.CreatedAt}}\t{{.Tag}}' | sort -r | cut -f2 | tail -n +4" |
     while read -r old; do
       if [ -n "$old" ] && [ "$old" != "$TAG" ] && [ "$old" != "$previous" ]; then
-        remote "docker image rm 'gtnh-$image:$old'" >/dev/null && echo "removed gtnh-$image:$old"
+        # An image a stopped container still uses stays; the deploy has succeeded already.
+        if remote "docker image rm 'gtnh-$image:$old'" >/dev/null 2>&1; then
+          echo "removed gtnh-$image:$old"
+        else
+          echo "kept gtnh-$image:$old (still in use)"
+        fi
       fi
     done
 done

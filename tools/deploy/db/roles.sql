@@ -18,6 +18,8 @@ $$;
 alter role service_role nologin bypassrls;
 alter role authenticator login noinherit;
 grant service_role to authenticator;
--- psql fills this in from -v authenticator_password=...; outside a dollar
--- quote, where psql variables are expanded.
+-- Read from the environment, never from psql's command line: a container's
+-- argv shows in the host's process list to every local account. Used outside
+-- a dollar quote, where psql variables are expanded.
+\getenv authenticator_password POSTGREST_AUTHENTICATOR_PASSWORD
 alter role authenticator with password :'authenticator_password';

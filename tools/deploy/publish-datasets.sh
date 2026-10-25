@@ -127,6 +127,12 @@ for id in "${ids[@]}"; do
   [ "$local_sums" = "$server_sums" ] || fail "the published gzips of $id differ from the local ones."
   echo "$id: $(echo "$local_sums" | wc -l | tr -d ' ') gzips match"
 done
+for id in "${ids[@]}"; do
+  # The modes rsync was asked for, as the server's rsync applied them.
+  modes_off="$(remote "{ find '$root/$id' -maxdepth 1 \\( -type d ! -perm 755 -o -type f ! -perm 644 \\) -print; find '$root/$id/textures' -maxdepth 2 -type d ! -perm 755 -print 2>/dev/null; } | head -n 5")"
+  [ -z "$modes_off" ] || fail "$id has entries without modes 755 (directories) and 644 (files): $modes_off"
+done
+echo "modes: directories 755, files 644"
 remote "rm -rf '$staging'/.old-*-'$stamp'"
 
 # --- 6. Restart and over the network -----------------------------------------

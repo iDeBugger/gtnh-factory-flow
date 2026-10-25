@@ -26,6 +26,14 @@ const REQUIRED = [
 const LONG_SECRETS = ["COMMUNITY_HASH_SALT", "LIVE_INTERNAL_TOKEN", "POSTGREST_JWT_SECRET"];
 const MIN_SECRET_LENGTH = 32;
 
+/**
+ * Passwords spliced into a connection URI (PGRST_DB_URI) or a postgres
+ * setting: only characters no URI treats specially, as `openssl rand -hex 32`
+ * makes. A `/`, `@`, `:`, `?` or `#` would break the URI only at run time.
+ */
+const URI_SAFE_SECRETS = ["POSTGRES_PASSWORD", "POSTGREST_AUTHENTICATOR_PASSWORD"];
+const URI_SAFE = /^[A-Za-z0-9_-]+$/;
+
 /** Development-only switches a deployed stack must never carry. */
 const FORBIDDEN = ["LOCAL_DB", "NODE_ENV"];
 
@@ -51,6 +59,9 @@ export function parseEnvFile(text) {
     let value = line.slice(eq + 1).trim();
     if (value.length >= 2 && (value[0] === '"' || value[0] === "'") && value.at(-1) === value[0]) {
       value = value.slice(1, -1);
+    } else {
+      // An unquoted value ends at a ` #` comment, as compose reads it.
+      value = value.replace(/\s+#.*$/, "");
     }
     env[name] = value;
   }
@@ -69,6 +80,10 @@ function trustedProxyProblems(value) {
     const family = isIP(address);
     if (family === 0) {
       problems.push("LIVE_TRUSTED_PROXIES holds an entry that is not an address or a subnet.");
+      continue;
+    }
+    if (/^::ffff:/i.test(address)) {
+      problems.push("LIVE_TRUSTED_PROXIES holds an IPv4-mapped entry: write it as IPv4.");
       continue;
     }
     if (slash === -1) {
@@ -105,6 +120,13 @@ export function checkDeployEnv(env, image, options = {}) {
     if (value(name).trim() && value(name).length < MIN_SECRET_LENGTH) {
       problems.push(
         `${name} is shorter than ${MIN_SECRET_LENGTH} characters: use openssl rand -hex 32.`,
+      );
+    }
+  }
+  for (const name of URI_SAFE_SECRETS) {
+    if (value(name) && !URI_SAFE.test(value(name))) {
+      problems.push(
+        `${name} holds characters a connection URI breaks on: use openssl rand -hex 32.`,
       );
     }
   }

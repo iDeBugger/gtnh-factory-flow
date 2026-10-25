@@ -62,9 +62,12 @@ COPY --from=build /app/package.json /app/next.config.ts /app/security-headers.co
 COPY --from=build /app/src/app/fonts ./src/app/fonts
 # The deploy runs the env check in this image, against the server's .env.
 COPY --from=build /app/tools/deploy/check-env.mjs /app/tools/deploy/service-token.mjs ./deploy/
+# Modes only for what comes from the git tree (its files can be 664): .next
+# and node_modules are written by root at 644/755 in the build stage, and a
+# chmod over them would copy every file into a new layer.
 RUN mkdir -p /app/public/datasets/gtnh /app/.next/cache /data/files /data/client-files \
  && chown node:node /app/.next/cache /data/files /data/client-files \
- && chmod -R a+rX,go-w /app
+ && chmod -R a+rX,go-w /app/*.ts /app/package.json /app/src /app/public /app/deploy
 ENV NODE_ENV=production \
     PORT=3000 \
     NEXT_TELEMETRY_DISABLED=1 \
@@ -94,7 +97,7 @@ WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist-live ./dist-live
 COPY --from=build /app/package.json ./
-RUN mkdir -p /data/live-journal && chown node:node /data/live-journal && chmod -R a+rX,go-w /app
+RUN mkdir -p /data/live-journal && chown node:node /data/live-journal && chmod a+r,go-w /app/package.json
 ENV NODE_ENV=production \
     LIVE_HOST=0.0.0.0 \
     LIVE_PORT=3001 \

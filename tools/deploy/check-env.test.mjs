@@ -80,6 +80,21 @@ describe("the deploy's env check", () => {
     ).toHaveLength(1);
   });
 
+  it("refuses a password a connection URI would break on", () => {
+    for (const bad of ["pa/ss", "p@ss", "pa:ss", "pa?ss", "pa#ss", "pa+ss="]) {
+      expect(
+        checkDeployEnv({ ...complete(), POSTGREST_AUTHENTICATOR_PASSWORD: bad }, stage),
+      ).toEqual([expect.stringMatching(/^POSTGREST_AUTHENTICATOR_PASSWORD holds characters/)]);
+    }
+    expect(checkDeployEnv({ ...complete(), POSTGRES_PASSWORD: "a/b" }, stage)).toHaveLength(1);
+  });
+
+  it("refuses an IPv4-mapped trusted proxy, which no peer would match", () => {
+    expect(
+      checkDeployEnv({ ...complete(), LIVE_TRUSTED_PROXIES: "::ffff:172.30.61.1" }, stage),
+    ).toEqual([expect.stringMatching(/IPv4-mapped/)]);
+  });
+
   it("refuses a trusted subnet wider than /24", () => {
     expect(checkDeployEnv({ ...complete(), LIVE_TRUSTED_PROXIES: "172.30.0.0/16" }, stage)).toEqual(
       [expect.stringMatching(/^LIVE_TRUSTED_PROXIES holds a subnet wider than \/24/)],
@@ -112,11 +127,15 @@ describe("the deploy's env check", () => {
   });
 
   it("reads env files as compose does", () => {
-    expect(parseEnvFile("# note\nA=1\n\nB=\"two words\"\nC='x=y'\nD=\n")).toEqual({
+    expect(
+      parseEnvFile('# note\nA=1\n\nB="two words"\nC=\'x=y\'\nD=\nE=value # a note\nF="a # kept"\n'),
+    ).toEqual({
       A: "1",
       B: "two words",
       C: "x=y",
       D: "",
+      E: "value",
+      F: "a # kept",
     });
   });
 });
