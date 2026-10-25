@@ -1,0 +1,205 @@
+# The GTNH Planner stack: Postgres, PostgREST, the site and the live service.
+# This file is the source of truth; the infra repo's `gtnh` role ships a byte
+# copy as /opt/gtnh/docker-compose.yml, and the deploy refuses to run while
+# the two differ. Every call passes both env files:
+#
+#   docker compose -f /opt/gtnh/docker-compose.yml --env-file /opt/gtnh/.env --env-file /opt/gtnh/release.env ...
+#
+# .env (0600, rendered by the infra role) holds the secrets and settings;
+# release.env (written by tools/deploy/deploy.sh) holds GTNH_TAG and
+# GTNH_PREVIOUS_TAG. Images are built on the server by the deploy, never
+# pulled, except the two pinned below. Only the site and the live service
+# publish ports, on loopback; the host's Caddy proxies to them.
+name: gtnh
+
+x-service: &service
+  init: true
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+services:
+  postgres:
+    <<: *service
+    container_name: gtnh-postgres
+    image: postgres:17.10-bookworm@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f
+    # The host owns /srv/gtnh/postgres as 5432:5432 (the image's own uid 999
+    # is another account on the host); a non-root postgres cannot chown, so
+    # the directory must already be this user's.
+    user: "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set}
+    volumes:
+      - /srv/gtnh/postgres:/var/lib/postgresql/data
+    networks:
+      - backend
+    # Over TCP: the socket also answers while the image's first-start init
+    # server runs, and a migration run then would be lost with it.
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    mem_limit: 2g
+    shm_size: 256m
+
+  # One-shot: the deploy runs it (`docker compose run --rm migrate`) after
+  # postgres is healthy and before the services that read the schema.
+  migrate:
+    <<: *service
+    image: gtnh-migrate:${GTNH_TAG:?GTNH_TAG is not set}
+    profiles: ["tools"]
+    restart: "no"
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set}
+      POSTGREST_AUTHENTICATOR_PASSWORD: ${POSTGREST_AUTHENTICATOR_PASSWORD:?POSTGREST_AUTHENTICATOR_PASSWORD is not set}
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgrest:
+    <<: *service
+    container_name: gtnh-postgrest
+    image: postgrest/postgrest:v13.0.8@sha256:d09618df2b7b9547c80a076c2f4045b326be8d7ac06060d263caefec1334e3c9
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGREST_AUTHENTICATOR_PASSWORD:?POSTGREST_AUTHENTICATOR_PASSWORD is not set}@postgres:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      # No PGRST_DB_ANON_ROLE: a request without a token is 401.
+      PGRST_JWT_SECRET: ${POSTGREST_JWT_SECRET:?POSTGREST_JWT_SECRET is not set}
+      PGRST_DB_POOL: "10"
+      PGRST_SERVER_PORT: "3000"
+      PGRST_ADMIN_SERVER_PORT: "3001"
+      PGRST_LOG_LEVEL: warn
+    networks:
+      - backend
+    # No healthcheck: the image ships no client to ask its /ready with. The
+    # site's database timeout and breaker cover a PostgREST still starting.
+    mem_limit: 256m
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  site:
+    <<: *service
+    container_name: gtnh-site
+    image: gtnh-site:${GTNH_TAG:?GTNH_TAG is not set}
+    # edge first: the only network that is not internal, so the published
+    # port goes through it.
+    networks:
+      - edge
+      - backend
+    ports:
+      - "127.0.0.1:3300:3000"
+    environment:
+      POSTGREST_URL: http://postgrest:3000
+      POSTGREST_SERVICE_TOKEN: ${POSTGREST_SERVICE_TOKEN:?POSTGREST_SERVICE_TOKEN is not set}
+      COMMUNITY_HASH_SALT: ${COMMUNITY_HASH_SALT:?COMMUNITY_HASH_SALT is not set}
+      COMMUNITY_ADMIN_TOKEN: ${COMMUNITY_ADMIN_TOKEN:-}
+      GITHUB_FEEDBACK_TOKEN: ${GITHUB_FEEDBACK_TOKEN:-}
+      GITHUB_FEEDBACK_REPO: ${GITHUB_FEEDBACK_REPO:-}
+      GITHUB_FEEDBACK_WEB_REPO: ${GITHUB_FEEDBACK_WEB_REPO:-}
+      LIVE_INTERNAL_URL: http://live:3001
+      LIVE_INTERNAL_TOKEN: ${LIVE_INTERNAL_TOKEN:?LIVE_INTERNAL_TOKEN is not set}
+      # Unread by the site; set on both so one value serves the pair.
+      LIVE_TRUSTED_PROXIES: ${LIVE_TRUSTED_PROXIES?LIVE_TRUSTED_PROXIES is not set}
+      # Must equal the value the image was built with (its
+      # org.gtnh.mod-and-community label); the deploy's env check refuses otherwise.
+      NEXT_PUBLIC_MOD_AND_COMMUNITY: ${NEXT_PUBLIC_MOD_AND_COMMUNITY:-}
+      GTNH_PREWARM_FULL_DATASETS: ${GTNH_PREWARM_FULL_DATASETS:-}
+    volumes:
+      - /srv/gtnh/datasets:/app/public/datasets/gtnh:ro
+      - /srv/gtnh/files:/data/files
+      - /srv/gtnh/client-files:/data/client-files
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache:uid=1000,gid=1000
+    # Heap 3 GB (the image's NODE_OPTIONS) with both dataset versions loaded.
+    mem_limit: 4g
+    stop_grace_period: 20s
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/version').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+    depends_on:
+      postgrest:
+        condition: service_started
+      live:
+        condition: service_started
+
+  live:
+    <<: *service
+    container_name: gtnh-live
+    image: gtnh-live:${GTNH_TAG:?GTNH_TAG is not set}
+    networks:
+      - edge
+      - backend
+    ports:
+      - "127.0.0.1:3301:3001"
+    environment:
+      POSTGREST_URL: http://postgrest:3000
+      POSTGREST_SERVICE_TOKEN: ${POSTGREST_SERVICE_TOKEN:?POSTGREST_SERVICE_TOKEN is not set}
+      COMMUNITY_HASH_SALT: ${COMMUNITY_HASH_SALT:?COMMUNITY_HASH_SALT is not set}
+      LIVE_INTERNAL_URL: http://live:3001
+      LIVE_INTERNAL_TOKEN: ${LIVE_INTERNAL_TOKEN:?LIVE_INTERNAL_TOKEN is not set}
+      LIVE_ALLOWED_ORIGINS: ${LIVE_ALLOWED_ORIGINS:?LIVE_ALLOWED_ORIGINS is not set}
+      # The edge gateway: the peer docker-proxy presents for traffic arriving
+      # on the published loopback port. Empty only for the deploy's peer measurement.
+      LIVE_TRUSTED_PROXIES: ${LIVE_TRUSTED_PROXIES?LIVE_TRUSTED_PROXIES is not set}
+      NEXT_PUBLIC_MOD_AND_COMMUNITY: ${NEXT_PUBLIC_MOD_AND_COMMUNITY:-}
+      LIVE_MAX_PLAN_BYTES: ${LIVE_MAX_PLAN_BYTES:-67108864}
+      LIVE_MAX_ROOMS: ${LIVE_MAX_ROOMS:-500}
+    volumes:
+      - /srv/gtnh/live-journal:/data/live-journal
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Four times LIVE_MAX_PLAN_BYTES (64 MB) plus 150 MB, with room; heap 480 MB in the image.
+    mem_limit: 600m
+    # SIGTERM stores every open plan and releases its lease before exiting.
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/live/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      postgrest:
+        condition: service_started
+
+networks:
+  # Fixed subnets: the host firewall and LIVE_TRUSTED_PROXIES name them.
+  edge:
+    driver: bridge
+    enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 172.30.61.0/24
+          gateway: 172.30.61.1
+  backend:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.62.0/24
