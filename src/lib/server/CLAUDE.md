@@ -239,7 +239,8 @@ The instance is small and has gone down under load. Rules:
 - A community post's stats come from solving the uploaded plan on the request thread, which blocks every other
   request while it runs, so the solve has a budget the board never has: `ensurePlanEngine` sets the process-wide
   HiGHS limits once (`time_limit` 2 s, `mip_max_nodes` 20,000) and `solvePlanStats` rejects every model past 5 s
-  (`withLpDeadline`). Past either the stats are the failed plan's and the post is still stored; the stored plan is
+  (`withLpDeadline`). A model whose LP hits the time limit stops there (no other HiGHS setting is tried), so one
+  solve holds the thread at most 5 s plus one LP's 2 s. Past either the stats are the failed plan's and the post is still stored; the stored plan is
   re-solved once per `APP_VERSION` on its first view (`refreshStaleStats`) under the same budget. Every call site
   goes through `solvePlanStats`, never `calculateThroughput` directly. Follow-up: a worker thread, so a slow plan
   never blocks the loop at all. Exam: `plan-access.test.ts` "stores a plan-mode post whose stats solve ran out of

@@ -4,7 +4,7 @@
  * independent conservation check; an infeasible or non-conserving answer is retried under other HiGHS settings before
  * it is believed (spec 7.3).
  */
-import { solveLpAuto } from "../lp-engine";
+import { LpTimeLimitError, solveLpAuto } from "../lp-engine";
 import type { LinearProgram } from "../simplex";
 import { note, type SolveContext, type StageOutcome } from "./context";
 import { TICKS_PER_SECOND } from "./model";
@@ -415,6 +415,12 @@ export function runModel(ctx: SolveContext, lp: ModelLp, label: string): SolveRe
     try {
       solution = solveLpAuto(lowered.program, { highsOptions: opinion, exactPrimal: true });
     } catch (error) {
+      // A solve HiGHS stopped on the clock is not retried under another setting: one model costs at most one
+      // time limit, so the stats solve stays within its budget plus one LP.
+      if (error instanceof LpTimeLimitError) {
+        ctx.rejection = note("SOLVER_UNSATISFIABLE", "time budget");
+        return { ok: false, rejection: ctx.rejection };
+      }
       last = note("SOLVER_UNSATISFIABLE", error instanceof Error ? error.message : String(error));
       continue;
     }

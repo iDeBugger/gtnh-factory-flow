@@ -28,9 +28,10 @@ nowhere or goes nowhere except through a source, a drawer or trash. Longer versi
   nothing that size may run on the main thread.
 - The answer a player sees is counted work, never a clock. The one clock is the server's: `setLpSolveDefaults`
   (`timeLimitSeconds` -> HiGHS `time_limit`, a stopped solve throws `LpTimeLimitError` and never falls back to the
-  simplex) and `withLpDeadline` in `plan/lp.ts` (past it `runModel` rejects with the "time budget" note and runs no
-  LP) are set only by `src/lib/server/plan-engine.ts` for the stats solve of an uploaded plan. The browser, the
-  worker and the suite never set them. Exams: `lp-engine-limits.test.ts`, `plan/lp-deadline.test.ts`.
+  simplex, and `runModel` tries no other HiGHS setting after it: one model, one time limit) and `withLpDeadline` in
+  `plan/lp.ts` (past it `runModel` rejects with the "time budget" note and runs no LP) are set only by
+  `src/lib/server/plan-engine.ts` for the stats solve of an uploaded plan. The browser, the worker and the suite
+  never set them. Exams: `lp-engine-limits.test.ts`, `plan/lp-deadline.test.ts`, `plan/lp-time-limit.test.ts`.
 - Plan solver dust (`plan/validate.ts` `dustScales`) is judged per network, never over the whole point: a
   reactor's billions of EU a second must not zero a 0.03/s item wire (the answer then fails its own check).
 - Node rates in results are FULL SPEED; actual = nameplate x `min(1, max(0, utilization))`.

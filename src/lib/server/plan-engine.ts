@@ -13,7 +13,9 @@ import type { FactoryProject, ThroughputResult } from "@/lib/model/types";
  * The solve runs on the request thread and blocks every other request while
  * it does, so an uploaded plan gets a budget the board never has: one LP
  * stops at `LP_TIME_LIMIT_SECONDS`, and `solvePlanStats` rejects every model
- * past `PLAN_STATS_BUDGET_MS`. Past either the stats are the failed plan's
+ * past `PLAN_STATS_BUDGET_MS`; a model whose LP hits the limit stops there,
+ * so a solve holds the thread at most the budget plus one LP's limit. Past
+ * either the stats are the failed plan's
  * and the post is still stored. The limits are set once per process and
  * only here: nothing in this module reaches the browser.
  */
