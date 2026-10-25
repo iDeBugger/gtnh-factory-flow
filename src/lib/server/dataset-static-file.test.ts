@@ -115,6 +115,12 @@ describe("a dataset file's path", () => {
     await symlink("a.json", path.join(root, "v1", "inside.json"));
     // The dataset root itself is a symlink on the droplet.
     await symlink(root, path.join(tree, "linked-root"));
+    // And each version in it is a link into the shared datasets directory.
+    await mkdir(path.join(tree, "shared", "v3"), { recursive: true });
+    await writeFile(path.join(tree, "shared", "v3", "c.json"), "{}");
+    await writeFile(path.join(tree, "shared", "other.json"), "another version's");
+    await symlink("../other.json", path.join(tree, "shared", "v3", "sibling.json"));
+    await symlink(path.join(tree, "shared", "v3"), path.join(root, "v3"));
   });
 
   afterAll(async () => {
@@ -130,6 +136,14 @@ describe("a dataset file's path", () => {
       path.join(root, "v1", "a.json"),
     );
     expect(await resolveDatasetChildPathIn(root, "v1", "inside.json")).toBe(path.join(root, "v1", "a.json"));
+  });
+
+  it("resolves a file in a version directory that is itself a link, and nothing out of where it points", async () => {
+    expect(await resolveDatasetChildPathIn(root, "v3", "c.json")).toBe(path.join(tree, "shared", "v3", "c.json"));
+    expect(await resolveDatasetChildPathIn(path.join(tree, "linked-root"), "v3", "c.json")).toBe(
+      path.join(tree, "shared", "v3", "c.json"),
+    );
+    expect(await resolveDatasetChildPathIn(root, "v3", "sibling.json")).toBeUndefined();
   });
 
   it("never follows a link out of the version's directory, and a missing file is no path", async () => {
