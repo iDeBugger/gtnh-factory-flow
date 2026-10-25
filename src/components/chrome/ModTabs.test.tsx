@@ -365,13 +365,13 @@ describe("plans on two game versions", () => {
     expect(actions.addDesign).toHaveBeenCalledWith({ gameVersion: "2.9" });
   });
 
-  it("a 2.9 plan shows no chip; a 2.8.1 plan's tab shows 2.8.1", () => {
+  it("every plan's tab shows its version, the default's too", () => {
     useDesignStore.setState({
       designs: [design("a", "Benzene"), design("b", "Old steel", { gameVersion: "2.8.1" }), design("c", "Future", { gameVersion: "2.10" })],
     });
     render(<ModTabs {...props} />);
     const tab = (name: string) => screen.getByText(name).closest(".mt-tab")!;
-    expect(tab("Benzene").querySelector(".mt-version")).toBeNull();
+    expect(tab("Benzene").querySelector(".mt-version")?.textContent).toBe("2.9");
     expect(tab("Old steel").querySelector(".mt-version")?.textContent).toBe("2.8.1");
     expect(tab("Future").querySelector(".mt-version")?.textContent).toBe("2.10");
     // The tip's last line is the plan's version, on every tab.

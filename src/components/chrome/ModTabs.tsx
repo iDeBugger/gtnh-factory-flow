@@ -43,7 +43,7 @@ import {
   type PendingConversion,
 } from "@/lib/datasets/convert-action";
 import type { DatasetManifest } from "@/lib/datasets/types";
-import { DEFAULT_GAME_VERSION, gameVersionLabel, planGameVersion, type GameVersion } from "@/lib/model/game-version";
+import { gameVersionLabel, planGameVersion, type GameVersion } from "@/lib/model/game-version";
 
 /** What the tab strip asks of the bar: the dialogs it does not own. */
 export interface ModTabsActions {
@@ -575,11 +575,10 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
                   <>
                     {design.taskBoard ? <ChecklistIcon className="mt-tasks" /> : null}
                     <span className="mt-name">{design.name}</span>
-                    {version !== DEFAULT_GAME_VERSION ? (
-                      <span className="mt-version" data-plan-version={version} aria-label={gameVersionLabel(version)}>
-                        {version}
-                      </span>
-                    ) : null}
+                    {/* Every plan's version, the default's too: the player always sees which game the plan is for. */}
+                    <span className="mt-version" data-plan-version={version} aria-label={gameVersionLabel(version)}>
+                      {version}
+                    </span>
                   </>
                 )}
                 {converting?.sourceDesignId === design.id ? (

@@ -58,6 +58,8 @@ Every save goes through `persistCanvas` in design-store.ts:
 - A plan belongs to one GTNH version, `FactoryProject.gameVersion` ("2.9", "2.8.1"). Absent means 2.9: plans saved
   before the field read as 2.9 through `planGameVersion` and are never rewritten to say so (One mode: a load never
   writes). Rules of the field itself are in `src/lib/model/CLAUDE.md` (Game version).
+- Every plan's tab wears its version after its name (`.mt-version` in `ModTabs`), the default's too, on a desktop
+  and a phone: the top bar always says which game the open plan is for. The name gives way first, never the chip.
 - The active dataset follows the open plan (`ensureDatasetFor`, `DatasetCache` in `src/lib/datasets/dataset-cache.ts`:
   one load in flight per version, every loaded catalog kept, a late load only fills the cache). `datasetServesPlan` /
   `activeVersionServesPlan` guard every recipe refresh, recipe add (`refusesRecipeOnPlan`, at every add, swap and

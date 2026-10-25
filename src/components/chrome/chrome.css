@@ -255,7 +255,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* A plan on a version other than the default: its version after the name, in a small amber chip. */
+/* Every plan's version after its name, in a small amber chip; the name gives way first, the chip never does. */
 .mt-version {
   flex: none;
   margin-left: 3px;
