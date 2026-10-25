@@ -68,8 +68,7 @@ import {
  * REFUSED (too large, not valid, library full) is not sent again until it
  * changes.
  *
- * WHY SO CAREFUL: every push rewrites the WHOLE plan on a small Supabase
- * instance. Pushing after every autosave, or resending refused plans on
+ * WHY SO CAREFUL: every push rewrites the WHOLE plan in a small database. Pushing after every autosave, or resending refused plans on
  * every poll, is enough load to stall the database.
  *
  * IN THE ACCOUNT FROM THE START: with live plans configured and someone signed in, a design that appears here (new,

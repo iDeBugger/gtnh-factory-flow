@@ -28,5 +28,6 @@ describe("trusted proxies", () => {
     expect(() => parseTrustedProxies("172.30.61.1,nonsense")).toThrow(/nonsense/);
     expect(() => parseTrustedProxies("10.0.0.0/33")).toThrow(/10\.0\.0\.0\/33/);
     expect(() => parseTrustedProxies("10.0.0.0/")).toThrow(/10\.0\.0\.0\//);
+    expect(() => parseTrustedProxies("::ffff:172.30.61.1")).toThrow(/::ffff:172\.30\.61\.1.*IPv4/);
   });
 });

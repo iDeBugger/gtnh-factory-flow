@@ -83,6 +83,10 @@ const nextConfig: NextConfig = {
     // src/proxy.ts runs on every path, so Next holds each write body up to this size before a route runs
     // (default 10 MB). Just above the largest route cap, never below one (request-body.ts).
     proxyClientMaxBodySize: PROXY_BODY_MAX_BYTES,
+    // A revalidated page (the sitemap, llms.txt: `revalidate = 3600`) is kept in memory only. The site
+    // image's .next is read-only, so a write back under .next/server would fail on every revalidation;
+    // the prerendered files are still read from disk at start.
+    isrFlushToDisk: false,
   },
   async headers() {
     // The headers are read at build into the routes manifest, which is also when NEXT_PUBLIC_* is fixed.

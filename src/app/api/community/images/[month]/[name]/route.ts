@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { BOARD_IMAGE_NAME, BOARD_IMAGE_MONTH, BOARD_IMAGE_TYPES } from "@/lib/server/board-images";
+import { datasetBudgetRefusal } from "@/lib/server/dataset-rate";
 import { getFileStore, isFileStoreConfigured } from "@/lib/server/file-store";
 
 export const runtime = "nodejs";
@@ -19,9 +20,14 @@ function notFound(): NextResponse {
  * board images. A stored image never changes: cached for a year. The type
  * comes from the extension the upload chose after sniffing the bytes, and
  * nosniff keeps a browser from reading it as anything else.
+ *
+ * Each read spends one unit of the address's dataset budget (dataset-rate.ts)
+ * before touching the disk: a board shows a handful of pictures, the same
+ * address loads dataset files by the hundred, and an image read is a disk read
+ * of up to 4 MB.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ month: string; name: string }> },
 ) {
   const { month, name } = await params;
@@ -31,6 +37,10 @@ export async function GET(
   const contentType = BOARD_IMAGE_TYPES[name.slice(name.lastIndexOf(".") + 1)];
   if (!contentType) {
     return notFound();
+  }
+  const refusal = datasetBudgetRefusal(request, 1);
+  if (refusal) {
+    return refusal;
   }
   const bytes = await getFileStore()
     .get("board-images", `${month}/${name}`)

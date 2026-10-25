@@ -37,7 +37,8 @@ describe("how the served dataset files reach a browser", () => {
         destination: "https://example.test/api/datasets/:version/:rest*",
       },
       {
-        source: "/datasets/gtnh/:version([A-Za-z0-9_-][A-Za-z0-9._-]*)/:rest([A-Za-z0-9_-][A-Za-z0-9._-]*)*",
+        source:
+          "/datasets/gtnh/:version([A-Za-z0-9_-][A-Za-z0-9._-]*)/:rest([A-Za-z0-9_-][A-Za-z0-9._-]*)*",
         destination: "https://example.test/datasets/gtnh/:version/:rest*",
       },
     ]);
@@ -55,11 +56,23 @@ describe("how the served dataset files reach a browser", () => {
     ]) {
       expect(api!.test(forwarded), forwarded).toBe(true);
     }
-    for (const kept of ["/api/datasets/../x", "/api/datasets/v/../x", "/api/datasets/v/%2e%2e/x", "/api/datasets/./x"]) {
+    for (const kept of [
+      "/api/datasets/../x",
+      "/api/datasets/v/../x",
+      "/api/datasets/v/%2e%2e/x",
+      "/api/datasets/./x",
+    ]) {
       expect(api!.test(kept), kept).toBe(false);
     }
-    expect(files!.test("/datasets/gtnh/local-2.8.1/textures/rendered/x-0123456789ab.png")).toBe(true);
-    for (const kept of ["/datasets/gtnh/../x", "/datasets/gtnh/v/../x", "/datasets/gtnh/v/%2e%2e", "/datasets/gtnh/v/.hidden"]) {
+    expect(files!.test("/datasets/gtnh/local-2.8.1/textures/rendered/x-0123456789ab.png")).toBe(
+      true,
+    );
+    for (const kept of [
+      "/datasets/gtnh/../x",
+      "/datasets/gtnh/v/../x",
+      "/datasets/gtnh/v/%2e%2e",
+      "/datasets/gtnh/v/.hidden",
+    ]) {
       expect(files!.test(kept), kept).toBe(false);
     }
   });
@@ -87,9 +100,12 @@ describe("the build identity the config bakes in", () => {
     // config import it lacks, so the config's own files sit beside it (the
     // deploy's Dockerfile copies them) and import nothing themselves.
     const { readFileSync } = await import("node:fs");
-    const read = (file: string) => readFileSync(new URL(`../../../${file}`, import.meta.url), "utf8");
+    const read = (file: string) =>
+      readFileSync(new URL(`../../../${file}`, import.meta.url), "utf8");
     const importsOf = (source: string) =>
-      [...source.matchAll(/^\s*(?:import|export)[^;]*?from\s+["']([^"']+)["']/gm)].map((match) => match[1] ?? "");
+      [...source.matchAll(/^\s*(?:import|export)[^;]*?from\s+["']([^"']+)["']/gm)].map(
+        (match) => match[1] ?? "",
+      );
     const source = read("next.config.ts");
     const local = importsOf(source).filter((specifier) => /^(\.|@\/)/.test(specifier));
     expect(local.sort()).toEqual(["./body-limits.config", "./security-headers.config"]);
@@ -131,5 +147,11 @@ describe("the site's rewrites", () => {
       }
       expect(rewrites.afterFiles).toEqual([]);
     }
+  });
+
+  it("keeps revalidated pages in memory: the site image's .next is read-only", async () => {
+    vi.resetModules();
+    const config = (await import("../../../next.config")).default;
+    expect(config.experimental?.isrFlushToDisk).toBe(false);
   });
 });

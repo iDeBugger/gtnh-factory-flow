@@ -20,7 +20,7 @@ import { getCommunityDb, isCommunityConfigured } from "@/lib/server/community";
  *   split their score.
  * - Items weigh more than fluids (see ITEM_WEIGHT).
  *
- * Keys are `${kind}:${id}`, the dataset catalog's shape. With Supabase
+ * Keys are `${kind}:${id}`, the dataset catalog's shape. With the database
  * unconfigured (local dev) the map is empty.
  *
  * THE ITEM LIST NEVER WAITS FOR IT: "Most popular" is the items column's

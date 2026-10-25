@@ -56,6 +56,11 @@ export function parseTrustedProxies(value: string | undefined): TrustedProxies {
     if (family === 0) {
       throw new Error(`LIVE_TRUSTED_PROXIES: "${entry}" is not an address or a subnet.`);
     }
+    // A mapped entry would sit in the IPv6 list, where no peer is looked up
+    // (mapped peers are checked as IPv4): refused rather than never matching.
+    if (/^::ffff:/i.test(address)) {
+      throw new Error(`LIVE_TRUSTED_PROXIES: "${entry}" is IPv4-mapped: write it as IPv4.`);
+    }
     const type = family === 4 ? "ipv4" : "ipv6";
     if (slash === -1) {
       list.addAddress(address, type);

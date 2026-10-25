@@ -112,8 +112,9 @@ export function fileStoreAt(root: string): FileStore {
       // Written whole beside the bucket, then renamed into place: a reader
       // never sees half a file, and a failed write leaves nothing under the key.
       const temp = path.join(dir, `.tmp-${randomBytes(8).toString("hex")}`);
-      await fs.writeFile(temp, bytes, { mode: 0o600, flag: "wx" });
       try {
+        // Inside the try: a write that fails partway (a full disk) leaves no temp file behind.
+        await fs.writeFile(temp, bytes, { mode: 0o600, flag: "wx" });
         if (!overwrite) {
           // link refuses an existing target, so two racing writes cannot both land.
           await fs.link(temp, file).catch((error: NodeJS.ErrnoException) => {
