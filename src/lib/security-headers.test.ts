@@ -40,6 +40,19 @@ describe("the document policy", () => {
     expect(directive(documentPolicy({ ...production, liveUrl: "wss://live.example/live" }), "connect-src")).toBe(
       "connect-src 'self' wss://live.example",
     );
+    // The site's own socket origin, named for WebKit before CSP3; once only.
+    expect(directive(documentPolicy({ ...production, siteUrl: "https://gtnhplanner.com" }), "connect-src")).toBe(
+      "connect-src 'self' wss://gtnhplanner.com",
+    );
+    expect(
+      directive(
+        documentPolicy({ ...production, siteUrl: "http://localhost:3000/", liveUrl: "ws://localhost:3000/live" }),
+        "connect-src",
+      ),
+    ).toBe("connect-src 'self' ws://localhost:3000");
+    for (const siteUrl of ["", "/", "not a url", "ftp://gtnhplanner.com"]) {
+      expect(documentPolicy({ ...production, siteUrl })).toBe(documentPolicy(production));
+    }
     for (const liveUrl of ["/live", "", "not a url", "https://live.example/live"]) {
       expect(documentPolicy({ ...production, liveUrl })).toBe(documentPolicy(production));
     }
@@ -71,6 +84,7 @@ describe("the header rules", () => {
     const expected = securityHeaders({
       production: process.env.NODE_ENV === "production",
       liveUrl: process.env.NEXT_PUBLIC_LIVE_URL,
+      siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
     });
     expect(rules.slice(0, 2)).toEqual(expected);
     const textures = rules

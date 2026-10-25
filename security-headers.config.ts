@@ -19,13 +19,17 @@
  * resolves stylesheet URLs through a `<base>` of its own. `worker-src` allows
  * `blob:` so a worker made from a blob in the page can run. `'self'` in
  * `connect-src` covers the live socket on the page's own host (ws and wss,
- * per CSP3); an absolute live URL adds its origin.
+ * per CSP3); an absolute live URL adds its origin, and the site's own URL
+ * adds its socket origin (`wss://` for https), since WebKit before CSP3 did
+ * not let `'self'` match a socket.
  */
 export interface SecurityHeaderEnv {
   /** Outside production, Turbopack and React Refresh need `eval`: dev must never be what breaks. */
   production: boolean;
   /** NEXT_PUBLIC_LIVE_URL: a path adds nothing; an absolute ws(s) URL adds its origin to connect-src. */
   liveUrl?: string;
+  /** NEXT_PUBLIC_SITE_URL: an absolute http(s) URL adds its host as ws(s) to connect-src. */
+  siteUrl?: string;
 }
 
 export function documentPolicy(env: SecurityHeaderEnv): string {
@@ -35,8 +39,11 @@ export function documentPolicy(env: SecurityHeaderEnv): string {
   }
   const connectSources = ["'self'"];
   const liveOrigin = originOf(env.liveUrl, ["ws:", "wss:"]);
-  if (liveOrigin) {
-    connectSources.push(liveOrigin);
+  const siteSocket = originOf(env.siteUrl, ["http:", "https:"])?.replace(/^http/, "ws");
+  for (const origin of [siteSocket, liveOrigin]) {
+    if (origin && !connectSources.includes(origin)) {
+      connectSources.push(origin);
+    }
   }
   return [
     "default-src 'self'",
