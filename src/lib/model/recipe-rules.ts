@@ -51,10 +51,12 @@ export function getRecipeMachineHandlers(
   }
   const handlersByFamily = new Map<string, MachineHandler>();
   const fusionMark = isFusionRecipe(recipe) ? getFusionRecipeMark(recipe) : undefined;
+  const takesFluidInputs = (recipe.inputs ?? []).some((input) => input.kind === "fluid");
   for (const handler of recipe.machineHandlers ?? []) {
     const normalized = normalizeFusionHandler(normalizeMachineHandler(handler), recipe);
     const fusion = getFusionMachine(normalized.machineType);
     if (fusion && fusionMark !== undefined && fusion.mark < fusionMark) continue;
+    if (takesFluidInputs && STEAM_MULTIBLOCKS_WITHOUT_FLUID_INPUT.has(normalized.machineType)) continue;
     const familyId = `${normalized.kind ?? "single"}:${slug(normalized.label)}`;
     if (!handlersByFamily.has(familyId)) {
       handlersByFamily.set(familyId, normalized);
@@ -82,6 +84,18 @@ export function getRecipeMachineHandlers(
   }
   return [normalizeFusionHandler(fallback, recipe)];
 }
+
+/**
+ * Steam multiblocks whose structure has no fluid input hatch on any served
+ * version, so a recipe with a fluid input never starts in them although NEI
+ * lists them on the whole map. Their hatch elements are steam input and output
+ * buses (plus an output hatch on the Separator): MTESteamCentrifuge,
+ * MTESteamMacerator, MTESteamAlloySmelter and MTESteamFurnaceMulti in GT5U
+ * 5.09.54.205; 5.09.51.476's GT++ classes also require mInputHatches.isEmpty().
+ * The Squasher and Presser take an input hatch in 2.9 but not in 2.8.1, and the
+ * Purifier and Blender take one on both.
+ */
+const STEAM_MULTIBLOCKS_WITHOUT_FLUID_INPUT = new Set(["Steam Separator", "Steam Grinder", "Steam Fuser", "Steam Hearth"]);
 
 /** Whether this recipe comes off the crafting-grid maps the oracle exports. */
 export function isHandCraftingRecipeMap(recipe: Pick<Recipe, "machineType" | "source">): boolean {

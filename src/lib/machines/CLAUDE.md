@@ -133,7 +133,10 @@ computes in float: replicate it.
 - Coke Oven alias matches the brick oven too: no `cokeOvenSlices` control means no
   overclocks and one parallel.
 - Steam: the 8 steam multis are table entries (8 parallels, no OC, shared pressure
-  control); steam singleblocks are synthesized in `src/lib/model/recipe-rules.ts`. EU stays
+  control); steam singleblocks are synthesized in `src/lib/model/recipe-rules.ts`. The Separator,
+  Grinder, Fuser and Hearth have no fluid input hatch on either version, so `getRecipeMachineHandlers`
+  never offers them for a recipe with a fluid input (2.8.1's Squasher and Presser lack one too; not yet
+  applied, the handler list takes no game version). EU stays
   zero on steam cards; litres are billed instead, never both.
 - Crafting maps run on GT++'s Auto Workbench (synthesized in `recipe-rules.ts`, flat 2048 EU
   per craft) with instant hand-craft as the second handler.

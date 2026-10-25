@@ -36,6 +36,34 @@ describe("recipe machine handlers", () => {
     ]);
   });
 
+  it("never offers a steam multiblock with no fluid input hatch for a recipe with a fluid input", () => {
+    // NEI lists the Steam Separator on the whole Centrifuge map, but its
+    // structure has no fluid input hatch on either version.
+    const handler = (label: string, kind: "single" | "multiblock") => ({
+      id: label.toLowerCase().replace(/ /g, "-"),
+      label,
+      machineType: label,
+      minimumTier: "LV",
+      kind,
+    });
+    const centrifuge = {
+      ...testRecipe("Centrifuge"),
+      machineHandlers: [handler("Centrifuge", "single"), handler("Steam Separator", "multiblock")],
+    };
+    const lava = { ...centrifuge, inputs: [{ kind: "fluid" as const, id: "lava", amount: 100 }] };
+    const blender = {
+      ...testRecipe("Multiblock Mixer"),
+      inputs: [{ kind: "fluid" as const, id: "water", amount: 100 }],
+      machineHandlers: [handler("Mixer", "single"), handler("Steam Blender", "multiblock")],
+    };
+
+    expect(getRecipeMachineHandlers(centrifuge).map((h) => h.label)).toEqual(["Centrifuge", "Steam Separator"]);
+    expect(getRecipeMachineHandlers(lava).map((h) => h.label)).toEqual(["Centrifuge"]);
+    expect(getSelectedMachineHandler(lava, { machineHandlerId: "steam-separator" }).label).toBe("Centrifuge");
+    // The Steam Blender has input hatches.
+    expect(getRecipeMachineHandlers(blender).map((h) => h.label)).toEqual(["Mixer", "Steam Blender"]);
+  });
+
   it("does not invent a category entry next to dataset handlers", () => {
     const recipe = {
       ...testRecipe("Blast Furnace"),
