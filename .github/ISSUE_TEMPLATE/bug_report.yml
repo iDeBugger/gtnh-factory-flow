@@ -65,7 +65,7 @@ body:
       description: |
         The fastest way for someone to see exactly what you see. Publish your
         setup or pocket from the sidebar, then paste the link here.
-      placeholder: "https://gtnhplanner.com/?plan=..."
+      placeholder: "https://example.com/?plan=..."
     validations:
       required: false
 
