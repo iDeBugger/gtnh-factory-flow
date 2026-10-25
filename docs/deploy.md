@@ -168,9 +168,12 @@ down (below).
 
 The Dockerfile is laid out so a deploy rebuilds and rewrites only what its commit changed:
 
-- `.dockerignore` keeps docs, notes (`*.md`), tests and fixtures, `tools/` (but the prebuild step, the env check,
-  the service token and `tools/deploy/db`), the Dockerfile and the bake file out of the context: they are neither
-  sent nor hashed, and a commit that changes only those leaves `COPY . .` and `next build` cached.
+- `.dockerignore` keeps docs, notes (`*.md`), test files (`*.test.*`, `src/test-support`), the solver's test corpus
+  (`src/lib/solver/plan/__fixtures__/corpus`; the other fixtures stay, `/dev/clean-card` imports one), `tools/` (but
+  the prebuild step, the env check, the service token, `live-deps.mjs` and `tools/deploy/db`), the Dockerfile and
+  the bake file out of the context: they are neither sent nor hashed. `next build` still runs on every deploy, as
+  the build id is baked into the bundles, but from its cache (next bullet). Tailwind scans the same files in a
+  checkout (`@source` in `src/app/globals.css`), so a checkout's build and the image's have the same CSS.
 - `npm ci` depends on `package.json` and `package-lock.json` alone, with npm's download cache in a BuildKit cache
   mount (`gtnh-npm`): a deploy with the same lockfile reuses the install.
 - `next build` keeps `.next/cache` (Turbopack's cache and the type check's state) in a cache mount
@@ -180,14 +183,18 @@ The Dockerfile is laid out so a deploy rebuilds and rewrites only what its commi
   then `.next/static`, `public/` and the card route's fonts. The config is serialized into `server.js` at build;
   nothing reads `next.config.ts` at run time. The layers that rarely change (packages, public files, fonts) come
   first, so a deploy that leaves them alone reuses them.
-- The live image holds `dist-live/` and only the packages its bundle loads (`ws`, `zod`,
-  `@supabase/postgrest-js`, `tslib`; the `live-deps` stage), a layer that changes only with the lockfile. Its build
-  imports every package esbuild's metafile lists, so a package missing from that list fails the build, not the
-  service.
+- The live image holds `dist-live/` and only the packages it can load: the ones its bundle leaves external
+  (esbuild's metafile names them) and their whole run-time closure from `package-lock.json`, dependencies, optional
+  dependencies and peers, however late each is loaded (`tools/deploy/live-deps.mjs`, the `live-deps` stage). The
+  layer changes only with the lockfile or the bundle's imports. As a smoke test, the build then imports every
+  package the bundle imports.
 - Nothing is pruned at build: the old `npm prune --omit=dev` after `next build` ran on every deploy.
 
-The cache lives in the server's BuildKit store; `docker builder prune` empties it, and the next deploy builds from
-scratch (correctly, only slower).
+The cache lives in the server's BuildKit store, bounded only by dockerd's builder garbage collection; step 9 removes
+old image tags, not build cache. Watch it with `docker buildx du` (the two cache mounts are a few hundred MB; the
+rest is old layers). To trim it, `docker builder prune --filter until=168h` drops what no build used for a week and
+keeps what the last deploys share. A full `docker builder prune` also empties the cache mounts, and the next deploy
+builds from scratch (correctly, only slower).
 
 ### Downtime
 

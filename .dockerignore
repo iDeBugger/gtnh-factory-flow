@@ -34,9 +34,10 @@ vitest.config.ts
 vitest.local.config.ts
 eslint.config.mjs
 # Of tools/, the build needs its prebuild step, the site image the env check and the service token,
-# the migrate image the database setup.
+# the live image its package list, the migrate image the database setup.
 tools/*
 !tools/copy-highs-wasm.mjs
+!tools/deploy/live-deps.mjs
 !tools/deploy/check-env.mjs
 !tools/deploy/service-token.mjs
 !tools/deploy/db

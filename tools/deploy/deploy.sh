@@ -156,13 +156,15 @@ else
   context_dir="$(mktemp -d)"
   build_log="$(mktemp)"
   trap 'rm -rf "$local_compose" "$server_compose" "$context_dir" "$build_log"' EXIT
-  git archive HEAD | tar -x -C "$context_dir"
+  git archive HEAD | tar -x -C "$context_dir" || fail "could not unpack git archive HEAD into $context_dir."
   # Over ssh the default builder is the server's daemon; a builder chosen
-  # with `docker buildx use` on this Mac would build somewhere else.
+  # with `docker buildx use` on this Mac would build somewhere else. --load
+  # puts the images in the daemon's image store whatever the builder (a
+  # docker-container builder keeps them in its own cache otherwise).
   builder=()
   if [ "$DEPLOY_SSH" != local ]; then builder=(--builder default); fi
   if ! (cd "$context_dir" && TAG="$TAG" SITE_URL="$SITE_URL" MOD_AND_COMMUNITY="$MOD_AND_COMMUNITY" \
-    docker_remote buildx bake ${builder[@]+"${builder[@]}"} -f tools/deploy/docker-bake.hcl --progress=plain >"$build_log" 2>&1); then
+    docker_remote buildx bake ${builder[@]+"${builder[@]}"} --load -f tools/deploy/docker-bake.hcl --progress=plain >"$build_log" 2>&1); then
     tail -n 60 "$build_log" >&2
     fail "building the images for $TAG (the build's last lines are above)."
   fi

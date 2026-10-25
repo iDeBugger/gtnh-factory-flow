@@ -28,15 +28,6 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,id=gtnh-npm,target=/root/.npm,sharing=locked \
     npm ci --no-audit --no-fund
 
-# The live service's run-time packages: its bundle keeps them external
-# (esbuild --packages=external), and these are all it loads, with what they
-# load in turn. A layer of a few MB that changes only with the lockfile; the
-# live image's build imports each of the bundle's packages, so one missing
-# here fails the build, never the service.
-FROM deps AS live-deps
-RUN mkdir /live \
- && cp -a --parents node_modules/ws node_modules/zod node_modules/@supabase/postgrest-js node_modules/tslib /live/
-
 FROM deps AS build
 # Build values: baked into the bundles, the same for every container of the image.
 ARG NEXT_PUBLIC_SITE_URL
@@ -65,6 +56,17 @@ RUN --mount=type=cache,id=gtnh-next-cache,target=/app/.next/cache,sharing=locked
     npm run build \
  && npm run build:live -- --metafile=dist-live/meta.json \
  && chmod -R a+rX,go-w public src/app/fonts tools/deploy
+
+# The live service's run-time packages: the ones its bundle leaves external
+# (esbuild --packages=external; the build's metafile names them) and their
+# whole run-time closure from package-lock.json, however late each is loaded
+# (tools/deploy/live-deps.mjs). It reruns when the bundle changes, but its
+# output changes only with the lockfile or the bundle's imports, and the live
+# image's layer of it is reused otherwise.
+FROM deps AS live-deps
+COPY tools/deploy/live-deps.mjs /tools/live-deps.mjs
+COPY --from=build /app/dist-live/meta.json /tools/meta.json
+RUN node /tools/live-deps.mjs package-lock.json /tools/meta.json /app /live
 
 FROM ${NODE_IMAGE} AS site
 WORKDIR /app
@@ -117,7 +119,8 @@ RUN mkdir -p /data/live-journal && chown node:node /data/live-journal
 COPY --from=live-deps /live/node_modules ./node_modules
 COPY --from=build /app/package.json ./
 COPY --from=build /app/dist-live ./dist-live
-# Every package the bundle imports loads here (esbuild's metafile lists them).
+# A smoke test: every package the bundle imports loads here (a package it
+# loads later, as pg loads pgpass, is covered by the closure, not by this).
 RUN node --input-type=module -e 'import { readFileSync } from "node:fs"; const meta = JSON.parse(readFileSync("dist-live/meta.json", "utf8")); const packages = new Set(Object.values(meta.outputs).flatMap((output) => output.imports).filter((entry) => entry.external && !entry.path.startsWith("node:")).map((entry) => entry.path)); for (const name of packages) { await import(name); } console.log("live packages:", [...packages].join(" "));'
 ENV NODE_ENV=production \
     LIVE_HOST=0.0.0.0 \
