@@ -11,7 +11,7 @@ import type { PlanNote } from "@/lib/solver/plan/types";
 import { useFactoryStore } from "@/store/factory-store";
 import { writeDeviceSettings } from "@/lib/device-settings";
 import { OverviewRail } from "./OverviewRail";
-import { pinCount } from "./rail-actions";
+import { pinCount, stepPinRule } from "./rail-actions";
 import { PlanNoticeStack } from "./NoticeBar";
 import { RAIL_VIEW_STORAGE_KEY, resetRailViewForTests, writeRailView } from "./rail-view";
 import { SparePopupHost, closeSparePopup, openSparePopupForPort } from "./SparePopup";
@@ -408,6 +408,26 @@ it("writes a typed machine count through the card's rule", () => {
   pinCount("comp", 5);
   expect(comp().solvePinExact).toBeUndefined();
   expect(comp().solvePin).toBe(5);
+});
+
+it("keeps Any once picked: the count box let go with nothing in it does not snap it back to Up to", () => {
+  load(mockUnneeded);
+  const { container } = render(<OverviewRail />);
+  const comp = () => useFactoryStore.getState().project.nodes.find((n) => n.id === "comp")!;
+  const mark = () => container.querySelector(".rail-machine .rail-rule")?.textContent;
+  useFactoryStore.getState().updateNode("comp", { solvePin: 6, solvePinExact: true });
+  // Exactly steps to Any: no count, the plan picks.
+  act(() => stepPinRule("comp", 6));
+  expect(comp().solvePin).toBeUndefined();
+  expect(mark()).toBe("~");
+  // The box sets once more as it is let go of, with nothing typed: still Any.
+  act(() => pinCount("comp", 0));
+  expect(comp().solvePin).toBeUndefined();
+  expect(mark()).toBe("~");
+  // The next count typed is Up to.
+  act(() => pinCount("comp", 3));
+  expect(comp()).toMatchObject({ solvePin: 3 });
+  expect(comp().solvePinExact).toBeUndefined();
 });
 
 it("shows what runs of what is set for an Up to card", () => {
