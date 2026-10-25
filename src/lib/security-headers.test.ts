@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import nextConfig from "../../next.config";
+import { MOD_PORTS } from "./mod-link/mod-link";
 import {
   documentPolicy,
+  MOD_LOOPBACK_ORIGINS,
   securityHeaders,
   STRICT_TRANSPORT_SECURITY,
   workerPolicy,
@@ -59,6 +61,33 @@ describe("the document policy", () => {
   });
 });
 
+describe("the mod's loopback origins", () => {
+  it("are in connect-src only when the mod and community switch is on at build", () => {
+    const on = directive(documentPolicy({ ...production, modAndCommunity: "on" }), "connect-src");
+    expect(on).toBe(
+      "connect-src 'self' http://127.0.0.1:25640 http://127.0.0.1:25641 http://127.0.0.1:25642 http://127.0.0.1:25643 http://127.0.0.1:25644 http://127.0.0.1:25645 http://127.0.0.1:25646 http://127.0.0.1:25647 http://127.0.0.1:25648 http://127.0.0.1:25649",
+    );
+    expect(documentPolicy({ ...production, modAndCommunity: " ON " })).toBe(
+      documentPolicy({ ...production, modAndCommunity: "on" }),
+    );
+    for (const modAndCommunity of [undefined, "", "off", "true", "1"]) {
+      expect(documentPolicy({ ...production, modAndCommunity })).toBe(documentPolicy(production));
+    }
+    expect(documentPolicy(production)).not.toContain("127.0.0.1");
+  });
+
+  it("follow the live origins and match the ports the mod link tries", () => {
+    expect(
+      directive(
+        documentPolicy({ ...production, siteUrl: "https://gtnhplanner.com", modAndCommunity: "on" }),
+        "connect-src",
+      ),
+    ).toBe(`connect-src 'self' wss://gtnhplanner.com ${MOD_LOOPBACK_ORIGINS.join(" ")}`);
+    expect(MOD_LOOPBACK_ORIGINS).toEqual(MOD_PORTS.map((port) => `http://127.0.0.1:${port}`));
+    expect(workerPolicy).not.toContain("127.0.0.1");
+  });
+});
+
 describe("the header rules", () => {
   it("put the five headers on every path and the worker policy last on the static chunks", () => {
     const rules = securityHeaders(production);
@@ -85,6 +114,7 @@ describe("the header rules", () => {
       production: process.env.NODE_ENV === "production",
       liveUrl: process.env.NEXT_PUBLIC_LIVE_URL,
       siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+      modAndCommunity: process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY,
     });
     expect(rules.slice(0, 2)).toEqual(expected);
     const textures = rules

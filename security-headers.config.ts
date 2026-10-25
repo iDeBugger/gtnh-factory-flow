@@ -21,7 +21,9 @@
  * `connect-src` covers the live socket on the page's own host (ws and wss,
  * per CSP3); an absolute live URL adds its origin, and the site's own URL
  * adds its socket origin (`wss://` for https), since WebKit before CSP3 did
- * not let `'self'` match a socket.
+ * not let `'self'` match a socket. A build with the mod and community switch
+ * on adds the ten loopback origins the mod listens on (`MOD_LOOPBACK_ORIGINS`):
+ * "Open in the mod" probes and posts to them. CSP has no port ranges.
  */
 export interface SecurityHeaderEnv {
   /** Outside production, Turbopack and React Refresh need `eval`: dev must never be what breaks. */
@@ -30,7 +32,16 @@ export interface SecurityHeaderEnv {
   liveUrl?: string;
   /** NEXT_PUBLIC_SITE_URL: an absolute http(s) URL adds its host as ws(s) to connect-src. */
   siteUrl?: string;
+  /** NEXT_PUBLIC_MOD_AND_COMMUNITY at build: exactly "on" (any case, trimmed) adds the mod's loopback origins. */
+  modAndCommunity?: string;
 }
+
+/**
+ * The origins of the mod's `WebsiteListener`: 127.0.0.1 on ports 25640 to
+ * 25649, the same range as `MOD_PORTS` in src/lib/mod-link/mod-link.ts
+ * (written out here because this file imports nothing from src/).
+ */
+export const MOD_LOOPBACK_ORIGINS = Array.from({ length: 10 }, (_, index) => `http://127.0.0.1:${25640 + index}`);
 
 export function documentPolicy(env: SecurityHeaderEnv): string {
   const scriptSources = ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"];
@@ -40,7 +51,8 @@ export function documentPolicy(env: SecurityHeaderEnv): string {
   const connectSources = ["'self'"];
   const liveOrigin = originOf(env.liveUrl, ["ws:", "wss:"]);
   const siteSocket = originOf(env.siteUrl, ["http:", "https:"])?.replace(/^http/, "ws");
-  for (const origin of [siteSocket, liveOrigin]) {
+  const modOrigins = env.modAndCommunity?.trim().toLowerCase() === "on" ? MOD_LOOPBACK_ORIGINS : [];
+  for (const origin of [siteSocket, liveOrigin, ...modOrigins]) {
     if (origin && !connectSources.includes(origin)) {
       connectSources.push(origin);
     }

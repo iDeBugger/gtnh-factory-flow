@@ -96,8 +96,10 @@
   `Referrer-Policy`, the one HSTS value; `X-Powered-By` is off. The policy allows only the site's own origin for
   scripts, styles, fonts, fetch/WebSocket and workers (`blob:` workers too), `data:`/`blob:`/`https:` images,
   and no framing by other origins; `NEXT_PUBLIC_SITE_URL` at build adds the site's own `wss://` origin to
-  `connect-src` (WebKit before CSP3 did not match a socket with `'self'`). `/_next/static/*` gets a second
-  policy with `'unsafe-eval'`: the solver worker evaluates the HiGHS glue, and a worker's policy is its own script's response (a later rule overrides
+  `connect-src` (WebKit before CSP3 did not match a socket with `'self'`). `NEXT_PUBLIC_MOD_AND_COMMUNITY=on`
+  at build adds the mod's ten loopback origins, `http://127.0.0.1:25640` to `:25649` ("Open in the mod"); off,
+  the policy names no loopback origin. `/_next/static/*` gets a second policy with `'unsafe-eval'`: the solver
+  worker evaluates the HiGHS glue, and a worker's policy is its own script's response (a later rule overrides
   the same key). A third-party script, font, socket or frame needs a change there first, or the browser
   refuses it. Exam: `security-headers.test.ts`, `next-config.test.ts`, probe `scratch/probes/csp-headers.mjs`.
 - A route's `catch` answers through `error-response.ts`: `serverErrorResponse` gives the route's own fallback

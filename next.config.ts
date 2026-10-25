@@ -89,6 +89,7 @@ const nextConfig: NextConfig = {
         production: process.env.NODE_ENV === "production",
         liveUrl: process.env.NEXT_PUBLIC_LIVE_URL,
         siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+        modAndCommunity: process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY,
       }),
       {
         source: "/datasets/gtnh/:version/textures/icons/:path*",
