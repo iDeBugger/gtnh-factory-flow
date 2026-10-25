@@ -11,7 +11,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { createNewProject } from "@/examples";
 import { leaveLibrary, openLibrary } from "@/lib/library/library-tab";
 import type { FactoryEdge, FactoryNode, FactoryProject, Recipe } from "@/lib/model/types";
-import { leaveWelcomeTab } from "@/lib/welcome/welcome-tab";
+import { leaveWelcomeTab, openWelcomeTab } from "@/lib/welcome/welcome-tab";
 import { useFactoryStore } from "@/store/factory-store";
 
 vi.mock("@/lib/compact-view", () => ({ isCompactViewport: () => false, useIsCompactViewport: () => false }));
@@ -160,6 +160,51 @@ describe("the board's Delete and Backspace", () => {
     act(() => openLibrary());
     press("Backspace");
     expect(cards()).toEqual(ALL);
+  });
+
+  it("leave the board alone while Welcome or a task board covers it", () => {
+    boardWithPlan();
+    selectOnBoard(["m2"]);
+    act(() => openWelcomeTab());
+    press("Delete");
+    expect(cards()).toEqual(ALL);
+    act(() => leaveWelcomeTab());
+    act(() => useFactoryStore.setState((state) => ({ project: { ...state.project, primaryView: "tasks" } })));
+    press("Backspace");
+    expect(cards()).toEqual(ALL);
+  });
+
+  it("leave the board alone while a menu or dialog holds the focus", () => {
+    boardWithPlan();
+    selectOnBoard(["m2"]);
+    for (const role of ["menu", "dialog"]) {
+      const popup = document.createElement("div");
+      popup.setAttribute("role", role);
+      const row = document.createElement("div");
+      row.tabIndex = 0;
+      popup.append(row);
+      document.body.append(popup);
+      act(() => row.focus());
+      act(() => {
+        row.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true }));
+      });
+      popup.remove();
+    }
+    expect(cards()).toEqual(ALL);
+    // With the menu gone, the selection is still there to delete.
+    press("Delete");
+    expect(cards()).toEqual(["m0", "m1", "m3", "m4", "m5"]);
+  });
+
+  it("keep the selection when a popup took the Escape", () => {
+    boardWithPlan();
+    selectOnBoard(["m1"]);
+    const taken = (event: KeyboardEvent) => event.preventDefault();
+    window.addEventListener("keydown", taken, { capture: true });
+    press("Escape");
+    window.removeEventListener("keydown", taken, { capture: true });
+    press("Delete");
+    expect(cards()).toEqual(["m0", "m2", "m3", "m4", "m5"]);
   });
 
   it("delete nothing after Escape lets go of the selection", () => {

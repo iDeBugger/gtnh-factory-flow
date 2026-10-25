@@ -1929,7 +1929,6 @@ export function FactoryFlow() {
     }
   }, [poolPairsSignature, poolVersionServes]);
   const addStorageForConnection = useFactoryStore((state) => state.addStorageForConnection);
-  const selectedNodeId = useFactoryStore((state) => state.selectedNodeId);
   const deleteNode = useFactoryStore((state) => state.deleteNode);
   const deleteStorage = useFactoryStore((state) => state.deleteStorage);
   const deleteEdge = useFactoryStore((state) => state.deleteEdge);
@@ -5017,7 +5016,8 @@ export function FactoryFlow() {
         setNodeColorPaintMode(undefined);
         setAnnotationTool(undefined);
         setDeleteMode(false);
-        if (!isBoardCovered()) {
+        // A popup that took the Escape (its own dismiss) keeps the board's selection.
+        if (!event.defaultPrevented && !isBoardCovered()) {
           clearBoardSelection();
         }
       }
