@@ -148,7 +148,8 @@ The frames are the contract's (version 1). What the service adds or decides:
 - **Pings.** Clients send `{ t: "ping" }` every 25 s (Cloudflare drops a socket idle for 100 s); the server also pings
   at the WebSocket level and drops a connection silent for 90 s.
 - **Origins.** A browser's upgrade must come from an origin in `LIVE_ALLOWED_ORIGINS` (403 otherwise); a client that
-  sends no Origin (the game) is let in. Sign-in is the `gtnh_session` cookie on the upgrade, checked with
+  sends no Origin (the game) is let in only while `NEXT_PUBLIC_MOD_AND_COMMUNITY` is `on` in the service's
+  environment, and refused with 403 otherwise. Sign-in is the `gtnh_session` cookie on the upgrade, checked with
   `src/lib/server/session.ts`, the module the website uses. When the database cannot say whose the session is, the socket
   closes with 1013 (try again later), never 4001.
 
