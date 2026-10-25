@@ -598,20 +598,24 @@ export function usePowerCardModel(data: RecipeNodeData, selected: boolean): Spec
 
 /**
  * A crop card's harvesters as a number setting: the Crop Managers or Industrial Farms its seeds fill at the tier's
- * capacity (a seed bed's square, a manager's reach planted full). Typed or stepped, it plants that many full machines
- * of seeds through `plantSeeds`; below one machine it writes nothing. None for a hand-picked crop or no harvester.
+ * capacity (a seed bed's square, a manager's reach planted full). With a count set it reads the seeds SET, so it shows
+ * and steps from what the player typed even while the line runs fewer; on Any it reads the seeds the plan plants.
+ * Typed or stepped, it plants that many full machines of seeds through `plantSeeds`; below one machine it clears a set
+ * count (Any), as the count's own wheel does. None for a hand-picked crop or no harvester.
  */
 export function cropMachinesSetting(
   setup: CropHarvesterSetup | undefined,
-  crops: number,
-  plantSeeds: (seeds: number) => void,
+  seeds: { solved: number; set: number | undefined },
+  plantSeeds: (seeds: number | undefined) => void,
 ): NumberSetting | undefined {
   const capacity = setup && !cropsNhIsHandPicked(setup) ? cropsNhCropsPerMachine(setup) : 0;
   if (!setup || capacity <= 0) return undefined;
-  const value = cropsNhHarvesterMachineCount(setup, crops);
+  const isSet = seeds.set !== undefined && seeds.set > 0;
+  const value = cropsNhHarvesterMachineCount(setup, isSet ? seeds.set! : seeds.solved);
   const setMachines = (count: number) => {
-    if (!(count >= 1)) return;
-    plantSeeds(Math.round(count) * capacity);
+    if (!Number.isFinite(count)) return;
+    if (Math.round(count) >= 1) plantSeeds(Math.round(count) * capacity);
+    else if (isSet) plantSeeds(undefined);
   };
   return {
     id: CROP_MACHINES_ID,
@@ -690,7 +694,7 @@ export function useCropCardModel(data: RecipeNodeData, selected: boolean): Speci
   // reach planted full. A setting pinned until unpinned: typed or stepped, it plants that many full machines of seeds.
   const pinKey = pinMachineKey(recipe, projectNode);
   const pins = useFactoryStore((state) => state.project.settingPins?.[pinKey]);
-  const machines = cropMachinesSetting(setup, crops, (seeds) => {
+  const machines = cropMachinesSetting(setup, { solved: crops, set: count.pinned ? projectNode.solvePin : undefined }, (seeds) => {
     if (!isLocked()) base.actions.setCount(seeds);
   });
   const machinesTip = setup && machines ? cropMachinesNotes(setup, tierControl?.current.label ?? "") : [];

@@ -17,7 +17,8 @@ holder, a crop card. Bees, the Extreme Entity Crusher and every other machine ar
   are the plan's `settingPins["power:<source>"]`.
   A crop card's count is seeds, never machines (`.cc-run`, the word small beside the number). Its harvesters are a
   number setting (`CROP_MACHINES_ID`, `NumberSetting`), pinned by default: what the seeds fill at the tier's capacity
-  (`cropsNhCropsPerMachine`); typed or stepped, it sets the seeds to that many full machines. Pin toggles pass every
+  (`cropsNhCropsPerMachine`), of the seeds set when a count is set and of the solved seeds on Any; typed or stepped,
+  it sets the seeds to that many full machines, and below one clears a set count. Pin toggles pass every
   pinnable setting, or the ones left out unpin. Exam: `special/crop-machines.test.ts`.
 
 - A card's menu (`menus/CardActionsMenu.tsx` `CardRows`, from its actions key and a right click on it) is the mod's
