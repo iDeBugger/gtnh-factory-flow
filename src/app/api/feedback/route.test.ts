@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 
@@ -21,7 +21,7 @@ vi.mock("@/lib/server/feedback", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/server/feedback")>();
   return {
     ...actual,
-    openIssue: vi.fn(async () => ({ number: 12, url: "https://github.com/jackwrichards/gtnh-planner-mod/issues/12" })),
+    openIssue: vi.fn(async () => ({ number: 12, url: "https://github.com/example-owner/mod-repo/issues/12" })),
   };
 });
 
@@ -56,6 +56,11 @@ const report = {
   plans: [{ name: "Steel line", plan }],
 };
 
+beforeEach(() => {
+  vi.stubEnv("GITHUB_FEEDBACK_REPO", "example-owner/mod-repo");
+  vi.stubEnv("GITHUB_FEEDBACK_WEB_REPO", "example-owner/web-repo");
+});
+
 afterEach(() => {
   vi.unstubAllEnvs();
   // Every case here sends from one (absent) address: the gate's sender share would otherwise meet across them.
@@ -73,17 +78,43 @@ describe("the feedback route", () => {
     expect(await response.json()).toEqual({ error: "Reports can't be sent yet." });
   });
 
+  it("is closed without a repo for the report, before it is counted", async () => {
+    vi.stubEnv("GITHUB_FEEDBACK_TOKEN", "token");
+    vi.mocked(openIssue).mockClear();
+    vi.mocked(claimIssue).mockClear();
+    const web = {
+      ...report,
+      origin: "web",
+      deviceId: "web-0b6c1c7e-8f0a-4c43-9a51-6f2d0c1e2b3a",
+      versions: { mod: "3.12.0", pack: "", java: "", os: "Win32" },
+    };
+    vi.stubEnv("GITHUB_FEEDBACK_REPO", "");
+    vi.stubEnv("GITHUB_FEEDBACK_WEB_REPO", "");
+    for (const body of [report, web]) {
+      const response = await send(body);
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: "Reports can't be sent yet." });
+    }
+    // Only the web repo: the game's report is not ready, the web's opens.
+    vi.stubEnv("GITHUB_FEEDBACK_WEB_REPO", "example-owner/web-repo");
+    expect((await send(report)).status).toBe(503);
+    expect(claimIssue).not.toHaveBeenCalled();
+    expect((await send(web)).status).toBe(201);
+    expect(vi.mocked(openIssue).mock.calls.map((call) => call[1])).toEqual(["example-owner/web-repo"]);
+    vi.mocked(openIssue).mockClear();
+  });
+
   it("opens an issue with the plan linked and answers its page", async () => {
     vi.stubEnv("GITHUB_FEEDBACK_TOKEN", "token");
     const response = await send(report);
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({
       number: 12,
-      url: "https://github.com/jackwrichards/gtnh-planner-mod/issues/12",
+      url: "https://github.com/example-owner/mod-repo/issues/12",
     });
     const [token, repo, issue] = vi.mocked(openIssue).mock.calls[0]!;
     expect(token).toBe("token");
-    expect(repo).toBe("jackwrichards/gtnh-planner-mod");
+    expect(repo).toBe("example-owner/mod-repo");
     expect(issue.title).toBe("Idea: Copy a card");
     expect(issue.labels).toEqual(["from game", "enhancement"]);
     expect(issue.body).toContain("[open in the planner](https://gtnhplanner.com/#p=gtnh1.");
@@ -103,7 +134,7 @@ describe("the feedback route", () => {
     expect(sent.status).toBe(201);
     expect(vi.mocked(openIssue).mock.calls[0]![2].labels).toEqual(["from web", "enhancement"]);
     // The web planner's reports open on the website's repo, the game's on the mod's.
-    expect(vi.mocked(openIssue).mock.calls[0]![1]).toBe("jackwrichards/gtnh-factory-flow");
+    expect(vi.mocked(openIssue).mock.calls[0]![1]).toBe("example-owner/web-repo");
     vi.mocked(openIssue).mockClear();
     // The web's origin with the game's device id and a Java, and the game's shape claiming the web's origin.
     expect((await send({ ...web, deviceId: report.deviceId })).status).toBe(400);
@@ -251,7 +282,7 @@ describe("the feedback route with the setting unset", () => {
     };
     const sent = await send(web);
     expect(sent.status).toBe(201);
-    expect(vi.mocked(openIssue).mock.calls[0]![1]).toBe("jackwrichards/gtnh-factory-flow");
+    expect(vi.mocked(openIssue).mock.calls[0]![1]).toBe("example-owner/web-repo");
     expect((await send({ ...web, title: "" })).status).toBe(400);
   });
 });

@@ -33,6 +33,11 @@ function refuse(sender: string, status: number, error: string): NextResponse {
   return NextResponse.json({ error }, { status });
 }
 
+/** The server cannot open issues: no token, or no repo to open them on. */
+function notReady(): NextResponse {
+  return NextResponse.json({ error: "Reports can't be sent yet." }, { status: 503 });
+}
+
 /**
  * A report from the in-game Feedback box, opened as a GitHub issue on the planner's repo. Answers the issue's
  * number and page, which the game shows. `feedback-guard.ts` has what a report must get past first.
@@ -59,9 +64,12 @@ export async function POST(request: Request) {
       return modAndCommunityOffResponse();
     }
   }
+  // Not ready without a token or a repo for the reports this deployment
+  // takes (the web planner's always, the game's only with the mod on).
   const token = process.env.GITHUB_FEEDBACK_TOKEN;
-  if (!token || !isCommunityConfigured()) {
-    return NextResponse.json({ error: "Reports can't be sent yet." }, { status: 503 });
+  const anyRepo = Boolean(feedbackRepo("web") || (isModAndCommunityOn() && feedbackRepo("game")));
+  if (!token || !anyRepo || !isCommunityConfigured()) {
+    return notReady();
   }
   // The files stored for this report so far, removed again if no issue
   // comes to link to them.
@@ -98,6 +106,11 @@ export async function POST(request: Request) {
     if (!looksGenuine(report)) {
       return refuse(sender, 400, "That report could not be read.");
     }
+    // The one repo for this report's origin, checked before the issue is claimed.
+    const repo = feedbackRepo(report.origin);
+    if (!repo) {
+      return notReady();
+    }
     const refusal = await claimIssue(request, report);
     if (refusal) {
       return refuse(sender, refusal.status, refusal.error);
@@ -128,7 +141,7 @@ export async function POST(request: Request) {
     }
 
     const { body, plansComment } = issueBody(report, links);
-    const issue = await openIssue(token, feedbackRepo(report.origin), {
+    const issue = await openIssue(token, repo, {
       title: issueTitle(report),
       body,
       labels: issueLabels(report),

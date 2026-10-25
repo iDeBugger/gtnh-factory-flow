@@ -23,16 +23,24 @@ const LINK_MAX = 8000;
 /** GitHub refuses an issue body over 65,536 characters; the plans move to a comment past this. */
 const BODY_MAX = 60_000;
 
-/** Where reports go and how each kind is labelled there: the game's to the mod's repo, the web planner's to the website's. */
-export const FEEDBACK_REPO = "jackwrichards/gtnh-planner-mod";
-export const FEEDBACK_WEB_REPO = "jackwrichards/gtnh-factory-flow";
+/** An `owner/name` GitHub repo. */
+const REPO_NAME = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;
 
-/** The repo a report opens its issue on (`GITHUB_FEEDBACK_REPO` and `GITHUB_FEEDBACK_WEB_REPO` override). */
-export function feedbackRepo(origin: "game" | "web" | undefined, env: Record<string, string | undefined> = process.env): string {
-  return origin === "web"
-    ? env.GITHUB_FEEDBACK_WEB_REPO || FEEDBACK_WEB_REPO
-    : env.GITHUB_FEEDBACK_REPO || FEEDBACK_REPO;
+/**
+ * The repo a report opens its issue on: `GITHUB_FEEDBACK_WEB_REPO` for the web
+ * planner's, `GITHUB_FEEDBACK_REPO` for the game's. No default: a fork or a
+ * fresh deployment must never open its players' reports on somebody else's
+ * repo by accident, so an unset or malformed name is undefined and the route
+ * answers as it does without a token.
+ */
+export function feedbackRepo(
+  origin: "game" | "web" | undefined,
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  const repo = (origin === "web" ? env.GITHUB_FEEDBACK_WEB_REPO : env.GITHUB_FEEDBACK_REPO)?.trim();
+  return repo && REPO_NAME.test(repo) ? repo : undefined;
 }
+
 /**
  * Whether this deployment takes a report with this body's origin. The game's
  * reports (origin absent or `game`) come only while the mod integration is on;

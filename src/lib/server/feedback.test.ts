@@ -221,12 +221,23 @@ describe("feedback reports from the game", () => {
 });
 
 describe("feedbackRepo", () => {
-  it("sends the web planner's reports to the website's repo and the game's to the mod's", () => {
-    expect(feedbackRepo("web", {})).toBe("jackwrichards/gtnh-factory-flow");
-    expect(feedbackRepo("game", {})).toBe("jackwrichards/gtnh-planner-mod");
-    expect(feedbackRepo(undefined, {})).toBe("jackwrichards/gtnh-planner-mod");
-    expect(feedbackRepo("web", { GITHUB_FEEDBACK_WEB_REPO: "o/web", GITHUB_FEEDBACK_REPO: "o/game" })).toBe("o/web");
-    expect(feedbackRepo("game", { GITHUB_FEEDBACK_WEB_REPO: "o/web", GITHUB_FEEDBACK_REPO: "o/game" })).toBe("o/game");
+  it("sends the web planner's reports to the web repo and the game's to the mod's, each named only by its setting", () => {
+    const env = { GITHUB_FEEDBACK_WEB_REPO: "o/web", GITHUB_FEEDBACK_REPO: "o/game" };
+    expect(feedbackRepo("web", env)).toBe("o/web");
+    expect(feedbackRepo("game", env)).toBe("o/game");
+    expect(feedbackRepo(undefined, env)).toBe("o/game");
+    expect(feedbackRepo("web", { GITHUB_FEEDBACK_WEB_REPO: " o/web " })).toBe("o/web");
+  });
+
+  it("has no default: unset, blank or malformed is no repo", () => {
+    for (const origin of ["web", "game", undefined] as const) {
+      expect(feedbackRepo(origin, {})).toBeUndefined();
+    }
+    expect(feedbackRepo("web", { GITHUB_FEEDBACK_REPO: "o/game" })).toBeUndefined();
+    expect(feedbackRepo("game", { GITHUB_FEEDBACK_WEB_REPO: "o/web" })).toBeUndefined();
+    for (const bad of ["", " ", "o", "o/", "/r", "o/r/x", "https://github.com/o/r", "o/r?x"]) {
+      expect(feedbackRepo("web", { GITHUB_FEEDBACK_WEB_REPO: bad })).toBeUndefined();
+    }
   });
 });
 
