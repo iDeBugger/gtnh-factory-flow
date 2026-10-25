@@ -127,9 +127,10 @@ export async function deletePending(key: string): Promise<void> {
  * The first base wins until it is used or the account takes the plan: a later edit never moves it forward, or the
  * edits before it would be lost. IndexedDB is the only copy: every tab reads it there, so a base another tab used,
  * moved or forgot is seen at once, and taking it (`takeDetachedBase`) removes it in the same transaction that stores
- * the batches made of it, so two tabs never send the same edits. Memory holds the writes still in flight (one chain
- * per design, so a room opening moments after an edit or a refresh waits for them) and, for a moment, that a base is
- * stored, so a drag does not open the database at every step.
+ * the batches made of it, so two tabs never send the same edits. Every edit made away from the room checks storage
+ * (one small transaction), so one right after another tab took the base keeps a new one. Memory holds only the
+ * writes still to run, one chain per design: a room opening moments after an edit or a refresh waits for them, and
+ * edits arriving while a keep waits its turn share it (its plan is the older one).
  */
 
 interface StoredBase {
@@ -145,31 +146,8 @@ function baseKey(designId: string): string {
 }
 
 const writing = new Map<string, Promise<void>>();
-const keeping = new Map<string, Promise<void>>();
-/** When this tab last saw a base stored per design. Trusted for a short while only: another tab may take it. */
-const seen = new Map<string, number>();
-const SEEN_MS = 2_000;
-/**
- * Edits made while the note was trusted: the plan before the first of them, checked against storage when the note
- * runs out. Another tab may have taken the base meanwhile; then this one is kept, so those edits are not lost.
- */
-const trusted = new Map<string, { base: () => LivePlan; timer: ReturnType<typeof setTimeout> }>();
-
-function dropTrusted(designId: string): void {
-  const entry = trusted.get(designId);
-  if (entry) {
-    clearTimeout(entry.timer);
-    trusted.delete(designId);
-  }
-}
-
-/** What this tab remembers of stored bases, dropped: for tests, which each start on a fresh database. */
-export function forgetBaseMemoryForTests(): void {
-  seen.clear();
-  for (const designId of [...trusted.keys()]) {
-    dropTrusted(designId);
-  }
-}
+/** A keep asked for and not started yet, per design: later edits share it. */
+const queuedKeeps = new Map<string, Promise<void>>();
 
 async function settled(designId: string): Promise<void> {
   await writing.get(designId)?.catch(() => undefined);
@@ -240,54 +218,28 @@ function putBase(store: IDBObjectStore, designId: string, base: LivePlan): void 
 
 /**
  * The plan before the first edit made away from its room, unless one is kept already. `base` is called only when
- * none is, so an edit after the first costs one small read.
+ * none is, so an edit after the first costs one small read; edits while that read waits its turn share it.
  */
 export function keepDetachedBase(designId: string, base: () => LivePlan): Promise<void> {
   if (!available()) {
     return Promise.resolve();
   }
-  const at = seen.get(designId);
-  if (at !== undefined && Date.now() - at < SEEN_MS) {
-    if (!trusted.has(designId)) {
-      const timer = setTimeout(
-        () => {
-          const entry = trusted.get(designId);
-          trusted.delete(designId);
-          seen.delete(designId);
-          if (entry) {
-            void keepDetachedBase(designId, entry.base).catch(() => undefined);
-          }
-        },
-        SEEN_MS - (Date.now() - at),
-      );
-      trusted.set(designId, { base, timer });
-    }
-    return Promise.resolve();
+  const queued = queuedKeeps.get(designId);
+  if (queued) {
+    // Not started yet: it reads storage after this edit, with a plan at least as old as this edit's.
+    return queued;
   }
-  const inFlight = keeping.get(designId);
-  if (inFlight) {
-    // The write in flight keeps a base at least as old as this edit's.
-    return inFlight;
-  }
-  // The oldest plan of edits not yet checked against storage: the trusted ones, else this edit's.
-  const oldest = trusted.get(designId)?.base ?? base;
-  dropTrusted(designId);
-  const write = inTurn(designId, () =>
-    transact("readwrite", (store, abort) =>
+  const write = inTurn(designId, () => {
+    queuedKeeps.delete(designId);
+    return transact("readwrite", (store, abort) =>
       withBase(store, designId, abort, (existing) => {
         if (!existing) {
-          putBase(store, designId, oldest());
+          putBase(store, designId, base());
         }
       }),
-    ),
-  )
-    .then(() => {
-      seen.set(designId, Date.now());
-    })
-    .finally(() => {
-      keeping.delete(designId);
-    });
-  keeping.set(designId, write);
+    );
+  });
+  queuedKeeps.set(designId, write);
   return write;
 }
 
@@ -300,8 +252,7 @@ export async function readDetachedBase(designId: string): Promise<LivePlan | und
   await transact("readonly", (store, abort) =>
     withBase(store, designId, abort, (base) => (found = base)),
   );
-  // None stored (another tab took it) but edits made here while the note was trusted: their plan is the base.
-  return found ?? trusted.get(designId)?.base();
+  return found;
 }
 
 /** What a tab stores in place of a base it takes: its pending batches for the plan, made of the base. */
@@ -325,23 +276,13 @@ export async function takeDetachedBase(
     use(undefined);
     return;
   }
-  let unused: (() => LivePlan) | undefined;
-  await inTurn(designId, () => {
-    // Edits made here while the note was trusted count only when no base is stored (another tab took it).
-    const mine = trusted.get(designId)?.base;
-    dropTrusted(designId);
-    return transact("readwrite", (store, abort) =>
-      withBase(store, designId, abort, (stored) => {
-        const base = stored ?? mine?.();
+  await inTurn(designId, () =>
+    transact("readwrite", (store, abort) =>
+      withBase(store, designId, abort, (base) => {
         const taken = use(base);
-        if (!taken) {
-          unused = stored ? undefined : mine;
+        if (!base || !taken) {
           return;
         }
-        if (!base) {
-          return;
-        }
-        seen.delete(designId);
         store.delete(baseKey(designId));
         const key = pendingKey(taken.doc, taken.tabId);
         if (taken.pending.length === 0) {
@@ -351,12 +292,8 @@ export async function takeDetachedBase(
           store.put(entry);
         }
       }),
-    );
-  });
-  if (unused) {
-    // Not taken after all (the room went): those edits still need a base.
-    await keepDetachedBase(designId, unused).catch(() => undefined);
-  }
+    ),
+  );
 }
 
 /** The account now holds the plan as `base` (a push or a pull went through): later edits count from there. */
@@ -400,8 +337,6 @@ export async function forgetDetachedBase(designId: string): Promise<void> {
   if (!available()) {
     return;
   }
-  seen.delete(designId);
-  dropTrusted(designId);
   await inTurn(designId, () =>
     transact("readwrite", (store) => {
       store.delete(baseKey(designId));

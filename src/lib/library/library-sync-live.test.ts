@@ -76,11 +76,7 @@ vi.mock("./client", () => ({
 
 import { createEmptyProject } from "@/examples";
 import { writeDesign } from "@/lib/designs/design-storage";
-import {
-  forgetBaseMemoryForTests,
-  keepDetachedBase,
-  readDetachedBase,
-} from "@/lib/live/live-pending-store";
+import { keepDetachedBase, readDetachedBase } from "@/lib/live/live-pending-store";
 import { liveShape } from "@/lib/live/live-shape";
 import type { FactoryAnnotation, FactoryProject } from "@/lib/model/types";
 import { useCommunityAuthStore } from "@/store/community-auth-store";
@@ -112,7 +108,6 @@ beforeEach(() => {
   useDesignStore.setState({ designs: [], activeDesignId: undefined });
   useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
   globalThis.indexedDB = new IDBFactory();
-  forgetBaseMemoryForTests();
 });
 
 afterEach(() => {

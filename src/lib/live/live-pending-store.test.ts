@@ -3,7 +3,6 @@ import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { deleteDesign } from "@/lib/designs/design-storage";
 import {
-  forgetBaseMemoryForTests,
   forgetDetachedBase,
   keepDetachedBase,
   moveDetachedBase,
@@ -29,7 +28,6 @@ function plan(text: string): LivePlan {
 
 beforeEach(() => {
   globalThis.indexedDB = new IDBFactory();
-  forgetBaseMemoryForTests();
 });
 
 describe("the base of edits made away from a live room", () => {
@@ -64,53 +62,35 @@ describe("the base of edits made away from a live room", () => {
     });
 
     expect(await readDetachedBase("design-1")).toBeUndefined();
-    // This tab trusts that a base is stored for a moment (a drag writes once); past it, a later edit keeps a new one.
-    vi.useFakeTimers({ toFake: ["Date"] });
-    try {
-      vi.setSystemTime(Date.now() + 2_100);
-      await keepDetachedBase("design-1", () => plan("later"));
-    } finally {
-      vi.useRealTimers();
-    }
-    expect(await readDetachedBase("design-1")).toEqual(plan("later"));
   });
 
-  it("loses no edit made while it trusted a base another tab had just taken", async () => {
+  it("keeps a new base at the very next edit after another tab took it, so that edit is never lost", async () => {
     await keepDetachedBase("design-1", () => plan("first"));
     await deleteFromAnotherTab("design-1");
-    // Within the trusted moment: no read, but the plan before this edit is held.
-    await keepDetachedBase("design-1", () => plan("window"));
-    await keepDetachedBase("design-1", () => plan("later in the window"));
 
-    // Taken now (a room opens here), the held plan is the base.
+    await keepDetachedBase("design-1", () => plan("before the next edit"));
+
     let got: LivePlan | undefined;
     await takeDetachedBase("design-1", (base) => {
       got = base;
       return { doc: DOC, tabId: "tab-a", pending: [] };
     });
-    expect(got).toEqual(plan("window"));
+    expect(got).toEqual(plan("before the next edit"));
   });
 
-  it("stores the held plan once the trusted moment is over, when no base is stored", async () => {
+  it("shares one write among edits made while it waits its turn", async () => {
     await keepDetachedBase("design-1", () => plan("first"));
     await deleteFromAnotherTab("design-1");
-    await keepDetachedBase("design-1", () => plan("window"));
-
-    await new Promise((resolve) => setTimeout(resolve, 2_300));
-
-    expect(await readDetachedBase("design-1")).toEqual(plan("window"));
-  });
-
-  it("opens the database once for a run of edits, not at every step of a drag", async () => {
-    await keepDetachedBase("design-1", () => plan("first"));
     const opened = vi.spyOn(globalThis.indexedDB, "open");
 
-    for (let step = 0; step < 20; step += 1) {
-      await keepDetachedBase("design-1", () => plan(`step ${step}`));
-    }
+    const steps = Array.from({ length: 20 }, (_, step) =>
+      keepDetachedBase("design-1", () => plan(`step ${step}`)),
+    );
+    await Promise.all(steps);
 
-    expect(opened).not.toHaveBeenCalled();
-    expect(await readDetachedBase("design-1")).toEqual(plan("first"));
+    expect(opened).toHaveBeenCalledTimes(1);
+    // The plan of the first edit of the run, the oldest.
+    expect(await readDetachedBase("design-1")).toEqual(plan("step 0"));
   });
 
   it("shifts the base before a room binding right after the change takes it", async () => {

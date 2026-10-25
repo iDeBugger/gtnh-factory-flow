@@ -211,9 +211,9 @@ changes nothing until then. Architecture and protocol: `docs/live.md`.
   (`withRecipesTheyName`); the stored batches keep their ids and ops, so a crash never applies one twice. The wait
   for storage is bounded (3 s): past it the room joins, and what arrives later lands against the view at that moment
   and is sent at once, after everything the room already sent and before any later edit. Base writes run in turn per
-  design (keep, shift, move, take, forget). A tab trusts for 2 s that a base is stored, so a drag writes it once; the
-  plan before an edit made in that window is held, and becomes the base if none is stored when the window ends or a
-  room here takes or a pull reads it. A screen-only change (the recipe refresh, `quietlyOnThisScreen`) moves the base
+  design (keep, shift, move, take, forget). Every edit made while no room is open checks storage with one small
+  transaction (edits made while one waits its turn share it), so the edit right after another tab took the base
+  keeps a new one; nothing about the base is cached in memory. A screen-only change (the recipe refresh, `quietlyOnThisScreen`) moves the base
   with it, so it is never sent. A pull of a newer account copy puts the same edits on top of it (same recipe guard),
   and the base moves to the pulled plan only once the merged record is written; a push with the plan moves it; a
   push without it (409 live) does not. The account sync waits at most 2 s for the live store: a design whose base it

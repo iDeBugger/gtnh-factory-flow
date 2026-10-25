@@ -75,7 +75,6 @@ vi.mock("@/lib/live/live-pending-store", async (importOriginal) => {
 
 import { createEmptyProject, createNewProject } from "@/examples";
 import {
-  forgetBaseMemoryForTests,
   keepDetachedBase,
   readDetachedBase,
   readPending,
@@ -302,7 +301,6 @@ beforeEach(() => {
   service = new FakeService();
   storage.records.clear();
   globalThis.indexedDB = new IDBFactory();
-  forgetBaseMemoryForTests();
   useLiveSession.setState({
     status: "off",
     members: [],
