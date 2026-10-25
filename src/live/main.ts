@@ -6,7 +6,7 @@
  *
  * Environment:
  * - COMMUNITY_HASH_SALT: the session secret, the same as the website's.
- * - SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY: the database (or LOCAL_DB=1 and
+ * - POSTGREST_URL, POSTGREST_SERVICE_TOKEN: the database (or LOCAL_DB=1 and
  *   LOCAL_DB_URL for the local one).
  * - LIVE_PORT (3001), LIVE_HOST (127.0.0.1).
  * - LIVE_JOURNAL_DIR: where unflushed batches are kept (required in production).
@@ -26,7 +26,7 @@ import { isCommunityConfigured } from "@/lib/server/community";
 import { assertLocalDbAllowed } from "@/lib/server/local-db/client";
 import { sessionSecret } from "@/lib/server/session";
 import { LiveService } from "./service";
-import { supabasePlanStore } from "./store";
+import { databasePlanStore } from "./store";
 import { parseTrustedProxies, type TrustedProxies } from "./trusted-proxies";
 
 function fatal(message: string): never {
@@ -49,7 +49,7 @@ async function main() {
     fatal((error as Error).message);
   }
   if (!isCommunityConfigured()) {
-    fatal("No database: set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or LOCAL_DB=1).");
+    fatal("No database: set POSTGREST_URL and POSTGREST_SERVICE_TOKEN (or LOCAL_DB=1).");
   }
   const journalDir = process.env.LIVE_JOURNAL_DIR;
   if (!journalDir && production) {
@@ -71,7 +71,7 @@ async function main() {
   let stop: (signal: string, code?: number) => Promise<void> = async () => undefined;
   const service = new LiveService({
     onShutdownRequest: () => void stop("shutdown request"),
-    store: supabasePlanStore(),
+    store: databasePlanStore(),
     journalDir: path.resolve(journalDir ?? path.join("scratch", "local-db", "live-journal")),
     allowedOrigins,
     internalToken: process.env.LIVE_INTERNAL_TOKEN || undefined,

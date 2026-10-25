@@ -16,6 +16,10 @@ import { assertLocalDbAllowed } from "./local-db/client";
  * - GTNH_MAX_LOADED_RECIPE_SHARDS is no longer read (the shard cache is bounded
  *   by bytes): it warns and names GTNH_MAX_LOADED_RECIPE_SHARD_MB, so a unit
  *   that still sets it does not believe it is in effect.
+ * - SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY set: it warns and names
+ *   POSTGREST_URL and POSTGREST_SERVICE_TOKEN, the variables the database
+ *   client reads, so an old environment file does not leave the server
+ *   without a database while looking configured.
  */
 export const SHORT_SECRET_LENGTH = 16;
 
@@ -50,6 +54,11 @@ export function checkServerSetup(warn: (message: string) => void = console.warn)
   if (process.env.GTNH_MAX_LOADED_RECIPE_SHARDS) {
     warn(
       "[datasets] GTNH_MAX_LOADED_RECIPE_SHARDS is ignored: the recipe shard cache is bounded in MB by GTNH_MAX_LOADED_RECIPE_SHARD_MB.",
+    );
+  }
+  if (process.env.SUPABASE_URL || process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    warn(
+      "[db] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not read: set POSTGREST_URL and POSTGREST_SERVICE_TOKEN.",
     );
   }
 }

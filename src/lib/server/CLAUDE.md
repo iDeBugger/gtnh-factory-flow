@@ -219,17 +219,19 @@
   Both hold: both versions are prewarmed in full. If one fails, 2.8.1 is prewarmed second with its catalog
   only. Measure again when a dataset grows or a third version is served.
 
-## Supabase (community.ts, resource-popularity.ts)
+## Database (PostgREST: community.ts, resource-popularity.ts)
 
-The instance is small and has gone down under load. Rules:
+The server and the live service talk to PostgREST at `POSTGREST_URL` through `@supabase/postgrest-js`
+(`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
+which bypasses row security. No anon role exists, so a request without the token is 401. `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` are not read; the startup checks warn when either is set. Rules:
 - Every request goes through `fetchWithDbTimeout` (20 s). A timeout answers 504 rather than
   rejecting (postgrest-js retries a rejected GET three more times), and any 5xx that is not
-  JSON (Cloudflare's 522 page comes as text/plain) becomes the same plain JSON error, so no
+  JSON (a proxy's error page, often text/plain) becomes the same plain JSON error, so no
   route shows a player that page; so do PostgREST's own connection errors (PGRST000-003).
   Exam: `community-db-fetch.test.ts`.
-- The instance is Nano (Free plan): disk throughput falls to 5 MB/s once its Disk IO budget
-  is spent, and the budget refills only while demand stays under that. After 5 failures in a
-  row the client's breaker answers at once for 15 s without sending (`fetchFromDb`).
+- After 5 failures in a row the client's breaker answers at once for 15 s without sending (`fetchFromDb`): a
+  stalled database recovers only once demand drops, and every tab keeps asking.
 - A failed account lookup throws, never reads as signed out (`loadSessionUser`); accounts are
   cached a minute, as the lookup's promise from before it answers, so forgetting an account mid-read
   (Sign out everywhere) drops the read too and the old row is never written back. A library answer fails whole when a sharing read fails: the client
@@ -245,8 +247,6 @@ The instance is small and has gone down under load. Rules:
   the rest waits an hour; 500 ids keep the delete's query string under 8 KB), over the `created_at` index (migration
   `2026-10-25-community-events-created-at.sql`, mirrored in `schema.sql`), and a failed prune never fails a save. Exam:
   `community-events.test.ts`.
-- The dashboard (restarts, disk IO, memory) needs the repo owner; there is no management
-  token here.
 
 ## Sessions and secrets (session.ts)
 
@@ -397,15 +397,17 @@ The instance is small and has gone down under load. Rules:
 
 ## Local database (local-db/, `npm run dev:local`)
 
-- `LOCAL_DB=1` points the server's Supabase client at a real Postgres on this machine (PGlite, loaded from
+- `LOCAL_DB=1` points the server's PostgREST client at a real Postgres on this machine (PGlite, loaded from
   `supabase/schema.sql` and `supabase/migrations/*.sql` on every open) through a PostgREST stand-in
   (`local-db/postgrest.ts`). Unset, nothing changes. Never copy `.env.local` into a worktree: local work needs no
-  Supabase credentials.
+  database credentials.
 - Next.js never loads PGlite: it reaches the database over HTTP at `LOCAL_DB_URL` (`tools/local-db/serve.ts`, data in
   `scratch/local-db/pgdata`). Tests open it in memory and register it in-process (`useInProcessLocalDb`).
 - The stand-in covers the query shapes this code sends (filters, or-trees, counts, single, upserts). Files are not in
   the database: `npm run dev:local` keeps them in `scratch/local-db/files` (the file store below).
-  A new shape (an embed, an rpc) needs it added there and a case in `postgrest.test.ts`.
+  A new shape (an embed, an rpc) needs it added there and a case in `postgrest-cases.ts`, which `postgrest.test.ts`
+  runs against the stand-in and `postgrest-real.local.test.ts` against a real PostgREST (`REAL_POSTGREST_URL`,
+  `REAL_POSTGREST_TOKEN`; the Docker rehearsal).
 
 ## Cloud plans (cloud-plans.ts, app/api/library, app/api/accounts)
 

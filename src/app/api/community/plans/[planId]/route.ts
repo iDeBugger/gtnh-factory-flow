@@ -1,8 +1,8 @@
+import type { DbClient } from "@/lib/server/community";
 import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { factoryProjectSchema } from "@/lib/model/schemas";
 import { normalizeLoadedProject } from "@/lib/model/project-normalize";
 import { ensurePlanEngine, solvePlanStats } from "@/lib/server/plan-engine";
@@ -108,7 +108,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ plan
  * though freshly computed numbers still go out in this response.
  */
 async function refreshStaleStats(
-  db: SupabaseClient,
+  db: DbClient,
   planId: string,
   plan: CommunityPlanSummary,
 ): Promise<void> {

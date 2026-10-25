@@ -6,7 +6,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function notFound(): NextResponse {
-  return NextResponse.json({ error: "Not found." }, { status: 404, headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json(
+    { error: "Not found." },
+    { status: 404, headers: { "Cache-Control": "no-store" } },
+  );
 }
 
 /**
@@ -17,7 +20,10 @@ function notFound(): NextResponse {
  * comes from the extension the upload chose after sniffing the bytes, and
  * nosniff keeps a browser from reading it as anything else.
  */
-export async function GET(_request: Request, { params }: { params: Promise<{ month: string; name: string }> }) {
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ month: string; name: string }> },
+) {
   const { month, name } = await params;
   if (!BOARD_IMAGE_MONTH.test(month) || !BOARD_IMAGE_NAME.test(name) || !isFileStoreConfigured()) {
     return notFound();
@@ -26,7 +32,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ mon
   if (!contentType) {
     return notFound();
   }
-  const bytes = await getFileStore().get("board-images", `${month}/${name}`).catch(() => undefined);
+  const bytes = await getFileStore()
+    .get("board-images", `${month}/${name}`)
+    .catch(() => undefined);
   if (!bytes) {
     return notFound();
   }

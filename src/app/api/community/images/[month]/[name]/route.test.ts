@@ -15,7 +15,9 @@ let root: string;
 beforeAll(async () => {
   root = mkdtempSync(path.join(tmpdir(), "board-images-"));
   vi.stubEnv("FILE_STORE_DIR", root);
-  await getFileStore().put("board-images", "2026-10/0123456789abcdef01.png", PNG, { overwrite: false });
+  await getFileStore().put("board-images", "2026-10/0123456789abcdef01.png", PNG, {
+    overwrite: false,
+  });
   await getFileStore().put("plan-previews", "x.png", PNG, { overwrite: true });
 });
 

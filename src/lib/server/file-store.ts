@@ -14,7 +14,12 @@ import { BOARD_IMAGE_MAX_BYTES } from "@/lib/community/types";
 export type FileBucket = "board-images" | "plan-previews" | "feedback-files";
 
 export interface FileStore {
-  put(bucket: FileBucket, key: string, bytes: Uint8Array, options: { overwrite: boolean }): Promise<void>;
+  put(
+    bucket: FileBucket,
+    key: string,
+    bytes: Uint8Array,
+    options: { overwrite: boolean },
+  ): Promise<void>;
   get(bucket: FileBucket, key: string): Promise<Buffer | undefined>;
   remove(bucket: FileBucket, keys: string[]): Promise<void>;
 }
@@ -25,7 +30,8 @@ export interface FileStore {
  * kind. Keys come from the routes, which build them; a request's path parts
  * reach this only through the routes' own stricter patterns.
  */
-export const FILE_KEY = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}(\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}){0,2}$/;
+export const FILE_KEY =
+  /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}(\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}){0,2}$/;
 
 /** The largest file each bucket holds: what its upload route accepts. */
 export const FILE_BUCKET_MAX_BYTES: Record<FileBucket, number> = {
