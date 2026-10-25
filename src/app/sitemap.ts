@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { getCommunityDb, isCommunityConfigured } from "@/lib/server/community";
+import { siteUrl } from "@/lib/site-url";
 
 /** Re-query the plan list at most hourly, so crawl bursts cost one DB read. */
 export const revalidate = 3600;
@@ -14,7 +15,7 @@ export const revalidate = 3600;
  * no plan pages, so only the home page is listed.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://gtnhplanner.com";
+  const base = siteUrl();
   const entries: MetadataRoute.Sitemap = [
     { url: `${base}/`, lastModified: new Date(), changeFrequency: "weekly", priority: 1 },
   ];

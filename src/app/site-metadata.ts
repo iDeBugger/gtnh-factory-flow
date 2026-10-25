@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
+import { siteUrl } from "@/lib/site-url";
 
-export const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://gtnhplanner.com";
 
 /**
  * The site's default metadata, built at each call so the community setting is
@@ -14,7 +14,7 @@ export function siteMetadata(): Metadata {
     ? "balance machine ratios, find bottlenecks, and share plans with the community."
     : "balance machine ratios, and find bottlenecks.";
   return {
-    metadataBase: new URL(siteUrl),
+    metadataBase: new URL(siteUrl()),
     applicationName: "GTNH Planner",
     title: "GTNH Planner | GregTech New Horizons Factory Calculator",
     description:

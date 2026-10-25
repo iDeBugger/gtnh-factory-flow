@@ -8,7 +8,8 @@ import {
   Lexend,
 } from "next/font/google";
 import localFont from "next/font/local";
-import { siteMetadata, siteUrl } from "./site-metadata";
+import { siteUrl as siteOrigin } from "@/lib/site-url";
+import { siteMetadata } from "./site-metadata";
 import { APP_FONT_STORAGE_KEY, DEFAULT_APP_FONT } from "@/lib/app-font";
 import { AppFontRestore } from "@/components/AppFontRestore";
 import { UiScaleRestore } from "@/components/UiScaleRestore";
@@ -135,36 +136,39 @@ export const viewport: Viewport = {
  * structured data. Kept to claims a machine can verify: free, runs in a
  * browser, about GregTech: New Horizons.
  */
-const structuredData = {
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "WebSite",
-      "@id": `${siteUrl}/#website`,
-      url: `${siteUrl}/`,
-      name: "GTNH Planner",
-    },
-    {
-      "@type": "WebApplication",
-      "@id": `${siteUrl}/#app`,
-      url: `${siteUrl}/`,
-      name: "GTNH Planner",
-      alternateName: "GregTech New Horizons Factory Planner",
-      description:
-        "Free factory planner and recipe calculator for GregTech: New Horizons. Draw production chains on a flowchart, balance machine ratios, compute power and throughput, and share plans.",
-      applicationCategory: "GameApplication",
-      operatingSystem: "Any",
-      browserRequirements: "Requires JavaScript",
-      image: `${siteUrl}/icon-512.png`,
-      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-      about: {
-        "@type": "VideoGame",
-        name: "GregTech: New Horizons",
-        gamePlatform: "Minecraft",
+function structuredData() {
+  const siteUrl = siteOrigin();
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": `${siteUrl}/#website`,
+        url: `${siteUrl}/`,
+        name: "GTNH Planner",
       },
-    },
-  ],
-};
+      {
+        "@type": "WebApplication",
+        "@id": `${siteUrl}/#app`,
+        url: `${siteUrl}/`,
+        name: "GTNH Planner",
+        alternateName: "GregTech New Horizons Factory Planner",
+        description:
+          "Free factory planner and recipe calculator for GregTech: New Horizons. Draw production chains on a flowchart, balance machine ratios, compute power and throughput, and share plans.",
+        applicationCategory: "GameApplication",
+        operatingSystem: "Any",
+        browserRequirements: "Requires JavaScript",
+        image: `${siteUrl}/icon-512.png`,
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+        about: {
+          "@type": "VideoGame",
+          name: "GregTech: New Horizons",
+          gamePlatform: "Minecraft",
+        },
+      },
+    ],
+  };
+}
 
 export default function RootLayout({
   children,
@@ -184,7 +188,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: uiScaleBoot }} />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData()) }}
         />
         {children}
         {/* Above the app rather than inside it: what changed is a fact about

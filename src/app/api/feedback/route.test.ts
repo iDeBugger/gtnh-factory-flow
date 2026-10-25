@@ -106,6 +106,7 @@ describe("the feedback route", () => {
 
   it("opens an issue with the plan linked and answers its page", async () => {
     vi.stubEnv("GITHUB_FEEDBACK_TOKEN", "token");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://stage.gtnhplanner.idebugger.net");
     const response = await send(report);
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({
@@ -117,8 +118,8 @@ describe("the feedback route", () => {
     expect(repo).toBe("example-owner/mod-repo");
     expect(issue.title).toBe("Idea: Copy a card");
     expect(issue.labels).toEqual(["from game", "enhancement"]);
-    expect(issue.body).toContain("[open in the planner](https://gtnhplanner.com/#p=gtnh1.");
-    expect(issue.body).toMatch(/\[plan file\]\(https:\/\/gtnhplanner\.com\/api\/feedback\/files\/[0-9a-f-]{36}\/plan-1\.json\)/);
+    expect(issue.body).toContain("[open in the planner](https://stage.gtnhplanner.idebugger.net/#p=gtnh1.");
+    expect(issue.body).toMatch(/\[plan file\]\(https:\/\/stage\.gtnhplanner\.idebugger\.net\/api\/feedback\/files\/[0-9a-f-]{36}\/plan-1\.json\)/);
   });
 
   it("opens a web planner's report under the web label, and refuses its shape dressed as the game's", async () => {

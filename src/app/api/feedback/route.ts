@@ -20,12 +20,10 @@ import {
 import { removeFeedbackFiles, storeFeedbackFile } from "@/lib/server/feedback-files";
 import { claimIssue, feedbackGate, looksGenuine } from "@/lib/server/feedback-guard";
 import { readTextCapped } from "@/lib/server/request-body";
+import { siteUrl } from "@/lib/site-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/** Where the issues are opened, and the site the links point at. */
-const SITE = "https://gtnhplanner.com";
 
 /** A refusal, counted against its sender towards the gate's flood pause. */
 function refuse(sender: string, status: number, error: string): NextResponse {
@@ -116,25 +114,27 @@ export async function POST(request: Request) {
       return refuse(sender, refusal.status, refusal.error);
     }
 
+    // The site the issue's links point at.
+    const site = siteUrl();
     const links: FeedbackLinks = { plans: [] };
     for (let i = 0; i < report.plans.length; i++) {
       const { name, plan } = report.plans[i]!;
       let link: string | undefined;
       try {
-        const candidate = planCodeLink(await encodePlanCode(plan), SITE);
+        const candidate = planCodeLink(await encodePlanCode(plan), site);
         link = linkFits(candidate) ? candidate : undefined;
       } catch {
         link = undefined;
       }
       const fileName = `plan-${i + 1}.json`;
-      const file = await storeFeedbackFile(SITE, id, fileName, Buffer.from(planFile(plan)), "application/json");
+      const file = await storeFeedbackFile(site, id, fileName, Buffer.from(planFile(plan)), "application/json");
       if (file) {
         stored.push(fileName);
       }
       links.plans.push({ name, cards: plan.nodes.length, link, file });
     }
     if (report.picture) {
-      links.picture = await storeFeedbackFile(SITE, id, "picture.png", report.picture, "image/png");
+      links.picture = await storeFeedbackFile(site, id, "picture.png", report.picture, "image/png");
       if (links.picture) {
         stored.push("picture.png");
       }

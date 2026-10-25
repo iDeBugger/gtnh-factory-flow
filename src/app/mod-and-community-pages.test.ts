@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 
 const row = {
@@ -45,6 +45,13 @@ import { siteMetadata } from "./site-metadata";
 
 const planSearch = { searchParams: Promise.resolve({ plan: "plan-1" }) };
 
+beforeAll(() => {
+  vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://stage.gtnhplanner.idebugger.net");
+});
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("copy names both served versions", () => {
   withModAndCommunityUnset();
 
@@ -68,7 +75,7 @@ describe("with the setting unset", () => {
   it("the sitemap lists only the home page", async () => {
     getCommunityDb.mockClear();
     const entries = await sitemap();
-    expect(entries.map((entry) => entry.url)).toEqual(["https://gtnhplanner.com/"]);
+    expect(entries.map((entry) => entry.url)).toEqual(["https://stage.gtnhplanner.idebugger.net/"]);
     expect(getCommunityDb).not.toHaveBeenCalled();
   });
 
@@ -109,7 +116,7 @@ describe("with the setting on", () => {
 
   it("the sitemap and llms.txt list community plans, and robots allows their card", async () => {
     const entries = await sitemap();
-    expect(entries.map((entry) => entry.url)).toContain("https://gtnhplanner.com/?plan=plan-1");
+    expect(entries.map((entry) => entry.url)).toContain("https://stage.gtnhplanner.idebugger.net/?plan=plan-1");
     const text = await (await llms()).text();
     expect(text).toContain("## Popular community plans");
     expect(text).toContain("share plans with the community");
