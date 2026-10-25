@@ -373,8 +373,9 @@ which bypasses row security. No anon role exists, so a request without the token
   keyed on its /64; a request with neither header is `"local"` (`NO_ADDRESS`), which the dataset budget never
   refuses. It is trustworthy only because Caddy and the stack's own containers are the site's only peers: compose
   publishes the site on `127.0.0.1:3300` only and the firewall drops outside traffic to it (`docs/deploy.md`). Exam: `client-address.test.ts`.
-- Emergency stop without a deploy: a Caddy rule answering 503 to `POST /api/feedback`, through the infra repo's
-  `roles/caddy/templates/Caddyfile.j2` and an apply (`docs/deploy.md`, Emergency stop).
+- Emergency stop without a deploy: a Caddy `handle` answering 503 to `POST /api/feedback`, placed before the
+  site's catch-all `handle`, through the infra repo's `roles/caddy/templates/Caddyfile.j2` and an apply
+  (`docs/deploy.md`, Emergency stop).
 - Plans and the picture go to the private `feedback-files` bucket (the file store, below), served by `/api/feedback/files/<id>/<file>`, only
   once every check has passed; a report whose issue GitHub refuses has its files removed again. An attached plan is
   stored and linked without its task board (`tasks`, `taskItems`, `taskComments`, `primaryView`: account ids, names,
@@ -386,7 +387,8 @@ which bypasses row security. No anon role exists, so a request without the token
 - Board images, plan previews and feedback files live in a directory, `FILE_STORE_DIR` (a volume in production;
   outside production `scratch/local-db/files` when unset), one folder per bucket: `board-images`, `plan-previews`,
   `feedback-files`. Nothing there is a static file: each bucket is served only by its own route. Board images by
-  `GET /api/community/images/<YYYY-MM>/<18 hex>.<png|jpg|gif|webp>` (any other name 404, `immutable`, nosniff),
+  `GET /api/community/images/<YYYY-MM>/<18 hex>.<png|jpg|gif|webp>` (any other name 404, `immutable`, nosniff,
+  one unit of the address's dataset budget per read),
   previews by the post's preview route after its access check, feedback files by `/api/feedback/files/<id>/<file>`.
 - A key is one to three plain segments, none starting with a dot (`FILE_KEY`), resolved inside its bucket, else
   `FileKeyError`. Each bucket has a size cap (`FILE_BUCKET_MAX_BYTES`). A write lands whole (temp file, then link or

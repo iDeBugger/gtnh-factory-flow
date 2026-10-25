@@ -35,17 +35,25 @@ infra commit first.
   the firewall and `LIVE_TRUSTED_PROXIES` name them.
 - Only site and live publish ports, on loopback; nothing binds a public or ZeroTier address. The site trusts
   `X-Client-Ip` from any peer (`src/lib/server/client-address.ts`), which is safe only because Caddy and the
-  stack's own containers are its only peers.
+  stack's own containers are its only peers. Besides the loopback port, the site container answers on its edge
+  address (`172.30.61.x:3000`) to host processes and to the live container; remote hosts are kept off it only by
+  Docker's direct-routing guard and the firewall.
 - Memory: the site's heap is capped at 3 GB (`NODE_OPTIONS` in the image) under a 4 GB limit, with both dataset
   versions prewarmed (about 1.4 to 2.1 GB resident). Live holds about four times `LIVE_MAX_PLAN_BYTES` (64 MB)
   plus 150 MB; its heap is 480 MB under 600 MB.
 - One site container and one live service, never replicas: the rate limits serialise in process, and one live
   service owns each database's leases.
 - Every container runs under `init: true` (tini; the site image sets `TINI_KILL_PROCESS_GROUP=1`, so the
-  `next-server` child gets SIGTERM too), `no-new-privileges`, `restart: unless-stopped`, json-file logs of 3 x 10 MB.
-  Site and live are read-only with tmpfs `/tmp` (and the site's `.next/cache`), and run as uid 1000 over
-  root-owned files. The site stops within its 20 s grace; live within 30 s, storing every open plan and releasing
+  `next-server` child gets SIGTERM too), `no-new-privileges`, no capabilities (`cap_drop: ALL`), `restart: unless-stopped`, json-file logs of
+  3 x 10 MB. Every container's root filesystem is read-only: site and live with tmpfs `/tmp` (and the site's
+  `.next/cache`), postgres with tmpfs `/tmp` and its socket directory. Site and live run as uid 1000 over
+  root-owned files. PostgREST's admin server is off (nothing reads it, and every backend container could). The
+  site keeps revalidated pages (the sitemap, llms.txt) in memory (`isrFlushToDisk: false`), since its `.next` is
+  read-only. The site stops within its 20 s grace; live within 30 s, storing every open plan and releasing
   its leases on SIGTERM.
+- The image runs `npm ci` with its own npm (11.19), which needs lockfile entries an older npm leaves out (the
+  `@emnapi` packages): a lockfile an older npm rewrote fails the image build. Regenerate it with the image's npm:
+  `docker run --rm -v "$PWD":/w -w /w <the Dockerfile's NODE_IMAGE> npm install --package-lock-only --ignore-scripts`.
 - The site and live never chmod or chown their volumes: the infra role creates `files`, `client-files` and
   `live-journal` as `idebugger` (uid 1000, the containers' `node`), mode 0700. `client-files` starts empty; the site
   claims only an empty directory or its own.
@@ -72,7 +80,7 @@ and how to make it.
 | `LIVE_TRUSTED_PROXIES` | live | run | `172.30.61.1`, the edge gateway (measured, below) |
 | `LIVE_MAX_PLAN_BYTES`, `LIVE_MAX_ROOMS` | live | run | optional, 64 MB and 500 |
 | `COMMUNITY_ADMIN_TOKEN` | site | run | optional; deletes any community post |
-| `GITHUB_FEEDBACK_TOKEN`, `GITHUB_FEEDBACK_REPO`, `GITHUB_FEEDBACK_WEB_REPO` | site | run | optional; without the token `/api/feedback` answers 503 |
+| `GITHUB_FEEDBACK_TOKEN`, `GITHUB_FEEDBACK_REPO`, `GITHUB_FEEDBACK_WEB_REPO` | site | run | optional; no default repo: without the token, or the repo a report needs (`owner/name`), `/api/feedback` answers 503 |
 | `GTNH_PREWARM_FULL_DATASETS` | site | run | optional |
 | `NEXT_PUBLIC_MOD_AND_COMMUNITY` | site, live | build and run | empty on stage; the two must be equal |
 | `NEXT_PUBLIC_SITE_URL` | site | build | the target's `SITE_URL` |
@@ -118,7 +126,10 @@ here uses sudo or edits a file the role manages.
   - JSON log in `/var/log/caddy/gtnh-stage.log`.
 - `roles/firewall/templates/tungsten/rules.v4.j2`: drops traffic to `127.0.0.1:3300` and `:3301` arriving on
   any interface but `lo` (the loopback guard), and keeps the edge and backend subnets away from the host, the
-  LAN and ZeroTier while internet egress stays.
+  LAN and ZeroTier while internet egress stays. Applying a firewall change restarts Docker, and with it the whole
+  stack: live sockets drop and reconnect, and the site prewarms again.
+- Caddy's `stream_close_delay 5m` keeps upgraded live sockets open across a Caddy reload, so a vhost change
+  does not cut live sessions.
 - `roles/backup/files/server-backup`: a `pg_dump -Fc` of `gtnh-postgres` into `/srv/gtnh/backups/gtnh.dump`
   before restic, and `/opt/gtnh`, `/srv/gtnh/backups`, `/srv/gtnh/files` in the backup. Not backed up: the
   Postgres directory (the dump is the backup), the datasets (republished from the Mac), client files (the site
@@ -146,7 +157,11 @@ Each step prints its name; the first failure stops the deploy with a non-zero ex
 8. From the Mac: `/api/version` answers this version AND this build (`build` field) within 300 s, and
    `/live/health` is ok. A build that failed, a container that never turned healthy, or an old build answering
    under the same `APP_VERSION` is a failure, never a success.
-9. The three newest tags of each image are kept, older ones removed.
+9. The three newest tags of each image are kept, older ones removed (one still used by a stopped container
+   stays, with a note).
+
+A failure after step 5 leaves `release.env` naming the release that failed, so a later `compose up` would start
+it; the script then prints the rollback to the previous release (`deploy.sh <target> --rollback <previous>`).
 
 `tools/deploy/deploy.sh stage --rollback <tag>` reruns steps 2, 4, 5, 7 and 8 with an earlier tag's images.
 Migrations are additive, so none is undone. `--measure-peer` starts live with `LIVE_TRUSTED_PROXIES` empty and
@@ -171,7 +186,8 @@ role's `gtnh_trusted_proxies` and here.
 applies all of them on every deploy (`tools/deploy/db/migrate.sh`): `db/roles.sql` (`service_role` nologin
 bypassrls, `authenticator` login noinherit with the configured password), `schema.sql`, the migrations in name
 order, `db/grants.sql` (everything in `public` to `service_role`, also by default), then
-`notify pgrst, 'reload schema'`. Row security stays on with no policies; there is no anon role, so a request
+`notify pgrst, 'reload schema'`. The authenticator's password reaches psql through the environment
+(`\getenv` in `roles.sql`), never its command line, which shows in the host's process list. Row security stays on with no policies; there is no anon role, so a request
 without the token is 401. A new migration must survive a second run, as the local database also loads every file
 on every open.
 
@@ -197,7 +213,8 @@ order (`tools/dataset-pipeline/CLAUDE.md`):
    texture per version is 200 and `immutable`, `recipes.json` is not 200.
 
 Only the version directories are written, with modes 755 for directories and 644 for files (rsync's `--chmod`,
-written symbolically for macOS's openrsync); the datasets root itself is the infra role's.
+written symbolically for macOS's openrsync; step 5 checks the modes the server's rsync applied); the datasets root
+itself is the infra role's.
 
 ## Rehearsal on a workstation
 
@@ -235,7 +252,7 @@ On the server, in `/opt/gtnh`:
 ```bash
 docker compose --env-file .env --env-file release.env ps
 docker compose --env-file .env --env-file release.env logs --tail 200 site    # or live, postgres, postgrest
-docker logs gtnh-site 2>&1 | grep -c 'no X-Client-Ip'    # the site saw requests without Caddy's header
+docker logs gtnh-site 2>&1 | grep 'neither X-Client-Ip nor CF-Connecting-IP'    # requests without Caddy's header
 docker logs gtnh-live 2>&1 | grep 'untrusted peer'       # LIVE_TRUSTED_PROXIES misses the proxy
 ```
 
@@ -244,9 +261,19 @@ prewarm or the deploy regressed; the site's healthcheck allows 180 s before coun
 
 ## Emergency stop for feedback
 
-Without a deploy: a Caddy rule answering 503 to `POST /api/feedback` in the vhost, through the infra repo's
-`Caddyfile.j2` and an apply (`respond @feedback 503` with `@feedback { method POST
-path /api/feedback }`).
+Without a deploy: a Caddy route answering 503 to `POST /api/feedback`, through the infra repo's `Caddyfile.j2` and
+an apply. It must be a `handle`, placed before the site's catch-all `handle`: Caddy runs `handle` blocks before a
+bare `respond`, so a top-level `respond` would never fire.
+
+```caddy
+@feedback {
+	method POST
+	path /api/feedback
+}
+handle @feedback {
+	respond 503
+}
+```
 
 ## Cloudflare later
 
@@ -262,3 +289,8 @@ Not done yet; for the public site:
   six months without includeSubDomains, a rate limit on `/api/datasets/` (600 a minute per address, block 10
   minutes), a WAF rule on query length over 2048.
 - `LIVE_ALLOWED_ORIGINS` gains the public origin; the public site is its own build and target.
+- Board image reads (`GET /api/community/images/...`, up to 4 MB from disk each) spend one unit of the address's
+  dataset budget; floods from many addresses need Cloudflare's cache (the answers are `immutable`) or a rate rule.
+- Moving the public site off the hosted Supabase project is a data step: dump and restore the community tables,
+  copy the `plan-previews` and `feedback-files` objects into the file store (the code no longer reads Supabase
+  Storage), and accept that stored plans' board images keep their `supabase.co` URLs while that bucket exists.

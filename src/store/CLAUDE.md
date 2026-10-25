@@ -125,7 +125,7 @@ Every save goes through `persistCanvas` in design-store.ts:
 
 ## Account sync (src/lib/library/library-sync.ts)
 
-- The Supabase instance is small. Pushes wait for 5 s of quiet (30 s max while editing,
+- The database is small and every push rewrites a whole plan. Pushes wait for 5 s of quiet (30 s max while editing,
   at once when the tab hides). Only a LOCAL change schedules a push, judged by
   `libraryChangeSignature`, never by array identity; a run never schedules the next one.
 - A design the server refused is not resent until its stamp moves. Names are clipped to

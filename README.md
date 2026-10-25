@@ -26,8 +26,8 @@ GTNH_DATASET_BACKEND_URL=https://gtnhplanner.com npm run dev
 ```
 
 or place a dataset and its `datasets.manifest.json` under `public/datasets/gtnh/`
-(ignored by git). Community features
-need Supabase; see [docs/COMMUNITY.md](docs/COMMUNITY.md).
+(ignored by git). Accounts, cloud plans and community features need a database:
+`npm run dev:local` starts one on this machine; see [docs/COMMUNITY.md](docs/COMMUNITY.md).
 
 ## How it fits together
 
