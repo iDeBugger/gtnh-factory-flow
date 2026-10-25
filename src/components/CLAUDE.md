@@ -95,8 +95,11 @@ The board has its own notes in `flow/CLAUDE.md`, the Pool worksheet in `pool/CLA
 - The items column is NEI's list (`ResourceIndexPane`, `nei/nei.css`): page keys and n/m at the top, 32 px slots
   of art alone, a Minecraft tooltip at once (`nei/McTip`), R/U over a slot, filters and sort in one menu key. Its
   search field (`searchAt`) is a body portal at the bottom middle of the screen; on a phone, under Welcome or the
-  library, and while the recipe search is open it sits at the column's foot instead. The server answers at most
-  120 resources a query, so a taller page asks in pieces. Every `MinecraftTooltip` and title tooltip wears `.mc-tip`.
+  library, and while the recipe search is open it sits at the column's foot instead. A query answers at most
+  120 resources, so a taller page asks in pieces. Every item search (this column, IconPicker, the setups filter,
+  Welcome, the stencil, the board menu) goes through `queryRecipeDatasetResources`, which asks the browser's search
+  worker once it is ready and the server otherwise (`src/lib/server/CLAUDE.md`, item search in the browser); no
+  component calls either directly. Every `MinecraftTooltip` and title tooltip wears `.mc-tip`.
   Keep virtual-list row heights in sync with the CSS (`inspector/panel.css`).
 - Resources show Raw or Net, switched in the first section header (Raw by default). In
   Solve, drawer rate rows hang under their resource like files in a folder

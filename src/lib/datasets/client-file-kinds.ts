@@ -5,7 +5,7 @@
  */
 export const CLIENT_FILES_DIRECTORY = "client";
 
-export const CLIENT_FILE_KINDS = ["catalog", "mobs", "crops", "recipe-ids"] as const;
+export const CLIENT_FILE_KINDS = ["catalog", "mobs", "crops", "recipe-ids", "items"] as const;
 export type ClientFileKind = (typeof CLIENT_FILE_KINDS)[number];
 
 /** `<kind>.<20 hex of the sha256 of the JSON>.json`: within the gate's [A-Za-z0-9._-]. */

@@ -28,8 +28,8 @@ afterEach(async () => {
 
 const catalog = { schemaVersion: 1, resourceIndex: [{ id: "a" }] };
 const specs: ClientFileSpec[] = [
-  { kind: "catalog", brotli: true, produce: async () => catalog },
-  { kind: "recipe-ids", brotli: false, produce: async () => ({ recipeIds: ["r1", "r2"] }) },
+  { kind: "catalog", brotliQuality: 11, produce: async () => catalog },
+  { kind: "recipe-ids", produce: async () => ({ recipeIds: ["r1", "r2"] }) },
 ];
 
 describe("the server's content-addressed dataset answers", () => {
@@ -82,7 +82,6 @@ describe("the server's content-addressed dataset answers", () => {
     let release: () => void = () => {};
     const slow: ClientFileSpec = {
       kind: "crops",
-      brotli: false,
       produce: () => new Promise((resolve) => (release = () => resolve({ crops: [] }))),
     };
     const all = [specs[0]!, slow];
@@ -104,7 +103,7 @@ describe("the server's content-addressed dataset answers", () => {
   it("logs a failed write and stays incomplete, so the client keeps the API", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const failing: ClientFileSpec[] = [
-      { kind: "catalog", brotli: false, produce: async () => Promise.reject(new Error("no")) },
+      { kind: "catalog", produce: async () => Promise.reject(new Error("no")) },
     ];
     await ensureClientFiles("w:hash", "w", directory, failing);
     expect(clientFileListing("w:hash", "w", directory, failing)).toEqual({

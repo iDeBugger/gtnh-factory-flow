@@ -38,9 +38,10 @@
   (dataset-static-file.ts): lexically, then by real path against the real version directory, so a symlink in the
   tree never reads outside it (a miss is a 404). Exam: `dataset-path-gate.test.ts`, `proxy.test.ts`,
   `dataset-files/[versionId]/[...assetPath]/route.test.ts`, `dataset-static-file.test.ts`.
-- The answers every player gets the same (catalog, mobs, crops, recipe-ids) are also static files the server
+- The answers every player gets the same (catalog, mobs, crops, recipe-ids, items) are also static files the server
   writes itself (`client-files.ts`, `dataset-client-files.ts`): `<dataset>/client/<kind>.<20 hex of the sha256 of
-  the JSON>.json`, stored as `.gz` (level 9) and, except the id list (23 s of brotli for 13%), `.br` (quality 11).
+  the JSON>.json`, stored as `.gz` (level 9) and, except the id list (23 s of brotli for 13%), `.br` (quality 11; the
+  item search file 10: 41 s at 11 against 14 s at 10, for 7%).
   The server writes them, not the pipeline, because each is the dataset run through server code; a deploy that
   changes the JSON changes the name. With `GTNH_PREWARM_ON_STARTUP=1` they are written after the default
   version's prewarm, in the background, one at a time on the thread pool (`writeServedDatasetClientFiles`);
@@ -93,6 +94,23 @@
   so the fields the matcher reads and the schema does not name pass through. The browser sends
   `RESOLVE_RECIPES_CHUNK_REFS` (500) at a time, in order (`src/lib/datasets/resolve-recipes-limits.ts` holds all
   three numbers). Exam: `resolve-recipes/route.test.ts`, `src/lib/datasets/browser-loader.test.ts`.
+- Item search runs in the browser too. `src/lib/search/resource-search.ts` is the one copy of the item search
+  (index build, scoring, phases, sorts, page, request parsing); the `/resources` route runs it over the loaded
+  catalog (`queryCatalogResources`, with its blank-list cache) and the browser runs it in a Web Worker
+  (`resource-search.worker.ts` over `resource-search-engine.ts`) over the version's `items` client file
+  (`getDatasetResourceSearchFile`: the catalog's `resourceIndex` exactly as the route returns its entries, the
+  made/used counts and the crop and bee keys of listed resources; 23 MB of JSON, 1.8 MB brotli at quality 10 on 2.9,
+  1.5 MB on 2.8.1). The worker answers with the route's JSON, so the page cannot tell which side answered.
+  `browser-loader.ts` starts it when the catalog has loaded and the page is idle, for one version at a time (the
+  one last asked about; about 110 MB of the tab's memory on 2.9), never on a device reporting under 4 GB
+  (`navigator.deviceMemory`); until it is ready, for
+  a popular sort before the popularity map has arrived (`/api/resource-popularity`, the same 30-minute policy as a
+  popular `/resources` answer), and after any failure, the API answers. The route stays for old tabs, the
+  fallback and bots, with its budget. A change to the item search must keep both sides equal: `resource-search-engine.test.ts`
+  (in the suite, every sort, kind, source, mod and page on a small catalog) and
+  `src/lib/search/resource-search-parity.local.test.ts` (the installed 2.9 and 2.8.1: 11 queries each with total,
+  the first 120, order and respelling, then 280 sort, kind, source, mod and page combinations). The popularity
+  sweep's state is on `globalThis` (`resource-popularity.ts`) so the two routes reading it share one sweep.
 - A text search matches at most six words and at most two of them under three characters
   (`MAX_SEARCH_TERMS`, `MAX_SHORT_SEARCH_TERMS` in `src/lib/search/text-search.ts`): a word that short cannot use
   the trigram index and walks every recipe. The partial phase (entries with ANY of the words) runs in full on

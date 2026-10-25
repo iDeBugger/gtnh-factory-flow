@@ -39,43 +39,53 @@ const PAGE_SIZE = 10;
 const MAX_PLANS = 1000;
 const FAILURE_RETRY_MS = 30 * 60 * 1000;
 
-let cache: { at: number; map: Map<string, number> } | undefined;
-let inFlight: Promise<Map<string, number>> | undefined;
+/**
+ * The sweep's state, on `globalThis`: two routes read it (the item search and
+ * the popularity map the browser's search fetches), and a module copy per
+ * bundle would run the database's heaviest read once per copy.
+ */
+interface PopularityState {
+  cache?: { at: number; map: Map<string, number> };
+  inFlight?: Promise<Map<string, number>>;
+}
+const POPULARITY_STATE = Symbol.for("gtnh-factory-flow.resource-popularity");
+const stateHost = globalThis as { [POPULARITY_STATE]?: PopularityState };
+const state = (stateHost[POPULARITY_STATE] ??= {});
 const EMPTY = new Map<string, number>();
 
 /** The last good popularity map, never waiting: starts a sweep when one is due. */
 export function getResourcePopularity(): Map<string, number> {
-  if (!cache || Date.now() - cache.at >= CACHE_TTL_MS) {
+  if (!state.cache || Date.now() - state.cache.at >= CACHE_TTL_MS) {
     void refreshResourcePopularity();
   }
-  return cache?.map ?? EMPTY;
+  return state.cache?.map ?? EMPTY;
 }
 
 /** Runs a sweep unless one is already running; resolves with the map it lands. */
 export function refreshResourcePopularity(): Promise<Map<string, number>> {
-  if (!inFlight) {
-    inFlight = buildPopularityMap()
+  if (!state.inFlight) {
+    state.inFlight = buildPopularityMap()
       .then((map) => {
-        cache = { at: Date.now(), map };
+        state.cache = { at: Date.now(), map };
         return map;
       })
       .catch((error) => {
         console.error("resource popularity aggregation failed", error);
-        const stale = cache?.map ?? EMPTY;
-        cache = { at: Date.now() - CACHE_TTL_MS + FAILURE_RETRY_MS, map: stale };
+        const stale = state.cache?.map ?? EMPTY;
+        state.cache = { at: Date.now() - CACHE_TTL_MS + FAILURE_RETRY_MS, map: stale };
         return stale;
       })
       .finally(() => {
-        inFlight = undefined;
+        state.inFlight = undefined;
       });
   }
-  return inFlight;
+  return state.inFlight;
 }
 
 /** Tests only: forget every sweep. */
 export function resetResourcePopularityForTests(): void {
-  cache = undefined;
-  inFlight = undefined;
+  state.cache = undefined;
+  state.inFlight = undefined;
 }
 
 async function buildPopularityMap(): Promise<Map<string, number>> {

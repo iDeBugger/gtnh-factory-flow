@@ -6,6 +6,12 @@ import { DATASET_ANSWER_VERSION, DATASET_ANSWER_VERSION_PARAM } from "./answer-v
 import { RESOLVE_RECIPES_CHUNK_REFS } from "./resolve-recipes-limits";
 import type { ClientFileKind, ClientFileListingResponse } from "./client-file-kinds";
 import {
+  browserResourceSearchAvailable,
+  browserResourceSearchStarted,
+  searchResourcesInBrowser,
+  startBrowserResourceSearch,
+} from "./resource-search-client";
+import {
   serializeRecipeQueryClause,
   type RecipeQueryClause,
   type RecipeQuerySideOp,
@@ -100,7 +106,7 @@ export async function initRecipeDatasetVersion(
   version: DatasetVersion,
   options: { signal?: AbortSignal } = {},
 ): Promise<RecipeDataset> {
-  return fetchClientFile(version, "catalog", options.signal, () => {
+  const catalog = fetchClientFile(version, "catalog", options.signal, () => {
     const url = new URL(
       `/api/datasets/${encodeURIComponent(version.id)}/catalog`,
       window.location.origin,
@@ -108,6 +114,46 @@ export async function initRecipeDatasetVersion(
     addDatasetCacheKey(url, version);
     return fetchJson<RecipeDataset>(url.toString(), { signal: options.signal });
   });
+  // The item search's download waits until the page is idle, so the board's
+  // first paint never shares the network or the CPU with it.
+  void catalog.then(
+    () => whenIdle(() => prepareBrowserResourceSearch(version)),
+    () => {},
+  );
+  return catalog;
+}
+
+function whenIdle(run: () => void) {
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(run, { timeout: 5000 });
+  } else {
+    setTimeout(run, 2000);
+  }
+}
+
+/** Version keys whose item search is being started, so two asks start one worker. */
+const preparingSearches = new Set<string>();
+
+/** Starts the browser's item search for a version, when the server lists its file. */
+function prepareBrowserResourceSearch(version: DatasetVersion) {
+  const key = `${version.id}:${version.checksumSha256 ?? ""}`;
+  if (
+    !browserResourceSearchAvailable() ||
+    browserResourceSearchStarted(version) ||
+    preparingSearches.has(key)
+  ) {
+    return;
+  }
+  preparingSearches.add(key);
+  void clientFileListing(version)
+    .then(({ files }) => {
+      if (files.items) {
+        startBrowserResourceSearch(version, files.items);
+      }
+    })
+    .finally(() => {
+      preparingSearches.delete(key);
+    });
 }
 
 /**
@@ -366,6 +412,21 @@ export async function queryRecipeDatasetResources(
   }
   addDatasetCacheKey(url, version);
 
+  // The browser's own search answers the same as this route once its worker
+  // is ready; until then, and for any query it cannot answer, the route does.
+  const local = searchResourcesInBrowser<RecipeDatasetResourceQueryResult>(
+    version,
+    query,
+    options.signal,
+  );
+  if (local) {
+    const answer = await local;
+    if (answer) {
+      return answer;
+    }
+  } else {
+    prepareBrowserResourceSearch(version);
+  }
   return fetchJson<RecipeDatasetResourceQueryResult>(url.toString(), { signal: options.signal });
 }
 

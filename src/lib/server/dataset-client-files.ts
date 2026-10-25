@@ -9,6 +9,7 @@ import {
 import {
   getDatasetCatalog,
   getDatasetRecipeIds,
+  getDatasetResourceSearchFile,
   getServedDatasetVersion,
   listDatasetCropFarmRecipes,
   listDatasetEecMobs,
@@ -24,14 +25,16 @@ import type { DatasetVersion } from "@/lib/datasets/types";
  */
 function datasetClientFileSpecs(versionId: string): ClientFileSpec[] {
   return [
-    { kind: "catalog", brotli: true, produce: () => getDatasetCatalog(versionId) },
-    { kind: "mobs", brotli: true, produce: () => listDatasetEecMobs(versionId) },
-    { kind: "crops", brotli: true, produce: () => listDatasetCropFarmRecipes(versionId) },
+    { kind: "catalog", brotliQuality: 11, produce: () => getDatasetCatalog(versionId) },
+    { kind: "mobs", brotliQuality: 11, produce: () => listDatasetEecMobs(versionId) },
+    { kind: "crops", brotliQuality: 11, produce: () => listDatasetCropFarmRecipes(versionId) },
     {
       kind: "recipe-ids",
-      brotli: false,
       produce: async () => ({ recipeIds: await getDatasetRecipeIds(versionId) }),
     },
+    // The browser's item search (resource-search-engine.ts), downloaded in the
+    // background; until it is there the item panes ask the API.
+    { kind: "items", brotliQuality: 10, produce: () => getDatasetResourceSearchFile(versionId) },
   ];
 }
 

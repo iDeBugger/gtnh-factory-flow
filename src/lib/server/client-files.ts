@@ -37,13 +37,14 @@ export interface ClientFileSpec {
   /** The answer, exactly the JSON the API route would send. */
   produce: () => Promise<unknown>;
   /**
-   * Whether a brotli copy is worth writing beside the gzip. Measured on 2.9
-   * (M1, quality 11): the catalog, mobs and crops lists take under a second
-   * each and shrink by half or more (crops 314 KB gzip, 29 KB brotli); the id
-   * list takes 23 s and saves 13% (2.8 MB gzip, 2.4 MB brotli), so it ships
-   * gzip only.
+   * The quality of the brotli copy written beside the gzip, or undefined for
+   * none. Measured on 2.9 (M1, one thread): the catalog, mobs and crops lists
+   * take under a second each at 11 and shrink by half or more (crops 314 KB
+   * gzip, 29 KB brotli); the item search file takes 41 s at 11 and 14 s at 10
+   * for 1.67 and 1.78 MB (2.77 MB gzip), so 10; the id list takes 23 s at 11 to
+   * save 13% (2.8 MB gzip, 2.4 MB brotli) and ships gzip only.
    */
-  brotli: boolean;
+  brotliQuality?: number;
 }
 
 export type ClientFileListing = ClientFileListingResponse;
@@ -79,14 +80,15 @@ export async function writeClientFiles(
     const name = clientFileName(spec.kind, bytes);
     await ensureEncoded(directory, `${name}.gz`, () => gzipAsync(bytes, { level: 9 }), now);
     current.add(`${name}.gz`);
-    if (spec.brotli) {
+    const quality = spec.brotliQuality;
+    if (quality !== undefined) {
       await ensureEncoded(
         directory,
         `${name}.br`,
         () =>
           brotliAsync(bytes, {
             params: {
-              [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
+              [zlibConstants.BROTLI_PARAM_QUALITY]: quality,
               [zlibConstants.BROTLI_PARAM_LGWIN]: 24,
               [zlibConstants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
             },

@@ -30,6 +30,18 @@ import {
 import { HIDDEN_DATASET_VERSION_IDS } from "@/lib/datasets/hidden-versions";
 import { MIN_INDEXABLE_LENGTH, type SearchTerm } from "@/lib/search/text-search";
 import { BoundedLru } from "./bounded-lru";
+import type { ResourceSearchFile } from "@/lib/search/resource-search-engine";
+import {
+  blankResourceSearchKey,
+  buildResourceSearchIndexes,
+  resourceSearchPage,
+  searchOutcome,
+  searchResources,
+  type ResourceSearch,
+  type ResourceQuerySort,
+  type ResourceSearchIndexes,
+  type ResourceSourceFilter,
+} from "@/lib/search/resource-search";
 import { machineTableControlResourceIds } from "@/lib/machines/machine-table";
 import { EEC_MACHINE_TYPE } from "@/lib/machines/extreme-entity-crusher";
 import { pickRecipeRefMatch, type RecipeContentRef } from "@/lib/import-export/recipe-ref-match";
@@ -41,17 +53,11 @@ import {
   type RecipeQuerySideOp,
 } from "@/lib/datasets/recipe-query";
 import {
-  buildSearchVocabulary,
   buildTextSearchIndex,
-  buildTokenSearchIndex,
-  createTokenInterner,
-  matchSearchEntry,
   matchSearchTokens,
   parseSearchQuery,
   queryTextSearchIndex,
   resolveSearchPhases,
-  splitSearchTokens,
-  type SearchEntryFields,
   type SearchPhase,
   type SearchQuery,
   type SearchVocabulary,
@@ -89,7 +95,7 @@ interface LoadedRecipeIndex {
   recipeIconScores?: number[];
   shards: RecipeIndexShard[];
   indexes?: QueryIndexes;
-  resourceIndexes?: ResourceQueryIndexes;
+  resourceIndexes?: ResourceSearchIndexes;
   resourcesByKey?: Map<string, DatasetResource | DatasetResourceIndexEntry>;
   choiceAlternativesByKey?: Map<string, ResourceAlternative[]>;
   recipeMapIconCandidates?: RecipeMapIconCandidate[];
@@ -109,6 +115,12 @@ interface LoadedRecipeIndex {
 }
 
 export type DatasetRecipeRef = RecipeContentRef;
+
+export {
+  getResourceModId,
+  type ResourceQuerySort,
+  type ResourceSourceFilter,
+} from "@/lib/search/resource-search";
 
 interface RecipeLookupIndexFile {
   schemaVersion: 1;
@@ -172,18 +184,6 @@ interface QueryIndexes {
   allRecipeIndexes: number[];
 }
 
-interface ResourceQueryIndexes {
-  sortedResourceIndexes: number[];
-  /**
-   * Each resource split by where its words came from, so a word in the item's
-   * name counts for more than the same word buried in a registry id.
-   */
-  fields: SearchEntryFields[];
-  searchIndex: TextSearchIndex;
-  /** The words items are actually called: what a typo gets corrected against. */
-  vocabulary: SearchVocabulary;
-}
-
 interface RecipeShardPayload {
   datasetVersionId: string;
   recipes: Recipe[];
@@ -198,8 +198,6 @@ const CROP_FARM_RECIPE_MAP = "Crop Farm";
  */
 const PLANT_RECIPE_MAPS = new Set([CROP_FARM_RECIPE_MAP, "IC2 Crop", "Tree Growth Simulator"]);
 const BEE_RECIPE_MAPS = new Set(["Bee Produce"]);
-
-export type ResourceSourceFilter = "plants" | "bees";
 
 const datasetRoot = path.join(process.cwd(), "public", "datasets", "gtnh");
 /**
@@ -605,15 +603,6 @@ async function loadRecipeBodies(
   return bodies;
 }
 
-export type ResourceQuerySort =
-  | "relevance"
-  | "name"
-  | "mod"
-  | "recipes"
-  | "made"
-  | "uses"
-  | "popular";
-
 /**
  * How many recipes MAKE and how many USE each resource, read off the same
  * inverted index the recipe search queries - so a Spruce Log's counts include
@@ -661,15 +650,6 @@ async function getResourceDirectionCounts(
   return counts;
 }
 
-/** Mod is encoded in the id prefix ("gregtech:gt.metaitem..."); fluids are bare ids. */
-export function getResourceModId(resource: { id: string; kind: string }): string {
-  const colon = resource.id.indexOf(":");
-  if (colon > 0) {
-    return resource.id.slice(0, colon);
-  }
-  return resource.kind === "fluid" ? "fluids" : "other";
-}
-
 export async function queryDatasetResources(
   versionId: string,
   request: {
@@ -687,20 +667,44 @@ export async function queryDatasetResources(
   return queryCatalogResources(await loadCatalog(versionId), request);
 }
 
+/**
+ * The item search's data for the browser (the `items` client file): the list
+ * the route searches and returns entries from, and the made/used counts and
+ * crop and bee keys the search reads, each only for listed resources (the
+ * search never asks about any other).
+ */
+export async function getDatasetResourceSearchFile(versionId: string): Promise<ResourceSearchFile> {
+  const catalog = await loadCatalog(versionId);
+  const listed = new Set(
+    catalog.resourceIndex.map((resource) => `${resource.kind}:${resource.id}`),
+  );
+  const counts = await getResourceDirectionCounts(catalog);
+  const directionCounts: ResourceSearchFile["directionCounts"] = [];
+  for (const key of listed) {
+    const entry = counts.get(key);
+    if (entry) {
+      directionCounts.push([key, entry.madeBy, entry.usedBy]);
+    }
+  }
+  const sourceKeys = async (source: ResourceSourceFilter) =>
+    [...(await getPassiveSourceResourceKeys(catalog, source))].filter((key) => listed.has(key));
+  return {
+    schemaVersion: 1,
+    resourceIndex: catalog.resourceIndex,
+    directionCounts,
+    sources: { plants: await sourceKeys("plants"), bees: await sourceKeys("bees") },
+  };
+}
+
 /** `queryDatasetResources` on a loaded catalog. */
 export async function queryCatalogResources(
   catalog: LoadedRecipeIndex,
   request: Parameters<typeof queryDatasetResources>[1],
 ) {
   // Nothing typed is the item list as it opens and as it scrolls: every resource, sorted, about a second of the one
-  // server thread on RC-2. The answer only changes with the catalog and the popularity sweep, so it is kept.
-  // The mod is not part of the key: the cached list is the un-modded one and a mod view filters it, because the mod
-  // counts are taken before the mod filter and the sort is stable, so the filtered list is the same bytes. Keyed on
-  // the mod, a request with a made-up mod name could push every player's list out of the 24 kept.
-  const blankKey =
-    request.query.trim() === ""
-      ? JSON.stringify([request.kind ?? "", request.sort ?? "relevance", request.source ?? null])
-      : undefined;
+  // server thread on RC-2. The answer only changes with the catalog and the popularity sweep, so it is kept, without
+  // its mod (blankResourceSearchKey, resourceSearchPage).
+  const blankKey = blankResourceSearchKey(request);
   const kept = blankKey === undefined ? undefined : catalog.blankResourceSearches?.get(blankKey);
   const search =
     kept && kept.popularity === request.popularity
@@ -713,32 +717,14 @@ export async function queryCatalogResources(
     catalog.blankResourceSearches ??= createBlankResourceSearchCache();
     catalog.blankResourceSearches.set(blankKey, { popularity: request.popularity, value: search });
   }
-  const { modCounts, resolved } = search;
-  const matches =
-    blankKey !== undefined && request.mod
-      ? search.matches.filter((match) => {
-          const resource = catalog.resourceIndex[match.resourceIndex];
-          return resource !== undefined && getResourceModId(resource) === request.mod;
-        })
-      : search.matches;
-
-  return {
-    resources: matches
-      .slice(request.offset, request.offset + request.limit)
-      .map((match) => catalog.resourceIndex[match.resourceIndex])
-      .filter(Boolean),
-    total: matches.length,
-    offset: request.offset,
-    limit: request.limit,
-    hasMore: request.offset + request.limit < matches.length,
-    mods: [...modCounts.entries()]
-      .map(([id, count]) => ({ id, count }))
-      .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)),
-    ...searchOutcome(resolved),
-  };
+  return resourceSearchPage(
+    catalog.resourceIndex,
+    search,
+    request,
+    blankKey !== undefined ? request.mod : undefined,
+  );
 }
 
-type ResourceSearch = Awaited<ReturnType<typeof searchDatasetResources>>;
 /**
  * How many blank item lists each loaded version keeps. One holds every match
  * of its kind, sort and source, never narrowed to a mod (a mod view filters
@@ -758,175 +744,13 @@ export function createBlankResourceSearchCache<V>(): BoundedLru<string, V> {
 async function searchDatasetResources(
   catalog: LoadedRecipeIndex,
   request: Parameters<typeof queryDatasetResources>[1],
-) {
+): Promise<ResourceSearch> {
   const indexes = ensureResourceIndexes(catalog);
   const sourceKeys = request.source
     ? await getPassiveSourceResourceKeys(catalog, request.source)
     : undefined;
-  let modCounts = new Map<string, number>();
-
-  const resolved = resolveSearchPhases(
-    parseSearchQuery(request.query),
-    indexes.vocabulary,
-    (query, options) => {
-      // Counted per pass, because which mods are on offer depends on which
-      // reading of the query the results came from.
-      const counts = new Map<string, number>();
-      const matches: Array<{ resourceIndex: number; score: number }> = [];
-      // A query the index cannot narrow walks the whole list, the partial phase
-      // included: about 60k entries, 40-60 ms, within the heavy base cost and
-      // the metering, and that walk is what finds "bag of holding" (no item is
-      // named that) and "motor lv hv" (the motors of those tiers).
-      const candidateIndexes =
-        queryTextSearchIndex(indexes.searchIndex, query, options) ?? indexes.sortedResourceIndexes;
-
-      for (const resourceIndex of candidateIndexes) {
-        const resource = catalog.resourceIndex[resourceIndex];
-        if (
-          !resource ||
-          isVirtualChoiceResource(resource) ||
-          (!resource.iconPath && !resource.iconAtlas)
-        ) {
-          continue;
-        }
-        if (request.kind && resource.kind !== request.kind) {
-          continue;
-        }
-        if (sourceKeys && !sourceKeys.has(`${resource.kind}:${resource.id}`)) {
-          continue;
-        }
-
-        const score = matchSearchEntry(query, indexes.fields[resourceIndex] ?? {}, options);
-        if (score === undefined) {
-          continue;
-        }
-
-        // Mod counts reflect the search+kind scope, so the mod dropdown always
-        // shows what picking each mod would leave.
-        const modId = getResourceModId(resource);
-        counts.set(modId, (counts.get(modId) ?? 0) + 1);
-        if (request.mod && modId !== request.mod) {
-          continue;
-        }
-        matches.push({
-          resourceIndex,
-          score: score > 0 ? score + resourceRelevanceBias(resource) : score,
-        });
-      }
-
-      modCounts = counts;
-      return matches;
-    },
-  );
-
   const directionCounts = await getResourceDirectionCounts(catalog);
-  const matches = sortResourceMatches(
-    catalog,
-    resolved.results,
-    request.sort ?? "relevance",
-    directionCounts,
-    request.popularity,
-  );
-  return { matches, modCounts, resolved };
-}
-
-/**
- * The nudge that settles two equally good name matches.
- *
- * Between "Steel Plate" and "Compressed Aluminium Plate Casing", the item used
- * in more recipes and named more plainly is the one that was meant, so both
- * count for a little - never enough to outrank an actual better match.
- */
-function resourceRelevanceBias(resource: DatasetResourceIndexEntry): number {
-  const name = resource.displayName ?? resource.id;
-  return Math.log10(1 + (resource.recipeCount ?? 0)) / 10 - name.length / 400;
-}
-
-/** What the search did, for the "showing results for ..." line. */
-function searchOutcome(resolved: { query: SearchQuery; phase: SearchPhase }) {
-  return {
-    searchPhase: resolved.phase,
-    corrections: resolved.phase === "corrected" ? resolved.query.corrections : [],
-  };
-}
-
-function sortResourceMatches(
-  catalog: LoadedRecipeIndex,
-  matches: Array<{ resourceIndex: number; score: number }>,
-  sort: ResourceQuerySort,
-  directionCounts: Map<string, { madeBy: number; usedBy: number }>,
-  popularity?: Map<string, number>,
-) {
-  const nameOf = (match: { resourceIndex: number }) => {
-    const resource = catalog.resourceIndex[match.resourceIndex];
-    return (resource?.displayName ?? resource?.id ?? "").toLowerCase();
-  };
-  const modOf = (match: { resourceIndex: number }) =>
-    getResourceModId(catalog.resourceIndex[match.resourceIndex]);
-  const recipesOf = (match: { resourceIndex: number }) =>
-    catalog.resourceIndex[match.resourceIndex]?.recipeCount ?? 0;
-  const countsOf = (match: { resourceIndex: number }) => {
-    const resource = catalog.resourceIndex[match.resourceIndex];
-    return (
-      (resource && directionCounts.get(`${resource.kind}:${resource.id}`)) ?? {
-        madeBy: 0,
-        usedBy: 0,
-      }
-    );
-  };
-
-  if (sort === "name") {
-    return [...matches].sort((left, right) => nameOf(left).localeCompare(nameOf(right)));
-  }
-  if (sort === "mod") {
-    return [...matches].sort(
-      (left, right) =>
-        modOf(left).localeCompare(modOf(right)) || nameOf(left).localeCompare(nameOf(right)),
-    );
-  }
-  if (sort === "recipes") {
-    return [...matches].sort(
-      (left, right) =>
-        recipesOf(right) - recipesOf(left) || nameOf(left).localeCompare(nameOf(right)),
-    );
-  }
-  if (sort === "made") {
-    return [...matches].sort(
-      (left, right) =>
-        countsOf(right).madeBy - countsOf(left).madeBy || nameOf(left).localeCompare(nameOf(right)),
-    );
-  }
-  if (sort === "uses") {
-    return [...matches].sort(
-      (left, right) =>
-        countsOf(right).usedBy - countsOf(left).usedBy || nameOf(left).localeCompare(nameOf(right)),
-    );
-  }
-
-  if (sort === "popular") {
-    // What the community actually builds, aggregated over shared setups. A
-    // typed query still wins first: "steel" must find steel, not the most
-    // popular thing named vaguely like it. Resources no plan has touched
-    // fall back to the best-match order behind everything with a score.
-    const popularityOf = (match: { resourceIndex: number }) => {
-      const resource = catalog.resourceIndex[match.resourceIndex];
-      return (resource && popularity?.get(`${resource.kind}:${resource.id}`)) ?? 0;
-    };
-    return [...matches].sort(
-      (left, right) =>
-        right.score - left.score ||
-        popularityOf(right) - popularityOf(left) ||
-        countsOf(right).madeBy - countsOf(left).madeBy ||
-        nameOf(left).localeCompare(nameOf(right)),
-    );
-  }
-
-  // Best match. Equal scores - and with nothing typed every score is 0 - fall
-  // to the thing with the most ways to MAKE it, which is the item a planner
-  // most likely came to place.
-  return [...matches].sort(
-    (left, right) => right.score - left.score || countsOf(right).madeBy - countsOf(left).madeBy,
-  );
+  return searchResources(catalog.resourceIndex, indexes, request, { directionCounts, sourceKeys });
 }
 
 export interface DatasetRecipeQueryRequest {
@@ -3031,66 +2855,9 @@ function ensureIndexes(catalog: LoadedRecipeIndex): QueryIndexes {
   return catalog.indexes;
 }
 
-function ensureResourceIndexes(catalog: LoadedRecipeIndex): ResourceQueryIndexes {
-  if (catalog.resourceIndexes) {
-    return catalog.resourceIndexes;
-  }
-
-  const fields: SearchEntryFields[] = [];
-  const tokensByEntry: string[][] = [];
-  const intern = createTokenInterner();
-  const sortedResourceIndexes = catalog.resourceIndex
-    .map((resource, index) => {
-      fields[index] = resourceSearchFields(resource, intern);
-      tokensByEntry[index] = [
-        ...new Set([
-          ...(fields[index].name ?? []),
-          ...(fields[index].id ?? []),
-          ...(fields[index].text ?? []),
-        ]),
-      ];
-      return index;
-    })
-    .filter((index) => {
-      const resource = catalog.resourceIndex[index];
-      return Boolean(resource && !isVirtualChoiceResource(resource));
-    })
-    .sort((leftIndex, rightIndex) => {
-      const left = catalog.resourceIndex[leftIndex];
-      const right = catalog.resourceIndex[rightIndex];
-      return (
-        (right?.recipeCount ?? 0) - (left?.recipeCount ?? 0) ||
-        (left?.displayName ?? left?.id ?? "").localeCompare(right?.displayName ?? right?.id ?? "")
-      );
-    });
-
-  const resourceIndexes: ResourceQueryIndexes = {
-    sortedResourceIndexes,
-    fields,
-    searchIndex: buildTokenSearchIndex(tokensByEntry, sortedResourceIndexes),
-    // Ore dictionary entries are named "Ore Dictionary: plateSteel", which is not
-    // a phrase anyone types, so only real names teach the corrector words.
-    vocabulary: buildSearchVocabulary(
-      sortedResourceIndexes
-        .map((index) => catalog.resourceIndex[index])
-        .filter((resource) => resource && !isOreDictionaryResource(resource))
-        .map((resource) => resource.displayName ?? ""),
-    ),
-  };
-  catalog.resourceIndexes = resourceIndexes;
-  return resourceIndexes;
-}
-
-function resourceSearchFields(
-  resource: DatasetResourceIndexEntry,
-  intern: (tokens: string[]) => string[],
-): SearchEntryFields {
-  return {
-    nameText: normalizeText(resource.displayName ?? resource.id),
-    name: intern(splitSearchTokens(resource.displayName ?? "")),
-    id: intern(splitSearchTokens(`${resource.id} ${(resource.oreDictionary ?? []).join(" ")}`)),
-    text: intern(splitSearchTokens((resource.tooltip ?? []).join(" "))),
-  };
+function ensureResourceIndexes(catalog: LoadedRecipeIndex): ResourceSearchIndexes {
+  catalog.resourceIndexes ??= buildResourceSearchIndexes(catalog.resourceIndex);
+  return catalog.resourceIndexes;
 }
 
 function addRecipeIndex(index: Map<string, number[]>, key: string, recipeIndex: number) {

@@ -8,6 +8,7 @@ import {
   searchRequestCost,
 } from "@/lib/server/dataset-rate";
 import { getResourcePopularity } from "@/lib/server/resource-popularity";
+import { normalizeResourceSearchRequest } from "@/lib/search/resource-search";
 import { parseSearchQuery } from "@/lib/search/text-search";
 
 export const runtime = "nodejs";
@@ -25,30 +26,20 @@ export async function GET(
     if (refusal) {
       return refusal;
     }
-    const kindParam = url.searchParams.get("kind");
+    const searchRequest = normalizeResourceSearchRequest({
+      query,
+      offset: url.searchParams.get("offset"),
+      limit: url.searchParams.get("limit"),
+      kind: url.searchParams.get("kind"),
+      mod: url.searchParams.get("mod"),
+      sort: url.searchParams.get("sort"),
+      source: url.searchParams.get("source"),
+    });
     const sortParam = url.searchParams.get("sort");
-    const sourceParam = url.searchParams.get("source");
     // Never awaits the database: the last good ranking, or none yet.
     const popularity = sortParam === "popular" ? getResourcePopularity() : undefined;
     const result = await meteredDatasetWork(request, () =>
-      queryDatasetResources(versionId, {
-        query,
-        offset: parseOffset(url.searchParams.get("offset")),
-        limit: parseLimit(url.searchParams.get("limit")),
-        kind: kindParam === "item" || kindParam === "fluid" ? kindParam : undefined,
-        mod: url.searchParams.get("mod") ?? undefined,
-        sort:
-          sortParam === "name" ||
-          sortParam === "mod" ||
-          sortParam === "recipes" ||
-          sortParam === "made" ||
-          sortParam === "uses" ||
-          sortParam === "popular"
-            ? sortParam
-            : undefined,
-        source: sourceParam === "plants" || sourceParam === "bees" ? sourceParam : undefined,
-        popularity,
-      }),
+      queryDatasetResources(versionId, { ...searchRequest, popularity }),
     );
     return NextResponse.json(result, {
       // Popularity is community data, not dataset bytes: the datasetHash
@@ -63,14 +54,4 @@ export async function GET(
   } catch (error) {
     return datasetErrorResponse(error, "Resource query failed.");
   }
-}
-
-function parseOffset(value: string | null): number {
-  const parsed = Number.parseInt(value ?? "", 10);
-  return Number.isInteger(parsed) ? Math.max(0, parsed) : 0;
-}
-
-function parseLimit(value: string | null): number {
-  const parsed = Number.parseInt(value ?? "", 10);
-  return Number.isInteger(parsed) ? Math.max(1, Math.min(120, parsed)) : 24;
 }
