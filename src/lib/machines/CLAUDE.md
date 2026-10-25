@@ -50,6 +50,12 @@ computes in float: replicate it.
   their `voltageTier + 1` is our ordinal), and their `speed` is throughput (ours is a
   duration multiplier, `1 / speed`). `machine-table.test.ts` checks every entry against
   `__fixtures__/reference-coefficients.json` and says how to regenerate it; run it.
+- A map with one machine family ships no handlers, so its cards carry the MAP's name ("Milling",
+  "Flotation Cell", 2.9's "Industrial Chisel" and "Cable Coating"): the machine's entry needs that
+  name as an alias, or its cards silently run on scraped data. `dataset-machine-names.test.ts` checks
+  every entry is reached from a card name of each served dataset (`__fixtures__/dataset-machine-names.json`,
+  regenerated with `tools/audits/extract-dataset-machine-names.mjs` after a rebuild); the few it lists
+  as unreached say why.
 - `ctx.tier(id)` is an option's position; `ctx.value(id)` is the number behind a count
   knob. Formulas that read a count must use `value`.
 - A table machine that declares `speed` or `power` seeds from the recipe's base stats
