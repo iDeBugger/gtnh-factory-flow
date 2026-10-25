@@ -26,7 +26,8 @@ export const PLAN_PREVIEW_BUCKET = "plan-previews";
 /**
  * The largest side a stored preview may claim. The client captures at most
  * 1600 by 1000, so the bound costs nothing legitimate, and it keeps the one
- * decode the card pays (resvg, from the IHDR's own numbers) under 64 MB.
+ * decode the card pays (resvg, from the IHDR's own numbers) at most 64 MiB
+ * with the 8-bit bound below.
  */
 export const PLAN_PREVIEW_MAX_SIDE = 4096;
 
@@ -37,7 +38,7 @@ export const PREVIEW_BOX_HEIGHT = 330;
 /**
  * The width and height a PNG's IHDR declares, or undefined when the bytes
  * are not a PNG whose first chunk is an IHDR with both sides in
- * 1..`PLAN_PREVIEW_MAX_SIDE`. The signature and the chunk tag are checked
+ * 1..`PLAN_PREVIEW_MAX_SIDE` and at most 8 bits a channel. The signature and the chunk tag are checked
  * because the numbers at offsets 16 and 20 mean nothing otherwise.
  */
 export function readPngHeader(bytes: Uint8Array): { width: number; height: number } | undefined {
@@ -55,6 +56,10 @@ export function readPngHeader(bytes: Uint8Array): { width: number; height: numbe
   const width = view.getUint32(16);
   const height = view.getUint32(20);
   if (width < 1 || height < 1 || width > PLAN_PREVIEW_MAX_SIDE || height > PLAN_PREVIEW_MAX_SIDE) {
+    return undefined;
+  }
+  // At most 8 bits a channel (the browser's canvas never writes more): 16 would double the decode.
+  if (bytes[24]! > 8) {
     return undefined;
   }
   return { width, height };

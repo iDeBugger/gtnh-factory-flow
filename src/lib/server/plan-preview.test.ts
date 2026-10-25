@@ -16,6 +16,10 @@ describe("the stored board photograph's header", () => {
     expect(readPngHeader(pngHeader(60000, 60000))).toBeUndefined();
     expect(readPngHeader(pngHeader(0, 10))).toBeUndefined();
     expect(readPngHeader(pngHeader(100, 100).subarray(0, 24))).toBeUndefined();
+    // 16 bits a channel at the side bound is a 128 MiB decode.
+    const deep = pngHeader(4096, 4096);
+    deep[24] = 16;
+    expect(readPngHeader(deep)).toBeUndefined();
     const notPng = pngHeader(100, 100);
     notPng[0] = 0x00;
     expect(readPngHeader(notPng)).toBeUndefined();
