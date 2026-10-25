@@ -48,17 +48,23 @@
   sent, so a rewrite alone is bypassed by percent-encoding (`recipes%2Ejson`). The gate is `src/proxy.ts`
   (`decideDatasetPath`, `dataset-path-gate.ts`), which runs on every request path but `/_next/`: under
   `/datasets/gtnh/` (decoded) it refuses a path that is percent-encoded at all or holds a `.` or `..` segment
-  (400 `no-store`), sends the four index gzips, the shards, `client/` and `recipes.json` to
+  (400 `no-store`), sends the four index gzips, the shards, `client/`, the content-named textures
+  (`textures/rendered/<name>.png`, `textures/icons/<name>.png`) and `recipes.json` to
   `src/app/dataset-files/[versionId]/[...assetPath]/route.ts` (a day's cache, ETag, Last-Modified and one byte
-  range on a file; `no-store` on 400 and 404; `recipes.json`, about 2 GB, refused), and lets everything else
-  through to the public handler: textures (`immutable` by `next.config.ts` header rule), `oracle/`, stray copies,
-  at `max-age=0`. The gate is one process's view of a path: the raw `recipes.json` must still not exist on the
+  range on a file, a texture `immutable` for a year; `no-store` on 400 and 404; `recipes.json`, about 2 GB,
+  refused), and lets everything else through to the public handler: the other textures, `oracle/`, stray copies,
+  at `max-age=0` (a texture the handler misses reaches `datasets/gtnh/[versionId]/textures/[...assetPath]/route.ts`,
+  whose miss is `no-store` too). No cache policy is set by a `next.config.ts` header rule: Next applies the rule
+  first and keeps it over the answer's own `Cache-Control` (`send-response.js` adds a header only when absent), so a
+  texture asked for before its publish lands would be a 404 kept a year. With `GTNH_DATASET_BACKEND_URL` a
+  beforeFiles rewrite sends the proxy's texture rewrite on to the backend. The gate is one process's view of a path: the raw `recipes.json` must still not exist on the
   server, and the publish must not copy it (`tools/deploy/publish-datasets.sh` excludes it and checks). It also makes a pipeline invariant: published names stay within
   `[A-Za-z0-9._-]` (`tools/dataset-pipeline/CLAUDE.md`; `rebuild-manifest.mjs` refuses a version that breaks it),
   or the file is unreachable. The dataset-files and textures routes resolve a file with `resolveDatasetChildPath`
   (dataset-static-file.ts): lexically, then by real path against the real version directory, so a symlink in the
   tree never reads outside it (a miss is a 404). Exam: `dataset-path-gate.test.ts`, `proxy.test.ts`,
-  `dataset-files/[versionId]/[...assetPath]/route.test.ts`, `dataset-static-file.test.ts`.
+  `dataset-files/[versionId]/[...assetPath]/route.test.ts`, `datasets/gtnh/[versionId]/textures/[...assetPath]/route.test.ts`,
+  `next-config.test.ts`, `dataset-static-file.test.ts`.
 - The answers every player gets the same (catalog, mobs, crops, recipe-ids, items) are also static files the server
   writes itself (`client-files.ts`, `dataset-client-files.ts`), served at `/datasets/gtnh/<id>/client/<kind>.<20 hex
   of the sha256 of the JSON>.json` but stored outside the dataset tree, which stays the pipeline's bytes and may be

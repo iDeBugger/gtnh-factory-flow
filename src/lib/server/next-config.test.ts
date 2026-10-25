@@ -41,6 +41,11 @@ describe("how the served dataset files reach a browser", () => {
           "/datasets/gtnh/:version([A-Za-z0-9_-][A-Za-z0-9._-]*)/:rest([A-Za-z0-9_-][A-Za-z0-9._-]*)*",
         destination: "https://example.test/datasets/gtnh/:version/:rest*",
       },
+      {
+        source:
+          "/dataset-files/:version([A-Za-z0-9_-][A-Za-z0-9._-]*)/textures/:root(rendered|icons)/:file([A-Za-z0-9_-][A-Za-z0-9._-]*)",
+        destination: "https://example.test/datasets/gtnh/:version/textures/:root/:file",
+      },
     ]);
     // No dot segment, plain or encoded, is ever forwarded; a recipe id with `:` is.
     // Next's own matcher for custom routes (no type declarations ship with it).
@@ -48,7 +53,13 @@ describe("how the served dataset files reach a browser", () => {
       // @ts-expect-error untyped compiled module
       "next/dist/compiled/path-to-regexp"
     )) as { pathToRegexp: (source: string, keys: unknown[]) => RegExp };
-    const [api, files] = proxied.rewrites.beforeFiles.map((rule) => pathToRegexp(rule.source, []));
+    const [api, files, textures] = proxied.rewrites.beforeFiles.map((rule) =>
+      pathToRegexp(rule.source, []),
+    );
+    // The proxy's rewrite of a content-named texture still reaches the backend; the data files do not.
+    expect(textures!.test("/dataset-files/local-2.8.1/textures/rendered/x-0123456789ab.png")).toBe(true);
+    expect(textures!.test("/dataset-files/local-2.8.1/recipes.json.gz")).toBe(false);
+    expect(textures!.test("/dataset-files/local-2.8.1/textures/rendered/..")).toBe(false);
     for (const forwarded of [
       "/api/datasets/local-2.9.0-rc-2/catalog",
       "/api/datasets/local-2.9.0-rc-2/recipes/oracle%3Agregtech%3Abw-fuels%3A4f56",
@@ -77,15 +88,16 @@ describe("how the served dataset files reach a browser", () => {
     }
   });
 
-  it("sets no cache policy by path for dataset data: a header rule cannot tell a miss from a file", async () => {
+  it("sets no cache policy by path under the datasets: a header rule cannot tell a miss from a file", async () => {
+    // A next.config rule beats the answer's own Cache-Control, so a texture asked for before its
+    // publish lands would be a 404 kept a year. The dataset-files route answers for itself.
     const { headers } = await loadConfig();
-    const dataset = headers.filter((rule) => rule.source.startsWith("/datasets/"));
-    expect(dataset.length).toBeGreaterThan(0);
-    for (const rule of dataset) {
-      // Only textures, which are content-named, are immutable; nothing else under
-      // /datasets/ has a header rule, the dataset-files route answers for itself.
-      expect(rule.source).toContain("/textures/");
-      expect(cacheControl(rule)).toBe("public, max-age=31536000, immutable");
+    const dataset = headers.filter(
+      (rule) => rule.source.startsWith("/datasets/") || rule.source.startsWith("/dataset-files/"),
+    );
+    expect(dataset).toEqual([]);
+    for (const rule of headers) {
+      expect(cacheControl(rule), rule.source).toBeUndefined();
     }
   });
 });

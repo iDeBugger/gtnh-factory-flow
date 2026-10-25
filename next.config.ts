@@ -96,8 +96,10 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     // The headers are read at build into the routes manifest, which is also when NEXT_PUBLIC_* is fixed.
-    // Security headers first (security-headers.config.ts: the policy, framing, nosniff, referrer, HSTS, and
-    // the solver worker's own policy on the static chunks), then the texture cache rules.
+    // Security headers (security-headers.config.ts: the policy, framing, nosniff, referrer, HSTS, and the
+    // solver worker's own policy on the static chunks). No cache rule by path for the datasets: a rule here
+    // beats the answer's own header, so a missing texture would be kept a year like a file. The
+    // dataset-files route sets each answer's policy (content-named textures immutable, a miss no-store).
     return [
       ...securityHeaders({
         production: process.env.NODE_ENV === "production",
@@ -105,29 +107,6 @@ const nextConfig: NextConfig = {
         siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
         modAndCommunity: process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY,
       }),
-      {
-        source: "/datasets/gtnh/:version/textures/icons/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
-      {
-        // Rendered item, block and fluid icons are named by a hash of their
-        // bytes (the normalizer's staging, stage-rendered-icons.mjs, and the
-        // fluid alpha pass for what it repaints), so changed pixels get a new
-        // URL and these can be immutable too. They are most of what a
-        // returning browser re-downloads.
-        source: "/datasets/gtnh/:version/textures/rendered/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
     ];
   },
   async rewrites() {
@@ -149,6 +128,11 @@ const nextConfig: NextConfig = {
             {
               source: `/datasets/gtnh/:version(${PUBLISHED_SEGMENT})/:rest(${PUBLISHED_SEGMENT})*`,
               destination: `${datasetBackendUrl}/datasets/gtnh/:version/:rest*`,
+            },
+            // src/proxy.ts has already sent the content-named textures to the dataset-files route.
+            {
+              source: `/dataset-files/:version(${PUBLISHED_SEGMENT})/textures/:root(rendered|icons)/:file(${PUBLISHED_SEGMENT})`,
+              destination: `${datasetBackendUrl}/datasets/gtnh/:version/textures/:root/:file`,
             },
           ]
         : [],

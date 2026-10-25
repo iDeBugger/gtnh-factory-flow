@@ -45,6 +45,22 @@ describe("the dataset path gate", () => {
     });
   });
 
+  it("sends the content-named textures to the dataset-files route, the other textures not", () => {
+    for (const root of ["rendered", "icons"]) {
+      expect(decideDatasetPath(`/datasets/gtnh/${V}/textures/${root}/copper-a50d21cdeb41.png`)).toEqual({
+        kind: "rewrite",
+        pathname: `/dataset-files/${V}/textures/${root}/copper-a50d21cdeb41.png`,
+      });
+    }
+    for (const other of [
+      `/datasets/gtnh/${V}/textures/atlas/atlas-0000.png`,
+      `/datasets/gtnh/${V}/textures/icon-report.json`,
+      `/datasets/gtnh/${V}/textures/rendered/deeper/x.png`,
+    ]) {
+      expect(decideDatasetPath(other), other).toEqual({ kind: "pass" });
+    }
+  });
+
   it("refuses any percent-encoding under the data, whatever it spells", () => {
     for (const path of [
       `/datasets/gtnh/${V}/recipes%2Ejson`,
@@ -73,10 +89,7 @@ describe("the dataset path gate", () => {
     expect(decideDatasetPath(`/datasets/gtnh/${V}/recipes.json/`)).toEqual({ kind: "refuse" });
   });
 
-  it("lets everything else through: textures, other files, the rest of the site", () => {
-    expect(
-      decideDatasetPath(`/datasets/gtnh/${V}/textures/rendered/copper-a50d21cdeb41.png`),
-    ).toEqual({ kind: "pass" });
+  it("lets everything else through: other files, the rest of the site", () => {
     expect(decideDatasetPath(`/datasets/gtnh/${V}/oracle/oracle-report.json`)).toEqual({
       kind: "pass",
     });
