@@ -20,6 +20,7 @@ import {
   prewarmFirstThenRest,
   prewarmInOrder,
   queryCatalogResources,
+  createRankedRecipeSearchCache,
   RECIPE_SEARCH_CACHE_BYTES,
   rankedRecipeSearchBytes,
   rankedRecipeSearchKey,
@@ -584,5 +585,33 @@ describe("the kept recipe searches", () => {
     const bytes = rankedRecipeSearchBytes("key", widest);
     expect(bytes).toBeGreaterThan(278_000 * 4);
     expect(Math.floor(RECIPE_SEARCH_CACHE_BYTES / bytes)).toBeGreaterThanOrEqual(29);
+  });
+
+  it("count each map's name and count and the corrections, and evict the oldest past the bound", () => {
+    const search = (matches: number, maps: string[], corrected = false) => ({
+      order: new Int32Array(matches),
+      recipeMaps: maps,
+      recipeMapCounts: Object.fromEntries(maps.map((recipeMap) => [recipeMap, 1])),
+      outcome: {
+        searchPhase: (corrected ? "corrected" : "exact") as "corrected" | "exact",
+        corrections: corrected ? [{ from: "stel", to: "steel" }] : [],
+      },
+    });
+    const small = rankedRecipeSearchBytes("k", search(0, []));
+    expect(rankedRecipeSearchBytes("k", search(0, ["Assembler"]))).toBeGreaterThanOrEqual(
+      small + 128 + "Assembler".length * 4,
+    );
+    expect(rankedRecipeSearchBytes("k", search(0, [], true))).toBeGreaterThan(small);
+
+    const one = search(100_000, ["Assembler"]);
+    const size = rankedRecipeSearchBytes("a", one);
+    const cache = createRankedRecipeSearchCache(Math.floor(size * 2.5));
+    cache.set("a", one, size);
+    cache.set("b", search(100_000, ["Assembler"]), size);
+    expect(cache.get("a")).toBe(one);
+    cache.set("c", search(100_000, ["Assembler"]), size);
+    // "a" was read last, so "b" is the oldest and goes.
+    expect(cache.keys()).toEqual(["a", "c"]);
+    expect(cache.totalSize).toBeLessThanOrEqual(size * 2.5);
   });
 });

@@ -4,7 +4,11 @@ import { Readable } from "node:stream";
 import { createGunzip } from "node:zlib";
 import { NextResponse } from "next/server";
 
-import { CLIENT_FILE_NAME, CLIENT_FILES_DIRECTORY } from "@/lib/server/client-files";
+import {
+  CLIENT_FILE_NAME,
+  CLIENT_FILES_DIRECTORY,
+  resolveClientFilePath,
+} from "@/lib/server/client-files";
 import {
   CLIENT_FILE_CACHE_CONTROL,
   DATASET_FILE_CACHE_CONTROL,
@@ -27,7 +31,8 @@ export const dynamic = "force-dynamic";
  * with ETag and byte ranges, and a refusal or a miss says no-store.
  *
  * The server's own content-addressed answers (`client/<kind>.<hash>.json`,
- * client-files.ts) are served here too: immutable, as brotli or gzip by the
+ * client-files.ts) are served here too, from the site's cache directory
+ * (`clientFilesRoot`), not the dataset tree: immutable, as brotli or gzip by the
  * request's Accept-Encoding, decompressed for a client that takes neither.
  */
 const INDEX_FILES = new Set([
@@ -110,11 +115,7 @@ async function serveClientFile(request: Request, versionId: string, name: string
     if (!accepted.has(encoding)) {
       continue;
     }
-    const filePath = await resolveDatasetChildPath(
-      versionId,
-      CLIENT_FILES_DIRECTORY,
-      `${name}.${suffix}`,
-    );
+    const filePath = await resolveClientFilePath(versionId, `${name}.${suffix}`);
     if (!filePath) {
       break;
     }
@@ -131,7 +132,7 @@ async function serveClientFile(request: Request, versionId: string, name: string
     }
   }
   // A client that takes neither encoding gets the gzip copy unpacked.
-  const gzipPath = await resolveDatasetChildPath(versionId, CLIENT_FILES_DIRECTORY, `${name}.gz`);
+  const gzipPath = await resolveClientFilePath(versionId, `${name}.gz`);
   const stats = gzipPath ? await stat(gzipPath).catch(() => undefined) : undefined;
   if (!gzipPath || !stats?.isFile()) {
     return NextResponse.json(

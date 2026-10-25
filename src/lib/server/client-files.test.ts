@@ -5,6 +5,9 @@ import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CLIENT_FILE_NAME,
+  clientFileDirectory,
+  clientFilesRoot,
+  resolveClientFilePath,
   clientFileListing,
   clientFileName,
   ensureClientFiles,
@@ -28,9 +31,32 @@ afterEach(async () => {
 
 const catalog = { schemaVersion: 1, resourceIndex: [{ id: "a" }] };
 const specs: ClientFileSpec[] = [
-  { kind: "catalog", brotliQuality: 11, produce: async () => catalog },
+  { kind: "catalog", brotli: { quality: 11, window: 22 }, produce: async () => catalog },
   { kind: "recipe-ids", produce: async () => ({ recipeIds: ["r1", "r2"] }) },
 ];
+
+describe("where the client files live", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("is the site's own cache directory, never the dataset tree", () => {
+    vi.stubEnv("GTNH_CLIENT_FILES_DIR", "");
+    expect(clientFilesRoot()).toBe(path.join(process.cwd(), ".cache", "client-files"));
+    vi.stubEnv("GTNH_CLIENT_FILES_DIR", "/data/client-files");
+    expect(clientFileDirectory("local-2.9.0-rc-2")).toBe("/data/client-files/local-2.9.0-rc-2");
+    expect(resolveClientFilePath("local-2.9.0-rc-2", "catalog.0123456789abcdef0123.json.br")).toBe(
+      "/data/client-files/local-2.9.0-rc-2/catalog.0123456789abcdef0123.json.br",
+    );
+    expect(clientFilesRoot()).not.toContain(path.join("public", "datasets"));
+  });
+
+  it("refuses a version or file name that is not a plain name", () => {
+    expect(clientFileDirectory("..")).toBeUndefined();
+    expect(clientFileDirectory("a/b")).toBeUndefined();
+    expect(resolveClientFilePath("v", "../x.gz")).toBeUndefined();
+  });
+});
 
 describe("the server's content-addressed dataset answers", () => {
   it("names each file by the hash of the JSON the API sends, within the gate's characters", async () => {

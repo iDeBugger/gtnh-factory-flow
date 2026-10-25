@@ -1,4 +1,8 @@
-import { createResourceSearchEngine, type ResourceSearchFile } from "./resource-search-engine";
+import {
+  createResourceSearchEngine,
+  RESOURCE_SEARCH_FILE_SCHEMA,
+  type ResourceSearchFile,
+} from "./resource-search-engine";
 import type { ResourceSearchRequest } from "./resource-search";
 
 /**
@@ -14,7 +18,8 @@ import type { ResourceSearchRequest } from "./resource-search";
 
 export type ResourceSearchWorkerMessage =
   | { type: "load"; itemsUrl: string; popularityUrl: string }
-  | { type: "query"; id: number; request: Omit<ResourceSearchRequest, "popularity"> };
+  | { type: "query"; id: number; request: Omit<ResourceSearchRequest, "popularity"> }
+  | { type: "cancel"; id: number };
 
 export type ResourceSearchWorkerReply =
   | { type: "ready"; buildMs: number }
@@ -51,27 +56,22 @@ function refreshPopularity() {
     });
 }
 
-self.onmessage = async (event: MessageEvent<ResourceSearchWorkerMessage>) => {
-  const message = event.data;
-  if (message.type === "load") {
-    try {
-      popularityUrl = message.popularityUrl;
-      refreshPopularity();
-      const response = await fetch(message.itemsUrl, { headers: { Accept: "application/json" } });
-      if (!response.ok) {
-        throw new Error(`Item search file request failed (${response.status}).`);
-      }
-      const file = (await response.json()) as ResourceSearchFile;
-      const started = performance.now();
-      engine = createResourceSearchEngine(file);
-      post({ type: "ready", buildMs: performance.now() - started });
-    } catch (error) {
-      post({ type: "failed", error: error instanceof Error ? error.message : String(error) });
-    }
-    return;
-  }
+/**
+ * Queries waiting to run. A message only queues its query; the queue runs in a
+ * later task, so a cancel that arrived meanwhile (the player typed on) drops
+ * its query before the walk instead of after it.
+ */
+const waiting: Array<{ id: number; request: Omit<ResourceSearchRequest, "popularity"> }> = [];
+let draining = false;
 
-  const { id, request } = message;
+function drain() {
+  draining = false;
+  for (let next = waiting.shift(); next; next = waiting.shift()) {
+    answer(next.id, next.request);
+  }
+}
+
+function answer(id: number, request: Omit<ResourceSearchRequest, "popularity">) {
   if (!engine) {
     post({ type: "fallback", id });
     return;
@@ -95,5 +95,43 @@ self.onmessage = async (event: MessageEvent<ResourceSearchWorkerMessage>) => {
     post({ type: "result", id, json: JSON.stringify(result) });
   } catch {
     post({ type: "fallback", id });
+  }
+}
+
+self.onmessage = async (event: MessageEvent<ResourceSearchWorkerMessage>) => {
+  const message = event.data;
+  if (message.type === "load") {
+    try {
+      popularityUrl = message.popularityUrl;
+      refreshPopularity();
+      const response = await fetch(message.itemsUrl, { headers: { Accept: "application/json" } });
+      if (!response.ok) {
+        throw new Error(`Item search file request failed (${response.status}).`);
+      }
+      const file = (await response.json()) as ResourceSearchFile;
+      // A file of another format (a tab older or newer than the server's
+      // build) would answer wrong; the page asks the API instead.
+      if (file?.schemaVersion !== RESOURCE_SEARCH_FILE_SCHEMA) {
+        throw new Error(`Item search file has format ${String(file?.schemaVersion)}.`);
+      }
+      const started = performance.now();
+      engine = createResourceSearchEngine(file);
+      post({ type: "ready", buildMs: performance.now() - started });
+    } catch (error) {
+      post({ type: "failed", error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+  if (message.type === "cancel") {
+    const at = waiting.findIndex((query) => query.id === message.id);
+    if (at >= 0) {
+      waiting.splice(at, 1);
+    }
+    return;
+  }
+  waiting.push({ id: message.id, request: message.request });
+  if (!draining) {
+    draining = true;
+    setTimeout(drain, 0);
   }
 };

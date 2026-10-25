@@ -22,29 +22,60 @@ import {
  * The server writes them, not the pipeline: each is the dataset run through
  * the server's code (the catalog's merged machine resources and synthesized
  * icons, the pickers' hydrated summaries), so a deploy that changes that code
- * must change the file, and only the running code can say how. They go under
- * `<dataset>/client/` at start (after the prewarm, in the background) and are
- * written only when missing, so a restart with the same code and data
- * compresses nothing. A file another release still names stays for
- * `STALE_CLIENT_FILE_MS` after the last start that named it.
+ * must change the file, and only the running code can say how. They go into
+ * the site's own cache directory (`clientFilesRoot`, never the dataset tree,
+ * which is the pipeline's bytes and may be mounted read-only) at start, after
+ * the prewarm, in the background, and are written only when missing, so a
+ * restart with the same code and data compresses nothing. A file another
+ * release still names stays for `STALE_CLIENT_FILE_MS` after the last start
+ * that named it. They are served at `/datasets/gtnh/<id>/client/<name>`
+ * (dataset-path-gate.ts, the dataset-files route).
  */
 
 export { CLIENT_FILE_KINDS, CLIENT_FILE_NAME, CLIENT_FILES_DIRECTORY };
 export type { ClientFileKind };
+
+/**
+ * Where the client files live: `GTNH_CLIENT_FILES_DIR` (a writable volume in
+ * a container), else `.cache/client-files` under the working directory
+ * (gitignored). One directory per dataset version under it.
+ */
+export function clientFilesRoot(): string {
+  const configured = process.env.GTNH_CLIENT_FILES_DIR?.trim();
+  return configured ? path.resolve(configured) : path.join(process.cwd(), ".cache", "client-files");
+}
+
+/** A version's directory, or undefined for a version id that is not a plain name. */
+export function clientFileDirectory(versionId: string): string | undefined {
+  return isPlainName(versionId) ? path.join(clientFilesRoot(), versionId) : undefined;
+}
+
+/** One stored file (`<name>.gz` or `<name>.br`) of a version, or undefined for an unsafe name. */
+export function resolveClientFilePath(versionId: string, fileName: string): string | undefined {
+  const directory = clientFileDirectory(versionId);
+  return directory && isPlainName(fileName) ? path.join(directory, fileName) : undefined;
+}
+
+function isPlainName(value: string): boolean {
+  return /^[A-Za-z0-9._-]+$/.test(value) && value !== "." && value !== "..";
+}
 
 export interface ClientFileSpec {
   kind: ClientFileKind;
   /** The answer, exactly the JSON the API route would send. */
   produce: () => Promise<unknown>;
   /**
-   * The quality of the brotli copy written beside the gzip, or undefined for
-   * none. Measured on 2.9 (M1, one thread): the catalog, mobs and crops lists
-   * take under a second each at 11 and shrink by half or more (crops 314 KB
-   * gzip, 29 KB brotli); the item search file takes 41 s at 11 and 14 s at 10
-   * for 1.67 and 1.78 MB (2.77 MB gzip), so 10; the id list takes 23 s at 11 to
-   * save 13% (2.8 MB gzip, 2.4 MB brotli) and ships gzip only.
+   * The brotli copy written beside the gzip, or undefined for none. Measured
+   * on 2.9 (M1, one pool thread, peak process RSS during the call): the
+   * catalog, mobs and crops lists take under a second each at quality 11 and
+   * shrink by half or more (crops 314 KB gzip, 29 KB brotli); a 7.6 MB input at
+   * 11 holds +99 MB with a 16 MB window (24) and +72 MB with 4 MB (22) for the
+   * same size, so 22. The 23 MB item search file: 10/24 is 1.74 MB in 14 s at
+   * +201 MB, 9/24 is 1.96 MB in 1.1 s at +85 MB (gzip 2.77 MB), so 9/24 keeps
+   * four fifths of the gain at under half the memory. The id list takes 23 s
+   * at 11 to save 13% (2.8 MB gzip, 2.4 MB brotli) and ships gzip only.
    */
-  brotliQuality?: number;
+  brotli?: { quality: number; window: number };
 }
 
 export type ClientFileListing = ClientFileListingResponse;
@@ -80,16 +111,16 @@ export async function writeClientFiles(
     const name = clientFileName(spec.kind, bytes);
     await ensureEncoded(directory, `${name}.gz`, () => gzipAsync(bytes, { level: 9 }), now);
     current.add(`${name}.gz`);
-    const quality = spec.brotliQuality;
-    if (quality !== undefined) {
+    const brotli = spec.brotli;
+    if (brotli) {
       await ensureEncoded(
         directory,
         `${name}.br`,
         () =>
           brotliAsync(bytes, {
             params: {
-              [zlibConstants.BROTLI_PARAM_QUALITY]: quality,
-              [zlibConstants.BROTLI_PARAM_LGWIN]: 24,
+              [zlibConstants.BROTLI_PARAM_QUALITY]: brotli.quality,
+              [zlibConstants.BROTLI_PARAM_LGWIN]: brotli.window,
               [zlibConstants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
             },
           }),
@@ -160,8 +191,18 @@ const stateHost = globalThis as { [CLIENT_FILE_STATE]?: Map<string, VersionClien
 const states = (stateHost[CLIENT_FILE_STATE] ??= new Map());
 
 /**
+ * Outside production each load of this module keys its own states: a dev
+ * reload of changed answer code must not keep listing the files the old code
+ * wrote. In production the code never changes under a process, and the
+ * start-up write (another bundle's copy of this module) must fill the listing
+ * the route reads.
+ */
+const MODULE_GENERATION =
+  process.env.NODE_ENV === "production" ? "" : `:${Math.random().toString(36).slice(2)}`;
+
+/**
  * Starts (once per key) writing a version's files, and resolves when that is
- * done. A failure (an unwritable dataset directory, a dataset that does not
+ * done. A failure (an unwritable cache directory, a dataset that does not
  * load) is logged and leaves the listing incomplete: the client then asks the
  * API for what is missing, so nothing a player sees depends on the files.
  */
@@ -171,10 +212,10 @@ export function ensureClientFiles(
   directory: string,
   specs: readonly ClientFileSpec[],
 ): Promise<void> {
-  let state = states.get(key);
+  let state = states.get(key + MODULE_GENERATION);
   if (!state) {
     state = { files: {}, complete: false };
-    states.set(key, state);
+    states.set(key + MODULE_GENERATION, state);
   }
   if (!state.writing) {
     const target = state;
@@ -200,7 +241,7 @@ export function clientFileListing(
   specs: readonly ClientFileSpec[],
 ): ClientFileListing {
   void ensureClientFiles(key, versionId, directory, specs);
-  const state = states.get(key);
+  const state = states.get(key + MODULE_GENERATION);
   return { complete: state?.complete ?? false, files: { ...state?.files } };
 }
 

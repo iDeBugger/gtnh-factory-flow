@@ -17,8 +17,11 @@ import {
  * searches): the resource list exactly as the route returns its entries, and
  * the per-dataset facts the search reads besides it.
  */
+/** The `items` file's format: a change to its shape bumps it, and a worker refuses another. */
+export const RESOURCE_SEARCH_FILE_SCHEMA = 1;
+
 export interface ResourceSearchFile {
-  schemaVersion: 1;
+  schemaVersion: typeof RESOURCE_SEARCH_FILE_SCHEMA;
   resourceIndex: DatasetResourceIndexEntry[];
   /** `[kind:id, madeBy, usedBy]` for every listed resource some recipe makes or uses. */
   directionCounts: Array<[key: string, madeBy: number, usedBy: number]>;

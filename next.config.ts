@@ -1,8 +1,34 @@
+import { execFileSync } from "node:child_process";
 import type { NextConfig } from "next";
 import { securityHeaders } from "./src/lib/security-headers";
 import { PROXY_BODY_MAX_BYTES } from "./src/lib/server/request-body";
+import { APP_VERSION } from "./src/lib/version";
 
 const datasetBackendUrl = process.env.GTNH_DATASET_BACKEND_URL?.replace(/\/+$/, "");
+
+/**
+ * The build's identity, baked into the server and browser bundles alike: the
+ * dataset answers' cache key (`src/lib/datasets/answer-version.ts`), so two
+ * builds that share an APP_VERSION never share a cached answer. The deploy
+ * passes `GTNH_BUILD_ID` (`<version>-<sha8>`, the same value its image labels
+ * and `/api/version` report); a checkout builds `<version>-<sha8>` from git,
+ * and a tree without git the version alone.
+ */
+function buildIdentity(): string {
+  const configured = process.env.GTNH_BUILD_ID?.trim();
+  if (configured) {
+    return configured;
+  }
+  try {
+    const sha = execFileSync("git", ["rev-parse", "--short=8", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return sha ? `${APP_VERSION}-${sha}` : APP_VERSION;
+  } catch {
+    return APP_VERSION;
+  }
+}
 
 const nextConfig: NextConfig = {
   // Always defined at build, so `process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY` is inlined in the browser AND the
@@ -10,6 +36,7 @@ const nextConfig: NextConfig = {
   // running process's (deployment-features.ts), and a build and a unit that disagree leave the routes off.
   env: {
     NEXT_PUBLIC_MOD_AND_COMMUNITY: process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY ?? "",
+    NEXT_PUBLIC_GTNH_BUILD_ID: buildIdentity(),
   },
   outputFileTracingRoot: process.cwd(),
   turbopack: {

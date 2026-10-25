@@ -1,4 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import {
+  BUDGET_PER_MINUTE,
+  DATASET_BUDGET_REFUSAL,
+  resetDatasetBudget,
+  spendDatasetBudget,
+} from "@/lib/server/dataset-rate";
 import { getResourcePopularity } from "@/lib/server/resource-popularity";
 import { GET } from "./route";
 
@@ -16,5 +22,20 @@ describe("the popularity map the browser's item search orders by", () => {
     const landed = await GET(new Request("http://localhost/api/resource-popularity"));
     expect(landed.headers.get("Cache-Control")).toBe("public, max-age=1800");
     await expect(landed.json()).resolves.toEqual({ entries: [["fluid:water", 40]] });
+  });
+
+  it("spends the dataset budget like the routes it serves, and is refused past it", async () => {
+    resetDatasetBudget();
+    spendDatasetBudget("203.0.113.5", BUDGET_PER_MINUTE);
+    const refused = await GET(
+      new Request("http://localhost/api/resource-popularity", {
+        headers: { "x-client-ip": "203.0.113.5" },
+      }),
+    );
+    expect(refused.status).toBe(429);
+    expect(refused.headers.get("Retry-After")).toBe("10");
+    await expect(refused.json()).resolves.toEqual({ error: DATASET_BUDGET_REFUSAL });
+    expect(getResourcePopularity).toHaveBeenCalledTimes(2);
+    resetDatasetBudget();
   });
 });

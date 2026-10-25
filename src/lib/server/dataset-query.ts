@@ -31,7 +31,10 @@ import { HIDDEN_DATASET_VERSION_IDS } from "@/lib/datasets/hidden-versions";
 import { MIN_INDEXABLE_LENGTH, type SearchTerm } from "@/lib/search/text-search";
 import { BoundedLru } from "./bounded-lru";
 import { DATASET_ANSWER_VERSION } from "@/lib/datasets/answer-version";
-import type { ResourceSearchFile } from "@/lib/search/resource-search-engine";
+import {
+  RESOURCE_SEARCH_FILE_SCHEMA,
+  type ResourceSearchFile,
+} from "@/lib/search/resource-search-engine";
 import {
   blankResourceSearchKey,
   buildResourceSearchIndexes,
@@ -690,7 +693,7 @@ export async function getDatasetResourceSearchFile(versionId: string): Promise<R
   const sourceKeys = async (source: ResourceSourceFilter) =>
     [...(await getPassiveSourceResourceKeys(catalog, source))].filter((key) => listed.has(key));
   return {
-    schemaVersion: 1,
+    schemaVersion: RESOURCE_SEARCH_FILE_SCHEMA,
     resourceIndex: catalog.resourceIndex,
     directionCounts,
     sources: { plants: await sourceKeys("plants"), bees: await sourceKeys("bees") },
@@ -1161,7 +1164,12 @@ export const RECIPE_SEARCH_CACHE_BYTES = 32 * 1024 * 1024;
  * search code must start empty. The key carries the answer version as well, so
  * an answer never outlives the code that ranked it.
  */
-const rankedRecipeSearches = new BoundedLru<string, RankedRecipeSearch>(RECIPE_SEARCH_CACHE_BYTES);
+const rankedRecipeSearches = createRankedRecipeSearchCache();
+/**
+ * Searches being ranked now, by key: two identical cold searches at once (two
+ * players, or one player's pages asked together) rank once and share the answer.
+ */
+const rankingRecipeSearches = new Map<string, Promise<RankedRecipeSearch>>();
 
 /**
  * Everything a request's ranking depends on, offset and limit aside: the
@@ -1186,13 +1194,23 @@ export function rankedRecipeSearchKey(
   ]);
 }
 
-/** What a kept search costs the heap, roughly: its numbers, its key and its map names. */
+/**
+ * What a kept search costs the heap, roughly: its numbers, its key, each map
+ * twice (the name list and the counts object, a property and a number each) and
+ * the corrections it reports.
+ */
 export function rankedRecipeSearchBytes(key: string, search: RankedRecipeSearch): number {
   let bytes = 512 + search.order.byteLength + key.length * 2;
   for (const recipeMap of search.recipeMaps) {
-    bytes += 64 + recipeMap.length * 4;
+    bytes += 64 + recipeMap.length * 2 + 64 + recipeMap.length * 2;
   }
+  bytes += JSON.stringify(search.outcome.corrections ?? []).length * 2;
   return bytes;
+}
+
+/** A kept-search cache with this byte bound (the module's own is `RECIPE_SEARCH_CACHE_BYTES`). */
+export function createRankedRecipeSearchCache(limit = RECIPE_SEARCH_CACHE_BYTES) {
+  return new BoundedLru<string, RankedRecipeSearch>(limit);
 }
 
 /** Test seam: forgets every kept recipe search. */
@@ -1218,8 +1236,19 @@ async function queryDatasetRecipesFromLookup(
   const key = rankedRecipeSearchKey(catalog.version, request);
   let ranked = rankedRecipeSearches.get(key);
   if (!ranked) {
-    ranked = await rankLookupRecipes(catalog, request, parsedQuery, clauses);
-    rankedRecipeSearches.set(key, ranked, rankedRecipeSearchBytes(key, ranked));
+    let ranking = rankingRecipeSearches.get(key);
+    if (!ranking) {
+      ranking = rankLookupRecipes(catalog, request, parsedQuery, clauses)
+        .then((search) => {
+          rankedRecipeSearches.set(key, search, rankedRecipeSearchBytes(key, search));
+          return search;
+        })
+        .finally(() => {
+          rankingRecipeSearches.delete(key);
+        });
+      rankingRecipeSearches.set(key, ranking);
+    }
+    ranked = await ranking;
   }
 
   const pageRecipeIndexes = [

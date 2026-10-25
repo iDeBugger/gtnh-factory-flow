@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DATASET_ANSWER_VERSION } from "@/lib/datasets/answer-version";
+import { answerVersionToken, DATASET_ANSWER_VERSION } from "@/lib/datasets/answer-version";
 import { datasetCacheHeaders } from "./dataset-cache-headers";
 
 const base = "http://localhost/api/datasets/local-2.9.0-rc-2/resources?query=steel";
@@ -29,5 +29,19 @@ describe("the cache policy of a dataset answer", () => {
     expect(control(`${base}&datasetHash=abc&appVersion=${DATASET_ANSWER_VERSION}`)).toBe(
       "no-store",
     );
+  });
+});
+
+describe("the answer version", () => {
+  it("is the build, so two builds of one release never share a cached answer", () => {
+    expect(answerVersionToken("4.4.1", "4.4.1-5efe0a3c")).toBe("4.4.1-5efe0a3c");
+    expect(answerVersionToken("4.4.1", "4.4.1-720dec8b")).not.toBe(
+      answerVersionToken("4.4.1", "4.4.1-5efe0a3c"),
+    );
+  });
+
+  it("falls back to the release when a build names none", () => {
+    expect(answerVersionToken("4.4.1", undefined)).toBe("4.4.1");
+    expect(answerVersionToken("4.4.1", " ")).toBe("4.4.1");
   });
 });

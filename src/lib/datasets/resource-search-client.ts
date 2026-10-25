@@ -8,16 +8,20 @@ import type { DatasetVersion } from "./types";
 /**
  * The browser's item search: the server's own search code
  * (`src/lib/search/resource-search.ts`) in a Web Worker, over the version's
- * `items` file (the server's content-addressed answer, about 1.8 MB brotli on
- * 2.9), so typing in an item pane costs the server nothing. One version at a
- * time, the one a page last asked about; another version's worker is ended.
- * Until the worker is ready, and for any query it cannot answer the same, the
- * caller asks the API (`searchResourcesInBrowser` answers undefined), so the
- * client never waits longer than it did.
+ * `items` file (the server's content-addressed answer, about 2 MB brotli on
+ * 2.9), so typing in an item pane costs the server nothing. Started by the
+ * first item query for a version (never by opening a plan), for one version
+ * at a time: a query for another version ends this worker and the next one
+ * starts lazily, because two indexes would hold twice the memory below. Until
+ * the worker is ready, and for any query it cannot answer the same, the caller
+ * asks the API (`searchResourcesInBrowser` answers undefined), so the client
+ * never waits longer than it did.
  *
- * Off on a device that reports under 4 GB of memory: the worker holds the
- * item list and its index, about 110 MB on 2.9 (the parsed list 39 MB, the
- * index 68 MB; 91 MB on 2.8.1, measured in Node), built in about 0.6 s.
+ * Memory, measured in headless Chromium (the worker's JS heap after a GC, the
+ * index built and a few searches kept): see `src/lib/server/CLAUDE.md`, item
+ * search in the browser. Off where the browser reports under 4 GB of device
+ * memory (`navigator.deviceMemory`, Chromium only; elsewhere the first-query
+ * start is the guard).
  */
 
 interface ActiveSearch {
@@ -45,6 +49,11 @@ export function browserResourceSearchAvailable(): boolean {
   return memory === undefined || memory >= 4;
 }
 
+/** Whether this version's file failed to load this session (the API answers it). */
+export function browserResourceSearchFailed(version: DatasetVersion): boolean {
+  return failedKeys.has(versionKey(version));
+}
+
 /** Whether the worker for this version is started (ready or not). */
 export function browserResourceSearchStarted(version: DatasetVersion): boolean {
   return active?.key === versionKey(version);
@@ -58,7 +67,7 @@ export function startBrowserResourceSearch(version: DatasetVersion, itemsUrl: st
   if (
     !browserResourceSearchAvailable() ||
     browserResourceSearchStarted(version) ||
-    failedKeys.has(versionKey(version))
+    browserResourceSearchFailed(version)
   ) {
     return;
   }
@@ -151,6 +160,10 @@ export function searchResourcesInBrowser<T>(
     nextQueryId += 1;
     const onAbort = () => {
       search.pending.delete(id);
+      // A query still waiting in the worker is skipped: on a slow device stale
+      // one-letter walks would otherwise run one after another.
+      const cancel: ResourceSearchWorkerMessage = { type: "cancel", id };
+      search.worker.postMessage(cancel);
       reject(new DOMException("The request was aborted.", "AbortError"));
     };
     signal?.addEventListener("abort", onAbort, { once: true });

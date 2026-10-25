@@ -14,7 +14,8 @@
   summaries read then. Keyed by `rankedRecipeSearchKey`: the answer version, the dataset build, the parsed query
   text (case and outer spaces folded), the clauses, side ops, all-maps flag, map selection, map and tier; offset and
   limit are not in it, so every page of a search is one entry. Bounded at `RECIPE_SEARCH_CACHE_BYTES` (32 MB) by
-  `rankedRecipeSearchBytes` (4 bytes a match; the widest, "s" over 2.9, is about 1.1 MB). Module scope, not
+  `rankedRecipeSearchBytes` (4 bytes a match, each map's name and count, the corrections; the widest, "s" over 2.9,
+  is about 1.1 MB). Two identical searches ranking at once share one ranking (`rankingRecipeSearches`). Module scope, not
   `globalThis`: only the recipes route fills it, and a dev reload of search code starts it empty. Measured on 2.9:
   "s" 219 ms uncached, 0.6 ms kept; "st" 186 ms, 7 ms. The route's base cost is spent before the lookup, so a kept
   answer still pays it. Exam: `dataset-query.test.ts` "the kept recipe searches", `recipes/route.test.ts`, the
@@ -23,9 +24,12 @@
   map (`orderByRecipeMap`).
 - Every dataset answer is the dataset's bytes run through server code, so every dataset request carries two
   cache keys (`addDatasetCacheKey` in `browser-loader.ts`): `datasetHash` and the answer version
-  (`appVersion=APP_VERSION`, `src/lib/datasets/answer-version.ts`). `datasetCacheHeaders` marks an answer
-  immutable for a year only when both are there and the version is this release's; anything else is
-  `no-store`, so a deploy that changes a ranking is never served from an old URL. Exam:
+  (`appVersion=<build>`, `src/lib/datasets/answer-version.ts`). The answer version is the build, not the release
+  number: `next.config.ts` bakes `NEXT_PUBLIC_GTNH_BUILD_ID` into the server and browser bundles, from
+  `GTNH_BUILD_ID` (the deploy's `<version>-<sha8>`, the value `/api/version` reports) or else
+  `<APP_VERSION>-<git sha8>`, or `APP_VERSION` with no git. `datasetCacheHeaders` marks an answer immutable for a
+  year only when both keys are there and the version is this build's; anything else is `no-store`, so no build that
+  changes a ranking is served from another build's URL, even under one APP_VERSION. Exam:
   `dataset-cache-headers.test.ts`, `browser-loader.test.ts`.
 - A new catalog field must be added to `getDatasetCatalog`'s explicit field list (and
   `RecipeDataset` in types.ts) or it never reaches the client.
@@ -49,9 +53,12 @@
   tree never reads outside it (a miss is a 404). Exam: `dataset-path-gate.test.ts`, `proxy.test.ts`,
   `dataset-files/[versionId]/[...assetPath]/route.test.ts`, `dataset-static-file.test.ts`.
 - The answers every player gets the same (catalog, mobs, crops, recipe-ids, items) are also static files the server
-  writes itself (`client-files.ts`, `dataset-client-files.ts`): `<dataset>/client/<kind>.<20 hex of the sha256 of
-  the JSON>.json`, stored as `.gz` (level 9) and, except the id list (23 s of brotli for 13%), `.br` (quality 11; the
-  item search file 10: 41 s at 11 against 14 s at 10, for 7%).
+  writes itself (`client-files.ts`, `dataset-client-files.ts`), served at `/datasets/gtnh/<id>/client/<kind>.<20 hex
+  of the sha256 of the JSON>.json` but stored outside the dataset tree, which stays the pipeline's bytes and may be
+  mounted read-only: in `GTNH_CLIENT_FILES_DIR/<id>/` (a writable volume in a container), by default
+  `.cache/client-files/<id>/` under the working directory (gitignored). Each as `.gz` (level 9) and, except the id
+  list (23 s of brotli for 13%), `.br`: quality 11 with a 4 MB window for the small ones, 9 with 16 MB for the item
+  search file (1.96 MB in 1.1 s at +85 MB of RSS, against 1.74 MB in 14 s at +201 MB at 10; gzip 2.77 MB).
   The server writes them, not the pipeline, because each is the dataset run through server code; a deploy that
   changes the JSON changes the name. With `GTNH_PREWARM_ON_STARTUP=1` they are written after the default
   version's prewarm, in the background, one at a time on the thread pool (`writeServedDatasetClientFiles`);
@@ -59,8 +66,10 @@
   is removed. The browser reads `GET /api/datasets/<id>/client-files` (1 unit; `no-store` until every file is
   written, then cached like a dataset answer) and fetches each listed file through the gate and the dataset-files
   route (`immutable` for a year, brotli or gzip by Accept-Encoding, ETag `"<hash>-<br|gz>"`); with no listing, a
-  kind not listed or a failed file it asks the API as before, and the API routes stay for old tabs. A write that
-  fails (an unwritable dataset directory) is logged and the site keeps the API. Exam: `client-files.test.ts`,
+  kind not listed or a failed file it asks the API as before, and the API routes stay for old tabs; a listing that is
+  incomplete or failed is reused for 45 s before the browser asks again (`CLIENT_FILE_LISTING_RETRY_MS`). A write
+  that fails (an unwritable cache directory) is logged and the site keeps the API. Outside production each load of
+  the module keys its own listing, so a dev reload of answer code never lists the old code's files. Exam: `client-files.test.ts`,
   `dataset-files/[versionId]/[...assetPath]/client-files.test.ts`, `api/datasets/[versionId]/client-files/route.test.ts`,
   `browser-loader.test.ts`.
 - Every server cache is bounded or index-sized (the Node heap is capped at 3 GB). A slow
@@ -83,7 +92,9 @@
   (`DatasetNotFoundError`) is 404 `Dataset not found.`, never the id. `libraryStorageErrorMessage` (the owner's
   own account) and fixed 4xx copy stay as they are. Exam: `error-response.test.ts`,
   `datasets/[versionId]/catalog/route.test.ts`.
-- Every dataset route except `prewarm` spends an in-memory work budget per client address (`dataset-rate.ts`):
+- Every dataset route except `prewarm`, and `/api/resource-popularity` (the browser item search's popularity map,
+  1 unit, outside `/api/datasets/` so an edge rule on that prefix does not cover it), spends an in-memory work
+  budget per client address (`dataset-rate.ts`):
   3000 units a minute. A base cost goes before any dataset work (1 unit; 25 for a heavy request: a text search
   with a word under three characters or more than three words, `recipe-ids`, `crops`, `resolve-recipes`), then
   one unit per 10 ms the answer took past a free 50 ms (`meteredDatasetWork`; wall time holds the wait behind
@@ -109,11 +120,14 @@
   catalog (`queryCatalogResources`, with its blank-list cache) and the browser runs it in a Web Worker
   (`resource-search.worker.ts` over `resource-search-engine.ts`) over the version's `items` client file
   (`getDatasetResourceSearchFile`: the catalog's `resourceIndex` exactly as the route returns its entries, the
-  made/used counts and the crop and bee keys of listed resources; 23 MB of JSON, 1.8 MB brotli at quality 10 on 2.9,
-  1.5 MB on 2.8.1). The worker answers with the route's JSON, so the page cannot tell which side answered.
-  `browser-loader.ts` starts it when the catalog has loaded and the page is idle, for one version at a time (the
-  one last asked about; about 110 MB of the tab's memory on 2.9), never on a device reporting under 4 GB
-  (`navigator.deviceMemory`); until it is ready, for
+  made/used counts and the crop and bee keys of listed resources, `schemaVersion` 1, which a worker checks; 23 MB of
+  JSON, about 2 MB brotli on 2.9). The worker answers with the route's JSON, so the page cannot tell which side
+  answered. `browser-loader.ts` starts it on the first typed item query for a version, never on opening a plan or
+  for the untyped list a pane shows on opening (one kept server answer), for one version at a time (another
+  version's query ends it; the next typed query starts that version's: two indexes would hold twice the memory).
+  Measured in headless Chromium through CDP (`scratch/probes/worker-heap.mjs`): the worker's JS heap after a GC is
+  62 MB with the 2.9 index built, 64 MB after a few searches. Never where the browser reports under 4 GB
+  (`navigator.deviceMemory`, Chromium only). An aborted query is cancelled in the worker before it runs. Until it is ready, for
   a popular sort before the popularity map has arrived (`/api/resource-popularity`, the same 30-minute policy as a
   popular `/resources` answer), and after any failure, the API answers. The route stays for old tabs, the
   fallback and bots, with its budget. A change to the item search must keep both sides equal: `resource-search-engine.test.ts`

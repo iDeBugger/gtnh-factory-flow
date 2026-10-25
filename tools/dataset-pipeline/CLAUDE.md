@@ -34,10 +34,10 @@ The GitHub "GTNH dataset pipeline" workflow is a decoy (no runner). Never dispat
       then `systemctl restart gtnh-flow`. Before the swap, compare icon counts and icon tables
       against live (every name changes on the first content-named publish), and check that
       every rendered name the new gzips cite exists in the live `textures/rendered/`.
-   The `client/` directory in a live version is the site's own (content-addressed answers it writes at start,
-   `src/lib/server/client-files.ts`): a build never has one, a publish never copies one, and a swap may drop it
-   (the restart writes it again). The site needs write access to each version directory for it; without it the
-   site logs the failure and serves those answers from the API.
+   The dataset tree is the pipeline's bytes alone, and the site may mount it read-only: the site's own
+   content-addressed answers (`/datasets/gtnh/<id>/client/...`, `src/lib/server/client-files.ts`) live in its
+   cache directory (`GTNH_CLIENT_FILES_DIR`), never under a version directory, and a publish neither copies nor
+   checks them.
    3. Verify the live manifest, the published gzip and a few icon URLs afterwards. After a 2.9
       publish, regenerate the power maps (`tools/power-machine-icons.mjs`,
       `tools/power-resource-map.mjs`) before the version they cite is retired.

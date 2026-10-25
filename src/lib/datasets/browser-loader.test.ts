@@ -182,10 +182,10 @@ describe("the cache key of every dataset request", () => {
       limit: 120,
     });
 
-    // Eight answers, and before each of the four with a static copy the listing
-    // of those copies (an empty listing is not kept, so it is asked each time).
+    // Eight answers, and the listing of the static copies once: one with no
+    // files is kept for a while rather than asked before every answer.
     expect(urls.filter((url) => !url.includes("/client-files"))).toHaveLength(8);
-    expect(urls.filter((url) => url.includes("/client-files"))).toHaveLength(4);
+    expect(urls.filter((url) => url.includes("/client-files"))).toHaveLength(1);
     for (const url of urls) {
       const params = new URL(url).searchParams;
       expect(params.get("datasetHash"), url).toBe("abc");
@@ -263,7 +263,14 @@ describe("the static copies of the answers every player shares", () => {
       "/api/datasets/local-2.9.0-rc-2/client-files",
       files.crops,
       "/api/datasets/local-2.9.0-rc-2/crops",
-      // An incomplete listing is asked again.
+      // An incomplete listing is kept for a while, then asked again.
+      "/api/datasets/local-2.9.0-rc-2/mobs",
+    ]);
+    const now = Date.now();
+    vi.spyOn(Date, "now").mockReturnValue(now + 46_000);
+    await api.listRecipeDatasetMobs("manifest", version);
+    vi.mocked(Date.now).mockRestore();
+    expect(paths.slice(4)).toEqual([
       "/api/datasets/local-2.9.0-rc-2/client-files",
       "/api/datasets/local-2.9.0-rc-2/mobs",
     ]);
@@ -277,5 +284,86 @@ describe("the static copies of the answers every player shares", () => {
       "/api/datasets/local-2.9.0-rc-2/client-files",
       "/api/datasets/local-2.9.0-rc-2/mobs",
     ]);
+  });
+});
+
+describe("item queries before the browser's search is ready", () => {
+  class IdleWorker {
+    static count = 0;
+    onmessage = null;
+    onerror = null;
+    constructor() {
+      IdleWorker.count += 1;
+    }
+    postMessage() {}
+    terminate() {}
+  }
+
+  beforeEach(() => {
+    vi.resetModules();
+    IdleWorker.count = 0;
+    vi.stubGlobal("window", { location: { origin: "http://localhost" } });
+    vi.stubGlobal("Worker", IdleWorker);
+    vi.stubGlobal("navigator", { deviceMemory: 8 });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("each go to the API, with at most one listing while the server lacks the items file", async () => {
+    const paths: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        const path = new URL(url).pathname;
+        paths.push(path);
+        return Promise.resolve(
+          path.endsWith("/client-files")
+            ? json(200, { complete: false, files: {} })
+            : json(200, { resources: [], total: 0 }),
+        );
+      }),
+    );
+    const api = await loader();
+    for (let query = 0; query < 10; query += 1) {
+      await api.queryRecipeDatasetResources("manifest", version, {
+        query: "steel".slice(0, (query % 5) + 1),
+        offset: 0,
+        limit: 120,
+      });
+    }
+    expect(paths.filter((path) => path.endsWith("/resources"))).toHaveLength(10);
+    expect(paths.filter((path) => path.endsWith("/client-files"))).toHaveLength(1);
+    expect(IdleWorker.count).toBe(0);
+  });
+
+  it("start the worker on the first typed query once the file is listed, never on opening a plan", async () => {
+    const items = "/datasets/gtnh/local-2.9.0-rc-2/client/items.0123456789abcdef0123.json";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) =>
+        Promise.resolve(
+          new URL(url).pathname.endsWith("/client-files")
+            ? json(200, { complete: true, files: { items } })
+            : json(200, { schemaVersion: 1, resources: [], total: 0 }),
+        ),
+      ),
+    );
+    const api = await loader();
+    await api.initRecipeDatasetVersion("manifest", version);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(IdleWorker.count).toBe(0);
+    // The untyped list an item pane shows on opening starts nothing either.
+    await api.queryRecipeDatasetResources("manifest", version, { query: "", offset: 0, limit: 24 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(IdleWorker.count).toBe(0);
+    await api.queryRecipeDatasetResources("manifest", version, {
+      query: "st",
+      offset: 0,
+      limit: 24,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(IdleWorker.count).toBe(1);
   });
 });

@@ -1,7 +1,6 @@
-import path from "node:path";
 import {
   clientFileListing,
-  CLIENT_FILES_DIRECTORY,
+  clientFileDirectory,
   ensureClientFiles,
   type ClientFileListing,
   type ClientFileSpec,
@@ -16,7 +15,6 @@ import {
   prewarmDatasetVersion,
   servedDatasetVersionOrder,
 } from "./dataset-query";
-import { datasetRoot, isSafePathSegment } from "./dataset-static-file";
 import type { DatasetVersion } from "@/lib/datasets/types";
 
 /**
@@ -25,16 +23,32 @@ import type { DatasetVersion } from "@/lib/datasets/types";
  */
 function datasetClientFileSpecs(versionId: string): ClientFileSpec[] {
   return [
-    { kind: "catalog", brotliQuality: 11, produce: () => getDatasetCatalog(versionId) },
-    { kind: "mobs", brotliQuality: 11, produce: () => listDatasetEecMobs(versionId) },
-    { kind: "crops", brotliQuality: 11, produce: () => listDatasetCropFarmRecipes(versionId) },
+    {
+      kind: "catalog",
+      brotli: { quality: 11, window: 22 },
+      produce: () => getDatasetCatalog(versionId),
+    },
+    {
+      kind: "mobs",
+      brotli: { quality: 11, window: 22 },
+      produce: () => listDatasetEecMobs(versionId),
+    },
+    {
+      kind: "crops",
+      brotli: { quality: 11, window: 22 },
+      produce: () => listDatasetCropFarmRecipes(versionId),
+    },
     {
       kind: "recipe-ids",
       produce: async () => ({ recipeIds: await getDatasetRecipeIds(versionId) }),
     },
     // The browser's item search (resource-search-engine.ts), downloaded in the
     // background; until it is there the item panes ask the API.
-    { kind: "items", brotliQuality: 10, produce: () => getDatasetResourceSearchFile(versionId) },
+    {
+      kind: "items",
+      brotli: { quality: 9, window: 24 },
+      produce: () => getDatasetResourceSearchFile(versionId),
+    },
   ];
 }
 
@@ -44,9 +58,7 @@ function stateKey(version: DatasetVersion): string {
 }
 
 function clientDirectory(versionId: string): string | undefined {
-  return isSafePathSegment(versionId)
-    ? path.join(datasetRoot, versionId, CLIENT_FILES_DIRECTORY)
-    : undefined;
+  return clientFileDirectory(versionId);
 }
 
 /** What a served version has written so far; undefined for a version this site does not serve. */

@@ -4,16 +4,7 @@ import path from "node:path";
 import { gzipSync, brotliCompressSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-const root = vi.hoisted(() => ({ dir: "" }));
-
-vi.mock("@/lib/server/dataset-static-file", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/server/dataset-static-file")>();
-  return {
-    ...actual,
-    resolveDatasetChildPath: (versionId: string, ...segments: string[]) =>
-      path.join(root.dir, versionId, ...segments),
-  };
-});
+const root = { dir: "" };
 
 const { GET } = await import("./route");
 
@@ -33,7 +24,8 @@ function get(name: string, acceptEncoding?: string) {
 
 beforeAll(async () => {
   root.dir = await fs.mkdtemp(path.join(os.tmpdir(), "client-route-"));
-  const dir = path.join(root.dir, V, "client");
+  vi.stubEnv("GTNH_CLIENT_FILES_DIR", root.dir);
+  const dir = path.join(root.dir, V);
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, `${NAME}.gz`), gzipSync(body));
   await fs.writeFile(path.join(dir, `${NAME}.br`), brotliCompressSync(body));
@@ -41,6 +33,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  vi.unstubAllEnvs();
   await fs.rm(root.dir, { recursive: true, force: true });
 });
 

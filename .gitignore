@@ -19,6 +19,8 @@
 /.gh-artifacts-*/
 *.tar
 /public/datasets/gtnh/
+# the site's own content-addressed dataset answers (GTNH_CLIENT_FILES_DIR's default)
+/.cache/
 
 # agent scratch: screenshots, probes, captures, logs (local only, see AGENTS.md)
 /scratch/

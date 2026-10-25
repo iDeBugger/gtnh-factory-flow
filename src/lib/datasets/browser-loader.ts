@@ -7,6 +7,7 @@ import { RESOLVE_RECIPES_CHUNK_REFS } from "./resolve-recipes-limits";
 import type { ClientFileKind, ClientFileListingResponse } from "./client-file-kinds";
 import {
   browserResourceSearchAvailable,
+  browserResourceSearchFailed,
   browserResourceSearchStarted,
   searchResourcesInBrowser,
   startBrowserResourceSearch,
@@ -106,7 +107,7 @@ export async function initRecipeDatasetVersion(
   version: DatasetVersion,
   options: { signal?: AbortSignal } = {},
 ): Promise<RecipeDataset> {
-  const catalog = fetchClientFile(version, "catalog", options.signal, () => {
+  return fetchClientFile(version, "catalog", options.signal, () => {
     const url = new URL(
       `/api/datasets/${encodeURIComponent(version.id)}/catalog`,
       window.location.origin,
@@ -114,32 +115,22 @@ export async function initRecipeDatasetVersion(
     addDatasetCacheKey(url, version);
     return fetchJson<RecipeDataset>(url.toString(), { signal: options.signal });
   });
-  // The item search's download waits until the page is idle, so the board's
-  // first paint never shares the network or the CPU with it.
-  void catalog.then(
-    () => whenIdle(() => prepareBrowserResourceSearch(version)),
-    () => {},
-  );
-  return catalog;
-}
-
-function whenIdle(run: () => void) {
-  if (typeof window.requestIdleCallback === "function") {
-    window.requestIdleCallback(run, { timeout: 5000 });
-  } else {
-    setTimeout(run, 2000);
-  }
 }
 
 /** Version keys whose item search is being started, so two asks start one worker. */
 const preparingSearches = new Set<string>();
 
-/** Starts the browser's item search for a version, when the server lists its file. */
+/**
+ * Starts the browser's item search for a version, when the server lists its
+ * file. Only from a typed item query: a player who never searches items never
+ * downloads the file or holds its index (about 64 MB of the worker's heap on 2.9).
+ */
 function prepareBrowserResourceSearch(version: DatasetVersion) {
   const key = `${version.id}:${version.checksumSha256 ?? ""}`;
   if (
     !browserResourceSearchAvailable() ||
     browserResourceSearchStarted(version) ||
+    browserResourceSearchFailed(version) ||
     preparingSearches.has(key)
   ) {
     return;
@@ -157,11 +148,18 @@ function prepareBrowserResourceSearch(version: DatasetVersion) {
 }
 
 /**
- * Where the server keeps this version's static answers, by request URL. Only
- * a complete listing is kept: one the server is still writing is asked again
- * next time, so a file written since is picked up.
+ * How long a listing the server is still writing, or one that failed, is
+ * reused before it is asked again. Kept for good once complete. Without the
+ * wait every debounced item query would ask it again for as long as the
+ * server lacks a file (the first seconds after a deploy, an unwritable cache).
  */
-const clientFileListings = new Map<string, Promise<ClientFileListingResponse>>();
+export const CLIENT_FILE_LISTING_RETRY_MS = 45_000;
+
+/** Where the server keeps each version's static answers, by request URL. */
+const clientFileListings = new Map<
+  string,
+  { listing: Promise<ClientFileListingResponse>; until: number }
+>();
 
 function clientFileListing(version: DatasetVersion): Promise<ClientFileListingResponse> {
   const url = new URL(
@@ -171,23 +169,24 @@ function clientFileListing(version: DatasetVersion): Promise<ClientFileListingRe
   addDatasetCacheKey(url, version);
   const key = url.toString();
   const kept = clientFileListings.get(key);
-  if (kept) {
-    return kept;
+  if (kept && Date.now() < kept.until) {
+    return kept.listing;
   }
-  const listing = fetchJson<ClientFileListingResponse>(key).then(
+  const entry = { listing: Promise.resolve({ complete: false, files: {} }), until: Infinity };
+  entry.listing = fetchJson<ClientFileListingResponse>(key).then(
     (answer) => {
-      if (!answer.complete) {
-        clientFileListings.delete(key);
+      if (answer.complete !== true) {
+        entry.until = Date.now() + CLIENT_FILE_LISTING_RETRY_MS;
       }
       return { complete: answer.complete === true, files: answer.files ?? {} };
     },
     () => {
-      clientFileListings.delete(key);
+      entry.until = Date.now() + CLIENT_FILE_LISTING_RETRY_MS;
       return { complete: false, files: {} };
     },
   );
-  clientFileListings.set(key, listing);
-  return listing;
+  clientFileListings.set(key, entry);
+  return entry.listing;
 }
 
 /**
@@ -424,7 +423,11 @@ export async function queryRecipeDatasetResources(
     if (answer) {
       return answer;
     }
-  } else {
+  } else if (query.query.trim() !== "") {
+    // Only typed words start it: the untyped list every item pane shows on
+    // opening is one kept answer on the server (a fraction of a millisecond),
+    // and a player who never types into an item search never pays for the
+    // download or the index.
     prepareBrowserResourceSearch(version);
   }
   return fetchJson<RecipeDatasetResourceQueryResult>(url.toString(), { signal: options.signal });

@@ -112,6 +112,8 @@ describe("the browser's item search worker, from the page's side", () => {
     );
     controller.abort();
     await expect(answer).rejects.toMatchObject({ name: "AbortError" });
+    // The worker is told, so a query still waiting there is skipped.
+    expect(FakeWorker.all[0]!.posted.at(-1)).toEqual({ type: "cancel", id: 1 });
     expect(
       search.searchResourcesInBrowser(v281, { query: "s", offset: 0, limit: 120 }),
     ).toBeUndefined();
