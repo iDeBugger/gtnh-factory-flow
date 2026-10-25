@@ -20,7 +20,7 @@ export interface ServiceError {
   message: string;
   /** Overrides the kind's status, for the routes whose answer differs. */
   status?: number;
-  /** Fields answered beside `error`, such as `{ live: true }`. */
+  /** Fields answered beside `error`, such as `{ live: true }`; an `error` here never replaces `message`. */
   body?: Record<string, unknown>;
 }
 

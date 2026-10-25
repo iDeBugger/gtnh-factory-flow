@@ -40,10 +40,24 @@ describe("serviceResponse", () => {
     const response = serviceResponse(
       fail("unavailable", "Loading the plan failed.", { status: 500 }),
       () => ({}),
-      { headers: { "Cache-Control": "no-store" } },
     );
     expect(response.status).toBe(500);
-    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toEqual({ error: "Loading the plan failed." });
+  });
+
+  it("keeps a success's cache headers off an error, which answers no-store", async () => {
+    const response = serviceResponse(fail("unavailable", "The database is down."), () => ({}), {
+      headers: { "Cache-Control": "public, max-age=300" },
+    });
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("never lets an error's body replace the message", async () => {
+    const response = serviceResponse(
+      fail("conflict", "This plan is open live.", { body: { error: "other", live: true } }),
+      () => ({}),
+    );
+    expect(await response.json()).toEqual({ error: "This plan is open live.", live: true });
   });
 });
