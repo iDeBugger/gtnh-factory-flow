@@ -236,25 +236,4 @@ describe("the local database's PostgREST stand-in", () => {
       .insert({ actor_key: "k", action: "a", nope: 1 });
     expect(insertColumn.error?.code).toBe("PGRST204");
   });
-
-  it("stores, serves and removes objects (storage buckets)", async () => {
-    expect((await db.storage.getBucket("previews")).data).toBeNull();
-    expect((await db.storage.createBucket("previews", { public: true })).error).toBeNull();
-    expect((await db.storage.getBucket("previews")).data).toMatchObject({
-      id: "previews",
-      public: true,
-    });
-    const bytes = Buffer.from([137, 80, 78, 71, 1, 2, 3]);
-    const upload = await db.storage
-      .from("previews")
-      .upload("a/b.png", bytes, { contentType: "image/png", upsert: true });
-    expect(upload.error).toBeNull();
-    const download = await db.storage.from("previews").download("a/b.png");
-    expect(Buffer.from(await download.data!.arrayBuffer())).toEqual(bytes);
-    const publicUrl = db.storage.from("previews").getPublicUrl("a/b.png").data.publicUrl;
-    const served = await local.handle(new Request(publicUrl));
-    expect(served.headers.get("content-type")).toBe("image/png");
-    await db.storage.from("previews").remove(["a/b.png"]);
-    expect((await db.storage.from("previews").download("a/b.png")).data).toBeNull();
-  });
 });

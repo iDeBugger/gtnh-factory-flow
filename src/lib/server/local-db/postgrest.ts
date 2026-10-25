@@ -1,8 +1,8 @@
 /**
- * A PostgREST stand-in for local development: the HTTP requests supabase-js
- * makes (`/rest/v1/<table>` and the few `/storage/v1/...` calls the server
- * uses), answered from a real Postgres (PGlite) so the server code runs
- * unchanged against a database on this machine.
+ * A PostgREST stand-in for local development: the HTTP requests the server's
+ * PostgREST client makes (`/rest/v1/<table>`), answered from a real Postgres
+ * (PGlite) so the server code runs unchanged against a database on this
+ * machine.
  *
  * It covers what this codebase sends, the way PostgREST answers it: select
  * lists, filters (eq, neq, gt, gte, lt, lte, like, ilike, match, imatch, is,
@@ -415,11 +415,6 @@ class SqlBuilder {
 // ---------------------------------------------------------------------------
 // The handler
 
-export interface PostgrestHandlerOptions {
-  /** Answers `/storage/v1/...`; absent, storage requests get a 404. */
-  storage?: (request: Request, path: string) => Promise<Response>;
-}
-
 export interface PostgrestHandler {
   (request: Request): Promise<Response>;
   /** Re-reads the catalogue, after a migration. */
@@ -440,10 +435,7 @@ function contentRange(offset: number, rows: number, total: number | undefined): 
 
 const SINGLE_OBJECT = "application/vnd.pgrst.object+json";
 
-export function createPostgrestHandler(
-  db: SqlDatabase,
-  options: PostgrestHandlerOptions = {},
-): PostgrestHandler {
+export function createPostgrestHandler(db: SqlDatabase): PostgrestHandler {
   let schema: Promise<Map<string, TableInfo>> | undefined;
 
   const loadSchema = async (): Promise<Map<string, TableInfo>> => {
@@ -706,12 +698,6 @@ export function createPostgrestHandler(
   const handler = (async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
     try {
-      const storage = /^\/storage\/v1(\/.*)$/.exec(url.pathname);
-      if (storage) {
-        return options.storage
-          ? await options.storage(request, storage[1]!)
-          : json(404, { statusCode: "404", error: "not_found", message: "Storage is not set up" });
-      }
       const rest = /^\/rest\/v1\/([^/]+)$/.exec(url.pathname);
       if (!rest) {
         return json(404, {

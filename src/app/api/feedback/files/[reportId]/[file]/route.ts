@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isCommunityConfigured } from "@/lib/server/community";
+import { isFileStoreConfigured } from "@/lib/server/file-store";
 import { FEEDBACK_FILE, FEEDBACK_REPORT_ID, readFeedbackFile } from "@/lib/server/feedback-files";
 
 export const runtime = "nodejs";
@@ -11,7 +12,7 @@ export async function GET(
   { params }: { params: Promise<{ reportId: string; file: string }> },
 ) {
   const { reportId, file } = await params;
-  if (!FEEDBACK_REPORT_ID.test(reportId) || !FEEDBACK_FILE.test(file) || !isCommunityConfigured()) {
+  if (!FEEDBACK_REPORT_ID.test(reportId) || !FEEDBACK_FILE.test(file) || !isCommunityConfigured() || !isFileStoreConfigured()) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
   const bytes = await readFeedbackFile(reportId, file);
@@ -23,6 +24,7 @@ export async function GET(
     headers: {
       "Content-Type": isPicture ? "image/png" : "application/json",
       "Cache-Control": "public, max-age=31536000, immutable",
+      "X-Content-Type-Options": "nosniff",
       ...(isPicture ? {} : { "Content-Disposition": `attachment; filename="${file}"` }),
     },
   });

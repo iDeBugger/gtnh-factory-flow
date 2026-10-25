@@ -280,7 +280,7 @@ The instance is small and has gone down under load. Rules:
   at most 3 votes a day on one post or blueprint (`VOTES_PER_ADDRESS_PER_PLAN_PER_DAY`; accounts are exempt). The
   `plan-previews` bucket is private and its pictures are served only by `GET .../preview`, which answers an
   unpublished post's picture to its owner and the admin alone (`Cache-Control: private, no-store`) and 404 `No preview.`
-  to everyone else; a deployment whose bucket was created public before this must be switched off in the dashboard.
+  to everyone else.
   The share card sizes the picture from its IHDR without a decode, so the preview POST stores only a PNG whose
   first chunk is an IHDR with both sides in 1..`PLAN_PREVIEW_MAX_SIDE` (4096; `readPngHeader` in `plan-preview.ts`,
   else 415), `sizePlanPreview` answers nothing for an object that breaks the rule (the card falls back to the icon
@@ -374,11 +374,26 @@ The instance is small and has gone down under load. Rules:
   closes :3000. Exam: `client-address.test.ts`.
 - Emergency stop without a deploy: a Caddy rule answering 503 to `POST /api/feedback` (`/etc/caddy/Caddyfile`, then
   `systemctl reload caddy`).
-- Plans and the picture go to the private `feedback-files` bucket, served by `/api/feedback/files/<id>/<file>`, only
+- Plans and the picture go to the private `feedback-files` bucket (the file store, below), served by `/api/feedback/files/<id>/<file>`, only
   once every check has passed; a report whose issue GitHub refuses has its files removed again. An attached plan is
   stored and linked without its task board (`tasks`, `taskItems`, `taskComments`, `primaryView`: account ids, names,
   screenshot files, coordinates) and without `metadata.communityPlanId` (`reportablePlan`); the box says "Tasks and
   comments stay out." The mod strips names, paths and addresses from logs and crash reports before sending.
+
+## Uploaded files (file-store.ts)
+
+- Board images, plan previews and feedback files live in a directory, `FILE_STORE_DIR` (a volume in production;
+  outside production `scratch/local-db/files` when unset), one folder per bucket: `board-images`, `plan-previews`,
+  `feedback-files`. Nothing there is a static file: each bucket is served only by its own route. Board images by
+  `GET /api/community/images/<YYYY-MM>/<18 hex>.<png|jpg|gif|webp>` (any other name 404, `immutable`, nosniff),
+  previews by the post's preview route after its access check, feedback files by `/api/feedback/files/<id>/<file>`.
+- A key is one to three plain segments, none starting with a dot (`FILE_KEY`), resolved inside its bucket, else
+  `FileKeyError`. Each bucket has a size cap (`FILE_BUCKET_MAX_BYTES`). A write lands whole (temp file, then link or
+  rename); `overwrite: false` refuses an existing key. Directories `0700`, files `0600`.
+- The board image upload answers an absolute URL from `siteUrl()` (the annotation schema takes only `http(s)://` or
+  `data:image/`), so a picture names the host it was uploaded to.
+- Exam: `file-store.test.ts`, `app/api/community/images/[month]/[name]/route.test.ts` ("serves only board images by
+  their exact name"), `plan-access.test.ts` ("keeps previews out of every public route").
 
 ## Local database (local-db/, `npm run dev:local`)
 
@@ -388,7 +403,8 @@ The instance is small and has gone down under load. Rules:
   Supabase credentials.
 - Next.js never loads PGlite: it reaches the database over HTTP at `LOCAL_DB_URL` (`tools/local-db/serve.ts`, data in
   `scratch/local-db/pgdata`). Tests open it in memory and register it in-process (`useInProcessLocalDb`).
-- The stand-in covers the query shapes this code sends (filters, or-trees, counts, single, upserts, storage buckets).
+- The stand-in covers the query shapes this code sends (filters, or-trees, counts, single, upserts). Files are not in
+  the database: `npm run dev:local` keeps them in `scratch/local-db/files` (the file store below).
   A new shape (an embed, an rpc) needs it added there and a case in `postgrest.test.ts`.
 
 ## Cloud plans (cloud-plans.ts, app/api/library, app/api/accounts)

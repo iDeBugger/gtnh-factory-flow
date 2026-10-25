@@ -1,0 +1,41 @@
+import { NextResponse } from "next/server";
+import { BOARD_IMAGE_NAME, BOARD_IMAGE_MONTH, BOARD_IMAGE_TYPES } from "@/lib/server/board-images";
+import { getFileStore, isFileStoreConfigured } from "@/lib/server/file-store";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+function notFound(): NextResponse {
+  return NextResponse.json({ error: "Not found." }, { status: 404, headers: { "Cache-Control": "no-store" } });
+}
+
+/**
+ * A board image, by the exact name its upload answered. Only names the upload
+ * route makes are servable (a month, 18 hex characters, one of four image
+ * extensions), so no request reaches another bucket or a path outside the
+ * board images. A stored image never changes: cached for a year. The type
+ * comes from the extension the upload chose after sniffing the bytes, and
+ * nosniff keeps a browser from reading it as anything else.
+ */
+export async function GET(_request: Request, { params }: { params: Promise<{ month: string; name: string }> }) {
+  const { month, name } = await params;
+  if (!BOARD_IMAGE_MONTH.test(month) || !BOARD_IMAGE_NAME.test(name) || !isFileStoreConfigured()) {
+    return notFound();
+  }
+  const contentType = BOARD_IMAGE_TYPES[name.slice(name.lastIndexOf(".") + 1)];
+  if (!contentType) {
+    return notFound();
+  }
+  const bytes = await getFileStore().get("board-images", `${month}/${name}`).catch(() => undefined);
+  if (!bytes) {
+    return notFound();
+  }
+  return new NextResponse(new Uint8Array(bytes), {
+    headers: {
+      "Content-Type": contentType,
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Disposition": "inline",
+    },
+  });
+}

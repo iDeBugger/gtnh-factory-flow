@@ -127,14 +127,14 @@ export async function POST(request: Request) {
         link = undefined;
       }
       const fileName = `plan-${i + 1}.json`;
-      const file = await storeFeedbackFile(site, id, fileName, Buffer.from(planFile(plan)), "application/json");
+      const file = await storeFeedbackFile(site, id, fileName, Buffer.from(planFile(plan)));
       if (file) {
         stored.push(fileName);
       }
       links.plans.push({ name, cards: plan.nodes.length, link, file });
     }
     if (report.picture) {
-      links.picture = await storeFeedbackFile(site, id, "picture.png", report.picture, "image/png");
+      links.picture = await storeFeedbackFile(site, id, "picture.png", report.picture);
       if (links.picture) {
         stored.push("picture.png");
       }

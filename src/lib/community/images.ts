@@ -4,8 +4,8 @@ import { BOARD_IMAGE_MAX_BYTES } from "./types";
 
 /**
  * Uploading a picture for the board. The file goes to /api/community/images,
- * which sniffs, caps and stores it in a public bucket; what comes back is the
- * hosted URL an image annotation carries. All the friendly refusals (too big,
+ * which sniffs, caps and stores it on the site; what comes back is the URL
+ * an image annotation carries. All the friendly refusals (too big,
  * not an image, too many) surface here as thrown Errors with player-readable
  * messages. Nothing but the file is sent: the server limits by address.
  */

@@ -7,7 +7,7 @@
  *    data in scratch/local-db/pgdata;
  * 2. the live service (`src/live/main.ts`) on :3001, journal in
  *    scratch/local-db/live-journal;
- * 3. `next dev` on :3000.
+ * 3. `next dev` on :3000, uploaded files in scratch/local-db/files.
  *
  * Next.js and the live service run with LOCAL_DB=1 and a development-only
  * COMMUNITY_HASH_SALT, so sign-ins made here work only here. Ctrl+C stops
@@ -139,6 +139,10 @@ if (existsSync(path.join(root, "src", "live", "main.ts"))) {
 start("next", [bin.next, "dev", "--port", String(webPort)], {
   ...shared,
   NEXT_PUBLIC_LIVE_URL: `ws://localhost:${livePort}/live`,
+  // Board images, previews and feedback files.
+  FILE_STORE_DIR: path.join(root, "scratch", "local-db", "files"),
+  // The origin uploaded board images and other absolute links name.
+  NEXT_PUBLIC_SITE_URL: `http://localhost:${webPort}`,
 });
 
 console.log(`[dev-local] http://localhost:${webPort} with the local database at ${dbUrl}`);

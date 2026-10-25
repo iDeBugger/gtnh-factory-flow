@@ -10,6 +10,7 @@ import {
   readPngHeader,
 } from "@/lib/server/plan-preview";
 import { readFormDataCapped } from "@/lib/server/request-body";
+import { getFileStore, isFileStoreConfigured } from "@/lib/server/file-store";
 import {
   checkRateLimit,
   getCommunityDb,
@@ -22,12 +23,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * The board photograph a shared link unfurls into. Stored in its own PRIVATE
- * bucket AT the plan's id (no schema column, no URL to validate: the card
- * route derives the object name from the id it already has, and re-sharing
- * overwrites in place) and served only through the GET below, which checks
- * the post: a bucket URL would show an unpublished post's board to anyone
- * who had the id. Nothing reads the bucket's public URL.
+ * The board photograph a shared link unfurls into. Stored in the file
+ * store's PRIVATE `plan-previews` bucket AT the plan's id (no schema column,
+ * no URL to validate: the card route derives the object name from the id it
+ * already has, and re-sharing overwrites in place) and served only through the
+ * GET below, which checks the post: no other route serves that bucket.
  *
  * Owner-only, unlike board-image uploads: this picture becomes the plan's
  * public face in every chat the link is pasted into, so only the person who
@@ -40,26 +40,6 @@ export const dynamic = "force-dynamic";
 
 const PREVIEWS_PER_HOUR = 30;
 
-let bucketReady = false;
-
-async function ensureBucket(): Promise<void> {
-  if (bucketReady) {
-    return;
-  }
-  const db = getCommunityDb();
-  const { data } = await db.storage.getBucket(PLAN_PREVIEW_BUCKET);
-  if (!data) {
-    const { error } = await db.storage.createBucket(PLAN_PREVIEW_BUCKET, {
-      public: false,
-      fileSizeLimit: BOARD_IMAGE_MAX_BYTES,
-    });
-    if (error && !/already exists/i.test(error.message)) {
-      throw new Error(`Preview storage bucket could not be created: ${error.message}`);
-    }
-  }
-  bucketReady = true;
-}
-
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ planId: string }> },
@@ -67,7 +47,7 @@ export async function POST(
   if (!isModAndCommunityOn()) {
     return modAndCommunityOffResponse();
   }
-  if (!isCommunityConfigured()) {
+  if (!isCommunityConfigured() || !isFileStoreConfigured()) {
     return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
   }
 
@@ -130,22 +110,12 @@ export async function POST(
       );
     }
 
-    await ensureBucket();
-    // Short cache: the same object name is overwritten on every re-share, so
-    // a hot CDN copy must age out quickly enough for updates to show.
-    const { error } = await db.storage
-      .from(PLAN_PREVIEW_BUCKET)
-      .upload(`${existing.id}.png`, bytes, {
-        contentType: "image/png",
-        cacheControl: "300",
-        upsert: true,
-      });
-    if (error) {
+    // Re-sharing overwrites the one object in place.
+    try {
+      await getFileStore().put(PLAN_PREVIEW_BUCKET, `${existing.id}.png`, bytes, { overwrite: true });
+    } catch (error) {
       console.error("Preview upload failed.", error);
-      return NextResponse.json(
-        { error: "Preview upload failed." },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: "Preview upload failed." }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });
