@@ -193,8 +193,9 @@ The Dockerfile is laid out so a deploy rebuilds and rewrites only what its commi
 The cache lives in the server's BuildKit store, bounded only by dockerd's builder garbage collection; step 9 removes
 old image tags, not build cache. Watch it with `docker buildx du` (the two cache mounts are a few hundred MB; the
 rest is old layers). To trim it, `docker builder prune --filter until=168h` drops what no build used for a week and
-keeps what the last deploys share. A full `docker builder prune` also empties the cache mounts, and the next deploy
-builds from scratch (correctly, only slower).
+keeps what the last deploys share; after a week without a deploy that includes the two cache mounts, and the next
+deploy builds cold. A full `docker builder prune` always empties them. Either way the next deploy is correct, only
+slower.
 
 ### Downtime
 

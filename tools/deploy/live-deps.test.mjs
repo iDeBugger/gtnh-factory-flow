@@ -127,6 +127,45 @@ describe("the live image's packages", () => {
     expect(runtimeClosure(lock, ["a"])).toEqual(["node_modules/a"]);
   });
 
+  it("skips an optional package the lockfile lists but this platform did not install", () => {
+    // npm writes every platform's optional binaries into the lockfile and installs only the matching one.
+    const lock = {
+      packages: {
+        "node_modules/sharp": {
+          dependencies: { "detect-libc": "^2" },
+          optionalDependencies: { "@img/sharp-linux-x64": "0.34.5", "@img/sharp-linux-arm64": "0.34.5" },
+        },
+        "node_modules/detect-libc": {},
+        "node_modules/@img/sharp-linux-x64": { optional: true, os: ["linux"], cpu: ["x64"] },
+        "node_modules/@img/sharp-linux-arm64": { optional: true, os: ["linux"], cpu: ["arm64"] },
+        "node_modules/w": {
+          peerDependencies: { native: "1" },
+          peerDependenciesMeta: { native: { optional: true } },
+        },
+        "node_modules/native": { optional: true },
+      },
+    };
+    const onDisk = new Set(["node_modules/sharp", "node_modules/detect-libc", "node_modules/@img/sharp-linux-arm64", "node_modules/w"]);
+    expect(runtimeClosure(lock, ["sharp", "w"], (key) => onDisk.has(key))).toEqual([
+      "node_modules/@img/sharp-linux-arm64",
+      "node_modules/detect-libc",
+      "node_modules/sharp",
+      "node_modules/w",
+    ]);
+  });
+
+  it("refuses a required package the lockfile lists but that is not installed", () => {
+    const lock = {
+      packages: {
+        "node_modules/a": { dependencies: { b: "1" } },
+        "node_modules/b": {},
+      },
+    };
+    expect(() => runtimeClosure(lock, ["a"], (key) => key !== "node_modules/b")).toThrow(
+      "node_modules/b, needed by node_modules/a, is in package-lock.json but not installed.",
+    );
+  });
+
   it("covers today's live bundle from the repo's lockfile", () => {
     const lock = JSON.parse(readFileSync(new URL("../../package-lock.json", import.meta.url), "utf8"));
     const keys = runtimeClosure(lock, ["@supabase/postgrest-js", "ws", "zod"]);
