@@ -23,6 +23,7 @@
 
 import { BOARD_GRID } from "./board-grid";
 import {
+  cardRimDocks,
   solveGridRoutes,
   type GridEndpoint,
   type GridObstacle,
@@ -1050,19 +1051,12 @@ export function scoreLayoutProxy(
   return sum + (air?.(positions) ?? 0);
 }
 
-/** Rim docks the way the board offers them in free-dock mode. */
-function rim(rect: Rect): GridEndpoint[] {
-  const out: GridEndpoint[] = [];
-  const keepOut = (span: number) => (span >= 2 * BOARD_GRID ? BOARD_GRID : 0);
-  const kx = keepOut(rect.right - rect.left);
-  const ky = keepOut(rect.bottom - rect.top);
-  for (let x = rect.left + kx; x <= rect.right - kx; x += BOARD_GRID) {
-    out.push({ x, y: rect.top, side: "top" }, { x, y: rect.bottom, side: "bottom" });
-  }
-  for (let y = rect.top + ky; y <= rect.bottom - ky; y += BOARD_GRID) {
-    out.push({ x: rect.left, y, side: "left" }, { x: rect.right, y, side: "right" });
-  }
-  return out;
+/**
+ * Rim docks exactly as the board offers them (`cardRimDocks`): a drawer's 48 px side docks on the grid line outside it,
+ * so the judge scores the routes the board will draw.
+ */
+export function arrangeRimDocks(rect: Rect): GridEndpoint[] {
+  return cardRimDocks(rect);
 }
 
 /** Runs the real router over a candidate and scores its points. */
@@ -1082,8 +1076,8 @@ function judgeWithRouter(
   const requests: GridRouteRequest[] = links.map((link, i) => ({
     edgeId: `w${i}`,
     order: i,
-    sources: rim(obstacles[link.a]),
-    targets: rim(obstacles[link.b]),
+    sources: arrangeRimDocks(obstacles[link.a]),
+    targets: arrangeRimDocks(obstacles[link.b]),
     sourceCardId: cards[link.a].id,
     targetCardId: cards[link.b].id,
     strokeWidth: link.width,
