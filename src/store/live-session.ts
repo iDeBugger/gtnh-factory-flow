@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { LiveClientState, type PendingBatch } from "@/lib/live/client-state";
+import { LiveClientState, makeCid, type PendingBatch } from "@/lib/live/client-state";
 import { THIS_TAB_ID } from "@/lib/designs/design-tab-sync";
 import { isLiveConfigured, liveSocketAddress } from "@/lib/live/live-config";
 import {
@@ -11,9 +11,11 @@ import {
   holdTabLock,
   keepDetachedBase,
   pendingKey,
-  readDetachedBase,
   readPending,
+  shiftDetachedBase,
+  takeDetachedBase,
   writePending,
+  type StoredPending,
 } from "@/lib/live/live-pending-store";
 import { clearPresence, notePresence, setPresentPeople } from "@/lib/live/live-presence";
 import { liveShape, withRecipesTheyName } from "@/lib/live/live-shape";
@@ -40,6 +42,7 @@ import { leaveLibrary } from "@/lib/library/library-tab";
 import {
   clearDesignOpenLive,
   isQuietChange,
+  isScreenOnlyChange,
   markDesignOpenLive,
   setLiveDesignId,
   setLiveUndoHandler,
@@ -165,6 +168,8 @@ export function utf8Length(text: string): number {
 /** Presence a second while the pointer moves on the board. */
 const PRESENCE_INTERVAL_MS = 100;
 const OPEN_MARK_MS = 15_000;
+/** How long a room waits for what storage left for its plan before it joins without it. */
+const PREPARE_WAIT_MS = 3_000;
 const ME_CACHE_KEY = "gtnh-factory-flow.live-me.v1";
 
 interface Room {
@@ -185,10 +190,11 @@ interface Room {
   fresh: boolean;
   seed: LivePlan;
   /**
-   * The plan as it stood before edits made here while no room was open for it (`keepDetachedBase`): what changed
-   * since goes on top of the first snapshot instead of being wiped by it. Read before joining (`ready`).
+   * Batches made of edits done here while no room was open for the plan (`takeDetachedBase`): the recipes their cards
+   * name are checked against the first snapshot (`withRecipesTheyName`), which only then is known.
    */
-  base?: LivePlan;
+  away: Set<string>;
+  /** Pending batches left in storage and the base are taken in (or the wait for them is over): it may join. */
   ready: boolean;
 }
 
@@ -307,6 +313,11 @@ export class LiveSession {
       useFactoryStore.subscribe((state, previous) => {
         if (state.project !== previous.project && !isQuietChange()) {
           this.onLocalEdit(
+            previous.project as unknown as LivePlan,
+            state.project as unknown as LivePlan,
+          );
+        } else if (state.project !== previous.project && isScreenOnlyChange()) {
+          this.noteScreenOnlyChange(
             previous.project as unknown as LivePlan,
             state.project as unknown as LivePlan,
           );
@@ -620,19 +631,16 @@ export class LiveSession {
       // The first snapshot of a plan made here moments ago: what the canvas held beyond it is this person's edit,
       // sent first, ahead of anything done since the room was made.
       room.fresh = false;
-      room.base = undefined;
       this.putCanvasFirst(room, frame.seq, snapshotPlan, diffPlans(snapshotPlan, room.seed));
-      void forgetDetachedBase(room.designId).catch(() => undefined);
-    } else if (room.base) {
-      // Edits made here while no room was open (signing in still unknown, or the service would not open the plan):
-      // what this person changed since the base goes on top of the live plan, so everyone else's edits since stay
-      // and none of theirs is wiped. Forgotten only once the batches are stored.
-      const base = room.base;
-      room.base = undefined;
-      this.putCanvasFirst(room, frame.seq, snapshotPlan, diffPlans(base, room.seed));
-      void writePending(room.doc, THIS_TAB_ID, room.engine.pending.slice())
-        .then(() => forgetDetachedBase(room.designId))
-        .catch(() => undefined);
+    }
+    if (room.away.size > 0) {
+      for (const batch of room.engine.pending) {
+        if (room.away.has(batch.cid)) {
+          batch.ops = withRecipesTheyName(batch.ops, snapshotPlan, room.seed);
+        }
+      }
+      room.away.clear();
+      this.schedulePersist();
     }
     const resend = room.engine.resync({ seq: frame.seq, plan: snapshotPlan });
     room.joined = true;
@@ -884,6 +892,7 @@ export class LiveSession {
       present: [],
       fresh: takeDesignFresh(designId),
       seed: liveShape(project),
+      away: new Set(),
       ready: false,
     };
     this.room = room;
@@ -893,22 +902,28 @@ export class LiveSession {
     markDesignOpenLive(designId);
     clearInterval(this.markTimer);
     this.markTimer = setInterval(() => markDesignOpenLive(designId), OPEN_MARK_MS);
-    void this.adoptPending(room);
-    void this.readBase(room);
+    void this.prepare(room);
   }
 
-  /** Joins once the base of edits made away from the room is known: the first snapshot needs it. */
-  private async readBase(room: Room): Promise<void> {
+  /**
+   * Joins once what was left for this plan is taken in: a closed tab's pending batches and the edits made here away
+   * from the room. The wait is bounded (a storage read can hang): past it the room joins, and what arrives later is
+   * sent after.
+   */
+  private async prepare(room: Room): Promise<void> {
+    const ready = () => {
+      if (this.room === room && !room.ready) {
+        room.ready = true;
+        this.joinIfReady();
+      }
+    };
+    const timer = setTimeout(ready, PREPARE_WAIT_MS);
     try {
-      room.base = await readDetachedBase(room.designId);
-    } catch {
-      room.base = undefined;
+      await this.takeIn(room);
+    } finally {
+      clearTimeout(timer);
+      ready();
     }
-    if (this.room !== room) {
-      return;
-    }
-    room.ready = true;
-    this.joinIfReady();
   }
 
   private unbind(): void {
@@ -939,40 +954,102 @@ export class LiveSession {
     room.joinSent = this.sendRaw({ t: "join", doc: room.doc });
   }
 
-  /** Edits a closed tab of ours left for this plan: shown and sent with ours. */
-  private async adoptPending(room: Room): Promise<void> {
-    let entries;
+  /**
+   * What was left for this plan: the pending batches of a closed tab of ours (or this tab's own from an earlier
+   * visit), and the base kept by edits made here while no room was open for it. Both are older than anything done in
+   * this room, so before it joins they go in front, oldest first: the closed tab's batches, then this person's
+   * edits away from the room (the base to the canvas the room was made from), then edits made here since. The base
+   * is taken from storage in the transaction that stores those batches, so no other tab sends them again.
+   */
+  private async takeIn(room: Room): Promise<void> {
+    let entries: StoredPending[];
     try {
       entries = await readPending(room.doc);
     } catch {
-      return;
+      entries = [];
     }
     const alive = await aliveTabs();
+    if (this.room !== room) {
+      return;
+    }
     // This tab's own entry is left from an earlier visit to the plan (its
     // engine went when the tab moved to another design); others are tabs gone.
     const orphans = entries.filter(
       (entry) => entry.tabId === THIS_TAB_ID || (alive !== undefined && !alive.has(entry.tabId)),
     );
-    if (orphans.length === 0 || this.room !== room) {
+    const left = orphans.flatMap((entry) => entry.pending);
+    const before = room.engine.view;
+    let queued: PendingBatch[] = [];
+    let used = false;
+    // Added before the snapshot: its resend takes them. Added after it (the wait ran out): they go from here.
+    let sendHere = false;
+    const use = (base: LivePlan | undefined) => {
+      used = true;
+      sendHere = room.joined;
+      queued = this.putLeftFirst(room, left, base);
+      return base ? { doc: room.doc, tabId: THIS_TAB_ID, pending: room.engine.pending.slice() } : undefined;
+    };
+    if (room.fresh) {
+      // The canvas takes the first snapshot over whole: a base has nothing to add.
+      use(undefined);
+      void forgetDetachedBase(room.designId).catch(() => undefined);
+    } else {
+      try {
+        await takeDetachedBase(room.designId, (base) => (this.room === room ? use(base) : undefined));
+      } catch {
+        // Not taken: the base stays stored for the next room, so its batches leave this one.
+        if (this.room === room && room.away.size > 0) {
+          for (const cid of room.away) {
+            room.engine.refuse(cid);
+          }
+          queued = queued.filter((batch) => !room.away.has(batch.cid));
+          room.away.clear();
+        }
+      }
+      if (!used && this.room === room) {
+        use(undefined);
+      }
+    }
+    if (this.room !== room) {
       return;
     }
-    const before = room.engine.view;
-    const added = room.engine.adopt(orphans.flatMap((entry) => entry.pending));
-    // Not joined yet: the snapshot's resend takes them, so they go once.
-    const sendNow = room.joined;
     this.land(before, room.engine.view);
     await Promise.all(
       orphans
         .filter((entry) => entry.tabId !== THIS_TAB_ID)
         .map((entry) => deletePending(entry.key).catch(() => undefined)),
     );
-    if (this.room === room) {
-      this.persistNow();
+    if (this.room !== room) {
+      return;
     }
-    if (sendNow && this.room === room) {
-      added.forEach((batch) => this.queueBatch(room, batch));
+    this.persistNow();
+    if (sendHere) {
+      queued.forEach((batch) => this.queueBatch(room, batch));
     }
     this.publish();
+  }
+
+  /**
+   * The batches left for this plan and this person's edits away from the room (`base` to the room's seed), into the
+   * engine. Before joining they go in front of everything pending; once joined, after it (the server has the rest).
+   * Returns the batches added.
+   */
+  private putLeftFirst(room: Room, left: PendingBatch[], base: LivePlan | undefined): PendingBatch[] {
+    const awayOps = base ? diffPlans(base, room.seed) : [];
+    if (room.joined) {
+      const added = room.engine.adopt(left);
+      const ops = withRecipesTheyName(awayOps, room.engine.view, room.seed);
+      for (const chunk of chunkOps(ops)) {
+        const batch = room.engine.localOps(chunk, { undoable: false, keepRedo: true });
+        if (batch) {
+          added.push(batch);
+        }
+      }
+      return added;
+    }
+    const away = chunkOps(awayOps).map((ops): PendingBatch => ({ cid: makeCid(), ops, inverse: [] }));
+    away.forEach((batch) => room.away.add(batch.cid));
+    return room.engine.adoptBefore([...left, ...away]);
   }
 
   // -------------------------------------------------------------------------
@@ -1014,7 +1091,20 @@ export class LiveSession {
     if (!design || (!design.cloud && !design.remoteUpdatedAt)) {
       return;
     }
-    void keepDetachedBase(designId, liveShape(previous)).catch(() => undefined);
+    void keepDetachedBase(designId, () => liveShape(previous)).catch(() => undefined);
+  }
+
+  /**
+   * A change on this screen only (the recipe refresh) to a plan with no room open here: it goes into the base, so it
+   * is never sent as this person's edit when the room opens.
+   */
+  private noteScreenOnlyChange(previous: LivePlan, next: LivePlan): void {
+    const designId = useDesignStore.getState().activeDesignId;
+    if (!designId || this.room?.designId === designId) {
+      return;
+    }
+    const ops = diffPlans(liveShape(previous), liveShape(next));
+    void shiftDetachedBase(designId, ops).catch(() => undefined);
   }
 
   /** Undo (or redo) this person's last own edit: its recorded inverse goes out as a new edit. */

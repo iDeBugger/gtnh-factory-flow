@@ -1,5 +1,6 @@
 "use client";
 
+import { forgetDetachedBase } from "@/lib/live/live-pending-store";
 import type { FactoryProject } from "@/lib/model/types";
 import {
   keepStoredPlanMarks,
@@ -181,19 +182,20 @@ export async function writeDesignSummary(summary: DesignSummary): Promise<void> 
 }
 
 export async function deleteDesign(id: string): Promise<void> {
-  if (!isDesignStorageAvailable()) {
-    return;
+  if (isDesignStorageAvailable()) {
+    const db = await openDesignDb();
+    try {
+      const transaction = db.transaction([META_STORE, PLAN_STORE], "readwrite");
+      transaction.objectStore(META_STORE).delete(id);
+      transaction.objectStore(PLAN_STORE).delete(id);
+      await transactionToPromise(transaction);
+    } finally {
+      db.close();
+    }
   }
-
-  const db = await openDesignDb();
-  try {
-    const transaction = db.transaction([META_STORE, PLAN_STORE], "readwrite");
-    transaction.objectStore(META_STORE).delete(id);
-    transaction.objectStore(PLAN_STORE).delete(id);
-    await transactionToPromise(transaction);
-  } finally {
-    db.close();
-  }
+  // Edits made away from a live room count from a base kept per design: a design that is gone leaves none behind for
+  // a later design of the same id (a plan shared again reuses its copy's id).
+  await forgetDetachedBase(id).catch(() => undefined);
 }
 
 export async function listDesignFolders(): Promise<DesignFolder[]> {

@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import "fake-indexeddb/auto";
+import { IDBFactory } from "fake-indexeddb";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesignRecord, DesignSummary } from "@/lib/designs/design-library";
 
 /**
@@ -73,7 +75,8 @@ vi.mock("./client", () => ({
 }));
 
 import { createEmptyProject } from "@/examples";
-import { forgetDetachedBase, keepDetachedBase, readDetachedBase } from "@/lib/live/live-pending-store";
+import { writeDesign } from "@/lib/designs/design-storage";
+import { keepDetachedBase, readDetachedBase } from "@/lib/live/live-pending-store";
 import { liveShape } from "@/lib/live/live-shape";
 import type { FactoryAnnotation, FactoryProject } from "@/lib/model/types";
 import { useCommunityAuthStore } from "@/store/community-auth-store";
@@ -104,6 +107,11 @@ beforeEach(() => {
   setLiveDesignId(undefined);
   useDesignStore.setState({ designs: [], activeDesignId: undefined });
   useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
+  globalThis.indexedDB = new IDBFactory();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("the account sync beside live plans", () => {
@@ -167,13 +175,26 @@ describe("the account sync beside live plans", () => {
   it("counts edits made away from a live room from the plan the account took", async () => {
     const stored = record("design-away-1", { project: withNotes(note("n1", "one"), note("n2", "mine")) });
     storage.records.set("design-away-1", stored);
-    await keepDetachedBase("design-away-1", liveShape(withNotes(note("n1", "one"))));
+    vi.stubEnv("NEXT_PUBLIC_LIVE_URL", "ws://live.test/live");
+    await keepDetachedBase("design-away-1", () => liveShape(withNotes(note("n1", "one"))));
 
     await syncLibraryNow();
 
     expect(remote.pushes[0]!.body.plan).toBeDefined();
     expect(await readDetachedBase("design-away-1")).toEqual(liveShape(stored.project));
-    await forgetDetachedBase("design-away-1");
+  });
+
+  it("leaves the base where it was when the account took the push without the plan", async () => {
+    vi.stubEnv("NEXT_PUBLIC_LIVE_URL", "ws://live.test/live");
+    storage.records.set("design-away-3", record("design-away-3", { project: withNotes(note("n1", "mine")) }));
+    remote.liveIds.add("design-away-3");
+    const base = liveShape(withNotes(note("n1", "one")));
+    await keepDetachedBase("design-away-3", () => base);
+
+    await syncLibraryNow();
+
+    expect(remote.pushes.map((push) => push.body.plan === undefined)).toEqual([false, true]);
+    expect(await readDetachedBase("design-away-3")).toEqual(base);
   });
 
   it("keeps edits made away from a live room on top of a newer plan pulled from the account", async () => {
@@ -186,35 +207,88 @@ describe("the account sync beside live plans", () => {
         project: withNotes(note("n1", "one"), note("n2", "built offline")),
       }),
     );
-    await keepDetachedBase("design-away-2", liveShape(withNotes(note("n1", "one"))));
-    const meta = {
-      id: "design-away-2",
-      name: "Design design-away-2",
-      icon: null,
-      folderId: null,
-      closed: false,
-      favorite: false,
-      order: null,
-      communityPlanId: null,
-      createdAt: "2026-10-01T00:00:00.000Z",
-      updatedAt: "2026-10-04T00:00:00.000Z",
-      planUpdatedAt: "2026-10-04T00:00:00.000Z",
-    };
-    remote.library = { designs: [meta], folders: [], shared: [] };
-    vi.mocked(fetchRemoteDesignPlan).mockResolvedValueOnce({
-      design: meta,
-      plan: withNotes(note("n1", "one"), note("n9", "from the game")),
-    } as unknown as Awaited<ReturnType<typeof fetchRemoteDesignPlan>>);
+    vi.stubEnv("NEXT_PUBLIC_LIVE_URL", "ws://live.test/live");
+    await keepDetachedBase("design-away-2", () => liveShape(withNotes(note("n1", "one"))));
+    pullAwayDesign();
 
     await syncLibraryNow();
 
     const pulled = storage.records.get("design-away-2")!;
     expect(pulled.project.annotations?.map((entry) => entry.text)).toEqual(["one", "from the game", "built offline"]);
     // Newer than the account's copy: the next run sends it.
-    expect(Date.parse(pulled.updatedAt)).toBeGreaterThan(Date.parse(meta.updatedAt));
-    await forgetDetachedBase("design-away-2");
+    expect(Date.parse(pulled.updatedAt)).toBeGreaterThan(Date.parse(AWAY_META.updatedAt));
+    // The record holds the merge: the base is the account's plan now, so only the edits made here remain to send.
+    const moved = (await readDetachedBase("design-away-2")) as unknown as FactoryProject;
+    expect(moved.annotations?.map((entry) => entry.text)).toEqual(["one", "from the game"]);
+  });
+
+  it("keeps the base when the merged record could not be written, so the next pull merges the same edits", async () => {
+    storage.records.set(
+      "design-away-2",
+      record("design-away-2", {
+        updatedAt: "2026-10-03T00:00:00.000Z",
+        remoteUpdatedAt: "2026-10-02T00:00:00.000Z",
+        project: withNotes(note("n1", "one"), note("n2", "built offline")),
+      }),
+    );
+    vi.stubEnv("NEXT_PUBLIC_LIVE_URL", "ws://live.test/live");
+    const base = liveShape(withNotes(note("n1", "one")));
+    await keepDetachedBase("design-away-2", () => base);
+    pullAwayDesign();
+    vi.mocked(writeDesign).mockRejectedValueOnce(new Error("quota"));
+
+    await syncLibraryNow();
+
+    expect(await readDetachedBase("design-away-2")).toEqual(base);
+    expect(storage.records.get("design-away-2")!.project.annotations?.map((entry) => entry.text)).toEqual([
+      "one",
+      "built offline",
+    ]);
+  });
+
+  it("lets the account's plan win a pull when live plans are off, whatever storage holds", async () => {
+    storage.records.set(
+      "design-away-2",
+      record("design-away-2", {
+        updatedAt: "2026-10-03T00:00:00.000Z",
+        remoteUpdatedAt: "2026-10-02T00:00:00.000Z",
+        project: withNotes(note("n1", "one"), note("n2", "built offline")),
+      }),
+    );
+    await keepDetachedBase("design-away-2", () => liveShape(withNotes(note("n1", "one"))));
+    pullAwayDesign();
+
+    await syncLibraryNow();
+
+    expect(storage.records.get("design-away-2")!.project.annotations?.map((entry) => entry.text)).toEqual([
+      "one",
+      "from the game",
+    ]);
   });
 });
+
+const AWAY_META = {
+  id: "design-away-2",
+  name: "Design design-away-2",
+  icon: null,
+  folderId: null,
+  closed: false,
+  favorite: false,
+  order: null,
+  communityPlanId: null,
+  createdAt: "2026-10-01T00:00:00.000Z",
+  updatedAt: "2026-10-04T00:00:00.000Z",
+  planUpdatedAt: "2026-10-04T00:00:00.000Z",
+};
+
+/** The account holds a newer plan for design-away-2 (the game, another device): the next sync pulls it. */
+function pullAwayDesign(): void {
+  remote.library = { designs: [AWAY_META], folders: [], shared: [] };
+  vi.mocked(fetchRemoteDesignPlan).mockResolvedValueOnce({
+    design: AWAY_META,
+    plan: withNotes(note("n1", "one"), note("n9", "from the game")),
+  } as unknown as Awaited<ReturnType<typeof fetchRemoteDesignPlan>>);
+}
 
 function note(id: string, text: string): FactoryAnnotation {
   return { id, kind: "text", text, position: { x: 0, y: 0 }, size: { width: 200, height: 40 } } as FactoryAnnotation;

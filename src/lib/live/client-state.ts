@@ -185,6 +185,21 @@ export class LiveClientState {
   }
 
   /**
+   * Batches older than every pending one (a closed tab's, edits made before this room was opened), put in front of
+   * `pending`, so the edits made here since go after them and win. Only before anything pending was sent: the
+   * server applies batches in the order they arrive. Batches already pending are skipped; none enter undo.
+   */
+  adoptBefore(batches: PendingBatch[]): PendingBatch[] {
+    const known = new Set(this.pending.map((batch) => batch.cid));
+    const added = batches.filter((batch) => !known.has(batch.cid));
+    if (added.length > 0) {
+      this.pending.unshift(...added);
+      this.shown = null;
+    }
+    return added;
+  }
+
+  /**
    * A fresh snapshot (after joining again): it becomes `confirmed`, and every
    * pending batch is returned, oldest first, to be sent again.
    */

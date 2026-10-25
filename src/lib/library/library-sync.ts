@@ -21,7 +21,7 @@ import { useFactoryStore } from "@/store/factory-store";
 import { isDesignOpenLive, markDesignFresh } from "@/store/live-edit-gate";
 import { isLiveConfigured } from "@/lib/live/live-config";
 import { moveDetachedBase, readDetachedBase } from "@/lib/live/live-pending-store";
-import { liveShape } from "@/lib/live/live-shape";
+import { liveShape, withRecipesTheyName } from "@/lib/live/live-shape";
 import { applyOps, diffPlans, type LivePlan } from "@/lib/live/ops";
 import type { FactoryProject } from "@/lib/model/types";
 import { forgetRemoteLibrary, noteRemoteLibrary } from "./cloud-library";
@@ -479,13 +479,18 @@ async function applyDesignAction(action: DesignAction): Promise<boolean> {
       const { design, plan } = await fetchRemoteDesignPlan(action.id);
       const project = parseFactoryProjectJson(JSON.stringify(plan));
       const existing = await readDesign(action.id);
-      const kept = await keepEditsMadeAwayFromRoom(action.id, existing?.project, project);
+      const away = await editsMadeAwayFromRoom(action.id, existing?.project, project);
+      const kept = away?.kept;
       await writeDesign({
         ...existing,
         ...remoteMetaToSummary(design),
         ...(kept ? { updatedAt: new Date().toISOString() } : {}),
         project: { ...(kept ?? project), name: design.name },
       });
+      if (away) {
+        // Only once the record holds the merge: until then the old base still counts every edit made away from it.
+        await moveDetachedBase(action.id, liveShape(project)).catch(() => undefined);
+      }
       if (action.id === store.activeDesignId) {
         await store.reloadActiveDesign();
         setStatus({ reloadedActiveAt: new Date().toISOString() });
@@ -610,14 +615,18 @@ async function applyDesignAction(action: DesignAction): Promise<boolean> {
 
 /**
  * A pull of a plan this device edited while no live room was open for it (`keepDetachedBase`): what this person
- * changed since that base goes on top of the account's plan instead of being overwritten by it. The result is newer
- * than the account's copy, so the next run pushes it; the base moves to the account's plan. Undefined: nothing kept.
+ * changed since that base goes on top of the account's plan instead of being overwritten by it (`kept`, newer than the
+ * account's copy, so the next run pushes it). The caller moves the base to the pulled plan once the record is
+ * written. Undefined: no base, the account's plan wins as it does without live plans.
  */
-async function keepEditsMadeAwayFromRoom(
+async function editsMadeAwayFromRoom(
   designId: string,
   stored: FactoryProject | undefined,
   pulled: FactoryProject,
-): Promise<FactoryProject | undefined> {
+): Promise<{ kept?: FactoryProject } | undefined> {
+  if (!isLiveConfigured()) {
+    return undefined;
+  }
   const base = await readDetachedBase(designId).catch(() => undefined);
   if (!base) {
     return undefined;
@@ -625,9 +634,13 @@ async function keepEditsMadeAwayFromRoom(
   // The canvas is ahead of the stored record by autosave's wait.
   const local =
     useDesignStore.getState().activeDesignId === designId ? useFactoryStore.getState().project : stored;
-  await moveDetachedBase(designId, liveShape(pulled)).catch(() => undefined);
-  const mine = local ? diffPlans(base, liveShape(local)) : [];
-  return mine.length > 0 ? (applyOps(pulled as unknown as LivePlan, mine) as unknown as FactoryProject) : undefined;
+  if (!local) {
+    return {};
+  }
+  const shared = pulled as unknown as LivePlan;
+  const shaped = liveShape(local);
+  const mine = withRecipesTheyName(diffPlans(base, shaped), liveShape(pulled), shaped);
+  return mine.length > 0 ? { kept: applyOps(shared, mine) as unknown as FactoryProject } : {};
 }
 
 function toSummaryOf(record: DesignSummary & { project?: unknown }): DesignSummary {
