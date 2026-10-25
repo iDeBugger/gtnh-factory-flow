@@ -30,6 +30,7 @@ import {
 import { HIDDEN_DATASET_VERSION_IDS } from "@/lib/datasets/hidden-versions";
 import { MIN_INDEXABLE_LENGTH, type SearchTerm } from "@/lib/search/text-search";
 import { BoundedLru } from "./bounded-lru";
+import { DATASET_ANSWER_VERSION } from "@/lib/datasets/answer-version";
 import type { ResourceSearchFile } from "@/lib/search/resource-search-engine";
 import {
   blankResourceSearchKey,
@@ -1131,11 +1132,82 @@ export async function listDatasetEecMobs(versionId: string) {
   return { mobs: await listDatasetMapRecipes(versionId, EEC_MACHINE_TYPE) };
 }
 
+/**
+ * A recipe search's answer without its page: every match in page order (one
+ * number each), the map list and counts, and how the words were read. A page
+ * is a slice of `order` with its summaries read then, so a kept search holds
+ * no recipe bodies.
+ */
+interface RankedRecipeSearch {
+  order: Int32Array;
+  recipeMaps: string[];
+  recipeMapCounts: Record<string, number>;
+  outcome: ReturnType<typeof searchOutcome>;
+}
+
+/**
+ * The recipe searches kept, bounded by their estimated bytes
+ * (`rankedRecipeSearchBytes`): the widest answer, a one-letter word over all
+ * 278 thousand 2.9 recipes, is about 1.1 MB, a typical one a few KB. A search
+ * from one or two letters costs 170-255 ms and the same R/U browse is asked by
+ * many players, so a repeat is answered from here in a few ms. 32 MB holds at
+ * least 29 of the widest and thousands of typical ones.
+ */
+export const RECIPE_SEARCH_CACHE_BYTES = 32 * 1024 * 1024;
+
+/**
+ * Module scope, not `globalThis` like the loaded datasets: only the recipes
+ * route reads it (the prewarm never fills it), and a dev reload of changed
+ * search code must start empty. The key carries the answer version as well, so
+ * an answer never outlives the code that ranked it.
+ */
+const rankedRecipeSearches = new BoundedLru<string, RankedRecipeSearch>(RECIPE_SEARCH_CACHE_BYTES);
+
+/**
+ * Everything a request's ranking depends on, offset and limit aside: the
+ * dataset build, the answer version, the query as the parser reads it (case and
+ * spacing folded), the conditions and the map choices.
+ */
+export function rankedRecipeSearchKey(
+  version: DatasetVersion,
+  request: DatasetRecipeQueryRequest,
+): string {
+  return JSON.stringify([
+    DATASET_ANSWER_VERSION,
+    datasetVersionCacheKey(version),
+    parseSearchQuery(request.query).text,
+    normalizedRecipeQueryClauses(request),
+    request.takesOp ?? null,
+    request.makesOp ?? null,
+    request.allMaps === true,
+    request.mapSelection ?? null,
+    request.recipeMap ?? null,
+    request.maxTier,
+  ]);
+}
+
+/** What a kept search costs the heap, roughly: its numbers, its key and its map names. */
+export function rankedRecipeSearchBytes(key: string, search: RankedRecipeSearch): number {
+  let bytes = 512 + search.order.byteLength + key.length * 2;
+  for (const recipeMap of search.recipeMaps) {
+    bytes += 64 + recipeMap.length * 4;
+  }
+  return bytes;
+}
+
+/** Test seam: forgets every kept recipe search. */
+export function clearRankedRecipeSearches(): void {
+  rankedRecipeSearches.clear();
+}
+
+export function rankedRecipeSearchCount(): number {
+  return rankedRecipeSearches.count;
+}
+
 async function queryDatasetRecipesFromLookup(
   catalog: LoadedRecipeIndex,
   request: DatasetRecipeQueryRequest,
 ) {
-  const lookup = await loadRecipeLookupIndex(catalog.version);
   const parsedQuery = parseSearchQuery(request.query);
   const clauses = normalizedRecipeQueryClauses(request);
 
@@ -1143,6 +1215,47 @@ async function queryDatasetRecipesFromLookup(
     return emptyRecipeQueryResult(request);
   }
 
+  const key = rankedRecipeSearchKey(catalog.version, request);
+  let ranked = rankedRecipeSearches.get(key);
+  if (!ranked) {
+    ranked = await rankLookupRecipes(catalog, request, parsedQuery, clauses);
+    rankedRecipeSearches.set(key, ranked, rankedRecipeSearchBytes(key, ranked));
+  }
+
+  const pageRecipeIndexes = [
+    ...ranked.order.subarray(request.offset, request.offset + request.limit),
+  ];
+  const recipes = (await getRecipeSummariesByIndex(catalog, pageRecipeIndexes)).map((recipe) =>
+    applyClauseResourceContexts(recipe, catalog, clauses),
+  );
+
+  return {
+    recipes,
+    total: ranked.order.length,
+    recipeMaps: ranked.recipeMaps,
+    recipeMapCounts: ranked.recipeMapCounts,
+    recipeMapIcons: Object.fromEntries(
+      ranked.recipeMaps
+        .map((recipeMap) => [recipeMap, getRecipeMapIcon(catalog, recipeMap)] as const)
+        .filter((entry): entry is readonly [string, DatasetResourceIndexEntry] =>
+          Boolean(entry[1]),
+        ),
+    ),
+    offset: request.offset,
+    limit: request.limit,
+    hasMore: request.offset + request.limit < ranked.order.length,
+    ...ranked.outcome,
+  };
+}
+
+/** Ranks every match of a request: the work `rankedRecipeSearches` keeps. */
+async function rankLookupRecipes(
+  catalog: LoadedRecipeIndex,
+  request: DatasetRecipeQueryRequest,
+  parsedQuery: SearchQuery,
+  clauses: RecipeQueryClause[],
+): Promise<RankedRecipeSearch> {
+  const lookup = await loadRecipeLookupIndex(catalog.version);
   // Only a typed query needs the words index, and building it walks every
   // recipe: browsing a resource must not pay for one.
   const search = parsedQuery.terms.length ? await getRecipeSearchIndex(catalog, lookup) : undefined;
@@ -1228,37 +1341,20 @@ async function queryDatasetRecipesFromLookup(
   }
 
   const ranked = rankRecipes(await applyFocusScores(catalog, matching, clauses));
-  const pageRecipeIndexes = (
-    request.allMaps
-      ? orderByRecipeMap(
-          ranked,
-          (recipeIndex) => lookup.recipeMaps[lookup.recipeMapIdsByRecipeIndex[recipeIndex] ?? -1],
-          sortedRecipeMaps,
-        )
-      : ranked
-  )
-    .slice(request.offset, request.offset + request.limit)
-    .map((match) => match.recipeIndex);
-  const recipes = (await getRecipeSummariesByIndex(catalog, pageRecipeIndexes)).map((recipe) =>
-    applyClauseResourceContexts(recipe, catalog, clauses),
-  );
-
   return {
-    recipes,
-    total: matching.length,
+    order: Int32Array.from(
+      request.allMaps
+        ? orderByRecipeMap(
+            ranked,
+            (recipeIndex) => lookup.recipeMaps[lookup.recipeMapIdsByRecipeIndex[recipeIndex] ?? -1],
+            sortedRecipeMaps,
+          )
+        : ranked,
+      (match) => match.recipeIndex,
+    ),
     recipeMaps: sortedRecipeMaps,
     recipeMapCounts,
-    recipeMapIcons: Object.fromEntries(
-      sortedRecipeMaps
-        .map((recipeMap) => [recipeMap, getRecipeMapIcon(catalog, recipeMap)] as const)
-        .filter((entry): entry is readonly [string, DatasetResourceIndexEntry] =>
-          Boolean(entry[1]),
-        ),
-    ),
-    offset: request.offset,
-    limit: request.limit,
-    hasMore: request.offset + request.limit < matching.length,
-    ...searchOutcome(resolved),
+    outcome: searchOutcome(resolved),
   };
 }
 

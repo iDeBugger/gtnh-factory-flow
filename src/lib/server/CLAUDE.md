@@ -9,6 +9,16 @@
   (`applyClauseResourceContexts`).
 - ONLY is verified against recipe bodies (`recipeIsOnlyMatch`) up to `ONLY_VERIFY_LIMIT`
   candidates, then degrades to ALL. Non-consumed inputs never count against takes-ONLY.
+- A ranked recipe search is kept (`rankedRecipeSearches`, lookup path only): every match's index in page order
+  (an `Int32Array`), the map list and counts and the search outcome, never bodies; a page is a slice with its
+  summaries read then. Keyed by `rankedRecipeSearchKey`: the answer version, the dataset build, the parsed query
+  text (case and outer spaces folded), the clauses, side ops, all-maps flag, map selection, map and tier; offset and
+  limit are not in it, so every page of a search is one entry. Bounded at `RECIPE_SEARCH_CACHE_BYTES` (32 MB) by
+  `rankedRecipeSearchBytes` (4 bytes a match; the widest, "s" over 2.9, is about 1.1 MB). Module scope, not
+  `globalThis`: only the recipes route fills it, and a dev reload of search code starts it empty. Measured on 2.9:
+  "s" 219 ms uncached, 0.6 ms kept; "st" 186 ms, 7 ms. The route's base cost is spent before the lookup, so a kept
+  answer still pays it. Exam: `dataset-query.test.ts` "the kept recipe searches", `recipes/route.test.ts`, the
+  golden harness (its second pass reads the kept searches).
 - All-maps answers page through `recipeMaps` in chip order, best match first inside each
   map (`orderByRecipeMap`).
 - Every dataset answer is the dataset's bytes run through server code, so every dataset request carries two

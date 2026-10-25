@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { queryDatasetRecipes } from "@/lib/server/dataset-query";
-import { datasetBudgetSpent, resetDatasetBudget } from "@/lib/server/dataset-rate";
+import {
+  datasetBudgetSpent,
+  HEAVY_REQUEST_COST,
+  resetDatasetBudget,
+} from "@/lib/server/dataset-rate";
 import { GET } from "./route";
 
 vi.mock("@/lib/server/dataset-query", () => ({
@@ -200,6 +204,22 @@ describe("recipe dataset API route", () => {
     // 1 unit up front and one more per 10 ms of the 120 ms answer past the free 50 ms.
     expect(datasetBudgetSpent("203.0.113.9")).toBeGreaterThanOrEqual(8);
     expect(datasetBudgetSpent("203.0.113.9")).toBeLessThanOrEqual(40);
+  });
+
+  it("charges a repeated heavy search its base cost every time, however fast the answer", async () => {
+    // The server keeps ranked searches, so a repeat answers in a few ms: the
+    // base cost is spent before any dataset work and never depends on that.
+    for (let call = 0; call < 3; call += 1) {
+      const response = await GET(
+        new Request("http://localhost/api/datasets/stable/recipes?query=s", {
+          headers: { "x-client-ip": "203.0.113.7" },
+        }),
+        { params: Promise.resolve({ versionId: "stable" }) },
+      );
+      expect(response.status).toBe(200);
+    }
+    expect(datasetBudgetSpent("203.0.113.7")).toBeGreaterThanOrEqual(3 * HEAVY_REQUEST_COST);
+    expect(datasetBudgetSpent("203.0.113.7")).toBeLessThanOrEqual(3 * HEAVY_REQUEST_COST + 3);
   });
 
   it("never refuses a request with no trusted address", async () => {

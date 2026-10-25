@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { buildTextSearchIndex, queryTextSearchIndex } from "@/lib/search";
 import { matchSearchTokens, parseSearchQuery } from "@/lib/search";
 import type { DatasetVersion } from "@/lib/datasets/types";
+import { DATASET_ANSWER_VERSION } from "@/lib/datasets/answer-version";
 import {
   applyUsesResourceContext,
   BLANK_RESOURCE_SEARCH_KEYS,
@@ -19,6 +20,9 @@ import {
   prewarmFirstThenRest,
   prewarmInOrder,
   queryCatalogResources,
+  RECIPE_SEARCH_CACHE_BYTES,
+  rankedRecipeSearchBytes,
+  rankedRecipeSearchKey,
   SHARD_CACHE_BYTES,
   shardHeapBytes,
   withTankMapFace,
@@ -525,5 +529,60 @@ describe("the bounded dataset caches", () => {
     expect(cache.count).toBe(24);
     expect(cache.get("list-1")).toBeUndefined();
     expect(cache.get("list-0")).toBe(0);
+  });
+});
+
+describe("the kept recipe searches", () => {
+  const version = { id: "local-2.9.0-rc-2", checksumSha256: "abc" } as DatasetVersion;
+  const request = {
+    query: " Steel Plate ",
+    mode: "recipes" as const,
+    maxTier: "all" as const,
+    offset: 0,
+    limit: 48,
+  };
+
+  it("key one search for every page of it, and fold case and outer spaces as the parser does", () => {
+    const key = rankedRecipeSearchKey(version, request);
+    expect(rankedRecipeSearchKey(version, { ...request, offset: 48, limit: 24 })).toBe(key);
+    expect(rankedRecipeSearchKey(version, { ...request, query: "steel plate" })).toBe(key);
+    expect(key).toContain(DATASET_ANSWER_VERSION);
+  });
+
+  it("key apart whatever changes the ranking: the dataset build, the words, the conditions, the maps", () => {
+    const key = rankedRecipeSearchKey(version, request);
+    for (const other of [
+      rankedRecipeSearchKey({ ...version, checksumSha256: "def" }, request),
+      rankedRecipeSearchKey(version, { ...request, query: "steel plates" }),
+      rankedRecipeSearchKey(version, { ...request, maxTier: "LV" }),
+      rankedRecipeSearchKey(version, { ...request, allMaps: true }),
+      rankedRecipeSearchKey(version, { ...request, recipeMap: "Bender" }),
+      rankedRecipeSearchKey(version, { ...request, mapSelection: { mode: "include", maps: [] } }),
+      rankedRecipeSearchKey(version, {
+        ...request,
+        resource: { kind: "item", id: "minecraft:glass" },
+      }),
+      rankedRecipeSearchKey(version, {
+        ...request,
+        resource: { kind: "item", id: "minecraft:glass" },
+        mode: "uses",
+      }),
+      rankedRecipeSearchKey(version, { ...request, takesOp: "all" }),
+    ]) {
+      expect(other).not.toBe(key);
+    }
+  });
+
+  it("are bounded by bytes, the widest search counting its four bytes a match", () => {
+    expect(RECIPE_SEARCH_CACHE_BYTES).toBe(32 * 1024 * 1024);
+    const widest = {
+      order: new Int32Array(278_000),
+      recipeMaps: ["Assembler"],
+      recipeMapCounts: { Assembler: 278_000 },
+      outcome: { searchPhase: "exact" as const, corrections: [] },
+    };
+    const bytes = rankedRecipeSearchBytes("key", widest);
+    expect(bytes).toBeGreaterThan(278_000 * 4);
+    expect(Math.floor(RECIPE_SEARCH_CACHE_BYTES / bytes)).toBeGreaterThanOrEqual(29);
   });
 });
