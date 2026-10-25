@@ -1,4 +1,4 @@
-// INT1 smoke: opens the app, loads an example plan, then opens every Help, Share, Settings, Feedback, Tour and
+// INT1 smoke: opens the app, loads an example plan, then opens every Help, Share, Settings, Tour and
 // Minimap entry, checks each did something and takes a screenshot of it.
 //   PARITY_BASE=http://localhost:3151 node tools/parity/int1.mjs
 // Output: tools/parity/out/int1/NN-name.png and results.json; exits 1 when a check fails or the page threw.
@@ -71,7 +71,7 @@ await shot("board");
 const ids = await page.evaluate(() => [...document.querySelectorAll(".mb-key")].map((e) => e.getAttribute("data-mb")));
 check(
   "the bar's keys are all there",
-  ["nonrecipe", "undo", "redo", "arrange", "fit", "rate", "power", "peak", "library", "share", "feedback", "settings", "help"].every((id) => ids.includes(id)),
+  ["nonrecipe", "undo", "redo", "arrange", "fit", "rate", "power", "peak", "library", "share", "settings", "help"].every((id) => ids.includes(id)),
   ids.join(" "),
 );
 
@@ -203,18 +203,6 @@ await esc();
 await shot("circuit-as-input");
 const badgeAfter = await page.locator(".cc-circuit").count();
 check("Circuit as an input changes the card", badgeBefore !== badgeAfter || badgeBefore === 0, `badges ${badgeBefore} -> ${badgeAfter}`);
-
-// Feedback.
-const githubBefore = await page.evaluate(() => window.__opened.filter((u) => /github/i.test(u)).length);
-await key("feedback").click();
-await page.waitForTimeout(500);
-check("Feedback opens the box (no GitHub fallback)", (await page.locator('[aria-label="Send feedback"][role="dialog"]').count()) === 1);
-const feedbackOpened = await page.evaluate(() => window.__opened.filter((u) => /github/i.test(u)).length);
-check("Feedback did not fall back to the bug form", feedbackOpened === githubBefore, `github opens ${feedbackOpened}`);
-await page.locator(".fb-area").fill("Smoke test, please ignore.");
-await shot("feedback");
-await page.locator(".fb-x").click();
-await page.waitForTimeout(300);
 
 // Library.
 await key("library").click();

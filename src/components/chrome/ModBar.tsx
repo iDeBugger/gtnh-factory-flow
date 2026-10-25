@@ -19,7 +19,7 @@ import { PastePlanDialog } from "@/components/export/PastePlanDialog";
 import { BarKey, useBarFit, useTopBarFit } from "./bar-parts";
 import { AccountKey } from "./AccountKey";
 import { ChromeMenu, chromeAnchorOf, type ChromeAnchor, type MenuEntry } from "./ChromeMenu";
-import { knock, OPEN_FEEDBACK_EVENT, OPEN_TOUR_EVENT, OPEN_CONTROLS_EVENT } from "./chrome-events";
+import { knock, OPEN_TOUR_EVENT, OPEN_CONTROLS_EVENT } from "./chrome-events";
 import { ModTabs } from "./ModTabs";
 import { TOP_BAR_STEPS } from "./top-bar-fold";
 import { libraryRows } from "./library-rows";
@@ -32,7 +32,6 @@ import { isLiveConfigured } from "@/lib/live/live-config";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { useCommunityAuthStore } from "@/store/community-auth-store";
 import { useLiveSession } from "@/store/live-session";
-import { closeFeedback, useFeedbackOpen } from "@/components/flow/clean/feedback/feedback-store";
 import { PlanShareDialog } from "@/components/live/PlanShareDialog";
 import { initialsOf, inkOn, liveFaceName } from "@/components/live/LiveFaces";
 import { servedGameVersions, useNewPlanVersion } from "@/lib/datasets/new-plan-version";
@@ -83,7 +82,7 @@ export interface ModBarProps {
 /**
  * The top bar holds the account's things only: the plan tabs and +, the live state and faces, then Plans (the library
  * on My plans; Shared with me and Community are its shelves) and Share (Invite people first, then the copies), the
- * account key, and feedback, settings and help, all on one row that never wraps and never hides a key in a menu: short of
+ * account key, and settings and help, all on one row that never wraps and never hides a key in a menu: short of
  * room the tabs give way, then Plans, Share and Sign in become icon keys, then the gaps tighten (`useTopBarFit`). Its keys
  * are flat like the tabs and + (chrome.css), the picture keys and the face bare until hovered. What edits or views the board (Non-recipe, undo and redo, Arrange, Fit,
  * the rate unit, EU/t, Avg) is the board's own toolbar (BoardToolbar), along the top of the board.
@@ -108,7 +107,6 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
   const sideOpen = workspace.rightPanelOpen && !bothOpen;
   const library = useLibraryTab();
   const isReadOnly = useFactoryStore((state) => state.isReadOnly);
-  const feedbackOpen = useFeedbackOpen();
   const [menu, setMenu] = useState<{ kind: "share" | "help" | "version"; anchor: ChromeAnchor }>();
   const [pasting, setPasting] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
@@ -255,24 +253,7 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
         {pictures ? <PixelIcon name="share" /> : undefined}
       </BarKey>
       <AccountKey pictures={pictures} />
-      <BarKey
-        id="feedback"
-        gap
-        icon
-        open={feedbackOpen}
-        ariaLabel="Feedback"
-        tip="Feedback: report a bug, share an idea, or ask for help"
-        onClick={() => {
-          if (feedbackOpen) {
-            closeFeedback();
-            return;
-          }
-          if (!knock(OPEN_FEEDBACK_EVENT)) window.open(HelpLinks.bugReport, "_blank", "noopener,noreferrer");
-        }}
-      >
-        <PixelIcon name="bug" className="mb-bug" />
-      </BarKey>
-      <BarKey id="settings" icon ariaLabel="Settings" tip="Settings" onClick={onSettings}>
+      <BarKey id="settings" gap icon ariaLabel="Settings" tip="Settings" onClick={onSettings}>
         <PixelIcon name="gear" />
       </BarKey>
       <BarKey

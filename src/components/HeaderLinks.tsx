@@ -3,13 +3,11 @@
 import { useRef, useState } from "react";
 import { useDropdownDismiss } from "@/lib/hooks/use-dropdown-dismiss";
 
-import { Bug, ChevronDown, Compass, Heart, Library, Route } from "lucide-react";
-import { openFeedback } from "@/components/flow/clean/feedback/feedback-store";
+import { ChevronDown, Compass, Heart, Library, Route } from "lucide-react";
 import { startTour } from "@/components/flow/clean/tour/tour-controller";
 import { useIsCompactViewport } from "@/lib/compact-view";
 import { leaveLibrary, openLibrary } from "@/lib/library/library-tab";
 import { openWelcomeTab } from "@/lib/welcome/welcome-tab";
-import { APP_VERSION } from "@/lib/version";
 
 export const GITHUB_URL = "https://github.com/jackwrichards/gtnh-factory-flow";
 
@@ -21,14 +19,6 @@ export const DISCORD_THREAD_URL = "https://discord.com/channels/1810784743945666
 
 /** The tip jar. */
 export const KOFI_URL = "https://ko-fi.com/gtnhplanner";
-
-/**
- * The bug report form with the app version pre-filled, since reporters rarely
- * think to include the build.
- */
-export const BUG_REPORT_URL = `${GITHUB_URL}/issues/new?template=bug_report.yml&version=${encodeURIComponent(
-  APP_VERSION,
-)}`;
 
 /** The header's "Help" dropdown: the auxiliary set of MenuLinks. */
 export function HeaderLinks() {
@@ -129,22 +119,6 @@ export function MenuLinks({ onAction, auxiliary = false }: { onAction?: () => vo
       >
         <Heart className="h-3.5 w-3.5 fill-current" aria-hidden />
       </MenuLink> : null}
-      <button
-        type="button"
-        onClick={() => {
-          onAction?.();
-          openFeedback();
-        }}
-        className="flex h-10 items-center gap-2.5 rounded px-2 text-left text-sm text-fg-subtle hover:bg-surface-sunken"
-      >
-        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-          <Bug className="h-3.5 w-3.5" aria-hidden />
-        </span>
-        <span className="truncate">Send feedback</span>
-      </button>
-      <MenuLink href={BUG_REPORT_URL} label="Report a bug">
-        <Bug className="h-3.5 w-3.5" aria-hidden />
-      </MenuLink>
     </div>
   );
 }

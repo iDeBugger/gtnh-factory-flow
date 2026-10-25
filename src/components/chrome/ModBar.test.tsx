@@ -4,7 +4,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { useFactoryStore } from "@/store/factory-store";
 import { useDesignStore } from "@/store/design-store";
 import { writeWorkspaceView } from "@/lib/workspace-view";
-import { OPEN_FEEDBACK_EVENT } from "./chrome-events";
 import { ModBar, plansTip } from "./ModBar";
 import { NEW_PLAN_VERSION_STORAGE_KEY } from "@/lib/datasets/new-plan-version";
 import type { DatasetManifest } from "@/lib/datasets/types";
@@ -77,7 +76,7 @@ describe("the mod's top bar", () => {
 
   it("every key is in the Tab order and Enter or Space presses it", () => {
     renderBar();
-    for (const id of ["plans", "share", "account", "feedback", "settings", "help"]) {
+    for (const id of ["plans", "share", "account", "settings", "help"]) {
       expect(key(id).getAttribute("tabindex"), id).toBe("0");
     }
     key("plans").focus();
@@ -87,10 +86,10 @@ describe("the mod's top bar", () => {
     expect(readLibraryTabState().active).toBe(false);
   });
 
-  it("holds the account's keys only, in order: Plans, Share, the account, feedback, settings, help", () => {
+  it("holds the account's keys only, in order: Plans, Share, the account, settings, help", () => {
     renderBar();
     const order = [...document.querySelectorAll("[data-mb]")].map((element) => element.getAttribute("data-mb"));
-    expect(order).toEqual(["plans", "share", "account", "feedback", "settings", "help"]);
+    expect(order).toEqual(["plans", "share", "account", "settings", "help"]);
     expect(key("plans").textContent).toBe("Plans");
     expect(key("account").textContent).toBe("Sign in");
   });
@@ -276,23 +275,9 @@ describe("the mod's top bar", () => {
     expect(screen.queryByText("Download the mod")).toBeNull();
   });
 
-  it("the Feedback key knocks on the feedback door, and a part that answers takes it", () => {
-    const open = vi.spyOn(window, "open").mockImplementation(() => null);
-    renderBar();
-    fireEvent.click(key("feedback"));
-    expect(open).toHaveBeenCalledTimes(1);
-    const heard = vi.fn((event: Event) => event.preventDefault());
-    window.addEventListener(OPEN_FEEDBACK_EVENT, heard);
-    fireEvent.click(key("feedback"));
-    expect(heard).toHaveBeenCalledTimes(1);
-    expect(open).toHaveBeenCalledTimes(1);
-    window.removeEventListener(OPEN_FEEDBACK_EVENT, heard);
-    open.mockRestore();
-  });
-
   it("every key carries a tip for the tip host", () => {
     renderBar();
-    for (const id of ["plans", "share", "account", "feedback", "settings", "help"]) {
+    for (const id of ["plans", "share", "account", "settings", "help"]) {
       expect(key(id).getAttribute("data-tip-id"), id).toBe(`bar|${id}`);
       expect(JSON.parse(key(id).getAttribute("data-tip")!).title.length).toBeGreaterThan(3);
     }
@@ -413,9 +398,9 @@ describe("the top bar's one row", () => {
   const bar = () => document.querySelector<HTMLElement>("[data-mod-bar]")!;
   const fit = () => bar().getAttribute("data-fit");
   const isIcon = (id: string) => key(id).hasAttribute("data-icon");
-  // The roomy bar needs 207 of keys beside the tabs, the icon bar 128: with two full tabs and the + kept (260) the keys
-  // become icons below 467 and the gaps tighten below 266; they come back from 479 and 345.
-  const ICONS_BELOW = 467;
+  // The roomy bar needs 187 of keys beside the tabs, the icon bar 108: with two full tabs and the + kept (260) the keys
+  // become icons below 447 and the gaps tighten below 246; they come back from 459 and 258.
+  const ICONS_BELOW = 447;
 
   it("keeps Plans, Share and Sign in as words while the tabs have room", () => {
     renderBar();
@@ -427,11 +412,11 @@ describe("the top bar's one row", () => {
     expect(isIcon("plans") || isIcon("share") || isIcon("account")).toBe(false);
   });
 
-  it("Plans, Share and Sign in become small icon keys like feedback, settings and help, in the same places", () => {
+  it("Plans, Share and Sign in become small icon keys like settings and help, in the same places", () => {
     renderBar();
     resize(ICONS_BELOW - 1);
     expect(fit()).toBe("icons");
-    for (const id of ["plans", "share", "account", "feedback", "settings", "help"]) {
+    for (const id of ["plans", "share", "account", "settings", "help"]) {
       expect(isIcon(id), id).toBe(true);
       expect(key(id).textContent, id).toBe("");
       expect(key(id).querySelector("svg"), id).not.toBeNull();
@@ -440,7 +425,6 @@ describe("the top bar's one row", () => {
       "plans",
       "share",
       "account",
-      "feedback",
       "settings",
       "help",
     ]);
@@ -491,7 +475,7 @@ describe("the top bar's one row", () => {
     renderBar();
     resize(ICONS_BELOW - 1);
     expect(fit()).toBe("icons");
-    resize(250);
+    resize(230);
     expect(fit()).toBe("tight");
     resize(100);
     expect(fit()).toBe("tight");

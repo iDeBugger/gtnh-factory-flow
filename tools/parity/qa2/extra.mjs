@@ -64,7 +64,7 @@ export default function ({ page, wait, rec, check, shot, nodeSel, focus, idle, s
 
   section("topbar-tips", async () => {
     await loadPlan(page, refChain);
-    const targets = ["Share", "Settings", "Fit", "Library", "Undo", "Redo", "Arrange", "Help", "Feedback", "/s", "EU/t", "Avg"]; // QA3: the mod-style bar renamed its keys
+    const targets = ["Share", "Settings", "Fit", "Library", "Undo", "Redo", "Arrange", "Help", "/s", "EU/t", "Avg"]; // QA3: the mod-style bar renamed its keys
     for (const t of targets) {
       await idle();
       await wait(300);
@@ -122,9 +122,6 @@ export default function ({ page, wait, rec, check, shot, nodeSel, focus, idle, s
     rec("panels", "screenshot panel offers Detailed / Simple cards and a footer (mod)", cardMode ? "PASS" : "FAIL", sp.slice(0, 160));
     await page.keyboard.press("Escape");
     await wait(400);
-    // feedback panel / bug key
-    const fb = await page.locator("[aria-label*=eedback i], [title*=eedback i], [aria-label*='ug' i]").count();
-    rec("panels", "feedback panel key (mod: red bug key with faces, Bug/Idea/Help chips)", fb ? "PASS" : "FAIL", `matching keys ${fb}`);
     // help menu / tour
     await page.locator('[aria-label="Help"]').first().click();
     await wait(500);

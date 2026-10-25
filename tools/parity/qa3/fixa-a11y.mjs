@@ -19,18 +19,6 @@ await page.mouse.click(5, 5).catch(() => {});
 const order = [];
 for (let i = 0; i < 24; i++) { await page.keyboard.press("Tab"); const w = await where(); order.push(w.label); }
 console.log("TAB ORDER:", order.join(" | "));
-// Feedback dialog
-const fb = page.locator('[data-mb="feedback"]');
-await fb.focus();
-await page.keyboard.press("Enter");
-await page.waitForTimeout(500);
-res.feedbackOpen = await where();
-for (let i = 0; i < 25; i++) await page.keyboard.press("Tab");
-res.feedbackTrap = await where();
-await page.screenshot({ path: OUT + "fixa-fb-open.png" });
-await page.keyboard.press("Escape");
-await page.waitForTimeout(400);
-res.feedbackClosed = await where();
 // Share to library dialog via the Share menu
 await page.locator('[data-mb="share"]').focus();
 await page.keyboard.press("Enter");

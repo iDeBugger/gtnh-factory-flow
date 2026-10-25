@@ -331,10 +331,6 @@
   "MATCH",
   "Same text and size."
  ],
- "tip-topbar-feedback": [
-  "MATCH",
-  "Same text and size."
- ],
  "tip-topbar-fit": [
   "MATCH",
   "Same text and size."
@@ -390,10 +386,6 @@
  "help-controls-and-shortcuts-list": [
   "DIFFERS",
   "Same list and heading mostly; the web wraps its right column and words a few rows differently."
- ],
- "feedback-panel-open": [
-  "DIFFERS",
-  "Same box (faces, Bug/Idea/Help, text box, Send); drawn at about 60% of the mod's size on screen."
  ],
  "non-recipe-picker-open": [
   "DIFFERS",

@@ -145,7 +145,7 @@ in `src/store/CLAUDE.md` (Live plans, Task boards).
   plans picker (the GTNH version new plans are made for; only while the site serves more than one; its version alone in
   the icons dress; on a phone a row of the + menu instead), the live
   state as a dot and the faces of who else is here (`LivePresence`: one square per account, initials in their colour; a
-  tip says Live, Connecting or Offline with edits waiting), Library, Share, the account key, feedback, settings, help.
+  tip says Live, Connecting or Offline with edits waiting), Library, Share, the account key, settings, help.
   The account key (`chrome/AccountKey.tsx`) reads "Sign in" signed out (it opens `SignInPanel`, the form that used to
   hang in the Library) and is the account's face (initials in its colour) signed in, with a menu of the username and
   Sign out. The Library has no sign-in key, only a line "Signed in as X". The Share menu's first row is Share with
@@ -164,8 +164,8 @@ in `src/store/CLAUDE.md` (Live plans, Task boards).
 - The desktop top bar is one row and hides nothing in a menu (`useTopBarFit` in `bar-parts.tsx`, steps in the pure,
   tested `chrome/top-bar-fold.ts`, `data-fit` roomy / icons / tight). The tabs give way first (the strip scrolls; the open
   plan's tab and the + never go: the `.mt` min-width, and `ModTabs` scrolls the open tab back into view when the strip
-  resizes). With under two full tabs and the + of room, Plans, Share and Sign in become icon keys like feedback, settings
-  and help (tips lead with the name; `AccountKey` takes `pictures`); with under one tab and the + the gaps tighten and the
+  resizes). With under two full tabs and the + of room, Plans, Share and Sign in become icon keys like settings and
+  help (tips lead with the name; `AccountKey` takes `pictures`); with under one tab and the + the gaps tighten and the
   live faces are two and a +N. Each step is judged by the tab strip's measured width, undone by the room the earlier dress
   would leave (what the step gave is measured when it is taken), and starts again from the widest dress when what the bar
   holds changes. A new key needs nothing here: the strip's width sees it.

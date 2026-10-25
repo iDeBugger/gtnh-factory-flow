@@ -17,7 +17,7 @@ body:
     id: version
     attributes:
       label: Planner version
-      description: The `v` chip in the top left of the planner. It should already be filled in if you came from the bug button.
+      description: The `v` chip in the top left of the planner.
       placeholder: "1.22.0"
     validations:
       required: true

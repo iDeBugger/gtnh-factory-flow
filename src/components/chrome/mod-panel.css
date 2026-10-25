@@ -1,12 +1,12 @@
 /*
- * The mod's boxes (the Feedback box, the Library's sign-in, ui/popup/*) as one skin for every panel around the board:
+ * The mod's boxes (the Library's sign-in, ui/popup/*) as one skin for every panel around the board:
  * the paste dialog, share-to-library and sign-in, the Welcome page, the recipe search and the items column.
  *
  * Two ways in. `.pn-backdrop` + `.pn` is a box built from the `pn-*` parts below. `.pn-skin` is the same look laid
  * over markup that still carries Tailwind classes (a descendant rule per kind of thing: buttons are flat keys,
  * fields are wells, the rounded corners and the heavy weights go). Plain unlayered CSS, so it beats Tailwind's
  * layers and globals.css's `button { font: inherit }`. Tokens are the clean card's (`flow/clean/tokens.ts`) and the
- * Feedback box's: surface #23252A, hairlines #34363C / #2C2E34, wells #16171A, the cyan primary key.
+ * mod's popups': surface #23252A, hairlines #34363C / #2C2E34, wells #16171A, the cyan primary key.
  */
 .pn-backdrop {
   position: fixed;
@@ -107,7 +107,7 @@
   gap: 8px;
 }
 
-/* A field: the Feedback box's well. */
+/* A field: the mod popup's well. */
 .pn-field,
 .pn-skin input:not([type="radio"]):not([type="checkbox"]):not([type="range"]):not([type="file"]),
 .pn-skin textarea {
