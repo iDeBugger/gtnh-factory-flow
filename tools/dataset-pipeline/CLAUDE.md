@@ -49,10 +49,26 @@ must get a new name. The normalizer stages every rendered icon (item, block, flu
 content-addressed name (`stage-rendered-icons.mjs`): the export's `<slug>-<sha1(stack key)[:12]>.png`
 becomes `<slug>-<sha1(bytes)[:12]>.png`, same length, and the dataset records point at that. A
 rebuild whose pixels did not change keeps every URL; one whose pixels changed moves only those.
-`apply-texture-icons.mjs` (textures/icons) names its files by content too, and
+`apply-texture-icons.mjs` names its files by content too, and
 `reuse-previous-icons.mjs` copies `textures/rendered/` along with the references it reuses.
 Exam: `stage-rendered-icons.test.mjs`. Publishing adds files beside the live ones and never deletes
 old names: a plan's own icon and other stored references keep the name they were saved with.
+
+Icon hints: where the oracle knows a texture's name but draws no pixels it writes
+`asset:<mod>:textures/...` into `iconPath` (`GtnhCalcOracleExporter.aspectIconPath`: the 21 Thaumcraft
+aspects other mods add, GregTech's Radio, Electrum and Magneto among them). A browser cannot load it and
+the app draws `?`. `resolve-icon-hints.mjs <instance root or mods dir> <recipes.json> <out dir>` runs after
+the normalizer and before the index builds (`run-gtnh-oracle-export.sh` does; the WSL `~/run-both.sh` must
+too). It reads `recipes.json` line by line, so it runs on a dataset of any size, copies each hinted PNG
+out of the mod jars to `textures/rendered/<mod>_<file>-<sha1(bytes)[:12]>.png`, rewrites every copy,
+clears a hint no jar holds (listed, with the missing mod, in `textures/icon-report.json`), and refuses a
+mods directory with no jars rather than clear them all. `apply-texture-icons.mjs` parses the dataset whole
+and skips its name matching above `GTNH_TEXTURE_ICON_MAX_DATASET_BYTES` (450 MB: every real dataset); it
+adds `textureMatching` to the report and never writes a top-level `skipped`. Its own extraction writes
+`textures/<kind>/`, which the textures route does not serve, and it removes `textures/item` and
+`textures/fluid`: keep hints out of it. `publish-datasets.sh` refuses a version with no icon report, one
+that says `skipped`, or any published file holding `"asset:` (`deploy-lib.mjs icons`). Exam:
+`resolve-icon-hints.test.mjs`, `tools/deploy/deploy-lib.test.mjs`.
 
 Every rebuild runs `normalize-fluid-icon-alpha.mjs --rename` after the index builds
 (`generate-dataset.mjs` does), on 2.9 as on 2.8.1, so faint fluids never ship invisible. It

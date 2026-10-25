@@ -62,6 +62,12 @@ manifest="$local_root/datasets.manifest.json"
 for id in "${ids[@]}"; do
   [ -f "$local_root/$id/recipe-lookup-index.json.gz" ] || fail "$id has no recipe-lookup-index.json.gz: not a built dataset."
 done
+# The export's asset: icon hints must be resolved (resolve-icon-hints.mjs) or each one draws `?`:
+# no icon report, a report that says skipped, or a file still holding "asset: refuses the version.
+for id in "${ids[@]}"; do
+  node "$here/deploy-lib.mjs" icons "$local_root/$id" || fail "$id still carries unresolved icon hints; rebuild it."
+done
+echo "icon hints: resolved in ${ids[*]}"
 listed="$(node -e 'for (const v of JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).versions) console.log(v.id)' "$manifest")"
 for id in $listed; do
   given=0

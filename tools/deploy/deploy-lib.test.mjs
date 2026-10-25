@@ -1,6 +1,15 @@
-import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
-import { buildId, readAppVersion, sameFile, waitForBuild } from "./deploy-lib.mjs";
+import fs, { readFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { gzipSync } from "node:zlib";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  buildId,
+  datasetIconProblems,
+  readAppVersion,
+  sameFile,
+  waitForBuild,
+} from "./deploy-lib.mjs";
 
 /** A fetch that answers each body in turn, then the last one for ever. */
 function answering(...bodies) {
@@ -77,5 +86,60 @@ describe("the deploy's checks", () => {
     expect(sameFile("name: gtnh\n", "name: gtnh\n")).toBe(true);
     expect(sameFile("name: gtnh\n", "name: gtnh\n\n")).toBe(false);
     expect(sameFile(Buffer.from("a"), Buffer.from("a"))).toBe(true);
+  });
+});
+
+describe("the publish's icon check", () => {
+  const dirs = [];
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** A built version directory: the index gzips, a shard, and the icon report. */
+  function version({ report, slot }) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "icon-gate-"));
+    dirs.push(dir);
+    fs.mkdirSync(path.join(dir, "textures", "rendered"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "recipes-shards"));
+    if (report !== undefined) {
+      fs.writeFileSync(path.join(dir, "textures", "icon-report.json"), JSON.stringify(report));
+    }
+    // Long enough that the gunzip hands it over in several chunks.
+    const body = `${"x".repeat(200_000)}{"id":"thaumcraft:aspect:radio","iconPath":"${slot}"}`;
+    fs.writeFileSync(path.join(dir, "resource-index.json.gz"), gzipSync("{}"));
+    fs.writeFileSync(path.join(dir, "recipes-shards", "shard-0000.json.gz"), gzipSync(body));
+    // Never published, so never read: the raw dataset may hold anything.
+    fs.writeFileSync(path.join(dir, "recipes.json"), '"asset:x"');
+    return dir;
+  }
+
+  const resolved = { schemaVersion: 1, textureHints: { hints: 1, resolved: [], unresolved: [] } };
+  const served = "/datasets/gtnh/v/textures/rendered/gregtech_radio-0123456789ab.png";
+
+  it("passes a version whose hints were resolved", async () => {
+    expect(await datasetIconProblems(version({ report: resolved, slot: served }))).toEqual([]);
+  });
+
+  it("refuses a version whose gzips still hold an asset: hint", async () => {
+    const problems = await datasetIconProblems(
+      version({ report: resolved, slot: "asset:gregtech:textures/aspects/RADIO.png" }),
+    );
+    expect(problems).toEqual([
+      '1 file(s) still hold "asset: icon hints: recipes-shards/shard-0000.json.gz',
+    ]);
+  });
+
+  it("refuses a version whose icon report says skipped, or that has none", async () => {
+    const skipped = await datasetIconProblems(
+      version({ report: { skipped: true, reason: "Dataset is too big." }, slot: served }),
+    );
+    expect(skipped).toEqual(["textures/icon-report.json says skipped: Dataset is too big."]);
+    const none = await datasetIconProblems(version({ slot: served }));
+    expect(none).toHaveLength(1);
+    expect(none[0]).toMatch(/icon-report\.json is missing/);
+    const older = await datasetIconProblems(version({ report: { schemaVersion: 1 }, slot: served }));
+    expect(older).toEqual([
+      "textures/icon-report.json has no textureHints: resolve-icon-hints.mjs did not run.",
+    ]);
   });
 });

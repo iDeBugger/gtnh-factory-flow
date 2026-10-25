@@ -95,8 +95,11 @@ breaking a schema.
   outside address would make every viewer fetch it. Every icon field is `siteIconPathSchema` /
   `siteIconAtlasSchema`, which DROP anything else rather than refuse (an icon must never sink a plan
   load); the landing refresh restamps dataset icons. `ResourceIcon` applies the same rule to what it
-  draws: a dataset-served recipe never passes the schema, and the dataset still carries unresolved
-  `asset:` hints (the pipeline's `icon-hints.mjs` clears them on the next publish). A test fixture that
+  draws: a dataset-served recipe never passes the schema, and a dataset built before
+  `resolve-icon-hints.mjs` still carries the export's `asset:<mod>:textures/...` hints (21 Thaumcraft
+  aspects other mods add, drawn as `?`). The pipeline now copies each hinted PNG out of the mod jars into
+  `textures/rendered/` and clears the rest, whatever the dataset's size, and the publish refuses a version
+  that still holds `"asset:` (`tools/dataset-pipeline/CLAUDE.md`, Icon hints). A test fixture that
   renders an icon needs a site-shaped path (`/nei/test/x.png`). Exam: `icon-path.test.ts`,
   `factory-json.test.ts` "drops icons that are not the site's own art", `src/lib/live/validate.test.ts`,
   `src/components/nei/ResourceIcon.test.tsx`.

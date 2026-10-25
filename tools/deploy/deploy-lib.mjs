@@ -6,10 +6,12 @@
 //   node deploy-lib.mjs build-id                       <version>-<sha8> of HEAD
 //   node deploy-lib.mjs wait <url> <version> <build> [timeout s]
 //   node deploy-lib.mjs same <file a> <file b>         exit 0 when the bytes match
+//   node deploy-lib.mjs icons <version dir>            exit 0 when its icon hints were resolved
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { createReadStream, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { createGunzip } from "node:zlib";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 /** APP_VERSION as `src/lib/version.ts` writes it. */
@@ -69,6 +71,74 @@ export function sameFile(a, b) {
   return digest(a) === digest(b);
 }
 
+const ASSET_HINT = Buffer.from('"asset:');
+
+/** True when the stream's bytes hold `"asset:`, across chunk boundaries too. */
+async function streamHoldsHint(stream) {
+  let tail = Buffer.alloc(0);
+  for await (const chunk of stream) {
+    const window = Buffer.concat([tail, chunk]);
+    if (window.includes(ASSET_HINT)) {
+      stream.destroy();
+      return true;
+    }
+    tail = window.subarray(Math.max(0, window.length - (ASSET_HINT.length - 1)));
+  }
+  return false;
+}
+
+function publishedDataFiles(dir, base = dir) {
+  const files = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    const relative = path.relative(base, full);
+    if (entry.isDirectory()) {
+      // Textures are pictures; the icon report among them is read on its own.
+      if (relative !== "textures") files.push(...publishedDataFiles(full, base));
+    } else if (entry.isFile() && relative !== "recipes.json" && /\.(json|gz)$/.test(entry.name)) {
+      files.push(relative);
+    }
+  }
+  return files.sort();
+}
+
+/**
+ * Why a built dataset version must not be published for its icons, or [] when it may. The
+ * export's `asset:<mod>:textures/...` hints are resolved from the mod jars by
+ * resolve-icon-hints.mjs, which writes textures/icon-report.json; a version with no report,
+ * a report that says `skipped`, or a published file still holding `"asset:` shipped the hints,
+ * and the app draws `?` for each one. The raw recipes.json is never published, so not read.
+ */
+export async function datasetIconProblems(versionDir) {
+  const problems = [];
+  let report;
+  try {
+    report = JSON.parse(readFileSync(path.join(versionDir, "textures", "icon-report.json"), "utf8"));
+  } catch {
+    problems.push("textures/icon-report.json is missing or unreadable: resolve-icon-hints.mjs did not run.");
+  }
+  if (report?.skipped === true) {
+    problems.push(`textures/icon-report.json says skipped: ${report.reason ?? "no reason given"}`);
+  } else if (report && !report.textureHints) {
+    problems.push("textures/icon-report.json has no textureHints: resolve-icon-hints.mjs did not run.");
+  }
+  const holding = [];
+  for (const file of publishedDataFiles(versionDir)) {
+    const raw = createReadStream(path.join(versionDir, file));
+    if (await streamHoldsHint(file.endsWith(".gz") ? raw.pipe(createGunzip()) : raw)) {
+      raw.destroy();
+      holding.push(file);
+    }
+  }
+  if (holding.length > 0) {
+    const shown = holding.slice(0, 5).join(", ");
+    problems.push(
+      `${holding.length} file(s) still hold "asset: icon hints: ${shown}${holding.length > 5 ? ", ..." : ""}`,
+    );
+  }
+  return problems;
+}
+
 async function main([command, ...args]) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   if (command === "build-id") {
@@ -98,8 +168,16 @@ async function main([command, ...args]) {
     const [a, b] = args;
     return sameFile(readFileSync(a), readFileSync(b)) ? 0 : 1;
   }
+  if (command === "icons") {
+    const [versionDir] = args;
+    const problems = await datasetIconProblems(versionDir);
+    for (const problem of problems) {
+      console.error(`${path.basename(versionDir)}: ${problem}`);
+    }
+    return problems.length === 0 ? 0 : 1;
+  }
   console.error(
-    "Usage: deploy-lib.mjs build-id | wait <url> <version> <build> [seconds] | same <a> <b>",
+    "Usage: deploy-lib.mjs build-id | wait <url> <version> <build> [seconds] | same <a> <b> | icons <dir>",
   );
   return 2;
 }
