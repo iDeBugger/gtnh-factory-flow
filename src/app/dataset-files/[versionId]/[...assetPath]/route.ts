@@ -117,7 +117,8 @@ async function serveClientFile(request: Request, versionId: string, name: string
     }
     const filePath = await resolveClientFilePath(versionId, `${name}.${suffix}`);
     if (!filePath) {
-      break;
+      // No copy in this encoding (the id list has no brotli one): try the next.
+      continue;
     }
     try {
       return await serveDatasetFile(filePath, {

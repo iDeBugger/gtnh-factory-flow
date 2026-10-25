@@ -43,21 +43,35 @@ describe("where the client files live", () => {
     vi.unstubAllEnvs();
   });
 
-  it("is the site's own cache directory, never the dataset tree", () => {
+  it("is the site's own cache directory, never the dataset tree", async () => {
     vi.stubEnv("GTNH_CLIENT_FILES_DIR", "");
     expect(clientFilesRoot()).toBe(path.join(process.cwd(), ".cache", "client-files"));
-    vi.stubEnv("GTNH_CLIENT_FILES_DIR", "/data/client-files");
-    expect(clientFileDirectory("local-2.9.0-rc-2")).toBe("/data/client-files/local-2.9.0-rc-2");
-    expect(resolveClientFilePath("local-2.9.0-rc-2", "catalog.0123456789abcdef0123.json.br")).toBe(
-      "/data/client-files/local-2.9.0-rc-2/catalog.0123456789abcdef0123.json.br",
+    vi.stubEnv("GTNH_CLIENT_FILES_DIR", directory);
+    expect(clientFileDirectory("local-2.9.0-rc-2")).toBe(path.join(directory, "local-2.9.0-rc-2"));
+    const name = "catalog.0123456789abcdef0123.json.br";
+    await fs.mkdir(path.join(directory, "local-2.9.0-rc-2"));
+    await fs.writeFile(path.join(directory, "local-2.9.0-rc-2", name), "x");
+    expect(await resolveClientFilePath("local-2.9.0-rc-2", name)).toBe(
+      await fs.realpath(path.join(directory, "local-2.9.0-rc-2", name)),
     );
     expect(clientFilesRoot()).not.toContain(path.join("public", "datasets"));
   });
 
-  it("refuses a version or file name that is not a plain name", () => {
+  it("refuses a name that is not plain, a file that is not there, and a link out of the version", async () => {
+    vi.stubEnv("GTNH_CLIENT_FILES_DIR", directory);
     expect(clientFileDirectory("..")).toBeUndefined();
     expect(clientFileDirectory("a/b")).toBeUndefined();
-    expect(resolveClientFilePath("v", "../x.gz")).toBeUndefined();
+    expect(await resolveClientFilePath("v", "../x.gz")).toBeUndefined();
+    await fs.mkdir(path.join(directory, "v"));
+    expect(
+      await resolveClientFilePath("v", "catalog.0123456789abcdef0123.json.gz"),
+    ).toBeUndefined();
+    const outside = path.join(directory, "secret.gz");
+    await fs.writeFile(outside, "x");
+    await fs.symlink(outside, path.join(directory, "v", "catalog.0123456789abcdef0123.json.gz"));
+    expect(
+      await resolveClientFilePath("v", "catalog.0123456789abcdef0123.json.gz"),
+    ).toBeUndefined();
   });
 });
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
+import { datasetErrorResponse } from "@/lib/server/error-response";
 import { datasetClientFileListing } from "@/lib/server/dataset-client-files";
 import { datasetBudgetRefusal } from "@/lib/server/dataset-rate";
 
@@ -26,20 +27,16 @@ export async function GET(
     const listing = await datasetClientFileListing(versionId);
     if (!listing) {
       return NextResponse.json(
-        { error: `Dataset ${versionId} is not served.` },
+        { error: "Dataset not found." },
         { status: 404, headers: { "Cache-Control": "no-store" } },
       );
     }
-    return NextResponse.json(
-      listing,
-      {
-        headers: listing.complete ? datasetCacheHeaders(request) : { "Cache-Control": "no-store" },
-      },
-    );
+    return NextResponse.json(listing, {
+      headers: listing.complete ? datasetCacheHeaders(request) : { "Cache-Control": "no-store" },
+    });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Dataset file listing failed." },
-      { status: 500, headers: { "Cache-Control": "no-store" } },
-    );
+    return datasetErrorResponse(error, "Dataset file listing failed.", {
+      "Cache-Control": "no-store",
+    });
   }
 }

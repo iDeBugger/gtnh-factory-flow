@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { brotliCompress, constants as zlibConstants, gzip } from "node:zlib";
+import { resolveDatasetChildPathIn } from "./dataset-static-file";
 import {
   CLIENT_FILE_KINDS,
   CLIENT_FILE_NAME,
@@ -50,10 +51,19 @@ export function clientFileDirectory(versionId: string): string | undefined {
   return isPlainName(versionId) ? path.join(clientFilesRoot(), versionId) : undefined;
 }
 
-/** One stored file (`<name>.gz` or `<name>.br`) of a version, or undefined for an unsafe name. */
-export function resolveClientFilePath(versionId: string, fileName: string): string | undefined {
-  const directory = clientFileDirectory(versionId);
-  return directory && isPlainName(fileName) ? path.join(directory, fileName) : undefined;
+/**
+ * One stored file (`<name>.gz` or `<name>.br`) of a version, as its real path,
+ * or undefined for an unsafe name, a file that is not there, or a link out of
+ * the version's directory (the same rule as the dataset files).
+ */
+export async function resolveClientFilePath(
+  versionId: string,
+  fileName: string,
+): Promise<string | undefined> {
+  if (!isPlainName(versionId) || !isPlainName(fileName)) {
+    return undefined;
+  }
+  return resolveDatasetChildPathIn(clientFilesRoot(), versionId, fileName);
 }
 
 function isPlainName(value: string): boolean {

@@ -159,7 +159,9 @@ describe("the cache key of every dataset request", () => {
       "fetch",
       vi.fn((url: string) => {
         urls.push(url);
-        return Promise.resolve(json(200, { recipeIds: [], crops: [], mobs: [], resources: [] }));
+        return Promise.resolve(
+          json(200, { recipeIds: [], crops: [], mobs: [], resources: [], matches: [] }),
+        );
       }),
     );
     const api = await loader();

@@ -68,7 +68,8 @@
   otherwise on the first listing request. A file already there is only touched; one no start has named for 30 days
   is removed. The browser reads `GET /api/datasets/<id>/client-files` (1 unit; `no-store` until every file is
   written, then cached like a dataset answer) and fetches each listed file through the gate and the dataset-files
-  route (`immutable` for a year, brotli or gzip by Accept-Encoding, ETag `"<hash>-<br|gz>"`); with no listing, a
+  route (`immutable` for a year, brotli or gzip by Accept-Encoding, ETag `"<hash>-<br|gz>"`; resolved by real path
+  like the dataset files, so a link out of the version's directory is a miss); with no listing, a
   kind not listed or a failed file it asks the API as before, and the API routes stay for old tabs; a listing that is
   incomplete or failed is reused for 45 s before the browser asks again (`CLIENT_FILE_LISTING_RETRY_MS`). A write
   that fails (an unwritable cache directory) is logged and the site keeps the API. Each start also removes the
