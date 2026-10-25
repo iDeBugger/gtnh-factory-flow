@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PROGRAMMED_CIRCUIT_ITEM_ID } from "@/lib/model/programmed-circuit";
 import { ResourceIcon } from "./ResourceIcon";
 
 describe("ResourceIcon", () => {
@@ -16,6 +17,27 @@ describe("ResourceIcon", () => {
       return 1;
     });
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+  });
+
+  describe("the programmed circuit", () => {
+    const circuit = {
+      kind: "item" as const,
+      id: `${PROGRAMMED_CIRCUIT_ITEM_ID}@3`,
+      amount: 0,
+      displayName: "Programmed Circuit",
+      consumed: false,
+    };
+    const boosted = (container: HTMLElement) =>
+      (container.firstElementChild as HTMLElement).className.includes("brightness-[1.9]");
+
+    // The boost lifts the near-black chip off the light grey panel; a bare badge sits on a dark well and keeps its art.
+    it("is brightened on its panel and drawn as it is when bare", () => {
+      const panel = render(<ResourceIcon resource={circuit} tooltip={false} />);
+      expect(boosted(panel.container)).toBe(true);
+      panel.unmount();
+      const bare = render(<ResourceIcon resource={circuit} bare tooltip={false} />);
+      expect(boosted(bare.container)).toBe(false);
+    });
   });
 
   describe("where an icon may come from", () => {
