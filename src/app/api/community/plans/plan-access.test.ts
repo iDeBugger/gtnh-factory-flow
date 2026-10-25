@@ -21,6 +21,10 @@ import * as preview from "./[planId]/preview/route";
 import * as view from "./[planId]/view/route";
 import * as vote from "./[planId]/vote/route";
 import * as comments from "./[planId]/comments/route";
+import * as download from "./[planId]/download/route";
+import * as plansRepo from "@/lib/server/repos/plans";
+import * as commentsRepo from "@/lib/server/repos/comments";
+import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
 import * as images from "../images/[month]/[name]/route";
 
 /** The server's time budget for an uploaded plan's stats solve, set per case. */
@@ -383,6 +387,119 @@ describe("a post's comments", () => {
       resetDbBreaker();
     }
     expect((await readComments(planId)).status).toBe(200);
+  });
+});
+
+describe("listing posts", () => {
+  withModAndCommunityOn();
+
+  /** Posts straight into the table, out of every other case's way by their game version. */
+  async function seed(rows: Array<{ name: string; version: string; isPublic: boolean }>) {
+    const { error } = await getCommunityDb()
+      .from("community_plans")
+      .insert(
+        rows.map((row) => ({
+          user_id: users.owner!.id,
+          author_name: "owner",
+          name: row.name,
+          game_version: row.version,
+          plan: { nodes: [] },
+          is_public: row.isPublic,
+          uploader_key: "test",
+        })),
+      );
+    expect(error).toBeNull();
+    invalidatePlanListCache();
+  }
+
+  const listPage = async (query: string) => {
+    const response = await list.GET(request("GET", `/api/community/plans?${query}`));
+    expect(response.status).toBe(200);
+    return (await response.json()) as { plans: Array<{ name: string }>; total: number; gameVersions: string[] };
+  };
+
+  it("a page past the end still counts every post", async () => {
+    await seed([
+      { name: "Past one", version: "past-end", isPublic: true },
+      { name: "Past two", version: "past-end", isPublic: true },
+      { name: "Past three", version: "past-end", isPublic: true },
+      { name: "Past hidden", version: "past-end", isPublic: false },
+    ]);
+    const first = await listPage("gameVersion=past-end&pageSize=2");
+    expect(first.plans).toHaveLength(2);
+    expect(first.total).toBe(3);
+    const beyond = await listPage("gameVersion=past-end&pageSize=2&page=99");
+    expect(beyond.plans).toEqual([]);
+    expect(beyond.total).toBe(3);
+  });
+
+  it("the version filter lists only published posts' versions", async () => {
+    await seed([
+      { name: "Versioned", version: "7.8-published", isPublic: true },
+      { name: "Versioned draft", version: "7.7-unpublished", isPublic: false },
+    ]);
+    const page = await listPage("sort=new");
+    expect(page.gameVersions).toContain("7.8-published");
+    expect(page.gameVersions).not.toContain("7.7-unpublished");
+  });
+
+  it("a search's pattern characters match nothing wider", async () => {
+    await seed([
+      { name: "aXb", version: "literal", isPublic: true },
+      { name: "abc", version: "literal", isPublic: true },
+      { name: "x*y", version: "literal", isPublic: true },
+    ]);
+    const names = async (search: string) =>
+      (await listPage(`gameVersion=literal&search=${encodeURIComponent(search)}`)).plans
+        .map((plan) => plan.name)
+        .sort();
+    const everything = await names("");
+    expect(everything).toEqual(["aXb", "abc", "x*y"]);
+    // `*` and `_` are no wildcards, and `,` `)` never close the text's filter.
+    expect(await names("a*b")).toEqual([]);
+    expect(await names("a_c")).toEqual([]);
+    expect(await names("a,b)")).toEqual([]);
+    expect(await names("x,is_public.eq.false")).toEqual([]);
+    // Alone, they are no search at all: nothing past the unsearched list.
+    expect(await names("*")).toEqual(everything);
+    expect(await names("%")).toEqual(everything);
+  });
+});
+
+describe("a malformed post id", () => {
+  withModAndCommunityOn();
+
+  it("is not found, not an error, and sends no query", async () => {
+    const spies = [plansRepo, commentsRepo].flatMap((module) =>
+      Object.entries(module)
+        .filter(([, value]) => typeof value === "function")
+        .map(([name]) => vi.spyOn(module as Record<string, (...args: unknown[]) => unknown>, name)),
+    );
+    try {
+      const planId = "not-a-uuid";
+      const answers = await Promise.all([
+        plan.GET(request("GET", `/api/community/plans/${planId}`), params({ planId })),
+        view.POST(request("POST", `/api/community/plans/${planId}/view`), params({ planId })),
+        download.POST(request("POST", `/api/community/plans/${planId}/download`), params({ planId })),
+        comments.GET(request("GET", `/api/community/plans/${planId}/comments`), params({ planId })),
+      ]);
+      for (const answer of answers) {
+        expect(answer.status).toBe(404);
+        expect(await answer.json()).toEqual({ error: "Plan not found." });
+      }
+      for (const spy of spies) {
+        expect(spy, spy.getMockName()).not.toHaveBeenCalled();
+      }
+      // The spies see the service's reads: a well-formed id is looked up.
+      const missing = randomUUID();
+      const gone = await plan.GET(request("GET", `/api/community/plans/${missing}`), params({ planId: missing }));
+      expect(gone.status).toBe(404);
+      expect(vi.mocked(plansRepo.readSummary)).toHaveBeenCalledWith(missing);
+    } finally {
+      for (const spy of spies) {
+        spy.mockRestore();
+      }
+    }
   });
 });
 

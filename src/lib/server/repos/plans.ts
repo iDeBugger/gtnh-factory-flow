@@ -108,11 +108,16 @@ export async function list(
   return load(false);
 }
 
-/** The game versions posts carry, newest first, for the filter; none when the read fails. */
+/**
+ * The game versions published posts carry, newest first, for the filter;
+ * none when the read fails. An unpublished post's version is its owner's
+ * business, so it never names a choice on the public shelf.
+ */
 export async function distinctGameVersions(_tx?: Tx): Promise<string[]> {
-  const { data } = await getCommunityDb()
-    .from("community_plans")
-    .select("game_version")
+  let query = getCommunityDb().from("community_plans").select("game_version");
+  query = publicPlans(query);
+  const { data } = await query
+    .neq("game_version", "")
     .limit(1000)
     .returns<Array<{ game_version: string }>>();
   return [...new Set((data ?? []).map((row) => row.game_version).filter(Boolean))].sort((a, b) =>

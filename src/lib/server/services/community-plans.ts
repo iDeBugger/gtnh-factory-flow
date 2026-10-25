@@ -26,13 +26,14 @@ import { ensurePlanEngine, solvePlanStats } from "../plan-engine";
 import { invalidatePlanListCache, readPlanListCache, writePlanListCache } from "../plan-list-cache";
 import { PLAN_PREVIEW_BUCKET, PLAN_PREVIEW_MAX_SIDE, readPngHeader } from "../plan-preview";
 import * as plans from "../repos/plans";
-import { canSeePlan, ownsPlan } from "./access";
+import { canSeePlan, isUuid, ownsPlan } from "./access";
 import { fail, ok, type ServiceResult } from "./result";
 
 /**
  * Community posts: the list, a post's page, sharing, editing and taking a
  * post down, and its counters. Who may see an unpublished post is
- * `canSeePlan`, here and everywhere.
+ * `canSeePlan`, here and everywhere. A post id that is no uuid is a missing
+ * post, answered before any query.
  */
 
 const PLAN_NOT_FOUND = "Plan not found.";
@@ -217,6 +218,9 @@ export async function readPlan(
   deviceId: string | undefined,
   request: Request,
 ): Promise<ServiceResult<{ plan: CommunityPlanSummary }>> {
+  if (!isUuid(planId)) {
+    return fail("not-found", PLAN_NOT_FOUND);
+  }
   const row = await plans.readSummary(planId);
   if (!row || !canSeePlan(viewer, row)) {
     return fail("not-found", PLAN_NOT_FOUND);
@@ -382,7 +386,7 @@ export async function editPlan(
   if (!viewer.userId) {
     return fail("unauthorized", "Sign in to update your post.");
   }
-  const existing = await plans.readOwner(planId);
+  const existing = isUuid(planId) ? await plans.readOwner(planId) : undefined;
   if (!existing) {
     return fail("not-found", PLAN_NOT_FOUND);
   }
@@ -446,10 +450,13 @@ export async function editPlan(
 
 /** Takes a post down: its owner, an admin account, or the admin header. Its board photograph goes with it. */
 export async function deletePlan(viewer: Viewer, planId: string): Promise<ServiceResult<{ ok: true }>> {
+  if (!viewer.adminToken && !viewer.userId) {
+    return fail("unauthorized", "Sign in to take down your post.");
+  }
+  if (!isUuid(planId)) {
+    return fail("not-found", PLAN_NOT_FOUND);
+  }
   if (!viewer.adminToken) {
-    if (!viewer.userId) {
-      return fail("unauthorized", "Sign in to take down your post.");
-    }
     const existing = await plans.readOwner(planId);
     if (!existing) {
       return fail("not-found", PLAN_NOT_FOUND);
@@ -481,6 +488,10 @@ export async function countPlanView(
   planId: string,
   request: Request,
 ): Promise<ServiceResult<{ views: number }>> {
+  // Before the rate limit: a malformed id sends no query at all.
+  if (!isUuid(planId)) {
+    return fail("not-found", PLAN_NOT_FOUND);
+  }
   if (!(await checkRateLimit(makeActorKey(request), "view", VIEWS_PER_MINUTE, 60))) {
     return fail("rate-limited", "Too many requests. Slow down.");
   }
@@ -498,6 +509,9 @@ export async function downloadPlan(
   viewer: Viewer,
   planId: string,
 ): Promise<ServiceResult<{ name: string; plan: unknown }>> {
+  if (!isUuid(planId)) {
+    return fail("not-found", PLAN_NOT_FOUND);
+  }
   const row = await plans.readDownload(planId);
   if (!row || !canSeePlan(viewer, row)) {
     return fail("not-found", PLAN_NOT_FOUND);
@@ -517,6 +531,9 @@ export async function previewAccess(
   viewer: Viewer,
   planId: string,
 ): Promise<ServiceResult<{ unpublished: boolean }>> {
+  if (!isUuid(planId)) {
+    return fail("not-found", NO_PREVIEW);
+  }
   const row = await plans.readAccess(planId).catch(() => undefined);
   if (!row || !canSeePlan(viewer, row)) {
     return fail("not-found", NO_PREVIEW);
@@ -536,7 +553,7 @@ export async function previewUploadAccess(
   if (!viewer.userId) {
     return fail("unauthorized", "Sign in to update your post.");
   }
-  const existing = await plans.readOwner(planId);
+  const existing = isUuid(planId) ? await plans.readOwner(planId) : undefined;
   if (!existing) {
     return fail("not-found", PLAN_NOT_FOUND);
   }

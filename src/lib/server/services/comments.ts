@@ -4,13 +4,14 @@ import { checkRateLimit } from "../limits/rate-limit";
 import { invalidatePlanListCache } from "../plan-list-cache";
 import * as comments from "../repos/comments";
 import * as plans from "../repos/plans";
-import { canSeePlan, ownsPlan } from "./access";
+import { canSeePlan, isUuid, ownsPlan } from "./access";
 import { fail, ok, type ServiceResult } from "./result";
 
 /**
  * Comment threads on community posts. A thread is readable by whoever may
  * see the post (`canSeePlan`); commenting needs an account. Deleting leaves a
- * tombstone, so the thread keeps its shape server-side.
+ * tombstone, so the thread keeps its shape server-side. A post or comment
+ * id that is no uuid is a missing one, answered before any query.
  */
 
 /** The most comments one thread answers with. */
@@ -50,6 +51,9 @@ export async function listComments(
   viewer: Viewer,
   planId: string,
 ): Promise<ServiceResult<{ comments: CommunityComment[] }>> {
+  if (!isUuid(planId)) {
+    return fail("not-found", PLAN_NOT_FOUND);
+  }
   const plan = await plans.readAccess(planId);
   if (!plan || !canSeePlan(viewer, plan)) {
     return fail("not-found", PLAN_NOT_FOUND);
@@ -74,6 +78,10 @@ export async function commentAccess(
 ): Promise<ServiceResult<{ planOwnerId: string | null }>> {
   if (!viewer.userId) {
     return fail("unauthorized", "Sign in to comment.");
+  }
+  // Before the rate limit: a malformed id sends no query at all.
+  if (!isUuid(planId)) {
+    return fail("not-found", PLAN_NOT_FOUND);
   }
   if (!(await checkRateLimit(`user:${viewer.userId}`, "comment", 40, 60 * 60))) {
     return fail("rate-limited", "Commenting too fast. Try again later.");
@@ -126,7 +134,8 @@ export async function deleteComment(
   if (!viewer.userId) {
     return fail("unauthorized", "Sign in to manage comments.");
   }
-  const access = await comments.readAccess(planId, commentId);
+  const access =
+    isUuid(planId) && isUuid(commentId) ? await comments.readAccess(planId, commentId) : undefined;
   if (!access) {
     return fail("not-found", "Comment not found.");
   }
