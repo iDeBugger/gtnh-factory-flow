@@ -21,6 +21,7 @@ before changing that area; it names the tests that pin its behaviour.
 | Server, recipe API, Supabase, cloud plans, local database | `src/lib/server/CLAUDE.md` |
 | Live service: live plan editing over WebSockets | `src/live/CLAUDE.md`, `docs/live.md` |
 | Dataset pipeline: export, normalize, rebuild, publish | `tools/dataset-pipeline/CLAUDE.md` |
+| Deploy: Docker images, compose stack, deploy and dataset publish scripts | `docs/deploy.md` |
 
 Longer references, read on demand: `docs/solver-equations.md` (solver doctrine),
 `docs/power-planner-math.md` (the decoded power workbook), `docs/COMMUNITY.md`.
@@ -65,24 +66,27 @@ Scratch harnesses are `*.local.test.ts` (excluded from the suite); run one with
 
 ## Releases and deploys
 
-- Deploy only when explicitly told to, once per instruction. Pushing `main` deploys
-  nothing. The GitHub deploy and dataset workflows are decoys (no runner); never dispatch
-  them. The deploy command lives outside the repo (the origin IP is not public).
-- `APP_VERSION` in `src/lib/version.ts` is bumped once per deploy: minor if the release
-  carries features, patch if only fixes. First check https://gtnhplanner.com/api/version:
-  behind `version.ts` means the last bump has not shipped, so fold new work into the top
-  changelog entry; equal means bump and open a new entry.
+- Deploy only when explicitly told to, once per instruction, with
+  `tools/deploy/deploy.sh <target>` (`docs/deploy.md`). Pushing `main` deploys nothing.
+- `APP_VERSION` in `src/lib/version.ts` is bumped once per release: minor if the release
+  carries features, patch if only fixes. First check the target's `/api/version` (its
+  `version` field): behind `version.ts` means the last bump has not shipped, so fold new work
+  into the top changelog entry; equal means bump and open a new entry. Stage deploys need no
+  bump: the `build` field is their marker.
 - Every release has an entry in `src/lib/changelog.ts`: concrete bullets about what
   changed for players. Players open it from the header's version chip (unread dot, stamp
   `changelog-read.v1`); nothing opens by itself. Shift-click the chip for the dev menu.
-- After a deploy, check `/api/version`; after a dataset publish, check the live manifest
-  and the published gzip, not just local output.
+- A deploy succeeds only when the target's `/api/version` names this build; the script
+  checks it. Datasets go out with `tools/deploy/publish-datasets.sh`, which checks the served
+  manifest and the published gzips, not just local output.
 
 ## Production
 
-- One DigitalOcean droplet: Caddy -> Next.js :3000, systemd unit `gtnh-flow`, releases in
-  `/opt/releases`, datasets in `/opt/shared/gtnh-datasets`, behind Cloudflare. Diagnose with
-  `journalctl -u gtnh-flow` and Caddy's JSON log `/var/lib/caddy/access.log`.
+- tungsten, the owner's server: Docker compose project `gtnh` (compose and `.env` in
+  `/opt/gtnh`, data in `/srv/gtnh`), managed by the infra repo's `gtnh` role, with the host's
+  Caddy in front. Stage (`https://stage.gtnhplanner.idebugger.net`) answers only on ZeroTier.
+  Site and live listen on loopback 3300 and 3301. Diagnose with `docker compose logs site`
+  (or `live`) and the vhost's Caddy log; `docs/deploy.md` has the rest.
 - The server prewarms datasets on start when `GTNH_PREWARM_ON_STARTUP=1`
   (`src/instrumentation.ts`). A slow first API call means prewarm or deploy regressed;
   don't make the client wait longer.

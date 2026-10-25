@@ -6,9 +6,7 @@ recipe map, NEI layout, catalyst, multiblock config and rendered icon. Node scri
 `normalize-oracle-export.mjs`, `machine-configs.mjs`, `build-resource-index.mjs`,
 `build-recipe-index.mjs` (recipe index, lookup index, 250-recipe shards).
 
-## Rebuild and publish (by hand, in WSL)
-
-The GitHub "GTNH dataset pipeline" workflow is a decoy (no runner). Never dispatch it.
+## Rebuild (by hand, in WSL) and publish (from the Mac)
 
 1. `~/gtnh-factory-flow` in WSL Ubuntu is a git-less SNAPSHOT: copy changed pipeline
    scripts into it first or the rebuild runs old code.
@@ -18,31 +16,29 @@ The GitHub "GTNH dataset pipeline" workflow is a decoy (no runner). Never dispat
    run without them broke live search.
 3. `~/run-both.sh` (fuller: `~/rebuild-cokeoven.sh`) normalizes, indexes and gzips into
    `~/gtnh-export/datasets/gtnh/<id>`. 2.9 and 2.8.1 are supported; 2.8.4 is retired.
-4. `~/copy-datasets.sh` copies results into the Windows repo's `public/datasets/gtnh`.
-5. Publish, in this order, to the droplet's `/opt/shared/gtnh-datasets/<id>/`:
-   1. Textures first, additively, straight into the live directory:
-      `rsync -a --ignore-existing <build>/textures/rendered/ <live>/textures/rendered/`
-      (the same for `textures/icons/` and `textures/atlas/` when the build has them). Never
+4. `~/copy-datasets.sh` copies results into a checkout's `public/datasets/gtnh`.
+5. Publish with `tools/deploy/publish-datasets.sh <target> <id>...` (`docs/deploy.md`, Datasets) into the
+   server's `/srv/gtnh/datasets/<id>/`. It keeps this order, and any other way of publishing must too:
+   1. Textures first, additively, straight into the served directory: `rsync -a --ignore-existing`. Never
       `--delete`, never a staged swap of `textures/`, never removing a file there. Texture URLs
       are served immutable for a year: a browser or Cloudflare holding an old URL keeps asking
       for it, and saved plans' own icons, card overrides, OG cards, cached recipe responses and
       the power maps (`src/lib/power/data/*.json`) name old files. A content name never changes
-      its bytes, so `--ignore-existing` is safe, and the live directory grows by the changed
+      its bytes, so `--ignore-existing` is safe, and the served directory grows by the changed
       icons on each publish. The first publish with content names renames every icon once.
-   2. Then the data: stage the changed gzips, shards and oracle-report beside the live ones,
-      move staging dirs out of the datasets root before `rebuild-manifest.mjs`, swap them in,
-      then `systemctl restart gtnh-flow`. Before the swap, compare icon counts and icon tables
-      against live (every name changes on the first content-named publish), and check that
-      every rendered name the new gzips cite exists in the live `textures/rendered/`.
-   The dataset tree is the pipeline's bytes alone, and the site may mount it read-only: the site's own
+   2. Then the data: staged in `/srv/gtnh/datasets-staging` (outside the served root), moved in entry by entry,
+      never `recipes.json`; the manifest last; then a site restart. Before publishing, compare icon counts and
+      icon tables against the served ones (every name changes on the first content-named publish), and check that
+      every rendered name the new gzips cite exists in the build's `textures/rendered/`.
+   The dataset tree is the pipeline's bytes alone, and the site mounts it read-only: the site's own
    content-addressed answers (`/datasets/gtnh/<id>/client/...`, `src/lib/server/client-files.ts`) live in its
    cache directory (`GTNH_CLIENT_FILES_DIR`), never under a version directory, and a publish neither copies nor
-   checks them.
-   3. Verify the live manifest, the published gzip and a few icon URLs afterwards. After a 2.9
-      publish, regenerate the power maps (`tools/power-machine-icons.mjs`,
+   checks them. The script writes only version directories; the datasets root is the infra role's.
+   3. The script verifies the served manifest, every published gzip's checksum, a texture per version and
+      `recipes.json` refused. After a 2.9 publish, regenerate the power maps (`tools/power-machine-icons.mjs`,
       `tools/power-resource-map.mjs`) before the version they cite is retired.
-   The WSL scripts (`~/run-both.sh`, `~/copy-datasets.sh`) and the deploy command live outside
-   the repo: check they never mirror with delete or swap `textures/` before relying on them.
+   The WSL scripts (`~/run-both.sh`, `~/copy-datasets.sh`) live outside the repo: check they never mirror with
+   delete or swap `textures/` before relying on them.
 
 `build-recipe-index.mjs` also writes `recipes.json.gz` from the bytes of `recipes.json`. Every
 dataset gzip goes through `deterministic-gzip.mjs` (level 9, no name, zero mtime, OS byte pinned

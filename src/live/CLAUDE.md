@@ -1,7 +1,7 @@
 # Live service (src/live)
 
 The WebSocket server for live plans: a separate Node process beside Next.js (`next start` cannot hold sockets).
-Architecture, protocol notes and REST: `docs/live.md`. Production rollout: `docs/live-rollout.md`. The contract with
+Architecture, protocol notes and REST: `docs/live.md`. Production: `docs/deploy.md`. The contract with
 the game is `docs/design/cloud-live.md` in the game's repository: frames and ops must stay as it says, and a change to
 `src/lib/live/ops.ts` or `live-vectors.json` changes the game's engine too.
 
