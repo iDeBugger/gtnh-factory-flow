@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { pngHeader } from "@/test-support/png";
-import { readPngHeader, sizePlanPreview } from "./plan-preview";
+import { quietMarkdown, readPngHeader, sizePlanPreview } from "./plan-preview";
 
 describe("the stored board photograph's header", () => {
   it("reads the size of a PNG whose first chunk is an IHDR within the bound", () => {
@@ -27,5 +27,18 @@ describe("the stored board photograph's header", () => {
     expect(sized!.dataUri.startsWith("data:image/png;base64,iVBORw0KGgo")).toBe(true);
     expect(sizePlanPreview(pngHeader(100, 100, "IDAT"))).toBeUndefined();
     expect(sizePlanPreview(pngHeader(5000, 10))).toBeUndefined();
+  });
+});
+
+describe("player text on a markdown line", () => {
+  it("cannot close its link text or open a link of its own", () => {
+    expect(quietMarkdown("x](https://evil.example) [y")).toBe("x\\]\\(https://evil.example\\) \\[y");
+    expect(quietMarkdown("<https://evil.example> `code` back\\slash")).toBe(
+      "\\<https://evil.example\\> \\`code\\` back\\\\slash",
+    );
+  });
+
+  it("stays on one line", () => {
+    expect(quietMarkdown("a\n\nb  c")).toBe("a b c");
   });
 });

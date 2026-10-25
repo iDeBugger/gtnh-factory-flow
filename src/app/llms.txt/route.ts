@@ -5,7 +5,7 @@ import {
   type PlanRow,
 } from "@/lib/server/community";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { describePlanRow } from "@/lib/server/plan-preview";
+import { describePlanRow, quietMarkdown } from "@/lib/server/plan-preview";
 import { APP_VERSION } from "@/lib/version";
 
 /**
@@ -29,10 +29,10 @@ async function topPlans(base: string): Promise<string[]> {
       .order("score", { ascending: false })
       .limit(10)
       .returns<PlanRow[]>();
-    // An author's description can span lines; a link list entry cannot.
+    // A name and a description are player text: one line each, with no markdown of their own.
     return (data ?? []).map(
       (row) =>
-        `- [${row.name}](${base}/?plan=${encodeURIComponent(row.id)}): ${describePlanRow(row).replace(/\s+/g, " ")}`,
+        `- [${quietMarkdown(row.name)}](${base}/?plan=${encodeURIComponent(row.id)}): ${quietMarkdown(describePlanRow(row))}`,
     );
   } catch {
     return [];

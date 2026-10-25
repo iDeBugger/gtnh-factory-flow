@@ -127,6 +127,19 @@ function nameList(stats: PlanResourceStat[], limit = 3): string {
 }
 
 /**
+ * Player text made safe for one line of a markdown link list: whitespace
+ * collapses to one space (an item cannot span lines) and the characters that
+ * open or close a link, an autolink or code are backslash-escaped, so a plan
+ * name cannot end its own link text and carry a link of its own.
+ */
+export function quietMarkdown(text: string): string {
+  return text
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[\\[\]()<>`]/g, (character) => `\\${character}`);
+}
+
+/**
  * The embed's one paragraph: the author's own words when they wrote any,
  * otherwise the plan's numbers as a sentence.
  */
