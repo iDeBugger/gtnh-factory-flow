@@ -241,10 +241,14 @@ The instance is small and has gone down under load. Rules:
   HiGHS limits once (`time_limit` 2 s, `mip_max_nodes` 20,000) and `solvePlanStats` rejects every model past 5 s
   (`withLpDeadline`). A model whose LP hits the time limit stops there (no other HiGHS setting is tried), so one
   solve holds the thread at most 5 s plus one LP's 2 s. Past either the stats are the failed plan's and the post is still stored; the stored plan is
-  re-solved once per `APP_VERSION` on its first view (`refreshStaleStats`) under the same budget. Every call site
+  re-solved once per `APP_VERSION` on its first view (`refreshStaleStats`) under the same budget; a refresh the clock
+  stopped (`solvePlanStats(...).outOfTime`, from `lpTimeBudgetHits`) keeps the stored stats and tries again on a
+  later view. The solver's island cache never keeps an island the clock stopped, so a busy moment cannot fix a
+  failed answer for the life of the process. Every call site
   goes through `solvePlanStats`, never `calculateThroughput` directly. Follow-up: a worker thread, so a slow plan
   never blocks the loop at all. Exam: `plan-access.test.ts` "stores a plan-mode post whose stats solve ran out of
-  time".
+  time" and "keeps a stored post's stats when a refresh of them runs out of time" (the real `solvePlanStats`, its
+  budget set per case), `plan/lp-deadline.test.ts`.
 
 ## The mod and community switch (deployment-features.ts)
 

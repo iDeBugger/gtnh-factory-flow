@@ -5,6 +5,7 @@
  * (docs/up-to.md). A pure function: same input, same output.
  */
 import { inputDigest, type PieceCache } from "./cache";
+import { lpTimeBudgetHits } from "./lp";
 import { SolveContext, type StageOutcome } from "./context";
 import { applyChoice, enumerate } from "./enumerate";
 import { splitIslands } from "./islands";
@@ -64,8 +65,10 @@ export function solvePlan(
     const key = inputDigest(island);
     const kept = cache.get(key);
     if (kept) return kept;
+    const clockStops = lpTimeBudgetHits();
     const piece = solvePiece(island, ext);
-    cache.set(key, piece);
+    // An island the server's clock stopped failed for want of time, not for its input: never kept as its answer.
+    if (lpTimeBudgetHits() === clockStops) cache.set(key, piece);
     return piece;
   };
   const islands = splitIslands(input);

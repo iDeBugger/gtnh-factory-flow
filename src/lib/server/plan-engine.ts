@@ -1,5 +1,5 @@
 import { initLpEngine, setLpSolveDefaults } from "@/lib/solver/lp-engine";
-import { withLpDeadline } from "@/lib/solver/plan/lp";
+import { lpTimeBudgetHits, withLpDeadline } from "@/lib/solver/plan/lp";
 import { calculateThroughput } from "@/lib/solver";
 import type { FactoryProject, ThroughputResult } from "@/lib/model/types";
 
@@ -15,9 +15,10 @@ import type { FactoryProject, ThroughputResult } from "@/lib/model/types";
  * stops at `LP_TIME_LIMIT_SECONDS`, and `solvePlanStats` rejects every model
  * past `PLAN_STATS_BUDGET_MS`; a model whose LP hits the limit stops there,
  * so a solve holds the thread at most the budget plus one LP's limit. Past
- * either the stats are the failed plan's
- * and the post is still stored. The limits are set once per process and
- * only here: nothing in this module reaches the browser.
+ * either the stats are the failed plan's and a new post is still stored; a
+ * refresh of a stored post's stats keeps the stored ones (`outOfTime`). The
+ * limits are set once per process and only here: nothing in this module
+ * reaches the browser.
  */
 
 const LP_TIME_LIMIT_SECONDS = 2;
@@ -36,7 +37,16 @@ export async function ensurePlanEngine(project: Pick<FactoryProject, "planMode">
   }
 }
 
-/** The books of an uploaded plan under the server's time budget. */
-export function solvePlanStats(project: FactoryProject): ThroughputResult {
-  return withLpDeadline(PLAN_STATS_BUDGET_MS, () => calculateThroughput(project));
+/**
+ * The books of an uploaded plan under the server's time budget, and whether
+ * the clock stopped any of its models (the books are then the failed plan's,
+ * whatever the plan itself would solve to). `budgetMs` is for tests.
+ */
+export function solvePlanStats(
+  project: FactoryProject,
+  budgetMs = PLAN_STATS_BUDGET_MS,
+): { result: ThroughputResult; outOfTime: boolean } {
+  const before = lpTimeBudgetHits();
+  const result = withLpDeadline(budgetMs, () => calculateThroughput(project));
+  return { result, outOfTime: lpTimeBudgetHits() > before };
 }

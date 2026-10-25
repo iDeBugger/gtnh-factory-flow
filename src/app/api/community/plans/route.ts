@@ -312,7 +312,7 @@ export async function POST(request: Request) {
     // first (the stored plan stays as uploaded).
     const solved = normalizeLoadedProject(project);
     await ensurePlanEngine(solved);
-    const stats = computeCommunityPlanStats(solved, solvePlanStats(solved));
+    const stats = computeCommunityPlanStats(solved, solvePlanStats(solved).result);
 
     const db = getCommunityDb();
     const row = {

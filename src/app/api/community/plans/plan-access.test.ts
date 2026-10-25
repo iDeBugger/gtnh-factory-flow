@@ -12,6 +12,7 @@ import { planWithAdditions } from "@/lib/model/__fixtures__/plan-additions";
 import { withModAndCommunityOn } from "@/test-support/mod-and-community";
 import { pngHeader } from "@/test-support/png";
 import { oversizeRequest } from "@/test-support/request-bodies";
+import { islandCache } from "@/lib/solver/plan/adapter/engine";
 import * as list from "./route";
 import * as plan from "./[planId]/route";
 import * as preview from "./[planId]/preview/route";
@@ -20,14 +21,12 @@ import * as vote from "./[planId]/vote/route";
 
 /** The server's time budget for an uploaded plan's stats solve, set per case. */
 const statsBudget = vi.hoisted(() => ({ ms: 5_000 }));
+// The real solvePlanStats and ensurePlanEngine, with the budget set per case.
 vi.mock("@/lib/server/plan-engine", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/server/plan-engine")>();
-  const { withLpDeadline } = await import("@/lib/solver/plan/lp");
-  const { calculateThroughput } = await import("@/lib/solver");
   return {
     ...actual,
-    solvePlanStats: (project: FactoryProject) =>
-      withLpDeadline(statsBudget.ms, () => calculateThroughput(project)),
+    solvePlanStats: (project: FactoryProject) => actual.solvePlanStats(project, statsBudget.ms),
   };
 });
 
@@ -368,6 +367,51 @@ describe("posting to the community", () => {
     } finally {
       statsBudget.ms = 5_000;
     }
+  });
+
+  it("keeps a stored post's stats when a refresh of them runs out of time", async () => {
+    const silicon = JSON.parse(
+      readFileSync(
+        path.join(process.cwd(), "src/components/flow/__fixtures__/up-to-silicon-line.json"),
+        "utf8",
+      ),
+    ) as FactoryProject;
+    const posted = await list.POST(
+      request("POST", "/api/community/plans", {
+        who: "owner",
+        body: { ...postBody("device-refresh"), name: "Silicon refresh", plan: silicon },
+      }),
+    );
+    expect(posted.status).toBe(201);
+    const { id: planId } = (await posted.json()) as { id: string };
+    const row = () =>
+      getCommunityDb()
+        .from("community_plans")
+        .select("machine_count,stats_version")
+        .eq("id", planId)
+        .single<{ machine_count: number; stats_version: string }>();
+    const solvedCount = (await row()).data!.machine_count;
+    // A card from an older release, marked so an overwrite shows.
+    const marked = await getCommunityDb()
+      .from("community_plans")
+      .update({ machine_count: 999, stats_version: "0.0.0" })
+      .eq("id", planId);
+    expect(marked.error).toBeNull();
+    expect((await row()).data).toEqual({ machine_count: 999, stats_version: "0.0.0" });
+    const open = () =>
+      plan.GET(request("GET", `/api/community/plans/${planId}`, { who: "owner" }), params({ planId }));
+
+    // A fresh process: the plan's islands are not in the solver's cache yet.
+    islandCache.clear();
+    statsBudget.ms = 0;
+    try {
+      expect((await open()).status).toBe(200);
+      expect((await row()).data).toEqual({ machine_count: 999, stats_version: "0.0.0" });
+    } finally {
+      statsBudget.ms = 5_000;
+    }
+    expect((await open()).status).toBe(200);
+    expect((await row()).data).toEqual({ machine_count: solvedCount, stats_version: APP_VERSION });
   });
 
   it("holds one account to ten posts an hour whatever device id it sends", async () => {

@@ -136,7 +136,12 @@ async function refreshStaleStats(
     // the opened tab compute from the identical project.
     const project = normalizeLoadedProject(parsed.data);
     await ensurePlanEngine(project);
-    const stats = computeCommunityPlanStats(project, solvePlanStats(project));
+    const solve = solvePlanStats(project);
+    // The clock is not the plan: a stored card that solved before is better than the failed plan's.
+    if (solve.outOfTime) {
+      return;
+    }
+    const stats = computeCommunityPlanStats(project, solve.result);
     plan.needs = stats.needs;
     plan.outputs = stats.outputs;
     plan.totalEuT = stats.totalEuT;
@@ -277,7 +282,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ plan
 
       const solved = normalizeLoadedProject(project);
       await ensurePlanEngine(solved);
-      const stats = computeCommunityPlanStats(solved, solvePlanStats(solved));
+      const stats = computeCommunityPlanStats(solved, solvePlanStats(solved).result);
       Object.assign(update, {
         plan: project,
         needs: stats.needs,

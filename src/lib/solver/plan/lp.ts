@@ -302,8 +302,24 @@ export function withLpDeadline<T>(ms: number, run: () => T): T {
   }
 }
 
+/**
+ * How many times a model has been stopped by the clock (the deadline, or an
+ * LP HiGHS stopped at its time limit) since the process started; a caller
+ * compares the count before and after a solve to learn whether the clock,
+ * not the plan, failed it.
+ */
+let timeBudgetHits = 0;
+
+export function lpTimeBudgetHits(): number {
+  return timeBudgetHits;
+}
+
 function pastDeadline(): boolean {
-  return lpDeadline !== null && Date.now() >= lpDeadline;
+  if (lpDeadline !== null && Date.now() >= lpDeadline) {
+    timeBudgetHits++;
+    return true;
+  }
+  return false;
 }
 
 /** Tests only: models add their columns in reverse order, a different path to the same optima. */
@@ -418,6 +434,7 @@ export function runModel(ctx: SolveContext, lp: ModelLp, label: string): SolveRe
       // A solve HiGHS stopped on the clock is not retried under another setting: one model costs at most one
       // time limit, so the stats solve stays within its budget plus one LP.
       if (error instanceof LpTimeLimitError) {
+        timeBudgetHits++;
         ctx.rejection = note("SOLVER_UNSATISFIABLE", "time budget");
         return { ok: false, rejection: ctx.rejection };
       }
@@ -466,7 +483,8 @@ export function runRelaxation(
   let solution;
   try {
     solution = solveLpAuto(lowered.program, { rowDuals: true });
-  } catch {
+  } catch (error) {
+    if (error instanceof LpTimeLimitError) timeBudgetHits++;
     return null;
   }
   if (solution.status !== "optimal" || !solution.rowDuals) return null;
