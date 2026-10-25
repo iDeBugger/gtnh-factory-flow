@@ -138,9 +138,10 @@ computes in float: replicate it.
   never offers them for a recipe with a fluid input. The pipeline drops them per pack
   (`tools/dataset-pipeline/scripts/steam-fluid-hatches.mjs`), 2.8.1's Squasher and Presser too; the app's
   version-free set covers older stored bodies. A card saved on one moves to the map's first machine at the
-  recipe refresh, and the plan notice says so. No output-side rule: a steam multi without an output hatch
-  still runs a recipe with a fluid output when its voiding mode allows (steam bases support void
-  protection), losing the fluid. EU stays
+  recipe refresh, and the plan notice says so. Only the Separator and the Blender take a fluid output
+  hatch: void protection is on by default (`VOID_NONE`), so any other steam multi never starts a recipe
+  with a fluid output (it would run only in a fluid-voiding mode, the fluid lost), and the same rule
+  leaves it off such recipes in the app and the pipeline. EU stays
   zero on steam cards; litres are billed instead, never both.
 - Crafting maps run on GT++'s Auto Workbench (synthesized in `recipe-rules.ts`, flat 2048 EU
   per craft) with instant hand-craft as the second handler.

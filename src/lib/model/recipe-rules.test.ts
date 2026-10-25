@@ -62,6 +62,13 @@ describe("recipe machine handlers", () => {
     expect(getSelectedMachineHandler(lava, { machineHandlerId: "steam-separator" }).label).toBe("Centrifuge");
     // The Steam Blender has input hatches.
     expect(getRecipeMachineHandlers(blender).map((h) => h.label)).toEqual(["Mixer", "Steam Blender"]);
+    // Void protection is on by default, so a steam multi with no output hatch never starts a fluid output.
+    const presser = {
+      ...testRecipe("Forge Hammer"),
+      outputs: [{ kind: "fluid" as const, id: "molten", amount: 10 }],
+      machineHandlers: [handler("Forge Hammer", "single"), handler("Steam Presser", "multiblock")],
+    };
+    expect(getRecipeMachineHandlers(presser).map((h) => h.label)).toEqual(["Forge Hammer"]);
   });
 
   it("does not invent a category entry next to dataset handlers", () => {
