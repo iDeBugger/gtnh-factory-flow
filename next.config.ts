@@ -6,6 +6,10 @@ import { PROXY_BODY_MAX_BYTES } from "./body-limits.config";
 import { securityHeaders } from "./security-headers.config";
 
 const datasetBackendUrl = process.env.GTNH_DATASET_BACKEND_URL?.replace(/\/+$/, "");
+/** A published dataset name's characters, never starting with a dot (route-pattern syntax). */
+const PUBLISHED_SEGMENT = "[A-Za-z0-9_-][A-Za-z0-9._-]*";
+/** Any API path segment that does not start with a dot or a percent escape. */
+const API_SEGMENT = "[^/.%][^/]*";
 
 /**
  * The build's identity, baked into the server and browser bundles alike: the
@@ -131,16 +135,18 @@ const nextConfig: NextConfig = {
     // decoded path; it runs before these rules, so the dev proxy below never
     // sees the gzips, the shards or recipes.json.
     return {
-      // The version segment holds only the characters a published name may (dataset-path-gate.ts), so an
-      // encoded `..%2f` in it is never forwarded to the backend; keep the backend an instance of this app.
+      // No segment forwarded to the backend can be `.` or `..`, plain or encoded: the version and every dataset
+      // file segment are a published name's characters (dataset-path-gate.ts) and never start with a dot; an API
+      // segment (a recipe id holds `:` and arrives encoded) never starts with a dot or `%`. Keep the backend an
+      // instance of this app.
       beforeFiles: datasetBackendUrl
         ? [
             {
-              source: "/api/datasets/:version([A-Za-z0-9._-]+)/:rest*",
+              source: `/api/datasets/:version(${PUBLISHED_SEGMENT})/:rest(${API_SEGMENT})*`,
               destination: `${datasetBackendUrl}/api/datasets/:version/:rest*`,
             },
             {
-              source: "/datasets/gtnh/:version([A-Za-z0-9._-]+)/:rest*",
+              source: `/datasets/gtnh/:version(${PUBLISHED_SEGMENT})/:rest(${PUBLISHED_SEGMENT})*`,
               destination: `${datasetBackendUrl}/datasets/gtnh/:version/:rest*`,
             },
           ]

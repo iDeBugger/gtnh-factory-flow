@@ -33,16 +33,36 @@ describe("how the served dataset files reach a browser", () => {
     vi.stubEnv("GTNH_DATASET_BACKEND_URL", "https://example.test/");
     const proxied = await loadConfig();
     expect(proxied.rewrites.beforeFiles).toEqual([
-      // The version segment is a published name's characters, so an encoded `..%2f` there is never forwarded.
       {
-        source: "/api/datasets/:version([A-Za-z0-9._-]+)/:rest*",
+        source: "/api/datasets/:version([A-Za-z0-9_-][A-Za-z0-9._-]*)/:rest([^/.%][^/]*)*",
         destination: "https://example.test/api/datasets/:version/:rest*",
       },
       {
-        source: "/datasets/gtnh/:version([A-Za-z0-9._-]+)/:rest*",
+        source: "/datasets/gtnh/:version([A-Za-z0-9_-][A-Za-z0-9._-]*)/:rest([A-Za-z0-9_-][A-Za-z0-9._-]*)*",
         destination: "https://example.test/datasets/gtnh/:version/:rest*",
       },
     ]);
+    // No dot segment, plain or encoded, is ever forwarded; a recipe id with `:` is.
+    // Next's own matcher for custom routes (no type declarations ship with it).
+    const { pathToRegexp } = (await import(
+      // @ts-expect-error untyped compiled module
+      "next/dist/compiled/path-to-regexp"
+    )) as { pathToRegexp: (source: string, keys: unknown[]) => RegExp };
+    const [api, files] = proxied.rewrites.beforeFiles.map((rule) => pathToRegexp(rule.source, []));
+    for (const forwarded of [
+      "/api/datasets/local-2.9.0-rc-2/catalog",
+      "/api/datasets/local-2.9.0-rc-2/recipes/oracle%3Agregtech%3Abw-fuels%3A4f56",
+      "/api/datasets/local-2.9.0-rc-2/recipes/oracle:gregtech:x",
+    ]) {
+      expect(api!.test(forwarded), forwarded).toBe(true);
+    }
+    for (const kept of ["/api/datasets/../x", "/api/datasets/v/../x", "/api/datasets/v/%2e%2e/x", "/api/datasets/./x"]) {
+      expect(api!.test(kept), kept).toBe(false);
+    }
+    expect(files!.test("/datasets/gtnh/local-2.8.1/textures/rendered/x-0123456789ab.png")).toBe(true);
+    for (const kept of ["/datasets/gtnh/../x", "/datasets/gtnh/v/../x", "/datasets/gtnh/v/%2e%2e", "/datasets/gtnh/v/.hidden"]) {
+      expect(files!.test(kept), kept).toBe(false);
+    }
   });
 
   it("sets no cache policy by path for dataset data: a header rule cannot tell a miss from a file", async () => {
