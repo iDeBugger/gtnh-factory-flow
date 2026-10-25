@@ -153,7 +153,12 @@ describe("audit gate", () => {
       { auditReportVersion: 3, vulnerabilities: {} },
       { vulnerabilities: {} },
     ]) {
-      const verdict = evaluate({ report: unknown, allowlist: noAllowlist, threshold: "high", today });
+      const verdict = evaluate({
+        report: unknown,
+        allowlist: noAllowlist,
+        threshold: "high",
+        today,
+      });
       expect(verdict.outcome).toBe("fail");
       expect(verdict.reason).toMatch(/unrecognised/);
     }

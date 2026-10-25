@@ -136,7 +136,11 @@ function runAudit(args) {
   }
 }
 
-/** Whether `argv1` (the script node was asked to run) is `moduleUrl`: through links, and percent-encoded the way Node does. */
+/**
+ * Whether `argv1` (the script node was asked to run) is `moduleUrl`: resolved through links and
+ * percent-encoded the way Node builds `import.meta.url`, so a path holding `#`, `%` or a link
+ * still runs the gate rather than exiting 0 with nothing checked.
+ */
 export function isEntryScript(argv1, moduleUrl) {
   if (!argv1) return false;
   try {
@@ -188,7 +192,11 @@ function main() {
     let verdict;
     const audit = runAudit(pass.args);
     if (audit.spawnError) {
-      verdict = { outcome: "fail", advisories: [], reason: `npm audit did not run (${audit.spawnError})` };
+      verdict = {
+        outcome: "fail",
+        advisories: [],
+        reason: `npm audit did not run (${audit.spawnError})`,
+      };
     } else {
       try {
         verdict = evaluate({ report: audit.report, allowlist, threshold: pass.threshold, today });

@@ -41,7 +41,10 @@ export interface SecurityHeaderEnv {
  * 25649, the same range as `MOD_PORTS` in src/lib/mod-link/mod-link.ts
  * (written out here because this file imports nothing from src/).
  */
-export const MOD_LOOPBACK_ORIGINS = Array.from({ length: 10 }, (_, index) => `http://127.0.0.1:${25640 + index}`);
+export const MOD_LOOPBACK_ORIGINS = Array.from(
+  { length: 10 },
+  (_, index) => `http://127.0.0.1:${25640 + index}`,
+);
 
 export function documentPolicy(env: SecurityHeaderEnv): string {
   const scriptSources = ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"];
