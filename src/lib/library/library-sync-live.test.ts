@@ -76,7 +76,11 @@ vi.mock("./client", () => ({
 
 import { createEmptyProject } from "@/examples";
 import { writeDesign } from "@/lib/designs/design-storage";
-import { keepDetachedBase, readDetachedBase } from "@/lib/live/live-pending-store";
+import {
+  forgetBaseMemoryForTests,
+  keepDetachedBase,
+  readDetachedBase,
+} from "@/lib/live/live-pending-store";
 import { liveShape } from "@/lib/live/live-shape";
 import type { FactoryAnnotation, FactoryProject } from "@/lib/model/types";
 import { useCommunityAuthStore } from "@/store/community-auth-store";
@@ -108,6 +112,7 @@ beforeEach(() => {
   useDesignStore.setState({ designs: [], activeDesignId: undefined });
   useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
   globalThis.indexedDB = new IDBFactory();
+  forgetBaseMemoryForTests();
 });
 
 afterEach(() => {
@@ -173,7 +178,9 @@ describe("the account sync beside live plans", () => {
   });
 
   it("counts edits made away from a live room from the plan the account took", async () => {
-    const stored = record("design-away-1", { project: withNotes(note("n1", "one"), note("n2", "mine")) });
+    const stored = record("design-away-1", {
+      project: withNotes(note("n1", "one"), note("n2", "mine")),
+    });
     storage.records.set("design-away-1", stored);
     vi.stubEnv("NEXT_PUBLIC_LIVE_URL", "ws://live.test/live");
     await keepDetachedBase("design-away-1", () => liveShape(withNotes(note("n1", "one"))));
@@ -186,7 +193,10 @@ describe("the account sync beside live plans", () => {
 
   it("leaves the base where it was when the account took the push without the plan", async () => {
     vi.stubEnv("NEXT_PUBLIC_LIVE_URL", "ws://live.test/live");
-    storage.records.set("design-away-3", record("design-away-3", { project: withNotes(note("n1", "mine")) }));
+    storage.records.set(
+      "design-away-3",
+      record("design-away-3", { project: withNotes(note("n1", "mine")) }),
+    );
     remote.liveIds.add("design-away-3");
     const base = liveShape(withNotes(note("n1", "one")));
     await keepDetachedBase("design-away-3", () => base);
@@ -214,7 +224,11 @@ describe("the account sync beside live plans", () => {
     await syncLibraryNow();
 
     const pulled = storage.records.get("design-away-2")!;
-    expect(pulled.project.annotations?.map((entry) => entry.text)).toEqual(["one", "from the game", "built offline"]);
+    expect(pulled.project.annotations?.map((entry) => entry.text)).toEqual([
+      "one",
+      "from the game",
+      "built offline",
+    ]);
     // Newer than the account's copy: the next run sends it.
     expect(Date.parse(pulled.updatedAt)).toBeGreaterThan(Date.parse(AWAY_META.updatedAt));
     // The record holds the merge: the base is the account's plan now, so only the edits made here remain to send.
@@ -240,10 +254,9 @@ describe("the account sync beside live plans", () => {
     await syncLibraryNow();
 
     expect(await readDetachedBase("design-away-2")).toEqual(base);
-    expect(storage.records.get("design-away-2")!.project.annotations?.map((entry) => entry.text)).toEqual([
-      "one",
-      "built offline",
-    ]);
+    expect(
+      storage.records.get("design-away-2")!.project.annotations?.map((entry) => entry.text),
+    ).toEqual(["one", "built offline"]);
   });
 
   it("lets the account's plan win a pull when live plans are off, whatever storage holds", async () => {
@@ -260,10 +273,9 @@ describe("the account sync beside live plans", () => {
 
     await syncLibraryNow();
 
-    expect(storage.records.get("design-away-2")!.project.annotations?.map((entry) => entry.text)).toEqual([
-      "one",
-      "from the game",
-    ]);
+    expect(
+      storage.records.get("design-away-2")!.project.annotations?.map((entry) => entry.text),
+    ).toEqual(["one", "from the game"]);
   });
 });
 
@@ -291,7 +303,13 @@ function pullAwayDesign(): void {
 }
 
 function note(id: string, text: string): FactoryAnnotation {
-  return { id, kind: "text", text, position: { x: 0, y: 0 }, size: { width: 200, height: 40 } } as FactoryAnnotation;
+  return {
+    id,
+    kind: "text",
+    text,
+    position: { x: 0, y: 0 },
+    size: { width: 200, height: 40 },
+  } as FactoryAnnotation;
 }
 
 function withNotes(...annotations: FactoryAnnotation[]): FactoryProject {

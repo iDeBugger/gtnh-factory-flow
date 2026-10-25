@@ -1,8 +1,9 @@
 import "fake-indexeddb/auto";
 import { IDBFactory } from "fake-indexeddb";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { deleteDesign } from "@/lib/designs/design-storage";
 import {
+  forgetBaseMemoryForTests,
   forgetDetachedBase,
   keepDetachedBase,
   moveDetachedBase,
@@ -28,6 +29,7 @@ function plan(text: string): LivePlan {
 
 beforeEach(() => {
   globalThis.indexedDB = new IDBFactory();
+  forgetBaseMemoryForTests();
 });
 
 describe("the base of edits made away from a live room", () => {
@@ -62,9 +64,42 @@ describe("the base of edits made away from a live room", () => {
     });
 
     expect(await readDetachedBase("design-1")).toBeUndefined();
-    // A later edit away from the room keeps a new base.
-    await keepDetachedBase("design-1", () => plan("later"));
+    // This tab trusts that a base is stored for a moment (a drag writes once); past it, a later edit keeps a new one.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() + 2_100);
+      await keepDetachedBase("design-1", () => plan("later"));
+    } finally {
+      vi.useRealTimers();
+    }
     expect(await readDetachedBase("design-1")).toEqual(plan("later"));
+  });
+
+  it("opens the database once for a run of edits, not at every step of a drag", async () => {
+    await keepDetachedBase("design-1", () => plan("first"));
+    const opened = vi.spyOn(globalThis.indexedDB, "open");
+
+    for (let step = 0; step < 20; step += 1) {
+      await keepDetachedBase("design-1", () => plan(`step ${step}`));
+    }
+
+    expect(opened).not.toHaveBeenCalled();
+    expect(await readDetachedBase("design-1")).toEqual(plan("first"));
+  });
+
+  it("shifts the base before a room binding right after the change takes it", async () => {
+    await keepDetachedBase("design-1", () => plan("base"));
+    const shifting = shiftDetachedBase("design-1", [
+      { o: "patch", c: "annotations", id: "n1", f: { text: "rekeyed" } },
+    ]);
+    let got: LivePlan | undefined;
+    await takeDetachedBase("design-1", (base) => {
+      got = base;
+      return undefined;
+    });
+    await shifting;
+
+    expect(got).toEqual(plan("rekeyed"));
   });
 
   it("is taken with the batches made of it in one go, and only once", async () => {
@@ -111,11 +146,15 @@ describe("the base of edits made away from a live room", () => {
 
   it("moves and shifts only a base that is kept", async () => {
     await moveDetachedBase("design-1", plan("moved"));
-    await shiftDetachedBase("design-1", [{ o: "patch", c: "annotations", id: "n1", f: { text: "shifted" } }]);
+    await shiftDetachedBase("design-1", [
+      { o: "patch", c: "annotations", id: "n1", f: { text: "shifted" } },
+    ]);
     expect(await readDetachedBase("design-1")).toBeUndefined();
 
     await keepDetachedBase("design-1", () => plan("base"));
-    await shiftDetachedBase("design-1", [{ o: "patch", c: "annotations", id: "n1", f: { text: "shifted" } }]);
+    await shiftDetachedBase("design-1", [
+      { o: "patch", c: "annotations", id: "n1", f: { text: "shifted" } },
+    ]);
     expect(await readDetachedBase("design-1")).toEqual(plan("shifted"));
     await moveDetachedBase("design-1", plan("moved"));
     expect(await readDetachedBase("design-1")).toEqual(plan("moved"));

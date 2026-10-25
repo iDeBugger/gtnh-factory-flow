@@ -207,8 +207,10 @@ changes nothing until then. Architecture and protocol: `docs/live.md`.
   reads it there, and the room that uses it takes it in the transaction that stores the batches made of it, so no
   second tab sends them. Before joining, a room puts what was left for it in front of what it holds: a closed tab's
   batches (oldest), then base-to-canvas as this person's edit, then edits made since the room was made; the first
-  snapshot checks the recipes their cards name (`withRecipesTheyName`). The wait for storage is bounded (3 s): past
-  it the room joins and sends what arrives after. A screen-only change (the recipe refresh, `quietlyOnThisScreen`)
+  snapshot checks the recipes their cards name (`withRecipesTheyName`) and splits them again under the batch limit.
+  The wait for storage is bounded (3 s): past it the room joins, and what arrives later goes after everything the
+  room already sent (it lands on the canvas against the view at that moment). Base writes run in turn per design
+  (keep, shift, move, take, forget); a tab trusts for 2 s that a base is stored, so a drag writes it once. A screen-only change (the recipe refresh, `quietlyOnThisScreen`)
   moves the base with it, so it is never sent. A pull of a newer account copy puts the same edits on top of it (same
   recipe guard), and the base moves to the pulled plan only once the merged record is written; a push with the plan
   moves it; a push without it (409 live) does not. Deleting a design forgets its base, and a new copy of a shared
@@ -216,7 +218,9 @@ changes nothing until then. Architecture and protocol: `docs/live.md`.
   Known limits: a field edited away from the room and by someone else since takes whichever arrives last, with no
   notice, however long ago it was made (the same as two live edits); a push of a newer local copy is last writer
   wins over live edits already flushed to the account; edits made between the room's making and its first snapshot
-  leave undo when a plan made moments ago takes its snapshot over. Exam: `live-session.test.ts`,
+  leave undo when a plan made moments ago takes its snapshot over; another open tab's pending batches go before this
+  tab's edits away from the room even when they are newer, and a plan reloaded from another tab's save while no room
+  is open leaves the base where it was, so that tab's edits go again as this person's (the same values). Exam: `live-session.test.ts`,
   `library-sync-live.test.ts`, `src/lib/live/live-pending-store.test.ts` (real IndexedDB through fake-indexeddb).
 - ACCOUNT SYNC never sends the body of a plan open live, here or in another tab (`isDesignOpenLive`, a localStorage
   mark refreshed while open), and a pull of one moves only its metadata. A push answered 409 `{ live: true }` goes

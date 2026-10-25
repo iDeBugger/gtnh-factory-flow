@@ -196,6 +196,8 @@ interface Room {
   away: Set<string>;
   /** Pending batches left in storage and the base are taken in (or the wait for them is over): it may join. */
   ready: boolean;
+  /** Snapshots taken in this room: after the first, everything pending has been sent at least once. */
+  snapshots: number;
 }
 
 let noticeCount = 0;
@@ -634,14 +636,20 @@ export class LiveSession {
       this.putCanvasFirst(room, frame.seq, snapshotPlan, diffPlans(snapshotPlan, room.seed));
     }
     if (room.away.size > 0) {
-      for (const batch of room.engine.pending) {
-        if (room.away.has(batch.cid)) {
-          batch.ops = withRecipesTheyName(batch.ops, snapshotPlan, room.seed);
-        }
+      // Recipe puts in front can take a batch past the size limit: the guarded ops are chunked again.
+      const away = room.engine.pending.filter((batch) => room.away.has(batch.cid));
+      const ops = away.flatMap((batch) => batch.ops);
+      const guarded = withRecipesTheyName(ops, snapshotPlan, room.seed);
+      if (guarded !== ops) {
+        room.engine.replace(
+          away.map((batch) => batch.cid),
+          chunkOps(guarded).map((chunk): PendingBatch => ({ cid: makeCid(), ops: chunk, inverse: [] })),
+        );
+        this.schedulePersist();
       }
       room.away.clear();
-      this.schedulePersist();
     }
+    room.snapshots += 1;
     const resend = room.engine.resync({ seq: frame.seq, plan: snapshotPlan });
     room.joined = true;
     room.role = frame.role;
@@ -894,6 +902,7 @@ export class LiveSession {
       seed: liveShape(project),
       away: new Set(),
       ready: false,
+      snapshots: 0,
     };
     this.room = room;
     setLiveDesignId(designId);
@@ -978,15 +987,22 @@ export class LiveSession {
       (entry) => entry.tabId === THIS_TAB_ID || (alive !== undefined && !alive.has(entry.tabId)),
     );
     const left = orphans.flatMap((entry) => entry.pending);
-    const before = room.engine.view;
     let queued: PendingBatch[] = [];
+    let awayCids = new Set<string>();
     let used = false;
-    // Added before the snapshot: its resend takes them. Added after it (the wait ran out): they go from here.
+    // Added before the snapshot: its resend takes them. Added in the room joined (the wait ran out): they go from here.
     let sendHere = false;
+    let snapshotsAtUse = 0;
     const use = (base: LivePlan | undefined) => {
       used = true;
       sendHere = room.joined;
-      queued = this.putLeftFirst(room, left, base);
+      snapshotsAtUse = room.snapshots;
+      // Read here, not before the wait: a snapshot may have landed meanwhile.
+      const before = room.engine.view;
+      const put = this.putLeftFirst(room, left, base);
+      queued = put.added;
+      awayCids = new Set(put.away);
+      this.land(before, room.engine.view);
       return base ? { doc: room.doc, tabId: THIS_TAB_ID, pending: room.engine.pending.slice() } : undefined;
     };
     if (room.fresh) {
@@ -997,13 +1013,20 @@ export class LiveSession {
       try {
         await takeDetachedBase(room.designId, (base) => (this.room === room ? use(base) : undefined));
       } catch {
-        // Not taken: the base stays stored for the next room, so its batches leave this one.
-        if (this.room === room && room.away.size > 0) {
-          for (const cid of room.away) {
-            room.engine.refuse(cid);
+        if (this.room === room && awayCids.size > 0) {
+          if (room.snapshots !== snapshotsAtUse) {
+            // A snapshot's resend took them out already: the edits are with the service, so the base goes.
+            void forgetDetachedBase(room.designId).catch(() => undefined);
+          } else {
+            // Not taken and not sent: the base stays stored for the next room, so its batches leave this one.
+            const before = room.engine.view;
+            for (const cid of awayCids) {
+              room.engine.refuse(cid);
+              room.away.delete(cid);
+            }
+            queued = queued.filter((batch) => !awayCids.has(batch.cid));
+            this.land(before, room.engine.view);
           }
-          queued = queued.filter((batch) => !room.away.has(batch.cid));
-          room.away.clear();
         }
       }
       if (!used && this.room === room) {
@@ -1013,7 +1036,6 @@ export class LiveSession {
     if (this.room !== room) {
       return;
     }
-    this.land(before, room.engine.view);
     await Promise.all(
       orphans
         .filter((entry) => entry.tabId !== THIS_TAB_ID)
@@ -1031,25 +1053,32 @@ export class LiveSession {
 
   /**
    * The batches left for this plan and this person's edits away from the room (`base` to the room's seed), into the
-   * engine. Before joining they go in front of everything pending; once joined, after it (the server has the rest).
-   * Returns the batches added.
+   * engine. Before anything was sent they go in front of everything pending. Once a snapshot has come (what was
+   * pending went to the service, even if the connection dropped since), after it: the service applies in arrival
+   * order, so nothing may go in front of what it has. Returns the batches added and the cids of the away ones.
    */
-  private putLeftFirst(room: Room, left: PendingBatch[], base: LivePlan | undefined): PendingBatch[] {
+  private putLeftFirst(
+    room: Room,
+    left: PendingBatch[],
+    base: LivePlan | undefined,
+  ): { added: PendingBatch[]; away: string[] } {
     const awayOps = base ? diffPlans(base, room.seed) : [];
-    if (room.joined) {
+    if (room.snapshots > 0) {
       const added = room.engine.adopt(left);
+      const away: string[] = [];
       const ops = withRecipesTheyName(awayOps, room.engine.view, room.seed);
       for (const chunk of chunkOps(ops)) {
         const batch = room.engine.localOps(chunk, { undoable: false, keepRedo: true });
         if (batch) {
           added.push(batch);
+          away.push(batch.cid);
         }
       }
-      return added;
+      return { added, away };
     }
     const away = chunkOps(awayOps).map((ops): PendingBatch => ({ cid: makeCid(), ops, inverse: [] }));
     away.forEach((batch) => room.away.add(batch.cid));
-    return room.engine.adoptBefore([...left, ...away]);
+    return { added: room.engine.adoptBefore([...left, ...away]), away: away.map((batch) => batch.cid) };
   }
 
   // -------------------------------------------------------------------------

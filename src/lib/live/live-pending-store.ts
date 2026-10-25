@@ -127,8 +127,9 @@ export async function deletePending(key: string): Promise<void> {
  * The first base wins until it is used or the account takes the plan: a later edit never moves it forward, or the
  * edits before it would be lost. IndexedDB is the only copy: every tab reads it there, so a base another tab used,
  * moved or forgot is seen at once, and taking it (`takeDetachedBase`) removes it in the same transaction that stores
- * the batches made of it, so two tabs never send the same edits. Memory holds only the write still in flight, so a
- * room opening moments after an edit waits for it.
+ * the batches made of it, so two tabs never send the same edits. Memory holds the writes still in flight (one chain
+ * per design, so a room opening moments after an edit or a refresh waits for them) and, for a moment, that a base is
+ * stored, so a drag does not open the database at every step.
  */
 
 interface StoredBase {
@@ -144,9 +145,34 @@ function baseKey(designId: string): string {
 }
 
 const writing = new Map<string, Promise<void>>();
+const keeping = new Map<string, Promise<void>>();
+/** When this tab last saw a base stored per design. Trusted for a short while only: another tab may take it. */
+const seen = new Map<string, number>();
+const SEEN_MS = 2_000;
+
+/** What this tab remembers of stored bases, dropped: for tests, which each start on a fresh database. */
+export function forgetBaseMemoryForTests(): void {
+  seen.clear();
+}
 
 async function settled(designId: string): Promise<void> {
   await writing.get(designId)?.catch(() => undefined);
+}
+
+/** Runs `work` after every base write already asked for on this design, in order. */
+function inTurn<T>(designId: string, work: () => Promise<T>): Promise<T> {
+  const next = (writing.get(designId) ?? Promise.resolve()).catch(() => undefined).then(work);
+  const tail = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  writing.set(designId, tail);
+  void tail.then(() => {
+    if (writing.get(designId) === tail) {
+      writing.delete(designId);
+    }
+  });
+  return next;
 }
 
 /** One transaction on the store; resolves once it has committed, rejects if it aborts. */
@@ -204,23 +230,31 @@ export function keepDetachedBase(designId: string, base: () => LivePlan): Promis
   if (!available()) {
     return Promise.resolve();
   }
-  const inFlight = writing.get(designId);
+  const at = seen.get(designId);
+  if (at !== undefined && Date.now() - at < SEEN_MS) {
+    return Promise.resolve();
+  }
+  const inFlight = keeping.get(designId);
   if (inFlight) {
     // The write in flight keeps a base at least as old as this edit's.
     return inFlight;
   }
-  const write = transact("readwrite", (store, abort) =>
-    withBase(store, designId, abort, (existing) => {
-      if (!existing) {
-        putBase(store, designId, base());
-      }
-    }),
-  ).finally(() => {
-    if (writing.get(designId) === write) {
-      writing.delete(designId);
-    }
-  });
-  writing.set(designId, write);
+  const write = inTurn(designId, () =>
+    transact("readwrite", (store, abort) =>
+      withBase(store, designId, abort, (existing) => {
+        if (!existing) {
+          putBase(store, designId, base());
+        }
+      }),
+    ),
+  )
+    .then(() => {
+      seen.set(designId, Date.now());
+    })
+    .finally(() => {
+      keeping.delete(designId);
+    });
+  keeping.set(designId, write);
   return write;
 }
 
@@ -230,7 +264,9 @@ export async function readDetachedBase(designId: string): Promise<LivePlan | und
   }
   await settled(designId);
   let found: LivePlan | undefined;
-  await transact("readonly", (store, abort) => withBase(store, designId, abort, (base) => (found = base)));
+  await transact("readonly", (store, abort) =>
+    withBase(store, designId, abort, (base) => (found = base)),
+  );
   return found;
 }
 
@@ -255,22 +291,24 @@ export async function takeDetachedBase(
     use(undefined);
     return;
   }
-  await settled(designId);
-  await transact("readwrite", (store, abort) =>
-    withBase(store, designId, abort, (base) => {
-      const taken = use(base);
-      if (!base || !taken) {
-        return;
-      }
-      store.delete(baseKey(designId));
-      const key = pendingKey(taken.doc, taken.tabId);
-      if (taken.pending.length === 0) {
-        store.delete(key);
-      } else {
-        const entry: StoredPending = { key, ...taken, updatedAt: new Date().toISOString() };
-        store.put(entry);
-      }
-    }),
+  await inTurn(designId, () =>
+    transact("readwrite", (store, abort) =>
+      withBase(store, designId, abort, (base) => {
+        const taken = use(base);
+        if (!base || !taken) {
+          return;
+        }
+        seen.delete(designId);
+        store.delete(baseKey(designId));
+        const key = pendingKey(taken.doc, taken.tabId);
+        if (taken.pending.length === 0) {
+          store.delete(key);
+        } else {
+          const entry: StoredPending = { key, ...taken, updatedAt: new Date().toISOString() };
+          store.put(entry);
+        }
+      }),
+    ),
   );
 }
 
@@ -279,13 +317,14 @@ export async function moveDetachedBase(designId: string, base: LivePlan): Promis
   if (!available()) {
     return;
   }
-  await settled(designId);
-  await transact("readwrite", (store, abort) =>
-    withBase(store, designId, abort, (existing) => {
-      if (existing) {
-        putBase(store, designId, base);
-      }
-    }),
+  await inTurn(designId, () =>
+    transact("readwrite", (store, abort) =>
+      withBase(store, designId, abort, (existing) => {
+        if (existing) {
+          putBase(store, designId, base);
+        }
+      }),
+    ),
   );
 }
 
@@ -297,13 +336,15 @@ export async function shiftDetachedBase(designId: string, ops: LiveOp[]): Promis
   if (!available() || ops.length === 0) {
     return;
   }
-  await settled(designId);
-  await transact("readwrite", (store, abort) =>
-    withBase(store, designId, abort, (existing) => {
-      if (existing) {
-        putBase(store, designId, applyOps(existing, ops));
-      }
-    }),
+  // In turn with the other base writes: a room binding right after the refresh takes the base shifted.
+  await inTurn(designId, () =>
+    transact("readwrite", (store, abort) =>
+      withBase(store, designId, abort, (existing) => {
+        if (existing) {
+          putBase(store, designId, applyOps(existing, ops));
+        }
+      }),
+    ),
   );
 }
 
@@ -312,10 +353,12 @@ export async function forgetDetachedBase(designId: string): Promise<void> {
   if (!available()) {
     return;
   }
-  await settled(designId);
-  await transact("readwrite", (store) => {
-    store.delete(baseKey(designId));
-  });
+  seen.delete(designId);
+  await inTurn(designId, () =>
+    transact("readwrite", (store) => {
+      store.delete(baseKey(designId));
+    }),
+  );
 }
 
 /*

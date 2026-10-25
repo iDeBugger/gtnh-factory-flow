@@ -200,6 +200,22 @@ export class LiveClientState {
   }
 
   /**
+   * Pending batches not sent yet, replaced where the first of them stood by `batches` (the same edits, split again).
+   */
+  replace(cids: string[], batches: PendingBatch[]): void {
+    const gone = new Set(cids);
+    const at = this.pending.findIndex((batch) => gone.has(batch.cid));
+    if (at < 0) {
+      return;
+    }
+    const rest = this.pending.filter((batch) => !gone.has(batch.cid));
+    const kept = this.pending.slice(0, at).filter((batch) => !gone.has(batch.cid)).length;
+    rest.splice(kept, 0, ...batches);
+    this.pending = rest;
+    this.shown = null;
+  }
+
+  /**
    * A fresh snapshot (after joining again): it becomes `confirmed`, and every
    * pending batch is returned, oldest first, to be sent again.
    */

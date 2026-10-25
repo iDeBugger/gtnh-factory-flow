@@ -633,7 +633,9 @@ async function editsMadeAwayFromRoom(
   }
   // The canvas is ahead of the stored record by autosave's wait.
   const local =
-    useDesignStore.getState().activeDesignId === designId ? useFactoryStore.getState().project : stored;
+    useDesignStore.getState().activeDesignId === designId
+      ? useFactoryStore.getState().project
+      : stored;
   if (!local) {
     return {};
   }
