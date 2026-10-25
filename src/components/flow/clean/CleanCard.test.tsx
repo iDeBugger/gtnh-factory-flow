@@ -47,7 +47,7 @@ function port(side: "input" | "output", n: number, kind: ResourceKind = "item"):
     id: `mock:${side}${n}`,
     amount: 1,
     displayName: `Resource ${side} ${n}`,
-    iconPath: "/mock.png",
+    iconPath: "/nei/test/mock.png",
   };
   const rail = {
     side,
@@ -123,7 +123,7 @@ function referenceView(): CleanCardView {
         id: "mock:circuit",
         amount: 1,
         displayName: "Programmed Circuit",
-        iconPath: "/c.png",
+        iconPath: "/nei/test/c.png",
       },
     } as CleanCardView["circuit"],
     chips: strip.chips,

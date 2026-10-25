@@ -189,6 +189,25 @@ describe("live batch checks", () => {
     expect(prepare([sound])).toMatchObject({ ops: [sound] });
   });
 
+  it("store a recipe without an icon that points off the site", () => {
+    const recipe = {
+      id: "r1",
+      name: "Fish",
+      machineType: "Fish Catcher",
+      minimumTier: "LV",
+      durationTicks: 20,
+      eut: 8,
+      inputs: [],
+      outputs: [{ kind: "item", id: "fish", amount: 1, iconPath: "https://evil.example/i.png" }],
+    };
+    const put: LiveOp = { o: "put", c: "recipes", id: "r1", v: recipe };
+    expect(check([put])).toBeNull();
+    const output = (stored([put]).recipes as Array<{ outputs: Array<Record<string, unknown>> }>)[0]!
+      .outputs[0]!;
+    expect(output).toEqual({ kind: "item", id: "fish", amount: 1 });
+    expect("iconPath" in output).toBe(false);
+  });
+
   it("check a thing whose schema checks it whole as a whole", () => {
     expect(check([{ o: "patch", c: "fuelProfiles", id: "f1", f: {}, d: ["euPerLiter"] }])).toMatch(
       /^fuelProfiles f1: euPerLiter/,

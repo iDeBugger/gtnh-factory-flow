@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isSiteIconPath } from "./icon-path";
 import { PROJECT_SCHEMA_VERSION } from "./types";
 
 export const resourceKindSchema = z.enum(["item", "fluid", "aspect", "power"]);
@@ -16,6 +17,20 @@ export const resourceIconAtlasRefSchema = z.object({
     .optional(),
 });
 /**
+ * Every stored icon field: a path to the site's own art is kept, anything
+ * else is dropped rather than refused (icon-path.ts). Dropping, not failing:
+ * an icon only ever renders as a picture, and a strict field must never sink
+ * a whole plan load. The export side runs the same schema, so what leaves the
+ * app is clean too.
+ */
+export const siteIconPathSchema = z
+  .string()
+  .optional()
+  .transform((value) => (isSiteIconPath(value) ? value : undefined));
+export const siteIconAtlasSchema = resourceIconAtlasRefSchema
+  .optional()
+  .transform((atlas) => (atlas && isSiteIconPath(atlas.imagePath) ? atlas : undefined));
+/**
  * A plan's (or post's) one-item face. Deliberately lenient: it only ever
  * renders as an icon, and a strict field must never sink a whole plan load.
  */
@@ -23,8 +38,8 @@ export const entryIconSchema = z.object({
   kind: z.enum(["item", "fluid"]),
   resourceId: z.string().min(1).max(200),
   displayName: z.string().max(200).optional(),
-  iconPath: z.string().max(500).optional(),
-  iconAtlas: resourceIconAtlasRefSchema.optional(),
+  iconPath: siteIconPathSchema,
+  iconAtlas: siteIconAtlasSchema,
   dominantColor: z.string().max(32).optional(),
 });
 
@@ -115,8 +130,8 @@ export const resourceAmountSchema = z.object({
   id: z.string().min(1, "Resource id is required"),
   amount: z.number().positive("Amount must be greater than zero"),
   displayName: z.string().min(1).optional(),
-  iconPath: z.string().min(1).optional(),
-  iconAtlas: resourceIconAtlasRefSchema.optional(),
+  iconPath: siteIconPathSchema,
+  iconAtlas: siteIconAtlasSchema,
   dominantColor: dominantColorSchema,
   modId: z.string().min(1).optional(),
   tooltip: z.array(z.string()).optional(),
@@ -132,8 +147,8 @@ export const resourceAmountSchema = z.object({
         kind: resourceKindSchema,
         id: z.string().min(1),
         displayName: z.string().min(1).optional(),
-        iconPath: z.string().min(1).optional(),
-        iconAtlas: resourceIconAtlasRefSchema.optional(),
+        iconPath: siteIconPathSchema,
+        iconAtlas: siteIconAtlasSchema,
         dominantColor: dominantColorSchema,
         modId: z.string().min(1).optional(),
         tooltip: z.array(z.string()).optional(),
@@ -310,11 +325,11 @@ export const recipeSchema = z.object({
     .optional(),
   nei: z
     .object({
-      iconPath: z.string().optional(),
+      iconPath: siteIconPathSchema,
       source: z.string().optional(),
       handlerClass: z.string().optional(),
       canvas: z.object({ width: z.number(), height: z.number() }).optional(),
-      backgroundImage: z.string().optional(),
+      backgroundImage: siteIconPathSchema,
       itemInputGrid: z.object({ width: z.number(), height: z.number() }).optional(),
       itemOutputGrid: z.object({ width: z.number(), height: z.number() }).optional(),
       fluidInputGrid: z.object({ width: z.number(), height: z.number() }).optional(),
@@ -459,8 +474,8 @@ export const factoryStorageSchema = z.object({
   resourceId: z.string().min(1),
   colorTag: factoryNodeColorTagSchema.optional(),
   displayName: z.string().optional(),
-  iconPath: z.string().optional(),
-  iconAtlas: resourceIconAtlasRefSchema.optional(),
+  iconPath: siteIconPathSchema,
+  iconAtlas: siteIconAtlasSchema,
   dominantColor: dominantColorSchema,
   capacity: z.number().positive().optional(),
   // Absent means `product` (the pulling one), as on legacy plans.

@@ -86,6 +86,21 @@ are stripped by the Zod schema on import, paste and server paths, not here; Inde
 loads are not schema-parsed. Old plans must keep opening: add a migration rather than
 breaking a schema.
 
+## Icon paths (icon-path.ts)
+
+- A stored icon (`iconPath`, `iconAtlas.imagePath`, `nei.iconPath`, `nei.backgroundImage`, a plan's or
+  a post's `icon`) may point only at the site's own art: `/datasets/gtnh/<any version>/...` or `/nei/...`,
+  an image extension, no query, quote, space, `\` or dot segment, at most 500 characters
+  (`isSiteIconPath`). A plan's icons are `<img src>` and `url(...)` in every viewer's browser, so an
+  outside address would make every viewer fetch it. Every icon field is `siteIconPathSchema` /
+  `siteIconAtlasSchema`, which DROP anything else rather than refuse (an icon must never sink a plan
+  load); the landing refresh restamps dataset icons. `ResourceIcon` applies the same rule to what it
+  draws: a dataset-served recipe never passes the schema, and the dataset still carries unresolved
+  `asset:` hints (the pipeline's `icon-hints.mjs` clears them on the next publish). A test fixture that
+  renders an icon needs a site-shaped path (`/nei/test/x.png`). Exam: `icon-path.test.ts`,
+  `factory-json.test.ts` "drops icons that are not the site's own art", `src/lib/live/validate.test.ts`,
+  `src/components/nei/ResourceIcon.test.tsx`.
+
 ## Cloud plan additions (schemas.ts)
 
 - `gtnhplanner` on the project, nodes, storages, edges and annotations is the in-game

@@ -28,7 +28,7 @@ function storage(patch: Partial<FactoryStorage> = {}): FactoryStorage {
     kind: "item",
     resourceId: "mock:dust",
     displayName: "Mock Dust",
-    iconPath: "/mock.png",
+    iconPath: "/nei/test/mock.png",
     position: { x: 0, y: 0 },
     ...patch,
   };

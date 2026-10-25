@@ -41,7 +41,7 @@ function port(
     id: `mock:${prefix}${side}${n}`,
     amount: 1,
     displayName: `Resource ${prefix}${side} ${n}`,
-    iconPath: "/mock.png",
+    iconPath: "/nei/test/mock.png",
   };
   const rail = {
     side,

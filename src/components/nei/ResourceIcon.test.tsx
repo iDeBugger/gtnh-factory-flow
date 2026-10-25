@@ -18,6 +18,55 @@ describe("ResourceIcon", () => {
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
   });
 
+  describe("where an icon may come from", () => {
+    // The dataset still ships unresolved `asset:` hints for some aspects, and a
+    // served recipe never passes the plan schema: the site's own art only.
+    it("draws the bundled aspect art for an aspect whose icon is an unresolved asset hint", () => {
+      const { container } = render(
+        <ResourceIcon
+          resource={{
+            kind: "aspect",
+            id: "thaumcraft:aspect:ignis",
+            amount: 1,
+            displayName: "Ignis",
+            iconPath: "asset:gregtech:textures/aspects/IGNIS.png",
+          }}
+          tooltip={false}
+        />,
+      );
+      const sources = [...container.querySelectorAll("[style]")].map((el) => (el as HTMLElement).style.maskImage);
+      expect(sources.some((value) => value.includes("/nei/thaumcraft/aspects/ignis.png"))).toBe(true);
+      expect(container.innerHTML).not.toContain("asset:");
+    });
+
+    it("never puts an outside address or an asset hint into an img or an atlas", () => {
+      const { container } = render(
+        <>
+          <ResourceIcon
+            resource={{ kind: "item", id: "x", amount: 1, displayName: "X", iconPath: "https://evil.example/x.png" }}
+            tooltip={false}
+          />
+          <ResourceIcon
+            resource={{
+              kind: "item",
+              id: "y",
+              amount: 1,
+              displayName: "Y",
+              iconAtlas: { imagePath: "https://evil.example/a.png", atlasWidth: 1, atlasHeight: 1, x: 0, y: 0, width: 1, height: 1 },
+            }}
+            tooltip={false}
+          />
+          <ResourceIcon
+            resource={{ kind: "item", id: "z", amount: 1, displayName: "Z", iconPath: "/nei/test/z.png" }}
+            tooltip={false}
+          />
+        </>,
+      );
+      expect(container.innerHTML).not.toContain("evil.example");
+      expect([...container.querySelectorAll("img")].map((img) => img.getAttribute("src"))).toEqual(["/nei/test/z.png"]);
+    });
+  });
+
   describe("fluids", () => {
     // Older plans and custom fluids can have no artwork; they still need a face.
     function renderFluid(id: string, displayName: string, dominantColor?: string) {
@@ -83,7 +132,7 @@ describe("ResourceIcon", () => {
             id: "with_art",
             amount: 1,
             displayName: "With Art",
-            iconPath: "/textures/rendered/with_art.png",
+            iconPath: "/datasets/gtnh/v/textures/rendered/with_art.png",
           }}
           tooltip={false}
         />,
@@ -100,7 +149,7 @@ describe("ResourceIcon", () => {
           id: "factoryflow:bee_species:gregtech-explosive",
           amount: 1,
           displayName: "Explosive Bee",
-          iconPath: "/textures/rendered/explosive_bee.png",
+          iconPath: "/datasets/gtnh/v/textures/rendered/explosive_bee.png",
           tooltip: [
             "Bee species",
             "gregtech.bee.speciesExplosive",
@@ -134,7 +183,7 @@ describe("ResourceIcon", () => {
           id: "minecraft:iron_ingot",
           amount: 1,
           displayName: "Iron Ingot",
-          iconPath: "/textures/rendered/iron_ingot.png",
+          iconPath: "/datasets/gtnh/v/textures/rendered/iron_ingot.png",
         }}
         tooltip={false}
       />,
@@ -158,7 +207,7 @@ describe("ResourceIcon", () => {
           id: "minecraft:log",
           amount: 16,
           displayName: "Oak Log",
-          iconPath: "/textures/rendered/oak_log.png",
+          iconPath: "/datasets/gtnh/v/textures/rendered/oak_log.png",
           tooltip: ["Ore dictionary: logWood", "Accepts: Oak Log, Spruce Log, Birch Log"],
           alternatives: [
             { kind: "item", id: "minecraft:log@1", displayName: "Spruce Log" },

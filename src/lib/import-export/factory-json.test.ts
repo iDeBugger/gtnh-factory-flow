@@ -41,6 +41,38 @@ describe("factory JSON import/export", () => {
     expect(parseFactoryProjectJson(JSON.stringify({ ...project, gameVersion: " 2.8.1 " })).gameVersion).toBe("2.8.1");
   });
 
+  it("drops icons that are not the site's own art", () => {
+    const evil = "https://evil.example";
+    const plan = JSON.parse(serializeFactoryProject(loadBiodieselDemoProject()));
+    const kept = "/datasets/gtnh/local-2.9.0-rc-2/textures/rendered/x-0123456789ab.png";
+    plan.recipes[0].outputs[0].iconPath = "http://127.0.0.1:3177/i.png";
+    plan.recipes[0].outputs.push({ kind: "item", id: "kept", amount: 1, iconPath: kept });
+    plan.recipes[1].inputs[0].iconAtlas = {
+      imagePath: `${evil}/a.png`,
+      atlasWidth: 1,
+      atlasHeight: 1,
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
+    };
+    plan.recipes[0].nei = { iconPath: `${evil}/m.png`, backgroundImage: `${evil}/b.png` };
+    plan.storages[0].iconPath = `${evil}/s.png`;
+    plan.icon = { kind: "item", resourceId: "fish", iconPath: `${evil}/p.png` };
+
+    const parsed = parseFactoryProjectJson(JSON.stringify(plan));
+    expect(parsed.recipes[0]!.outputs[0]!.iconPath).toBeUndefined();
+    expect(parsed.recipes[0]!.outputs[1]!.iconPath).toBe(kept);
+    expect(parsed.recipes[1]!.inputs[0]!.iconAtlas).toBeUndefined();
+    expect(parsed.recipes[0]!.nei?.iconPath).toBeUndefined();
+    expect(parsed.recipes[0]!.nei?.backgroundImage).toBeUndefined();
+    expect(parsed.storages![0]!.iconPath).toBeUndefined();
+    expect(parsed.icon?.iconPath).toBeUndefined();
+    expect(parsed.icon?.resourceId).toBe("fish");
+    expect(serializeFactoryProject(plan)).not.toContain("evil.example");
+    expect(serializeFactoryProject(plan)).not.toContain("127.0.0.1");
+  });
+
   it("reports invalid JSON and invalid factory data", () => {
     expect(() => parseFactoryProjectJson("{")).toThrow(/Invalid JSON/);
     expect(() =>

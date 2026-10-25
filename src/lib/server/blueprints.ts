@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { resourceIconAtlasRefSchema } from "@/lib/model/schemas";
+import { siteIconAtlasSchema, siteIconPathSchema } from "@/lib/model/schemas";
 import {
   BLUEPRINT_RESOURCE_STAT_LIMIT,
   type BlueprintResourceStat,
@@ -18,8 +18,8 @@ const resourceStatSchema = z.object({
   kind: z.enum(["item", "fluid"]),
   resourceId: z.string().min(1).max(200),
   displayName: z.string().max(200).optional(),
-  iconPath: z.string().max(500).optional(),
-  iconAtlas: resourceIconAtlasRefSchema.optional(),
+  iconPath: siteIconPathSchema,
+  iconAtlas: siteIconAtlasSchema,
   dominantColor: z.string().max(32).optional(),
   ratePerSecond: z.number().finite().nonnegative(),
 });

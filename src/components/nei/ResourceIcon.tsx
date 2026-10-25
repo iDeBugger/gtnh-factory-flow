@@ -9,6 +9,7 @@ import {
   type AlternativeCycleFace,
 } from "@/lib/nei/alternative-cycle";
 import { Zap } from "lucide-react";
+import { isSiteIconPath } from "@/lib/model/icon-path";
 import type { ResourceAmount, ResourceIconAtlasRef, ResourceKind } from "@/lib/model/types";
 import { NEI_TEXTURES } from "@/lib/nei-renderer/theme/textures";
 import {
@@ -293,7 +294,7 @@ function isOreDictionaryNoiseLine(line: string): boolean {
 // and the solver never see a preview face. Concrete resources stay still.
 function CategoryIconImage(props: { resource?: DisplayResourceAmount; iconPixelSize?: number }) {
   const faces = props.resource && isOreDictionaryResource(props.resource)
-    ? getAlternativeCycleFaces(props.resource).filter((face) => face.iconPath || face.iconAtlas)
+    ? getAlternativeCycleFaces(props.resource).filter((face) => siteIcon(face) || siteAtlas(face))
     : [];
   if (!props.resource || faces.length === 0) return <IconImage {...props} />;
   if (faces.length === 1) return <IconImage resource={faces[0]} iconPixelSize={props.iconPixelSize} />;
@@ -460,7 +461,7 @@ function IconImage({
     return null;
   }
 
-  const atlas = resource.iconAtlas;
+  const atlas = siteAtlas(resource);
   if (atlas) {
     return <AtlasIconImage resource={resource} atlas={atlas} iconPixelSize={iconPixelSize} onReady={onReady} />;
   }
@@ -471,7 +472,7 @@ function IconImage({
     return <PowerIconGlyph iconPixelSize={iconPixelSize} />;
   }
 
-  const iconPath = resource.iconPath ?? getFallbackIconPath(resource);
+  const iconPath = siteIcon(resource) ?? getFallbackIconPath(resource);
   if (!iconPath) {
     // The dataset ships no art for fluids at all — not one of the thousands of
     // fluid references carries an iconPath or an atlas entry — so without this
@@ -815,7 +816,24 @@ const ASPECT_COLORS: Record<string, string> = {
 export function isSwatchFluid(
   resource: Pick<ResourceAmount, "kind" | "iconPath" | "iconAtlas">,
 ): boolean {
-  return resource.kind === "fluid" && !resource.iconPath && !resource.iconAtlas;
+  return resource.kind === "fluid" && !siteIcon(resource) && !siteAtlas(resource);
+}
+
+/**
+ * A resource's icon path when it is the site's own art, else undefined. A
+ * plan's icons are checked by the schema on the way in, but a recipe served
+ * by the dataset never passes it, and the dataset still carries unresolved
+ * `asset:<mod>:...` hints for some aspects: the same rule here, so a hint or
+ * an outside address is never an `<img src>` and the kind's fallback face
+ * (the bundled aspect art, the fluid swatch) shows instead.
+ */
+function siteIcon(resource: Pick<ResourceAmount, "iconPath">): string | undefined {
+  return isSiteIconPath(resource.iconPath) ? resource.iconPath : undefined;
+}
+
+function siteAtlas(resource: Pick<ResourceAmount, "iconAtlas">): ResourceIconAtlasRef | undefined {
+  const atlas = resource.iconAtlas;
+  return atlas && isSiteIconPath(atlas.imagePath) ? atlas : undefined;
 }
 
 /**

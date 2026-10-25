@@ -4,6 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { writeDatasetJson } from "./dataset-json-writer.mjs";
+import { applyIcon, clearUnresolvedIconPathTextureHint, resourceKey } from "./icon-hints.mjs";
 
 const instanceRoot = process.argv[2];
 const datasetPath = process.argv[3];
@@ -246,12 +247,6 @@ function findIconPathTextureHint(resource, textureIndex) {
   return textureIndex.byPath.get(`assets/${namespace}/${resourcePath}`);
 }
 
-function clearUnresolvedIconPathTextureHint(resource) {
-  if (typeof resource.iconPath === "string" && resource.iconPath.startsWith("asset:")) {
-    delete resource.iconPath;
-  }
-}
-
 function requiresRenderedStackIcon(resource) {
   const id = String(resource.id ?? "").toLowerCase();
   return resource.kind === "item" && id.includes("@") && /^gregtech:gt\.metaitem\./.test(id);
@@ -323,17 +318,6 @@ async function extractTexture(resource, texture, textureOutDir, publicTextureBas
   return `${publicTextureBase}/${relativePath}`;
 }
 
-function applyIcon(resource, iconsByKey) {
-  if (resource.iconPath) {
-    return;
-  }
-
-  const iconPath = iconsByKey.get(resourceKey(resource));
-  if (iconPath) {
-    resource.iconPath = iconPath;
-  }
-}
-
 async function findFiles(root, extension) {
   if (!existsSync(root)) {
     return [];
@@ -379,10 +363,6 @@ function parseResourceId(id) {
     namespace: withoutMeta.slice(0, separator).toLowerCase(),
     name: withoutMeta.slice(separator + 1).toLowerCase(),
   };
-}
-
-function resourceKey(resource) {
-  return `${resource.kind}:${resource.id}`;
 }
 
 async function readBundledAspectIconNames() {
