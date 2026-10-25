@@ -2,10 +2,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { serveDatasetFile } from "@/lib/server/dataset-static-file";
 import { GET } from "./route";
 
-vi.mock("@/lib/server/dataset-static-file", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/server/dataset-static-file")>()),
-  serveDatasetFile: vi.fn(async () => new Response("")),
-}));
+// The files need not exist here: the resolver is the real one with the
+// version root as its own fake tree (dataset-static-file.test.ts covers links).
+vi.mock("@/lib/server/dataset-static-file", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/server/dataset-static-file")>();
+  const path = await import("node:path");
+  return {
+    ...actual,
+    resolveDatasetChildPath: vi.fn(async (versionId: string, ...segments: string[]) => {
+      const versionRoot = path.resolve(actual.datasetRoot, versionId);
+      const filePath = path.resolve(versionRoot, ...segments);
+      return filePath.startsWith(`${versionRoot}${path.sep}`) ? filePath : undefined;
+    }),
+    serveDatasetFile: vi.fn(async () => new Response("")),
+  };
+});
 
 function get(assetPath: string[], versionId = "local-2.9.0-rc-2") {
   return GET(new Request(`http://localhost/dataset-files/${versionId}/${assetPath.join("/")}`), {

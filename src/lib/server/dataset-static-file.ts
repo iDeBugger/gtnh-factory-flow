@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 
@@ -112,11 +112,32 @@ export function isSafePathSegment(value: string) {
   return /^[a-zA-Z0-9._-]+$/.test(value) && value !== "." && value !== "..";
 }
 
+/**
+ * A file under one dataset version, or undefined when the path leaves the
+ * version's directory or names nothing. Checked twice: lexically, then by
+ * the real path, so a symlink inside the tree (rsync -a keeps them) cannot
+ * point a read outside it. The real file is compared with the real version
+ * directory, not the lexical one: the dataset root itself is a symlink on
+ * the droplet.
+ */
 export function resolveDatasetChildPath(versionId: string, ...segments: string[]) {
-  const versionRoot = path.resolve(datasetRoot, versionId);
+  return resolveDatasetChildPathIn(datasetRoot, versionId, ...segments);
+}
+
+export async function resolveDatasetChildPathIn(
+  root: string,
+  versionId: string,
+  ...segments: string[]
+): Promise<string | undefined> {
+  const versionRoot = path.resolve(root, versionId);
   const filePath = path.resolve(versionRoot, ...segments);
   if (!filePath.startsWith(`${versionRoot}${path.sep}`)) {
     return undefined;
   }
-  return filePath;
+  try {
+    const [real, rootReal] = await Promise.all([realpath(filePath), realpath(versionRoot)]);
+    return real.startsWith(`${rootReal}${path.sep}`) ? real : undefined;
+  } catch {
+    return undefined;
+  }
 }

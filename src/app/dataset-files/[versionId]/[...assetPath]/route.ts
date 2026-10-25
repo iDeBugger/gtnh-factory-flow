@@ -43,15 +43,12 @@ export async function GET(
     );
   }
 
-  const filePath = resolveDatasetChildPath(versionId, ...segments);
-  if (!filePath) {
-    return NextResponse.json(
-      { error: "Invalid dataset path." },
-      { status: 400, headers: uncached },
-    );
-  }
-
+  // Undefined is a file that is not there or a link out of the version's directory: both a miss.
+  const filePath = await resolveDatasetChildPath(versionId, ...segments);
   try {
+    if (!filePath) {
+      throw new Error("Not a dataset file.");
+    }
     return await serveDatasetFile(filePath, {
       cacheControl: DATASET_FILE_CACHE_CONTROL,
       contentType: "application/gzip",

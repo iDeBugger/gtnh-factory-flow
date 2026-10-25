@@ -29,7 +29,9 @@
   at `max-age=0`. The gate is one process's view of a path: the raw `recipes.json` must still not exist on the
   droplet, and the publish must not copy it. It also makes a pipeline invariant: published names stay within
   `[A-Za-z0-9._-]` (`tools/dataset-pipeline/CLAUDE.md`; `rebuild-manifest.mjs` refuses a version that breaks it),
-  or the file is unreachable. Exam: `dataset-path-gate.test.ts`, `proxy.test.ts`,
+  or the file is unreachable. The dataset-files and textures routes resolve a file with `resolveDatasetChildPath`
+  (dataset-static-file.ts): lexically, then by real path against the real version directory, so a symlink in the
+  tree never reads outside it (a miss is a 404). Exam: `dataset-path-gate.test.ts`, `proxy.test.ts`,
   `dataset-files/[versionId]/[...assetPath]/route.test.ts`, `dataset-static-file.test.ts`.
 - Every server cache is bounded or index-sized (the Node heap is capped at 3 GB). A slow
   site: check the heap first.
