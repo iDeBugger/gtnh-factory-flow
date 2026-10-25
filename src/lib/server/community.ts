@@ -511,21 +511,26 @@ export async function recordEvents(events: { actorKey: string; action: string }[
 /**
  * Nothing reads an event older than the longest window (30 days, the same
  * words check), so older rows only cost the small instance disk and its IO
- * budget. Pruned once an hour per process, after a record, in bounded
- * batches (the oldest rows first, by the `created_at` index), so a backlog
- * from before the prune existed can never hold one request past the
- * statement timeout; what a prune does not reach waits for the next hour. A
- * prune never fails a save.
+ * budget. Pruned once an hour per process, after a record: batches of the
+ * oldest rows (by the `created_at` index), deleted by id, until a batch comes
+ * back short or `PRUNE_BUDGET_MS` has gone, so a backlog drains as fast as
+ * the hour's prune can manage yet never holds one request past the statement
+ * timeout; what a prune does not reach waits for the next hour. A batch of
+ * 500 ids keeps the `id=in.(...)` query string at 4 to 6 KB, under the usual
+ * 8 KB request-line limit: never raise `PRUNE_BATCH_ROWS` past that. A prune
+ * never fails a save.
  */
 export const EVENTS_KEPT_DAYS = 31;
 export const PRUNE_BATCH_ROWS = 500;
-export const PRUNE_BATCHES = 4;
+export const PRUNE_BUDGET_MS = 2_000;
 const PRUNE_EVERY_MS = 60 * 60_000;
 let lastPruneAt = 0;
+let pruneBudgetMs = PRUNE_BUDGET_MS;
 
-/** For tests: the next record prunes again. */
-export function forgetEventPrune(): void {
+/** For tests: the next record prunes again, within `budgetMs`. */
+export function forgetEventPrune(budgetMs = PRUNE_BUDGET_MS): void {
   lastPruneAt = 0;
+  pruneBudgetMs = budgetMs;
 }
 
 async function pruneEvents(): Promise<void> {
@@ -537,7 +542,8 @@ async function pruneEvents(): Promise<void> {
   const before = new Date(now - EVENTS_KEPT_DAYS * 86_400_000).toISOString();
   try {
     const db = getCommunityDb();
-    for (let batch = 0; batch < PRUNE_BATCHES; batch++) {
+    // At least one batch, then more while the budget lasts.
+    do {
       const { data } = await db
         .from("community_events")
         .select("id")
@@ -553,7 +559,7 @@ async function pruneEvents(): Promise<void> {
       if (ids.length < PRUNE_BATCH_ROWS) {
         return;
       }
-    }
+    } while (Date.now() - now < pruneBudgetMs);
   } catch {
     // The rows stay until the next hour's prune.
   }

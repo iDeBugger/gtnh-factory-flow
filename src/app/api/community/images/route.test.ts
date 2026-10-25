@@ -3,6 +3,7 @@ import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/dat
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
 import { getCommunityDb } from "@/lib/server/community";
 import {
+  forgetImageCapWarnings,
   IMAGES_PER_DAY,
   IMAGES_PER_HOUR,
   SITE_IMAGES_PER_HOUR,
@@ -62,6 +63,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await local.db.exec("delete from community_events");
+  forgetImageCapWarnings();
 });
 
 describe("board image uploads", () => {
@@ -154,6 +156,10 @@ describe("board image uploads", () => {
     });
     expect(warned).toHaveBeenCalledTimes(1);
     expect(String(warned.mock.calls[0]![0])).toContain(`${SITE_IMAGES_PER_HOUR} an hour`);
+    // Refused again within the hour: one line in the log for the window, not one per refusal.
+    expect((await upload("198.51.100.251")).status).toBe(503);
+    expect((await upload("198.51.100.252")).status).toBe(503);
+    expect(warned).toHaveBeenCalledTimes(1);
     warned.mockRestore();
   }, 60_000);
 

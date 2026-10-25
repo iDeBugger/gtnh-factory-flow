@@ -20,6 +20,27 @@ const SITE_KEY = "images:site";
 const HOUR = 60 * 60;
 const DAY = 24 * HOUR;
 
+/**
+ * When each site cap last told the log. Once a cap bites, every upload until
+ * the window passes is refused; one line per window says so, not one per
+ * refusal.
+ */
+const capWarnedAt = { day: Number.NEGATIVE_INFINITY, hour: Number.NEGATIVE_INFINITY };
+
+function warnCapOnce(cap: keyof typeof capWarnedAt, windowSeconds: number, line: string): void {
+  const now = Date.now();
+  if (now - capWarnedAt[cap] >= windowSeconds * 1000) {
+    capWarnedAt[cap] = now;
+    console.warn(line);
+  }
+}
+
+/** For tests: the next refusal at a site cap tells the log again. */
+export function forgetImageCapWarnings(): void {
+  capWarnedAt.day = Number.NEGATIVE_INFINITY;
+  capWarnedAt.hour = Number.NEGATIVE_INFINITY;
+}
+
 /** Why an upload may not land, as the player is told. */
 export type ImageRefusal = { status: number; error: string };
 
@@ -46,13 +67,13 @@ export function claimImageUpload(request: Request): Promise<ImageRefusal | undef
     }
     // A site cap biting is the owner's to know: every anonymous paste, drop
     // and picture key answers this until the window passes, and the numbers
-    // can only be raised with that in the log.
+    // can only be raised with that in the log, once per window.
     if (siteDay >= SITE_IMAGES_PER_DAY) {
-      console.warn(`images: the site's ${SITE_IMAGES_PER_DAY} a day are used; uploads refused until tomorrow`);
+      warnCapOnce("day", DAY, `images: the site's ${SITE_IMAGES_PER_DAY} a day are used; uploads refused until tomorrow`);
       return { status: 503, error: "Lots of images have been uploaded today. Try again tomorrow." };
     }
     if (siteHour >= SITE_IMAGES_PER_HOUR) {
-      console.warn(`images: the site's ${SITE_IMAGES_PER_HOUR} an hour are used; uploads refused for the hour`);
+      warnCapOnce("hour", HOUR, `images: the site's ${SITE_IMAGES_PER_HOUR} an hour are used; uploads refused for the hour`);
       return { status: 503, error: "Lots of images are being uploaded right now. Try again in an hour." };
     }
     await recordEvents([

@@ -6,7 +6,6 @@ import {
   forgetEventPrune,
   getCommunityDb,
   PRUNE_BATCH_ROWS,
-  PRUNE_BATCHES,
   recordEvents,
 } from "./community";
 
@@ -56,27 +55,37 @@ describe("recording events", () => {
     expect(await actorsRecorded()).toEqual(["later", "now", "old-again", "recent"]);
   });
 
-  it("prunes a backlog in bounded batches, the oldest first, and leaves the rest for the next hour", async () => {
+  async function insertBacklog(backlog: number): Promise<void> {
     await local.db.exec("delete from community_events");
-    const backlog = PRUNE_BATCH_ROWS * PRUNE_BATCHES + 7;
     const { error } = await getCommunityDb()
       .from("community_events")
       .insert(
         Array.from({ length: backlog }, (_, i) => ({
           actor_key: `stale-${String(i).padStart(5, "0")}`,
           action: "probe",
-          // The youngest of the backlog are the seven that must survive.
           created_at: new Date(Date.now() - (60 + backlog - i) * 86_400_000).toISOString(),
         })),
       );
     expect(error).toBeNull();
+  }
+
+  it("drains a backlog of many batches in one prune while its time lasts", async () => {
+    await insertBacklog(PRUNE_BATCH_ROWS * 6 + 7);
     forgetEventPrune();
     await recordEvents([{ actorKey: "now", action: "probe" }]);
+    expect(await actorsRecorded()).toEqual(["now"]);
+  }, 60_000);
+
+  it("stops at its time budget, the oldest first, and leaves the rest for the next hour", async () => {
+    const backlog = PRUNE_BATCH_ROWS * 2 + 7;
+    await insertBacklog(backlog);
+    // No time at all: one batch, then the budget is spent.
+    forgetEventPrune(0);
+    await recordEvents([{ actorKey: "now", action: "probe" }]);
     const left = await actorsRecorded();
-    expect(left).toHaveLength(8);
-    expect(left.slice(-7)).toEqual(
-      Array.from({ length: 7 }, (_, i) => `stale-${String(backlog - 7 + i).padStart(5, "0")}`),
-    );
+    expect(left).toHaveLength(backlog - PRUNE_BATCH_ROWS + 1);
+    expect(left[0]).toBe("now");
+    expect(left[1]).toBe(`stale-${String(PRUNE_BATCH_ROWS).padStart(5, "0")}`);
     forgetEventPrune();
     await recordEvents([{ actorKey: "later", action: "probe" }]);
     expect(await actorsRecorded()).toEqual(["later", "now"]);

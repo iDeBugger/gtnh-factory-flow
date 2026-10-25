@@ -239,8 +239,9 @@ The instance is small and has gone down under load. Rules:
   before the rate limit's two queries; the plan schema check follows.
 - Read community plan jsonb about 10 rows per statement, or it hits the statement timeout.
 - `community_events` keeps 31 days (`EVENTS_KEPT_DAYS`; the longest window read is 30): `recordEvents` deletes older
-  rows once an hour per process, oldest first in at most `PRUNE_BATCHES` batches of `PRUNE_BATCH_ROWS` (so a backlog
-  never holds a request past the statement timeout; the rest waits an hour), over the `created_at` index (migration
+  rows once an hour per process, oldest first in batches of `PRUNE_BATCH_ROWS` until one comes back short or
+  `PRUNE_BUDGET_MS` (2 s) has gone (so a backlog drains fast yet never holds a request past the statement timeout;
+  the rest waits an hour; 500 ids keep the delete's query string under 8 KB), over the `created_at` index (migration
   `2026-10-25-community-events-created-at.sql`, mirrored in `schema.sql`), and a failed prune never fails a save. Exam:
   `community-events.test.ts`.
 - The dashboard (restarts, disk IO, memory) needs the repo owner; there is no management
@@ -397,7 +398,7 @@ The instance is small and has gone down under load. Rules:
   time." (designs and folders; `isFutureStamp`): one far-future stamp from a member's wrong clock would otherwise make
   every later save on every device read as behind, silently. Refused, never clamped (the device's local and pushed
   stamps must agree). `createdAt` is never judged: it is sent unchanged on every push, so a clock once ahead would
-  refuse the design for good, and nothing orders on it.
+  refuse the design for good, and only the owner's own shelf sorts on it, by their own stamp.
 - While `live_lease_until` is in the future the live service is the plan's only writer: the PUT refuses a plan body
   (409 `{ live: true }`) and its write is conditional on the lease. Metadata still goes through.
 - `GET /api/library` keeps listing tombstones (clients rely on it never to reuse a deleted id) and adds each design's

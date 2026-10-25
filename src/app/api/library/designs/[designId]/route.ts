@@ -135,8 +135,8 @@ export async function PUT(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Bad timestamps." }, { status: 400 });
   }
   // The edit stamps only: `createdAt` is sent unchanged on every push, so a
-  // clock that was ahead once would refuse the design forever, and nothing
-  // orders on it.
+  // clock that was ahead once would refuse the design forever, and only the
+  // owner's own shelf sorts on it, by their own stamp.
   if (isFutureStamp(body.updatedAt) || isFutureStamp(body.planUpdatedAt)) {
     return NextResponse.json({ error: CLOCK_AHEAD_MESSAGE }, { status: 400 });
   }
