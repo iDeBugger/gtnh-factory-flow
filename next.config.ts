@@ -23,8 +23,9 @@ const API_SEGMENT = "[^/.%][^/]*";
  * answer URLs.
  *
  * The version is read as text, never imported: `next start` loads this file
- * again at run time, and the site image ships only the src/ modules listed in
- * `next-config.test.ts`. Where neither the version nor git is there (that
+ * again at run time, and the site image ships no src/: beside this file it
+ * copies only `security-headers.config.ts` and `body-limits.config.ts`, which
+ * import nothing (`next-config.test.ts` pins both). Where neither the version nor git is there (that
  * run-time load) the value is unused: `env` is inlined at build.
  */
 function buildIdentity(): string {

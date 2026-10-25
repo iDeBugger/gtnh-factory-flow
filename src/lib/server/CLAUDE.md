@@ -65,29 +65,29 @@
   mounted read-only: in `GTNH_CLIENT_FILES_DIR/<id>/` (a writable volume in a container), by default
   `.cache/client-files/<id>/` under the working directory (gitignored). Each as `.gz` (level 9) and, except the id
   list (23 s of brotli for 13%), `.br`: quality 11 with a 4 MB window for the small ones, 9 with 16 MB for the item
-  search file (1.96 MB in 1.1 s at +85 MB of RSS, against 1.74 MB in 14 s at +201 MB at 10; gzip 2.77 MB).
-  The server writes them, not the pipeline, because each is the dataset run through server code; a deploy that
-  changes the JSON changes the name. With `GTNH_PREWARM_ON_STARTUP=1` they are written after the default
-  version's prewarm, in the background, one at a time on the thread pool (`writeServedDatasetClientFiles`);
-  otherwise on the first listing request. A file already there is only touched; one no start has named for 30 days
-  is removed. The browser reads `GET /api/datasets/<id>/client-files` (1 unit; `no-store` until every file is
-  written, then cached like a dataset answer) and fetches each listed file through the gate and the dataset-files
-  route (`immutable` for a year, brotli or gzip by Accept-Encoding, ETag `"<hash>-<br|gz>"`; resolved by real path
-  like the dataset files, so a link out of the version's directory is a miss); with no listing, a
-  kind not listed or a failed file it asks the API as before, and the API routes stay for old tabs; a listing that is
-  incomplete or failed is reused for 45 s before the browser asks again (`CLIENT_FILE_LISTING_RETRY_MS`). A write
-  that fails (an unwritable cache directory) is logged and the site keeps the API. Each start also removes the
-  directories of versions it no longer serves (`removeUnservedClientFileDirectories`), and never what it did not
-  write. The site claims a root only when it creates it or finds it empty (a filesystem's `lost+found` aside;
-  `claimClientFilesRoot` writes the marker `.gtnh-client-files`, a regular file: the claim and the sweep take a link
-  or a directory of that name as no marker); a root that holds anything else and no marker is not the site's: it is logged once and
-  nothing is written or swept there, so the API answers. The sweep runs only in a marked root with a served version,
-  removes only a non-empty directory holding nothing but client files and their temporaries (never an empty one, a
-  link, or what a link points at), and logs and skips a directory it cannot read or remove. Exam:
-  `client-files.test.ts`, `dataset-client-files.test.ts`. Outside production each load of
-  the module keys its own listing, so a dev reload of answer code never lists the old code's files. Exam: `client-files.test.ts`,
-  `dataset-files/[versionId]/[...assetPath]/client-files.test.ts`, `api/datasets/[versionId]/client-files/route.test.ts`,
-  `browser-loader.test.ts`.
+  search file (1.96 MB in 1.1 s at +85 MB of RSS, against 1.74 MB in 14 s at +201 MB at 10; gzip 2.77 MB). The server
+  writes them, not the pipeline, because each is the dataset run through server code; a deploy that changes the JSON
+  changes the name. With `GTNH_PREWARM_ON_STARTUP=1` they are written after the default version's prewarm, in the
+  background, one at a time on the thread pool (`writeServedDatasetClientFiles`); otherwise on the first listing
+  request. A file already there is only touched; one no start has named for 30 days is removed. The browser reads `GET
+  /api/datasets/<id>/client-files` (1 unit; `no-store` until every file is written, then cached like a dataset answer)
+  and fetches each listed file through the gate and the dataset-files route (`immutable` for a year, brotli or gzip by
+  Accept-Encoding, ETag `"<hash>-<br|gz>"`; resolved by real path like the dataset files, so a link out of the
+  version's directory is a miss); with no listing, a kind not listed or a failed file it asks the API as before, and
+  the API routes stay for old tabs; a listing that is incomplete or failed is reused for 45 s before the browser asks
+  again (`CLIENT_FILE_LISTING_RETRY_MS`). A write that fails (an unwritable cache directory) is logged and the site
+  keeps the API. Each start also removes the directories of versions it no longer serves
+  (`removeUnservedClientFileDirectories`), and never what it did not write. The site claims a root only when it
+  creates it or finds it empty (a filesystem's `lost+found` aside; `claimClientFilesRoot` writes the marker
+  `.gtnh-client-files`, a regular file: the claim and the sweep take a link or a directory of that name as no marker);
+  a root that holds anything else and no marker is not the site's: it is logged once and nothing is written or swept
+  there, so the API answers. The sweep runs only in a marked root with a served version, removes only a non-empty
+  directory holding nothing but client files and their temporaries (never an empty one, a link, or what a link points
+  at), and logs and skips a directory it cannot read or remove. Exam: `client-files.test.ts`,
+  `dataset-client-files.test.ts`. Outside production each load of the module keys its own listing, so a dev reload of
+  answer code never lists the old code's files. Exam: `client-files.test.ts`,
+  `dataset-files/[versionId]/[...assetPath]/client-files.test.ts`,
+  `api/datasets/[versionId]/client-files/route.test.ts`, `browser-loader.test.ts`.
 - Every server cache is bounded or index-sized (the Node heap is capped at 3 GB). A slow
   site: check the heap first.
 - The OG card route reads fonts through `process.cwd()` (non-standalone build).
@@ -298,38 +298,39 @@ The instance is small and has gone down under load. Rules:
 ## Request bodies (request-body.ts)
 
 - Because `src/proxy.ts` runs on every path, Next copies every write body (up to `PROXY_BODY_MAX_BYTES`, 4.5 MiB,
-  `experimental.proxyClientMaxBodySize`; the bytes past it are dropped) and waits for its end before any route
-  runs. That limit sits just above the largest route cap and must never drop below one: a body cut at it is still
-  over every cap and answers 413, not a 400 for a truncated JSON or form. Next awaits the body's end even when the
-  proxy answers itself, so a declared length that never arrives, or a slow sender, is held until it finishes or
-  Node's `requestTimeout` (300 s); only the edge (Caddy's body read timeout) bounds that. Route handlers have no body limit, so every route that reads a body reads it through
-  `request-body.ts` (`readJsonCapped`, `readTextCapped`, `readFormDataCapped`) with a cap sized to what the client
-  sends: a declared `content-length` over the cap is refused without parsing, a chunked body stops at the cap, and
-  the answer is 413 with the route's own sentence. The read happens where it happened before, so every gate, 503 and auth check that ran ahead of it
-  still does. Caps: feedback `FEEDBACK_MAX_BYTES` (4 MiB); plan uploads and synced designs
-  `COMMUNITY_UPLOAD_BODY_MAX_BYTES` (4 MiB of bytes, then the player-facing 3 Mi-character count
-  `COMMUNITY_UPLOAD_MAX_BYTES`); board images and plan previews `BOARD_IMAGE_MAX_BYTES + UPLOAD_FORM_OVERHEAD_BYTES`
-  (the multipart is re-parsed from the capped bytes); blueprint saves `BLUEPRINT_BODY_MAX_BYTES` (2 MiB, the
-  payload's own 1.5 MB check stays behind it); comments `COMMENT_BODY_MAX_BYTES` (64 KiB); sign-in, sign-up, votes,
-  folders and publish `SMALL_JSON_MAX_BYTES` (16 KiB). A new route that reads a body uses the reader and names its
-  cap. Caddy's `request_body max_size` is the edge's copy of the rule, not a substitute. Exam: `request-body.test.ts`
-  and the "declared length over the cap" cases in the route tests.
+  `experimental.proxyClientMaxBodySize`; the bytes past it are dropped) and waits for its end before any route runs.
+  That limit sits just above the largest route cap and must never drop below one: a body cut at it is still over every
+  cap and answers 413, not a 400 for a truncated JSON or form. Next awaits the body's end even when the proxy answers
+  itself, so a declared length that never arrives, or a slow sender, is held until it finishes or Node's
+  `requestTimeout` (300 s); only the edge (Caddy's body read timeout) bounds that. Route handlers have no body limit,
+  so every route that reads a body reads it through `request-body.ts` (`readJsonCapped`, `readTextCapped`,
+  `readFormDataCapped`) with a cap sized to what the client sends: a declared `content-length` over the cap is refused
+  without parsing, a chunked body stops at the cap, and the answer is 413 with the route's own sentence. The read
+  happens where it happened before, so every gate, 503 and auth check that ran ahead of it still does. Caps: feedback
+  `FEEDBACK_MAX_BYTES` (4 MiB); plan uploads and synced designs `COMMUNITY_UPLOAD_BODY_MAX_BYTES` (4 MiB of bytes,
+  then the player-facing 3 Mi-character count `COMMUNITY_UPLOAD_MAX_BYTES`); board images and plan previews
+  `BOARD_IMAGE_MAX_BYTES + UPLOAD_FORM_OVERHEAD_BYTES` (the multipart is re-parsed from the capped bytes); blueprint
+  saves `BLUEPRINT_BODY_MAX_BYTES` (2 MiB, the payload's own 1.5 MB check stays behind it); comments
+  `COMMENT_BODY_MAX_BYTES` (64 KiB); sign-in, sign-up, votes, folders and publish `SMALL_JSON_MAX_BYTES` (16 KiB). A
+  new route that reads a body uses the reader and names its cap. Caddy's `request_body max_size` is the edge's copy of
+  the rule, not a substitute. Exam: `request-body.test.ts` and the "declared length over the cap" cases in the route
+  tests.
 
 ## Uploaded plan stats (plan-engine.ts)
 
-- A community post's stats come from solving the uploaded plan on the request thread, which blocks every other
-  request while it runs, so the solve has a budget the board never has: `ensurePlanEngine` sets the process-wide
-  HiGHS limits once (`time_limit` 2 s, `mip_max_nodes` 20,000) and `solvePlanStats` rejects every model past 5 s
-  (`withLpDeadline`). A model whose LP hits the time limit stops there (no other HiGHS setting is tried), so one
-  solve holds the thread at most 5 s plus one LP's 2 s. Past either the stats are the failed plan's and the post is still stored; the stored plan is
-  re-solved once per `APP_VERSION` on its first view (`refreshStaleStats`) under the same budget; a refresh the clock
-  stopped (`solvePlanStats(...).outOfTime`, from `lpTimeBudgetHits`) keeps the stored stats and tries again on a
-  later view. The solver's island cache never keeps an island the clock stopped, so a busy moment cannot fix a
-  failed answer for the life of the process. Every call site
-  goes through `solvePlanStats`, never `calculateThroughput` directly. Follow-up: a worker thread, so a slow plan
-  never blocks the loop at all. Exam: `plan-access.test.ts` "stores a plan-mode post whose stats solve ran out of
-  time" and "keeps a stored post's stats when a refresh of them runs out of time" (the real `solvePlanStats`, its
-  budget set per case), `plan/lp-deadline.test.ts`.
+- A community post's stats come from solving the uploaded plan on the request thread, which blocks every other request
+  while it runs, so the solve has a budget the board never has: `ensurePlanEngine` sets the process-wide HiGHS limits
+  once (`time_limit` 2 s, `mip_max_nodes` 20,000) and `solvePlanStats` rejects every model past 5 s
+  (`withLpDeadline`). A model whose LP hits the time limit stops there (no other HiGHS setting is tried), so one solve
+  holds the thread at most 5 s plus one LP's 2 s. Past either the stats are the failed plan's and the post is still
+  stored; the stored plan is re-solved once per `APP_VERSION` on its first view (`refreshStaleStats`) under the same
+  budget; a refresh the clock stopped (`solvePlanStats(...).outOfTime`, from `lpTimeBudgetHits`) keeps the stored
+  stats and tries again on a later view. The solver's island cache never keeps an island the clock stopped, so a busy
+  moment cannot fix a failed answer for the life of the process. Every call site goes through `solvePlanStats`, never
+  `calculateThroughput` directly. Follow-up: a worker thread, so a slow plan never blocks the loop at all. Exam:
+  `plan-access.test.ts` "stores a plan-mode post whose stats solve ran out of time" and "keeps a stored post's stats
+  when a refresh of them runs out of time" (the real `solvePlanStats`, its budget set per case),
+  `plan/lp-deadline.test.ts`.
 
 ## The mod and community switch (deployment-features.ts)
 
