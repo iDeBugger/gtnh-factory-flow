@@ -14,7 +14,7 @@ this file is the website's side of it.
 | Client engine | `src/lib/live/client-state.ts` | confirmed + pending, echoes, resync after a reconnect, undo by inverse |
 | Protocol | `src/lib/live/protocol.ts` | frame types, doc keys, limits, colours, `liveSocketUrl` |
 | Batch checks | `src/lib/live/validate.ts`, `src/live/batch.ts` | each thing a batch puts or patches must pass its collection's schema, plan fields their field's; what is stored is the schema's output |
-| REST | `src/app/api/library/...`, `src/app/api/accounts/search` | members, `?owner=`, the lease refusal, notices to the live service (`src/lib/server/cloud-plans.ts`) |
+| REST | `src/app/api/library/...`, `src/app/api/accounts/search` | members, `?owner=`, the lease refusal, notices to the live service (`src/lib/server/live-notify.ts`) |
 | Live service | `src/live/` | the WebSocket server: rooms (`room.ts`, the plan held in `doc.ts`), journal, the flush queue, leases |
 | Local database | `src/lib/server/local-db/`, `tools/local-db/serve.ts` | Postgres in-process (PGlite) behind a PostgREST stand-in |
 | Test client | `tools/live/test-client.mjs` | a headless client for all of the above |

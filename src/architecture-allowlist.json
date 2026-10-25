@@ -181,11 +181,6 @@
       "rule": "5"
     },
     {
-      "from": "src/live/service.ts",
-      "to": "src/lib/server/cloud-plans.ts",
-      "rule": "5"
-    },
-    {
       "from": "src/live/store.ts",
       "to": "src/lib/server/cloud-plans.ts",
       "rule": "5"

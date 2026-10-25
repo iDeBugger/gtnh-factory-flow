@@ -10,7 +10,7 @@ vi.mock("@/lib/server/auth/sessions", async (importOriginal) => {
     bumpSessionEpoch: (id: string) => bumpSessionEpoch(id),
   };
 });
-vi.mock("@/lib/server/cloud-plans", () => ({ notifyLive: vi.fn(async () => true) }));
+vi.mock("@/lib/server/live-notify", () => ({ notifyLive: vi.fn(async () => true) }));
 
 import { POST } from "./route";
 

@@ -6,7 +6,8 @@ import {
   LIBRARY_MAX_DESIGNS,
   type DesignUpsertBody,
 } from "@/lib/library/sync-types";
-import { designRole, leaseHeld, notifyLive, requestedOwner } from "@/lib/server/cloud-plans";
+import { designRole, leaseHeld, requestedOwner } from "@/lib/server/cloud-plans";
+import { notifyLive } from "@/lib/server/live-notify";
 import { checkRateLimit } from "@/lib/server/limits/rate-limit";
 import { getCommunityDb, isCommunityConfigured, libraryStorageErrorMessage } from "@/lib/server/db";
 import { getSessionUser } from "@/lib/server/auth/sessions";

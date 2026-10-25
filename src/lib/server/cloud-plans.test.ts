@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { notifyLive } from "./cloud-plans";
+import { notifyLive } from "./live-notify";
 
 /** Notices to the live service when it does not answer at first. */
 

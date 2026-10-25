@@ -6,7 +6,7 @@ import {
 import { checkPassword, hashPassword, PasswordCheckBusyError } from "../auth/passwords";
 import { makeActorKey, saltedKey } from "../auth/keys";
 import { bumpSessionEpoch, makeSessionToken } from "../auth/sessions";
-import { notifyLive } from "../cloud-plans";
+import { notifyLive } from "../live-notify";
 import type { Viewer } from "../http/viewer";
 import { checkRateLimit, countEvents, recordEvents, serially } from "../limits/rate-limit";
 import { takeMemoryToken } from "../limits/memory-rate";

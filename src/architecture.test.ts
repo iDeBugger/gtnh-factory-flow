@@ -22,7 +22,7 @@ const MAX_ALLOWED: Record<string, number> = {
   "1": 11,
   "2": 1,
   "4": 23,
-  "5": 3,
+  "5": 2,
   "6": 1,
   "7": 4,
   "8": 48,
@@ -301,6 +301,18 @@ function clientCrossings(graph: Map<string, SourceFile>): Edge[] {
 const QUERY_PACKAGES = /^pkg:(@supabase\/postgrest-js|kysely|pg)(\/|$)/;
 
 /**
+ * A query builder's `.from("table")`, whatever the client is named. The
+ * built-ins' static `from` (`Array.from`, `Buffer.from`, typed arrays) is no
+ * query and is excused by name.
+ */
+const QUERY_TEXT =
+  /(?<!\b(?:Array|Buffer|Object|Set|Map|String|Iterator|(?:Int|Uint|Float|BigInt|BigUint)(?:8|16|32|64)(?:Clamped)?Array)\s*)\.from\(\s*["'`]/;
+
+function sendsQuery(text: string): boolean {
+  return QUERY_TEXT.test(text);
+}
+
+/**
  * Files under src/app that send a query themselves, or hold the client. A
  * route that hands a query to a helper outside db/ and repos/
  * (`community-rows`, `library`, `cloud-plans`, `blueprints`) is not seen
@@ -312,8 +324,7 @@ function queryingAppFiles(graph: Map<string, SourceFile>): string[] {
     .filter((file) => file.path.startsWith("src/app/") && !isExempt(file.path))
     .filter(
       (file) =>
-        // A static constructor (`Array.from`, `Buffer.from`) is no query.
-        /(?<![A-Z][\w$]*)\.from\(\s*["'`]/.test(file.text) ||
+        sendsQuery(file.text) ||
         file.edges.some(
           (edge) => QUERY_PACKAGES.test(edge.to) || /^src\/lib\/server\/(db|repos)\//.test(edge.to),
         ),
@@ -406,6 +417,27 @@ describe("the layers", () => {
 
   it("route handlers send no query", () => {
     expect(querying).toEqual([...allowlist.queriesInApp].sort());
+  });
+
+  it("counts a query builder's .from by any client name, and not the built-ins' from", () => {
+    for (const text of [
+      'db.from("plans")',
+      'communityDb.from("x")',
+      'planDb.from("x")',
+      "getCommunityDb().from('x')",
+      "  .from(`community_plans`)",
+      'tx\n  .from("x")',
+    ]) {
+      expect(sendsQuery(text), text).toBe(true);
+    }
+    for (const text of [
+      'Array.from("abc")',
+      'Buffer.from("x")',
+      'Uint8Array.from("x")',
+      'Object.from("x")',
+    ]) {
+      expect(sendsQuery(text), text).toBe(false);
+    }
   });
 
   it("services never import next/server", () => {

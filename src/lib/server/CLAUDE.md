@@ -413,7 +413,7 @@ which bypasses row security. No anon role exists, so a request without the token
 - `GET /api/library` keeps listing tombstones (clients rely on it never to reuse a deleted id) and adds each design's
   `members` and the `shared` plans, in one extra read when nothing is shared.
 - Deleting a design deletes its member rows (designs are tombstoned, so the foreign key's cascade never fires) and
-  tells the live service; sharing changes tell it too (`notifyLive`, only with `LIVE_INTERNAL_URL` and
+  tells the live service; sharing changes tell it too (`notifyLive` in `live-notify.ts`, only with `LIVE_INTERNAL_URL` and
   `LIVE_INTERNAL_TOKEN`). A failed notice loses nothing: the service checks membership on every join.
 - Account search is limited in memory (`limits/memory-rate.ts`): a share box asks on every keystroke. A prefix is two
   characters at least (the box asks from the second), so one character does not list a thirtieth of every account.
