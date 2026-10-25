@@ -36,6 +36,9 @@ SITE_URL="${SITE_URL%/}"
 root="$DATA_DIR/datasets"
 staging="$DATA_DIR/datasets-staging"
 ids=("$@")
+# Directories 755 and files 644 (D755,F644), written symbolically: macOS's
+# openrsync takes no octal modes.
+modes="Du=rwx,Dgo=rx,Fu=rw,Fgo=r"
 
 step() { printf '\n== publish: %s\n' "$*"; }
 fail() { printf 'publish: FAILED: %s\n' "$*" >&2; exit 1; }
@@ -79,7 +82,7 @@ for id in "${ids[@]}"; do
   step "2. textures of $id, additively"
   if [ -d "$local_root/$id/textures" ]; then
     remote "umask 022 && mkdir -p '$root/$id/textures'"
-    rsync -a --ignore-existing --chmod=D755,F644 \
+    rsync -a --ignore-existing --chmod="$modes" \
       "$local_root/$id/textures/" "$(dest "$root/$id/textures/")"
   else
     echo "no textures/ in $id"
@@ -92,7 +95,7 @@ for id in "${ids[@]}"; do
   step "3. data of $id"
   # The staging copy starts from what is served, so only changed bytes travel.
   remote "umask 022 && rm -rf '$staging/$id' && mkdir -p '$staging/$id' && if [ -d '$root/$id' ]; then rsync -a --exclude textures/ --exclude recipes.json '$root/$id/' '$staging/$id/'; fi"
-  rsync -a --delete --chmod=D755,F644 --exclude recipes.json --exclude textures/ \
+  rsync -a --delete --chmod="$modes" --exclude recipes.json --exclude textures/ \
     "$local_root/$id/" "$(dest "$staging/$id/")"
   # Each staged entry replaces the served one; the old one is set aside
   # outside the root first, so the served name is never half written.
@@ -109,7 +112,7 @@ done
 
 # --- 4. The manifest, last ---------------------------------------------------
 step "4. the manifest"
-rsync -a --chmod=F644 "$manifest" "$(dest "$staging/datasets.manifest.json")"
+rsync -a --chmod=Fu=rw,Fgo=r "$manifest" "$(dest "$staging/datasets.manifest.json")"
 remote "mv '$staging/datasets.manifest.json' '$root/datasets.manifest.json'"
 
 # --- 5. On the server --------------------------------------------------------
@@ -139,7 +142,7 @@ curl -fsS --max-time 30 "$SITE_URL/datasets/gtnh/datasets.manifest.json" -o "$se
 node "$here/deploy-lib.mjs" same "$served" "$manifest" || fail "the served manifest differs from the local one."
 echo "manifest: the local file"
 for id in "${ids[@]}"; do
-  texture="$(cd "$local_root/$id/textures/rendered" 2>/dev/null && find . -name '*.png' -type f | head -n 1 | sed 's|^\./||')"
+  texture="$(cd "$local_root/$id/textures/rendered" 2>/dev/null && find . -name '*.png' -type f -print -quit | sed 's|^\./||')"
   if [ -n "$texture" ]; then
     headers="$(curl -fsS --max-time 30 -o /dev/null -D - "$SITE_URL/datasets/gtnh/$id/textures/rendered/$texture")" || fail "$id texture $texture is not served."
     echo "$headers" | grep -qi '^cache-control:.*immutable' || fail "$id texture is not served immutable."

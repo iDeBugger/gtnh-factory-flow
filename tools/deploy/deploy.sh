@@ -173,7 +173,10 @@ wait_healthy gtnh-site 400
 if [ "$measure_peer" = 1 ]; then
   step "stopped for the peer measurement"
   echo "live runs with no trusted proxy. On the server:"
-  echo "  curl -s -H 'X-Client-Ip: 203.0.113.9' 'http://127.0.0.1:3301/live/nearby?names=x'"
+  # An upgrade, not /live/nearby: with the mod switch off that answers 404 before reading the address.
+  echo "  curl -s -o /dev/null -w '%{http_code}\\n' --max-time 5 -H 'Connection: Upgrade' -H 'Upgrade: websocket' \\"
+  echo "    -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \\"
+  echo "    -H 'Origin: $SITE_URL' -H 'X-Client-Ip: 203.0.113.9' http://127.0.0.1:3301/live"
   echo "  docker logs gtnh-live 2>&1 | grep 'untrusted peer'"
   echo "then deploy again without --measure-peer."
   exit 0

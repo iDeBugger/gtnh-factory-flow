@@ -1,0 +1,37 @@
+# The stack on a workstation (OrbStack or Docker Desktop), over the real
+# compose file: data under scratch/rehearsal/ instead of /srv/gtnh, other
+# loopback ports, and PostgREST published for postgrest-real.local.test.ts.
+# Paths are relative to tools/deploy (the first file's directory).
+#
+#   docker compose -f tools/deploy/docker-compose.yml -f tools/deploy/compose.rehearsal.yml \
+#     --env-file scratch/rehearsal/.env --env-file scratch/rehearsal/release.env up -d
+#
+# The env check takes --rehearsal for its http:// origin. scratch/rehearsal/postgres
+# must be owned by 5432:5432 before the first start (a non-root postgres
+# cannot chown its data directory). docs/deploy.md, Rehearsal.
+services:
+  postgres:
+    volumes: !override
+      - ../../scratch/rehearsal/postgres:/var/lib/postgresql/data
+
+  postgrest:
+    # Only for the compatibility test against a real PostgREST; never in production.
+    networks: !override
+      - backend
+      - edge
+    ports:
+      - "127.0.0.1:3482:3000"
+
+  site:
+    ports: !override
+      - "127.0.0.1:3480:3000"
+    volumes: !override
+      - ../../scratch/rehearsal/datasets:/app/public/datasets/gtnh:ro
+      - ../../scratch/rehearsal/files:/data/files
+      - ../../scratch/rehearsal/client-files:/data/client-files
+
+  live:
+    ports: !override
+      - "127.0.0.1:3481:3001"
+    volumes: !override
+      - ../../scratch/rehearsal/live-journal:/data/live-journal

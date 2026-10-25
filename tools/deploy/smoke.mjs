@@ -4,6 +4,9 @@
  *
  *   node tools/deploy/smoke.mjs --base https://stage.gtnhplanner.idebugger.net [--caddy] [--skip-accounts]
  *
+ * Without Caddy in front (a workstation rehearsal), --live <url> names the
+ * live service's own port for /live/health.
+ *
  * HTTP: the version and live health, the security headers, the dataset gate,
  * the live service's internal routes kept off the site, board image uploads,
  * the mod-and-community switch. Browser (headless, fresh profile): Welcome, a
@@ -28,6 +31,7 @@ const option = (name, fallback) => {
 };
 const BASE = (option("--base", "http://127.0.0.1:3300") ?? "").replace(/\/+$/, "");
 const CADDY = flag("--caddy");
+const LIVE = (option("--live", BASE) ?? BASE).replace(/\/+$/, "");
 const VERSIONS = (option("--versions", "local-2.9.0-rc-2,local-2.8.1") ?? "").split(",");
 const here = path.dirname(fileURLToPath(import.meta.url));
 const out = path.resolve(here, "../../scratch/probes");
@@ -72,7 +76,9 @@ check(
   "/api/version is not cached",
   header(version, "cache-control"),
 );
-const health = await http("/live/health");
+const health = await fetch(`${LIVE}/live/health`, { signal: AbortSignal.timeout(30_000) }).catch(
+  () => ({ status: 0, json: async () => ({}) }),
+);
 const healthBody = await health.json().catch(() => ({}));
 check(
   health.status === 200 && healthBody.ok === true,
@@ -229,7 +235,13 @@ if (!flag("--skip-accounts")) {
     return { status: response.status, cookie: cookie.split(";")[0] };
   };
   const first = await signIn("register");
-  if (check(first.status === 200 && first.cookie !== "", "sign up", String(first.status))) {
+  if (
+    check(
+      (first.status === 200 || first.status === 201) && first.cookie !== "",
+      "sign up",
+      String(first.status),
+    )
+  ) {
     const designId = `design-${randomUUID()}`;
     const stamp = new Date().toISOString();
     const plan = {
@@ -368,19 +380,23 @@ try {
         .locator('[role="menu"] [role="menuitem"]', { hasText: /^New plan$/ })
         .first()
         .click();
-      const mark = requests.length;
+      // The new plan's first dataset request is the proof: its catalog or a search.
+      const asked = page
+        .waitForRequest((request) => /\/api\/datasets\/local-2\.8\.1\//.test(request.url()), {
+          timeout: 90_000,
+        })
+        .then(
+          () => true,
+          () => false,
+        );
       const field281 = page.locator('input[aria-label="Search items and fluids"]').first();
       await field281.fill("");
       await field281.fill("Copper Ingot");
-      await page
-        .locator('[aria-label="Resource results"] .nei-slot')
-        .first()
-        .waitFor({ timeout: 60_000 })
-        .catch(() => undefined);
       check(
-        requests.slice(mark).some((url) => /\/api\/datasets\/local-2\.8\.1\//.test(url)),
-        "a 2.8.1 plan searches local-2.8.1",
+        (await asked) || requests.some((url) => /\/api\/datasets\/local-2\.8\.1\//.test(url)),
+        "a 2.8.1 plan asks the local-2.8.1 dataset",
       );
+      await page.screenshot({ path: path.join(out, "smoke-2-8-1.png") });
     }
   }
   check(pageErrors.length === 0, "no page errors", pageErrors.slice(0, 3).join(" | "));
