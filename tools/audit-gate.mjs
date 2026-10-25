@@ -11,19 +11,21 @@
 //
 // A registry outage (no JSON, or an `error` key such as ENOAUDIT) skips the pass with a warning
 // rather than failing it: the audit endpoint being down must not block unrelated pull requests;
-// the weekly scheduled run repeats the check.
+// the weekly scheduled run repeats the check. Anything the gate cannot read never passes: npm
+// that did not run, a report in a shape it does not know, an advisory without a known severity.
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readFileSync, realpathSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const SEVERITY_ORDER = ["info", "low", "moderate", "high", "critical"];
 const ALLOWLIST_MAX_DAYS = 90;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// An unknown severity ranks as the worst, so a renamed or missing field fails every threshold.
 const severityRank = (severity) => {
   const rank = SEVERITY_ORDER.indexOf(severity);
-  return rank === -1 ? 0 : rank;
+  return rank === -1 ? SEVERITY_ORDER.length - 1 : rank;
 };
 
 const toDate = (value) => {
@@ -68,10 +70,24 @@ export function evaluate({ report, allowlist, threshold, today }) {
     return { outcome: "skipped", advisories: [], reason: report?.error?.code ?? "no report" };
   }
   const entries = validateAllowlist(allowlist, today);
+  // Version 2 is the report npm 7 and later write; without its `vulnerabilities` map nothing was checked.
+  const vulnerabilities = report.vulnerabilities;
+  if (
+    report.auditReportVersion !== 2 ||
+    !vulnerabilities ||
+    typeof vulnerabilities !== "object" ||
+    Array.isArray(vulnerabilities)
+  ) {
+    return {
+      outcome: "fail",
+      advisories: [],
+      reason: `unrecognised npm audit report (auditReportVersion ${String(report.auditReportVersion)})`,
+    };
+  }
   const todayDate = toDate(today);
   const thresholdRank = severityRank(threshold);
   const advisories = [];
-  for (const [name, vulnerability] of Object.entries(report.vulnerabilities ?? {})) {
+  for (const [name, vulnerability] of Object.entries(vulnerabilities)) {
     for (const via of vulnerability.via ?? []) {
       // A string entry points at another vulnerable package; that package reports its own advisories.
       if (typeof via !== "object" || via === null) continue;
@@ -97,15 +113,36 @@ export function evaluate({ report, allowlist, threshold, today }) {
   return { outcome: failing.length ? "fail" : "pass", advisories };
 }
 
+/**
+ * Runs one `npm audit --json`. `spawnError` names why npm did not run or finish (its spawn error
+ * code, such as ENOENT or ENOBUFS, or the signal that ended it); the report is then not trusted.
+ */
 function runAudit(args) {
   const result = spawnSync("npm", ["audit", "--json", ...args], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
+  const spawnError =
+    result.error?.code ??
+    result.error?.message ??
+    (result.status === null ? `signal ${result.signal}` : undefined);
+  if (spawnError) {
+    return { report: null, spawnError };
+  }
   try {
-    return JSON.parse(result.stdout);
+    return { report: JSON.parse(result.stdout) };
   } catch {
-    return null;
+    return { report: null };
+  }
+}
+
+/** Whether `argv1` (the script node was asked to run) is `moduleUrl`: through links, and percent-encoded the way Node does. */
+export function isEntryScript(argv1, moduleUrl) {
+  if (!argv1) return false;
+  try {
+    return pathToFileURL(realpathSync(argv1)).href === moduleUrl;
+  } catch {
+    return false;
   }
 }
 
@@ -117,11 +154,18 @@ function printPass(label, verdict) {
     );
     return;
   }
+  if (verdict.reason) {
+    console.log(`  ${verdict.reason}`);
+  }
   for (const a of verdict.advisories) {
     const mark = a.allowlisted ? " [allowlisted]" : a.expired ? " [allowlist entry expired]" : "";
     console.log(`  [${a.severity}] ${a.ghsa} ${a.package}: ${a.title} (${a.range})${mark}`);
   }
-  console.log(verdict.advisories.length ? `  ${verdict.outcome.toUpperCase()}` : "  no advisories");
+  console.log(
+    verdict.advisories.length || verdict.outcome === "fail"
+      ? `  ${verdict.outcome.toUpperCase()}`
+      : "  no advisories",
+  );
 }
 
 function main() {
@@ -142,16 +186,16 @@ function main() {
   let failed = false;
   for (const pass of passes) {
     let verdict;
-    try {
-      verdict = evaluate({
-        report: runAudit(pass.args),
-        allowlist,
-        threshold: pass.threshold,
-        today,
-      });
-    } catch (error) {
-      console.error(error.message);
-      process.exit(2);
+    const audit = runAudit(pass.args);
+    if (audit.spawnError) {
+      verdict = { outcome: "fail", advisories: [], reason: `npm audit did not run (${audit.spawnError})` };
+    } else {
+      try {
+        verdict = evaluate({ report: audit.report, allowlist, threshold: pass.threshold, today });
+      } catch (error) {
+        console.error(error.message);
+        process.exit(2);
+      }
     }
     printPass(pass.label, verdict);
     if (verdict.outcome === "fail") failed = true;
@@ -159,9 +203,6 @@ function main() {
   process.exit(failed ? 1 : 0);
 }
 
-if (
-  process.argv[1] &&
-  import.meta.url === new URL(`file://${path.resolve(process.argv[1])}`).href
-) {
+if (isEntryScript(process.argv[1], import.meta.url)) {
   main();
 }

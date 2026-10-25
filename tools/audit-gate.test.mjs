@@ -1,5 +1,9 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, test } from "vitest";
-import { evaluate } from "./audit-gate.mjs";
+import { evaluate, isEntryScript } from "./audit-gate.mjs";
 
 const today = "2026-06-15";
 const daysFromToday = (days) => new Date(Date.UTC(2026, 5, 15 + days)).toISOString().slice(0, 10);
@@ -140,5 +144,64 @@ describe("audit gate", () => {
     expect(
       evaluate({ report: null, allowlist: noAllowlist, threshold: "moderate", today }).outcome,
     ).toBe("skipped");
+  });
+
+  test("a report it does not know fails rather than passing", () => {
+    for (const unknown of [
+      { auditReportVersion: 2, metadata: {} },
+      { auditReportVersion: 2, vulnerabilities: [] },
+      { auditReportVersion: 3, vulnerabilities: {} },
+      { vulnerabilities: {} },
+    ]) {
+      const verdict = evaluate({ report: unknown, allowlist: noAllowlist, threshold: "high", today });
+      expect(verdict.outcome).toBe("fail");
+      expect(verdict.reason).toMatch(/unrecognised/);
+    }
+    expect(
+      evaluate({ report: report({}), allowlist: noAllowlist, threshold: "high", today }).outcome,
+    ).toBe("pass");
+  });
+
+  test("an advisory without a known severity fails every threshold", () => {
+    for (const severity of [undefined, "", "severe"]) {
+      const verdict = evaluate({
+        report: report({ next: { severity: "high", via: [advisory({ severity })] } }),
+        allowlist: noAllowlist,
+        threshold: "critical",
+        today,
+      });
+      expect(verdict.outcome).toBe("fail");
+    }
+  });
+});
+
+describe("the gate's entry check", () => {
+  const gate = fileURLToPath(new URL("./audit-gate.mjs", import.meta.url));
+  const gateUrl = pathToFileURL(gate).href;
+
+  test("matches through a link and from a path holding # % ? or a space", () => {
+    // Node's import.meta.url is the resolved path, percent-encoded; tmpdir may itself be a link.
+    const dir = realpathSync(mkdtempSync(path.join(tmpdir(), "audit-gate-")));
+    try {
+      const odd = path.join(dir, "a #b %20c ?d");
+      mkdirSync(odd);
+      const script = path.join(odd, "gate.mjs");
+      writeFileSync(script, "");
+      const scriptUrl = pathToFileURL(script).href;
+      expect(scriptUrl).toContain("%23");
+      expect(isEntryScript(script, scriptUrl)).toBe(true);
+      const link = path.join(dir, "linked.mjs");
+      symlinkSync(script, link);
+      expect(isEntryScript(link, scriptUrl)).toBe(true);
+      expect(isEntryScript(gate, gateUrl)).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("does not run it for another script or none", () => {
+    expect(isEntryScript(undefined, gateUrl)).toBe(false);
+    expect(isEntryScript(fileURLToPath(import.meta.url), gateUrl)).toBe(false);
+    expect(isEntryScript("/no/such/file.mjs", gateUrl)).toBe(false);
   });
 });
