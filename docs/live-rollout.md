@@ -173,7 +173,8 @@ In the Supabase SQL editor of the production project, run `supabase/migrations/2
 the branch (the same SQL is at the end of `supabase/schema.sql`), then `2026-10-24-live-plan-bytes.sql` (the
 `plan_bytes` generated column; without it the service logs once that plan sizes cannot be read and budgets every
 plan being opened at 3 MB, which lets at most `LIVE_MAX_PLAN_BYTES / 3 MB` plans open at the same moment). Both are
-idempotent:
+idempotent. The `plan_bytes` column rewrites every `library_designs` row under an exclusive lock, and every library
+read and write waits while it runs: apply it at a quiet moment.
 
 ```sql
 alter table library_designs add column if not exists seq bigint not null default 0;

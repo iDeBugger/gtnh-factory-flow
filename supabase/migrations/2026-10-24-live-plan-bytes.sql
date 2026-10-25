@@ -5,6 +5,9 @@
 -- would have to count as the biggest one allowed. Postgres keeps the figure
 -- with the row; nothing writes it. Additive and idempotent; the code before
 -- this never reads the column. Mirrored at the end of supabase/schema.sql.
+-- Adding a stored generated column rewrites every library_designs row under
+-- an exclusive lock, so every library read and write waits until it ends:
+-- run it at a quiet moment.
 alter table library_designs
   add column if not exists plan_bytes integer
   generated always as (octet_length(plan::text)) stored;
