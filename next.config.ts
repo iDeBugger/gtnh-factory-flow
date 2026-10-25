@@ -18,6 +18,9 @@ const API_SEGMENT = "[^/.%][^/]*";
  * passes `GTNH_BUILD_ID` (`<version>-<sha8>`, the same value its image labels
  * and `/api/version` report; a build from `git archive` has no git to ask); a
  * checkout builds `<version>-<sha8>`, with `-dirty` for uncommitted changes.
+ * A deploy must do one of the two: with neither, the id falls back to the
+ * bare APP_VERSION, and two deploys under one version share year-immutable
+ * answer URLs.
  *
  * The version is read as text, never imported: `next start` loads this file
  * again at run time, and the site image ships only the src/ modules listed in

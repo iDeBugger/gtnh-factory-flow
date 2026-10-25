@@ -28,7 +28,9 @@
   number: `next.config.ts` bakes `NEXT_PUBLIC_GTNH_BUILD_ID` into the server and browser bundles, from
   `GTNH_BUILD_ID` (the deploy's `<version>-<sha8>`, the value `/api/version` reports; an image built from `git
   archive` has no git, so its Dockerfile must pass `ARG GTNH_BUILD_ID` to the build) or else
-  `<APP_VERSION>-<git sha8>` (`-dirty` with uncommitted changes), or `APP_VERSION` with neither. `next.config.ts`
+  `<APP_VERSION>-<git sha8>` (`-dirty` with uncommitted changes), or `APP_VERSION` with neither. A deploy must
+  set `GTNH_BUILD_ID` or build inside a git checkout: with neither, two deploys under one `APP_VERSION` share
+  year-immutable answer URLs, and browsers keep the older build's answers. `next.config.ts`
   imports nothing from `src/` (it reads `version.ts` as text): `next start` loads it again at run time and the site
   image ships no `src/`. Its own modules sit beside it and import nothing (`security-headers.config.ts`,
   `body-limits.config.ts`, which `request-body.ts` re-exports); the image must copy them with it
