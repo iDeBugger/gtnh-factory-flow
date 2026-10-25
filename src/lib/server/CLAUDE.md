@@ -73,8 +73,12 @@
   incomplete or failed is reused for 45 s before the browser asks again (`CLIENT_FILE_LISTING_RETRY_MS`). A write
   that fails (an unwritable cache directory) is logged and the site keeps the API. Each start also removes the
   directories of versions it no longer serves (`removeUnservedClientFileDirectories`), and never what it did not
-  write: only in a root holding its marker (`.gtnh-client-files`, written before any file), never with no version
-  served, and only a directory holding nothing but client files and their temporaries. Outside production each load of
+  write. The site claims a root only when it creates it or finds it empty (`claimClientFilesRoot` writes the marker
+  `.gtnh-client-files`); a root that holds anything else and no marker is not the site's: it is logged once and
+  nothing is written or swept there, so the API answers. The sweep runs only in a marked root with a served version,
+  removes only a non-empty directory holding nothing but client files and their temporaries (never an empty one, a
+  link, or what a link points at), and logs and skips a directory it cannot read or remove. Exam:
+  `client-files.test.ts`, `dataset-client-files.test.ts`. Outside production each load of
   the module keys its own listing, so a dev reload of answer code never lists the old code's files. Exam: `client-files.test.ts`,
   `dataset-files/[versionId]/[...assetPath]/client-files.test.ts`, `api/datasets/[versionId]/client-files/route.test.ts`,
   `browser-loader.test.ts`.

@@ -8,7 +8,7 @@ import {
   clientFileDirectory,
   clientFilesRoot,
   CLIENT_FILES_ROOT_MARKER,
-  markClientFilesRoot,
+  claimClientFilesRoot,
   removeUnservedClientFileDirectories,
   resolveClientFilePath,
   clientFileListing,
@@ -151,9 +151,10 @@ describe("the client files of a version no longer served", () => {
       await fs.writeFile(path.join(directory, name, entry), "x");
     }
   }
+  const contents = async () => (await fs.readdir(directory)).sort();
 
   it("are removed at start, and nothing else in the root is touched", async () => {
-    await markClientFilesRoot(directory);
+    expect(await claimClientFilesRoot(directory)).toBe(true);
     await version("local-2.9.0-rc-2", [`${file}.gz`]);
     await version("local-2.8.1", [`${file}.gz`]);
     await version("local-2.9.0-beta-2", [`${file}.gz`, `${file}.br`, `${file}.br.123.tmp`]);
@@ -163,32 +164,96 @@ describe("the client files of a version no longer served", () => {
       "local-2.8.1",
     ]);
     expect(removed).toEqual(["local-2.9.0-beta-2"]);
-    expect((await fs.readdir(directory)).sort()).toEqual(
+    expect(await contents()).toEqual(
       [CLIENT_FILES_ROOT_MARKER, "local-2.8.1", "local-2.9.0-rc-2", "note.txt"].sort(),
     );
   });
 
-  it("never delete a foreign directory, or one holding anything the site does not write", async () => {
-    await markClientFilesRoot(directory);
+  it("never delete a foreign directory, an empty one, or one holding anything the site does not write", async () => {
+    await claimClientFilesRoot(directory);
     await version("postgres", ["PG_VERSION"]);
     await version("old-build", [`${file}.gz`, "readme.md"]);
     await version("nested", [`${file}.gz`]);
     await fs.mkdir(path.join(directory, "nested", "inner"));
+    await version("backups", []);
     const removed = await removeUnservedClientFileDirectories(directory, ["local-2.9.0-rc-2"]);
     expect(removed).toEqual([]);
-    expect((await fs.readdir(directory)).sort()).toEqual(
-      [CLIENT_FILES_ROOT_MARKER, "nested", "old-build", "postgres"].sort(),
+    expect(await contents()).toEqual(
+      [CLIENT_FILES_ROOT_MARKER, "backups", "nested", "old-build", "postgres"].sort(),
     );
+  });
+
+  it("leave links alone, in the root and in a version directory, and never reach their targets", async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), "client-files-outside-"));
+    try {
+      await fs.writeFile(path.join(outside, `${file}.gz`), "target");
+      await claimClientFilesRoot(directory);
+      await fs.symlink(outside, path.join(directory, "linked-version"));
+      await version("local-2.9.0-beta-2", [`${file}.gz`]);
+      await fs.symlink(
+        path.join(outside, `${file}.gz`),
+        path.join(directory, "local-2.9.0-beta-2", `${file}.br`),
+      );
+      expect(await removeUnservedClientFileDirectories(directory, ["local-2.9.0-rc-2"])).toEqual(
+        [],
+      );
+      expect(await contents()).toEqual(
+        [CLIENT_FILES_ROOT_MARKER, "linked-version", "local-2.9.0-beta-2"].sort(),
+      );
+      expect(await fs.readFile(path.join(outside, `${file}.gz`), "utf8")).toBe("target");
+    } finally {
+      await fs.rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("go on past a directory they cannot remove, and the writes after them go on too", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await claimClientFilesRoot(directory);
+    await version("local-2.9.0-beta-1", [`${file}.gz`]);
+    await version("local-2.9.0-beta-2", [`${file}.gz`]);
+    // Without write permission its files cannot be unlinked, so it cannot be removed.
+    await fs.chmod(path.join(directory, "local-2.9.0-beta-1"), 0o500);
+    try {
+      const removed = await removeUnservedClientFileDirectories(directory, ["local-2.9.0-rc-2"]);
+      expect(removed).toEqual(["local-2.9.0-beta-2"]);
+      expect(await contents()).toContain("local-2.9.0-beta-1");
+      await writeClientFiles(path.join(directory, "local-2.9.0-rc-2"), specs, () => {});
+      expect(await fs.readdir(path.join(directory, "local-2.9.0-rc-2"))).toHaveLength(3);
+    } finally {
+      await fs.chmod(path.join(directory, "local-2.9.0-beta-1"), 0o700);
+    }
   });
 
   it("touch nothing in a root without the site's marker, or when no version is served", async () => {
     await version("local-2.9.0-beta-2", [`${file}.gz`]);
     expect(await removeUnservedClientFileDirectories(directory, ["local-2.9.0-rc-2"])).toEqual([]);
-    await markClientFilesRoot(directory);
+    await fs.writeFile(path.join(directory, CLIENT_FILES_ROOT_MARKER), "");
     expect(await removeUnservedClientFileDirectories(directory, [])).toEqual([]);
-    expect(await fs.readdir(directory)).toContain("local-2.9.0-beta-2");
+    expect(await contents()).toContain("local-2.9.0-beta-2");
     await expect(
       removeUnservedClientFileDirectories(path.join(directory, "missing"), ["v"]),
     ).resolves.toEqual([]);
+  });
+});
+
+describe("whose root the client files go into", () => {
+  it("is claimed when created or found empty, and a non-empty root that is not the site's stays untouched over two starts", async () => {
+    const fresh = path.join(directory, "fresh");
+    expect(await claimClientFilesRoot(fresh)).toBe(true);
+    expect(await fs.readdir(fresh)).toEqual([CLIENT_FILES_ROOT_MARKER]);
+    expect(await claimClientFilesRoot(fresh)).toBe(true);
+
+    const shared = path.join(directory, "data");
+    await fs.mkdir(path.join(shared, "backups"), { recursive: true });
+    await fs.mkdir(path.join(shared, "old-version"));
+    await fs.writeFile(
+      path.join(shared, "old-version", "catalog.00000000000000000000.json.gz"),
+      "x",
+    );
+    for (let start = 0; start < 2; start += 1) {
+      expect(await claimClientFilesRoot(shared)).toBe(false);
+      expect(await removeUnservedClientFileDirectories(shared, ["local-2.9.0-rc-2"])).toEqual([]);
+    }
+    expect((await fs.readdir(shared)).sort()).toEqual(["backups", "old-version"]);
   });
 });

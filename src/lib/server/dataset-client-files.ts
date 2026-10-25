@@ -3,7 +3,7 @@ import {
   clientFileDirectory,
   clientFilesRoot,
   ensureClientFiles,
-  markClientFilesRoot,
+  claimClientFilesRoot,
   removeUnservedClientFileDirectories,
   type ClientFileListing,
   type ClientFileSpec,
@@ -64,7 +64,30 @@ function clientDirectory(versionId: string): string | undefined {
   return clientFileDirectory(versionId);
 }
 
-let rootMarked: Promise<void> | undefined;
+let rootClaim: Promise<boolean> | undefined;
+
+/**
+ * Whether the configured root is the site's to write (`claimClientFilesRoot`),
+ * asked once per process copy. A root that is not, or cannot be made, is
+ * logged once, and the site writes nothing and answers from the API.
+ */
+function clientFilesRootIsOurs(): Promise<boolean> {
+  rootClaim ??= claimClientFilesRoot(clientFilesRoot()).then(
+    (ours) => {
+      if (!ours) {
+        console.error(
+          `GTNH client files are off: ${clientFilesRoot()} holds files that are not the site's. Point GTNH_CLIENT_FILES_DIR at an empty or new directory.`,
+        );
+      }
+      return ours;
+    },
+    (error) => {
+      console.error(`GTNH client files are off: ${clientFilesRoot()} cannot be used.`, error);
+      return false;
+    },
+  );
+  return rootClaim;
+}
 
 /** What a served version has written so far; undefined for a version this site does not serve. */
 export async function datasetClientFileListing(
@@ -75,12 +98,9 @@ export async function datasetClientFileListing(
   if (!version || !directory) {
     return undefined;
   }
-  if (!rootMarked) {
-    rootMarked = markClientFilesRoot(clientFilesRoot()).catch(() => {
-      // The write that follows logs an unwritable root.
-    });
+  if (!(await clientFilesRootIsOurs())) {
+    return { complete: false, files: {} };
   }
-  await rootMarked;
   return clientFileListing(
     stateKey(version),
     version.id,
@@ -99,12 +119,13 @@ export async function writeServedDatasetClientFiles(): Promise<void> {
   let served: string[];
   try {
     served = await servedDatasetVersionOrder();
-    const root = clientFilesRoot();
-    const removed = await removeUnservedClientFileDirectories(root, served);
+    if (!(await clientFilesRootIsOurs())) {
+      return;
+    }
+    const removed = await removeUnservedClientFileDirectories(clientFilesRoot(), served);
     if (removed.length > 0) {
       console.info(`GTNH client files of unserved versions removed: ${removed.join(", ")}.`);
     }
-    await markClientFilesRoot(root);
   } catch (error) {
     console.error("GTNH client files were not prepared.", error);
     return;

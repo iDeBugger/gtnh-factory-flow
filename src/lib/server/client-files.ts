@@ -176,18 +176,30 @@ async function removeStaleClientFiles(
 }
 
 /**
- * The file that marks a root as the site's: written there before any client
- * file, and the sweep below touches nothing in a root without it, so a
- * misconfigured `GTNH_CLIENT_FILES_DIR` (a shared data directory) loses nothing.
+ * The file that marks a root as the site's. The site claims a root
+ * (`claimClientFilesRoot`) only when it creates it or finds it empty, and
+ * writes and sweeps only a root that holds the marker: a misconfigured
+ * `GTNH_CLIENT_FILES_DIR` that points at a directory with anything else in it
+ * (a shared data directory) is never written to or swept, and the site serves
+ * those answers from the API.
  */
 export const CLIENT_FILES_ROOT_MARKER = ".gtnh-client-files";
 
-export async function markClientFilesRoot(root: string): Promise<void> {
+/** Whether the root is the site's: marked already, or created or found empty and marked now. */
+export async function claimClientFilesRoot(root: string): Promise<boolean> {
   await fs.mkdir(root, { recursive: true });
+  const entries = await fs.readdir(root);
+  if (entries.includes(CLIENT_FILES_ROOT_MARKER)) {
+    return true;
+  }
+  if (entries.length > 0) {
+    return false;
+  }
   await fs.writeFile(
     path.join(root, CLIENT_FILES_ROOT_MARKER),
     "GTNH Factory Flow writes its content-addressed dataset answers here.\n",
   );
+  return true;
 }
 
 /** A name the site writes into a version directory: a stored client file or its temporary. */
@@ -200,9 +212,11 @@ function isClientFileEntry(name: string): boolean {
  * Removes the directories of versions this site no longer serves (a dataset
  * dropped from the manifest): only a start of a served version sweeps its own
  * directory, so a dropped one would keep its files for good. It never deletes
- * what the site did not write: nothing at all without the root's marker, nothing
+ * what the site did not write: nothing in a root without the marker, nothing
  * with no served version (an empty manifest says nothing about what is stale),
- * and only a directory holding nothing but client files.
+ * no empty directory, no link, and only a directory holding nothing but client
+ * files. A directory it cannot read or remove is logged and left; the sweep goes
+ * on, and so do the writes after it.
  */
 export async function removeUnservedClientFileDirectories(
   root: string,
@@ -212,7 +226,7 @@ export async function removeUnservedClientFileDirectories(
     return [];
   }
   const marked = await fs
-    .stat(path.join(root, CLIENT_FILES_ROOT_MARKER))
+    .lstat(path.join(root, CLIENT_FILES_ROOT_MARKER))
     .then((stats) => stats.isFile())
     .catch(() => false);
   if (!marked) {
@@ -225,10 +239,17 @@ export async function removeUnservedClientFileDirectories(
       continue;
     }
     const directory = path.join(root, entry.name);
-    const contents = await fs.readdir(directory, { withFileTypes: true });
-    if (contents.every((item) => item.isFile() && isClientFileEntry(item.name))) {
-      await fs.rm(directory, { recursive: true, force: true });
-      removed.push(entry.name);
+    try {
+      const contents = await fs.readdir(directory, { withFileTypes: true });
+      if (
+        contents.length > 0 &&
+        contents.every((item) => item.isFile() && isClientFileEntry(item.name))
+      ) {
+        await fs.rm(directory, { recursive: true });
+        removed.push(entry.name);
+      }
+    } catch (error) {
+      console.error(`GTNH client files in ${directory} were not removed.`, error);
     }
   }
   return removed;
