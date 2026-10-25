@@ -20,6 +20,7 @@ import * as plan from "./[planId]/route";
 import * as preview from "./[planId]/preview/route";
 import * as view from "./[planId]/view/route";
 import * as vote from "./[planId]/vote/route";
+import * as comments from "./[planId]/comments/route";
 import * as images from "../images/[month]/[name]/route";
 
 /** The server's time budget for an uploaded plan's stats solve, set per case. */
@@ -336,6 +337,52 @@ describe("counting views", () => {
     const gone = await view.POST(request("POST", `/api/community/plans/${missing}/view`), params({ planId: missing }));
     expect(gone.status).toBe(404);
     expect(await gone.json()).toEqual({ error: "Plan not found." });
+  });
+});
+
+describe("a post's comments", () => {
+  withModAndCommunityOn();
+
+  const readComments = (planId: string, options: { who?: string; headers?: Record<string, string> } = {}) =>
+    comments.GET(request("GET", `/api/community/plans/${planId}/comments`, options), params({ planId }));
+
+  it("an admin-token request reads an unpublished post's comments", async () => {
+    vi.stubEnv("COMMUNITY_ADMIN_TOKEN", "plan-access-admin-token");
+    const planId = await makePlan("Private thread", false);
+    const posted = await comments.POST(
+      request("POST", `/api/community/plans/${planId}/comments`, { who: "owner", body: { body: "Notes" } }),
+      params({ planId }),
+    );
+    expect(posted.status).toBe(200);
+
+    const stranger = await readComments(planId);
+    expect(stranger.status).toBe(404);
+    expect(await stranger.json()).toEqual({ error: "Plan not found." });
+    const admin = await readComments(planId, { headers: { "x-admin-token": "plan-access-admin-token" } });
+    expect(admin.status).toBe(200);
+    const thread = (await admin.json()) as { comments: Array<{ body: string; canDelete: boolean }> };
+    expect(thread.comments.map((comment) => comment.body)).toEqual(["Notes"]);
+    expect(thread.comments[0]!.canDelete).toBe(false);
+  });
+
+  it("a database error reading a post's comments answers 500, not 404", async () => {
+    const planId = await makePlan("Unreachable thread", true);
+    useInProcessLocalDb(async (request) => {
+      const url = new URL(request.url);
+      if (request.method === "GET" && url.pathname.endsWith("/community_plans")) {
+        return Response.json({ message: "boom", code: "XX000", details: "", hint: "" }, { status: 500 });
+      }
+      return local.handle(request);
+    });
+    try {
+      const failed = await readComments(planId);
+      expect(failed.status).toBe(500);
+      expect(await failed.json()).toEqual({ error: "Comments could not be loaded." });
+    } finally {
+      useInProcessLocalDb(local.handle);
+      resetDbBreaker();
+    }
+    expect((await readComments(planId)).status).toBe(200);
   });
 });
 

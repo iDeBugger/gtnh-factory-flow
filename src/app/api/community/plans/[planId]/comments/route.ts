@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import { isDatabaseConfigured } from "@/lib/server/services/config";
@@ -23,9 +24,13 @@ export async function GET(request: Request, context: RouteContext) {
   if (!isDatabaseConfigured()) {
     return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
   }
-  const { planId } = await context.params;
-  const result = await listComments(await readViewer(request), planId);
-  return serviceResponse(result, (value) => value);
+  try {
+    const { planId } = await context.params;
+    const result = await listComments(await readViewer(request), planId);
+    return serviceResponse(result, (value) => value);
+  } catch (error) {
+    return serverErrorResponse(error, "Comments could not be loaded.");
+  }
 }
 
 export async function POST(request: Request, context: RouteContext) {

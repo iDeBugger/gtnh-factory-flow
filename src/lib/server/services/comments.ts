@@ -41,13 +41,17 @@ function storageFailure(error: unknown): ServiceResult<never> {
   return fail("unavailable", (error as Error).message, { status: 500 });
 }
 
-/** A post's thread, newest last, the way a thread reads. Deleted comments are simply not there. */
+/**
+ * A post's thread, newest last, the way a thread reads. Deleted comments are
+ * simply not there. The thread follows the post: whoever `canSeePlan` admits
+ * reads it. A failed read of the post throws: an error, never a missing post.
+ */
 export async function listComments(
   viewer: Viewer,
   planId: string,
 ): Promise<ServiceResult<{ comments: CommunityComment[] }>> {
-  const plan = await plans.readAccess(planId).catch(() => undefined);
-  if (!plan || !canSeePlan({ ...viewer, adminToken: false }, plan)) {
+  const plan = await plans.readAccess(planId);
+  if (!plan || !canSeePlan(viewer, plan)) {
     return fail("not-found", PLAN_NOT_FOUND);
   }
   let rows: comments.CommentRow[];
