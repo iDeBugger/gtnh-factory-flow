@@ -33,8 +33,12 @@ import {
   cropsNhFarmEut,
   cropsNhHarvestTicks,
   cropsNhHarvesterFromTiers,
+  cropsNhCropsPerMachine,
   cropsNhHarvesterMachineCount,
   cropsNhIsHandPicked,
+  cropsNhManagerLayers,
+  type CropHarvesterSetup,
+  cropsNhSquarePerTier,
   cropsNhManagerEuPerHarvest,
   getCropsNhStats,
   getRecipeMachineConfigTierControls,
@@ -95,6 +99,7 @@ import {
   type SpecialView,
 } from "./special-model";
 import type { SheetRow } from "./SpecialSheets";
+import { CROP_MACHINES_ID, pinMachineKey, type NumberSetting } from "../menus/settings-model";
 import { unconvertedPlaceholderRecipe } from "@/lib/model/unconverted-card";
 import type { GameVersion } from "@/lib/model/game-version";
 
@@ -109,7 +114,7 @@ export interface SpecialActions extends CleanCardActions {
 export interface SpecialContext extends CleanCardContext {
   readings: Array<{ label: string; value: string }>;
   /** The gear's sheet: the machine's own settings (shared machines, crops), or rows of the card's own. */
-  sheet: { kind: "machine" } | { kind: "rows"; rows: SheetRow[]; foot?: string };
+  sheet: { kind: "machine"; numbers?: NumberSetting[] } | { kind: "rows"; rows: SheetRow[]; foot?: string };
 }
 
 export interface SpecialModel {
@@ -143,6 +148,7 @@ export function countView(
   opts?: {
     noTimes?: boolean;
     title?: string;
+    unit?: string;
     recipe?: Pick<Recipe, "machineType">;
   },
 ): { count: CleanCountView; unset: boolean; upTo?: PlanUpTo } {
@@ -150,6 +156,7 @@ export function countView(
   const count = buildCountView(state, {
     noTimes: opts?.noTimes,
     title: opts?.title,
+    unit: opts?.unit,
     ruleFixed: isCustomRateRecipe(opts?.recipe),
   });
   return { count, unset: state.unset, upTo: state.upTo };
@@ -590,6 +597,47 @@ export function usePowerCardModel(data: RecipeNodeData, selected: boolean): Spec
 // ---------------------------------------------------------------- crops
 
 /**
+ * A crop card's harvesters as a number setting: the Crop Managers or Industrial Farms its seeds fill at the tier's
+ * capacity (a seed bed's square, a manager's reach planted full). Typed or stepped, it plants that many full machines
+ * of seeds through `plantSeeds`; below one machine it writes nothing. None for a hand-picked crop or no harvester.
+ */
+export function cropMachinesSetting(
+  setup: CropHarvesterSetup | undefined,
+  crops: number,
+  plantSeeds: (seeds: number) => void,
+): NumberSetting | undefined {
+  const capacity = setup && !cropsNhIsHandPicked(setup) ? cropsNhCropsPerMachine(setup) : 0;
+  if (!setup || capacity <= 0) return undefined;
+  const value = cropsNhHarvesterMachineCount(setup, crops);
+  const setMachines = (count: number) => {
+    if (!(count >= 1)) return;
+    plantSeeds(Math.round(count) * capacity);
+  };
+  return {
+    id: CROP_MACHINES_ID,
+    label: setup.id === CROP_HARVESTER_INDUSTRIAL_FARM_ID ? "Industrial Farms" : "Crop Managers",
+    value: value.toLocaleString("en-US"),
+    text: String(value),
+    pinDefault: true,
+    commit: (text) => setMachines(Number(text.replace(/,/g, "").trim())),
+    step: (direction) => setMachines(value + direction),
+  };
+}
+
+/** What one harvester of the setup holds, for the machines chip's tip. */
+export function cropMachinesNotes(setup: CropHarvesterSetup, tier: string): string[] {
+  const capacity = cropsNhCropsPerMachine(setup).toLocaleString("en-US");
+  const side = Math.round(Math.sqrt(cropsNhSquarePerTier(setup.tierIndex)));
+  return [
+    setup.id === CROP_HARVESTER_INDUSTRIAL_FARM_ID
+      ? `One ${tier} seed bed holds ${capacity} seeds.`
+      : `One ${tier} Crop Manager reaches ${side} x ${side}, ${cropsNhManagerLayers(setup.subSoil)} layers deep: ` +
+        `${capacity} crop sticks with every block planted.`,
+    "Set a number to plant that many full machines.",
+  ];
+}
+
+/**
  * A crop card: the plain card with a crop's own parts. Its count is crops planted (no times sign, a line saying
  * so), its harvester's voltage is the tier chip, its draw is a power row, and a farm picks its crop from a key in
  * the head (a dashed box in place of the rails until it has one).
@@ -620,20 +668,48 @@ export function useCropCardModel(data: RecipeNodeData, selected: boolean): Speci
 
   const needed = result?.theoreticalMachinesRequired ?? 0;
   const crops = Math.max(0, Math.round(needed));
-  // The count is crops planted: no times sign, and its tip says what it counts.
-  const { count, unset: countUnset } = countView(projectNode, needed, plan, { noTimes: true });
-  if (!count.pinned) count.title = "How many crops the plan plants.";
+  // The count is seeds planted, never machines: no times sign, the word on the number's line, and a tip that says so.
+  const { count, unset: countUnset } = countView(projectNode, needed, plan, {
+    noTimes: true,
+    unit: crops === 1 ? "seed" : "seeds",
+  });
+  if (!count.pinned) count.title = "How many seeds the plan plants. Machines follow from the seeds.";
+
+  const stats = getCropsNhStats(effective);
+  const setup =
+    isCropProductionRecipe(effective) && !placeholder
+      ? cropsNhHarvesterFromTiers(
+          projectNode.machineConfigTiers,
+          projectNode.machineHandlerId,
+          stats?.minSeedBedTier,
+          stats?.subSoil !== undefined,
+        )
+      : undefined;
+
+  // The machines the seeds fill, from what one machine of this tier holds: a seed bed's square, or a Crop Manager's
+  // reach planted full. A setting pinned until unpinned: typed or stepped, it plants that many full machines of seeds.
+  const pinKey = pinMachineKey(recipe, projectNode);
+  const pins = useFactoryStore((state) => state.project.settingPins?.[pinKey]);
+  const machines = cropMachinesSetting(setup, crops, (seeds) => {
+    if (!isLocked()) base.actions.setCount(seeds);
+  });
+  const machinesTip = setup && machines ? cropMachinesNotes(setup, tierControl?.current.label ?? "") : [];
+  const machinesPinned = machines !== undefined && (pins === undefined ? machines.pinDefault : pins.includes(machines.id));
+  const strip = machinesPinned
+    ? layoutStrip([
+        { id: machines!.id, label: machines!.label, value: machines!.value, title: machines!.label },
+        ...base.view.chips,
+      ])
+    : { chips: base.view.chips, height: base.view.stripHeight };
+  const chips: SpecialChip[] = strip.chips.map((chip) =>
+    chip.id === CROP_MACHINES_ID && machines
+      ? { ...chip, edit: { text: machines.text, commit: machines.commit, notes: machinesTip } }
+      : chip,
+  );
 
   // The harvester's draw: the Industrial Farm burns whole farms, the Crop Manager spends per harvest. Zero by hand.
   const drawEuT = (() => {
-    if (!isCropProductionRecipe(effective) || placeholder) return 0;
-    const stats = getCropsNhStats(effective);
-    const setup = cropsNhHarvesterFromTiers(
-      projectNode.machineConfigTiers,
-      projectNode.machineHandlerId,
-      stats?.minSeedBedTier,
-      stats?.subSoil !== undefined,
-    );
+    if (!setup) return 0;
     if (cropsNhIsHandPicked(setup)) return 0;
     if (setup.id === CROP_HARVESTER_INDUSTRIAL_FARM_ID) {
       return cropsNhFarmEut(setup) * cropsNhHarvesterMachineCount(setup, crops);
@@ -708,19 +784,24 @@ export function useCropCardModel(data: RecipeNodeData, selected: boolean): Speci
     foot: placeholder ? undefined : base.view.foot,
     loop: base.view.loop,
     glance: base.view.glance,
-    chips: base.view.chips,
-    stripHeight: base.view.stripHeight,
+    chips: placeholder ? [] : chips,
+    stripHeight: placeholder ? 0 : strip.height,
     warnings: [],
     selected,
     cannotRun: false,
     unset: placeholder ? false : countUnset,
     handleIds: placeholder ? [] : base.context.handleIds,
   };
-  const context: SpecialContext = { ...base.context, readings: [], sheet: { kind: "machine" } };
+  const context: SpecialContext = {
+    ...base.context,
+    readings: [],
+    sheet: { kind: "machine", numbers: machines ? [machines] : undefined },
+  };
   const actions: SpecialActions = {
     ...base.actions,
     stepTier,
-    stepChip: base.actions.stepSetting,
+    stepChip: (id, direction) =>
+      id === CROP_MACHINES_ID ? machines?.step(direction) : base.actions.stepSetting(id, direction),
     moveSection: () => undefined,
     removeSection: () => undefined,
   };
