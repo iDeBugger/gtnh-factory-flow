@@ -70,3 +70,6 @@ tools/parity/out/
 
 # the live service bundle (npm run build:live)
 /dist-live/
+
+# Deploy targets: hosts and logins stay on the deploying machine.
+/tools/deploy/targets/*.env
