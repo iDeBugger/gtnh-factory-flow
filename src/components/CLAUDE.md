@@ -111,9 +111,15 @@ The board has its own notes in `flow/CLAUDE.md`, the Pool worksheet in `pool/CLA
 
 ## Shared UI behaviour
 
-- A `ChromeMenu` row with `submenu` opens its rows beside it (mouse resting on it, a press, Right or Enter; Left goes
-  back). The submenu is drawn inside the menu, so a press in it counts as inside, and it wears the menu's zoom; it hangs
-  right of the row, or left where the window has no room. The tab menu's Convert to is one.
+- A `ChromeMenu` row with `submenu` opens its rows beside it. The mouse opens it, or shuts it from another row, after
+  `SUBMENU_HOVER_MS` (200 ms) on the row; reaching the submenu first cancels a pending shut, so a diagonal move gets
+  there. A mouse press opens it, a touch or pen press toggles it; Right or Enter opens it and moves focus in (also into
+  one the mouse opened), Left goes back, and focus inside goes back to the row whenever it shuts. It is drawn inside
+  the menu (a press in it counts as inside) and wears the menu's zoom; it hangs right of the row, left where the window
+  has no room, and under or over the row where neither side has (a phone), so the row stays readable. The tab menu's
+  Convert to is one.
+- A `ChromeMenu` stops the keys it handles (arrows, Home, End, Tab) from going on: the board pans on arrows from the
+  window, and a camera move closes every dropdown. The camera also ignores keys pressed inside `[data-mod-menu]`.
 - Dropdowns dismiss through `useDropdownDismiss`: the mouse fade counts from the nearest
   point the pointer has reached, so a panel that opens away from the pointer can be
   walked to. `fadeKeep` names the element a menu hangs from.

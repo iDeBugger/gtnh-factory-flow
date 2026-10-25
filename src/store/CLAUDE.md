@@ -106,7 +106,7 @@ Every save goes through `persistCanvas` in design-store.ts:
 - Exam: `new-plan-version.test.ts`, `dataset-cache.test.ts`, `refresh-project-recipes.test.ts`, the "active dataset
   follows the open plan" block of `factory-store.test.ts`, `ModSettings.test.tsx` (the New plans choice),
   `ModTabs.test.tsx` (chip, + menu, Convert to), `notices.test.ts` (the unserved notice). In the real app:
-  `scratch/probes/plan-version.mjs`.
+  `scratch/probes/version-ui.mjs` (Settings' New plans, Convert to, the tab chip; desktop and phone).
 
 ## Library posts are copies
 

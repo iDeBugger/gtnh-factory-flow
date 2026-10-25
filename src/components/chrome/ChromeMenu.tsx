@@ -2,7 +2,7 @@
 
 import "./chrome.css";
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useDropdownDismiss } from "@/lib/hooks/use-dropdown-dismiss";
 import { activateOnKey } from "@/lib/hooks/button-keys";
@@ -50,8 +50,8 @@ export interface MenuEntry {
   /** A font-family for the label alone (the font picker shows each font in itself). */
   labelFont?: string;
   /**
-   * The rows of a menu this row opens at its side (the mouse over it, a press, or the right arrow); `onSelect` is not
-   * called for such a row.
+   * The rows of a menu this row opens at its side (the mouse over it for `SUBMENU_HOVER_MS`, a press, or Right or
+   * Enter); `onSelect` is not called for such a row.
    */
   submenu?: MenuEntry[];
   onSelect: () => void;
@@ -59,6 +59,28 @@ export interface MenuEntry {
 
 /** The attribute that makes a press on an element count as inside the menu it opens (the key toggles it). */
 export const MENU_ANCHOR_ATTR = "data-menu-anchor";
+
+/**
+ * Hover intent: the mouse opens a submenu, or shuts it by moving to another row, only after resting this long. A
+ * pointer crossing other rows on its way into the submenu reaches it first, which cancels the pending close.
+ */
+export const SUBMENU_HOVER_MS = 200;
+
+/** What a row asks of its submenu. */
+type SubAsk =
+  /** The mouse came onto the row (`open`: the row has a submenu); takes effect after `SUBMENU_HOVER_MS`. */
+  | { kind: "hover"; open: boolean }
+  /** A press opens it; a touch or pen press toggles it. */
+  | { kind: "press"; toggle: boolean }
+  /** Right or Enter: open it and move focus into it. */
+  | { kind: "keys" }
+  /** Left from inside it: shut it. */
+  | { kind: "back" }
+  /** The pointer reached the submenu or its row: a pending change is dropped. */
+  | { kind: "stay" };
+
+/** The keys a menu handles itself; they never reach the board's camera or anything else on the page. */
+const MENU_KEYS = new Set(["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End", "Tab"]);
 
 /**
  * The mod's PickList in Popup's frame: rows 20 high, the label left, the detail right in muted ink, the hovered
@@ -87,8 +109,34 @@ export function ChromeMenu({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  // The row whose submenu is open, and whether the keyboard opened it (its first row then takes focus).
-  const [sub, setSub] = useState<{ index: number; focus: boolean }>();
+  // The row whose submenu is open; `focus` counts the keyboard's asks (each moves focus to its first row).
+  const [sub, setSub] = useState<{ index: number; focus: number }>();
+  const hoverTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
+  const askSub = (index: number, ask: SubAsk) => {
+    window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = undefined;
+    if (ask.kind === "stay") return;
+    if (ask.kind === "hover") {
+      // Already the open one, or nothing open to shut: no wait.
+      if (ask.open ? sub?.index === index : sub === undefined) return;
+      hoverTimer.current = window.setTimeout(() => {
+        setSub(ask.open ? { index, focus: 0 } : undefined);
+      }, SUBMENU_HOVER_MS);
+      return;
+    }
+    if (ask.kind === "back") {
+      setSub(undefined);
+      return;
+    }
+    if (ask.kind === "keys") {
+      setSub((current) => ({ index, focus: (current?.index === index ? current.focus : 0) + 1 }));
+      return;
+    }
+    setSub((current) =>
+      current?.index === index ? (ask.toggle ? undefined : current) : { index, focus: 0 },
+    );
+  };
   useDropdownDismiss(true, {
     refs: [ref],
     onClose,
@@ -152,6 +200,8 @@ export function ChromeMenu({
       onContextMenu={(event) => event.preventDefault()}
       tabIndex={-1}
       onKeyDown={(event) => {
+        // Keys the menu handles stop here: the board pans on arrows from the window, and a camera move closes menus.
+        if (MENU_KEYS.has(event.key)) event.stopPropagation();
         const rows = ownRows(ref.current);
         const at = rows.indexOf(document.activeElement as HTMLElement);
         const step = event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
@@ -175,7 +225,7 @@ export function ChromeMenu({
             entry={entry}
             onClose={onClose}
             subOpen={sub?.index === index ? sub : undefined}
-            onSub={(open, focus) => setSub(open ? { index, focus } : undefined)}
+            onSub={(ask) => askSub(index, ask)}
           />
         ))}
       </div>
@@ -200,12 +250,13 @@ function MenuRow({
 }: {
   entry: MenuEntry;
   onClose: () => void;
-  /** This row's submenu is open (`focus`: the keyboard opened it). */
-  subOpen?: { focus: boolean };
-  /** Opens (true) or shuts this row's submenu; any other row shuts the one open. */
-  onSub?: (open: boolean, focus: boolean) => void;
+  /** This row's submenu is open; `focus` counts the keyboard's asks to move into it. */
+  subOpen?: { focus: number };
+  onSub?: (ask: SubAsk) => void;
 }): ReactNode {
   const rowRef = useRef<HTMLDivElement>(null);
+  const pressedBy = useRef<string>("mouse");
+  const subId = useId();
   const hasSub = Boolean(entry.submenu?.length) && !entry.disabled;
   return (
     <>
@@ -219,14 +270,17 @@ function MenuRow({
           if (hasSub && event.target === event.currentTarget && ["ArrowRight", "Enter", " "].includes(event.key)) {
             event.preventDefault();
             event.stopPropagation();
-            onSub?.(true, true);
+            onSub?.({ kind: "keys" });
             return;
           }
           activateOnKey(event);
         }}
+        onPointerDown={(event) => {
+          pressedBy.current = event.pointerType || "mouse";
+        }}
         onPointerEnter={(event) => {
-          // The mouse opens a submenu by resting on its row, and shuts it on any other row. A finger presses instead.
-          if (event.pointerType === "mouse") onSub?.(hasSub, false);
+          // A finger presses instead: only the mouse opens and shuts by hovering.
+          if (event.pointerType === "mouse") onSub?.(subOpen ? { kind: "stay" } : { kind: "hover", open: hasSub });
         }}
         data-tone={entry.tone}
         data-current={entry.current ? "" : undefined}
@@ -235,12 +289,15 @@ function MenuRow({
         aria-disabled={entry.disabled || undefined}
         aria-haspopup={hasSub ? "menu" : undefined}
         aria-expanded={hasSub ? Boolean(subOpen) : undefined}
+        aria-controls={hasSub && subOpen ? subId : undefined}
         {...(entry.tip ? tipAttrs({ id: `menu|${entry.label}`, title: entry.tip }) : {})}
         onClick={() => {
           if (entry.disabled) return;
           playBoardSound("tick");
           if (hasSub) {
-            onSub?.(!subOpen, false);
+            // A mouse press opens it (the hover may have already); a touch or pen press toggles it.
+            onSub?.({ kind: "press", toggle: pressedBy.current !== "mouse" });
+            pressedBy.current = "mouse";
             return;
           }
           onClose();
@@ -258,14 +315,13 @@ function MenuRow({
       </div>
       {hasSub && subOpen ? (
         <SubMenu
+          id={subId}
           row={rowRef}
           label={entry.label}
           entries={entry.submenu!}
           focus={subOpen.focus}
-          onBack={() => {
-            onSub?.(false, false);
-            rowRef.current?.focus({ preventScroll: true });
-          }}
+          onStay={() => onSub?.({ kind: "stay" })}
+          onBack={() => onSub?.({ kind: "back" })}
           onClose={onClose}
         />
       ) : null}
@@ -274,22 +330,27 @@ function MenuRow({
 }
 
 /**
- * A row's submenu: the same rows, hung beside the row (to its right, or its left where the window has no room). It is
- * drawn inside the menu, so a press in it is a press inside, and it wears the menu's zoom: its box is in those pixels.
- * Picking a row closes the whole menu; the left arrow goes back to the row.
+ * A row's submenu: the same rows, hung beside the row (to its right, or its left where the window has no room; under
+ * or over it where neither side has room, so the row's own words stay in view). It is drawn inside the menu, so a
+ * press in it is a press inside, and it wears the menu's zoom: its box is in those pixels. Picking a row closes the
+ * whole menu; Left goes back to the row, and focus inside it goes back to the row whenever it shuts.
  */
 function SubMenu({
+  id,
   row,
   label,
   entries,
   focus,
+  onStay,
   onBack,
   onClose,
 }: {
+  id: string;
   row: React.RefObject<HTMLDivElement | null>;
   label: string;
   entries: MenuEntry[];
-  focus: boolean;
+  focus: number;
+  onStay: () => void;
   onBack: () => void;
   onClose: () => void;
 }) {
@@ -303,35 +364,55 @@ function SubMenu({
     const margin = 2 * scale;
     // The menu's top padding (4 GUI px) above its first row, so the first row lines up with the row it hangs from.
     const pad = 4 * scale;
+    const right = window.innerWidth - margin;
+    const bottom = window.innerHeight - margin;
     let left = at.right + scale;
-    if (left + box.width > window.innerWidth - margin) left = at.left - scale - box.width;
-    if (left < margin) left = Math.max(margin, window.innerWidth - margin - box.width);
-    const top = Math.max(margin, Math.min(at.top - pad, window.innerHeight - margin - box.height));
+    let top = at.top - pad;
+    if (left + box.width > right) left = at.left - scale - box.width;
+    if (left < margin) {
+      // Neither side has room (a phone): under the row, its right edge at the row's, or over it if the window ends.
+      left = Math.max(margin, Math.min(at.right - box.width, right - box.width));
+      top = at.bottom + box.height <= bottom ? at.bottom : at.top - box.height;
+    }
+    top = Math.max(margin, Math.min(top, bottom - box.height));
     setPlace({ left: left / scale, top: top / scale });
     // Measured once as it opens: the menu closes on a scroll, so the row does not move under it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Each keyboard ask moves focus to the first row, also into a submenu the mouse opened.
   useEffect(() => {
-    if (focus && place) ownRows(ref.current)[0]?.focus({ preventScroll: true });
-    // Only as it lands.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [place === undefined]);
+    if (focus > 0 && place) ownRows(ref.current)[0]?.focus({ preventScroll: true });
+  }, [focus, place]);
+  // Shut for any reason (Left, the mouse on another row) with focus inside: focus goes back to the row, never the page.
+  useLayoutEffect(() => {
+    const menu = ref.current;
+    const owner = row.current;
+    return () => {
+      if (menu?.contains(document.activeElement) && owner?.isConnected) owner.focus({ preventScroll: true });
+    };
+  }, [row]);
   return (
     <div
       ref={ref}
+      id={id}
       role="menu"
       aria-label={label}
       className="mm mm-sub"
       tabIndex={-1}
       style={place ? { left: place.left, top: place.top } : { left: 0, top: 0, visibility: "hidden" }}
+      onPointerEnter={onStay}
       onKeyDown={(event) => {
-        event.stopPropagation();
+        // Its keys are its own: neither the menu it hangs from nor the board's camera sees them.
+        if (MENU_KEYS.has(event.key)) event.stopPropagation();
         const rows = ownRows(ref.current);
         const at = rows.indexOf(document.activeElement as HTMLElement);
         const step = event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
         if (step) {
           event.preventDefault();
           rows[at < 0 ? (step > 0 ? 0 : rows.length - 1) : (at + step + rows.length) % rows.length]?.focus();
+        } else if (event.key === "Home" || event.key === "End") {
+          event.preventDefault();
+          rows[event.key === "Home" ? 0 : rows.length - 1]?.focus();
         } else if (event.key === "ArrowLeft") {
           event.preventDefault();
           onBack();
