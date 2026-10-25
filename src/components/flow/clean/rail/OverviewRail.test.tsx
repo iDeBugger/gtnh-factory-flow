@@ -635,3 +635,29 @@ it("steps a machine's tier from its line as the card does", () => {
   fireEvent.click(chip);
   expect(was()).not.toBe("LV");
 });
+
+it("repaints its rates and machine draw when the rate or power unit changes, without a new solve", () => {
+  load(mockLeftovers);
+  const { container } = render(<OverviewRail />);
+  const lineNumbers = () => [...container.querySelectorAll(".rail-line .rail-num")].map((e) => e.textContent);
+  const machineDraw = () => [...container.querySelectorAll(".rail-machine .rail-eu")].map((e) => e.textContent);
+  const solved = useFactoryStore.getState().lastResult;
+  const perSecond = lineNumbers();
+  const inEu = machineDraw();
+  expect(perSecond.length).toBeGreaterThan(0);
+  expect(inEu.some((text) => text)).toBe(true);
+  try {
+    act(() => useFactoryStore.getState().setRateUnit("minute"));
+    expect(lineNumbers()).not.toEqual(perSecond);
+    // Amps of one tier for the whole board: the overview quotes it too (the per-card Amps key leaves it in EU/t).
+    act(() => useFactoryStore.getState().setPowerDisplayUnit("LV"));
+    expect(machineDraw()).not.toEqual(inEu);
+    // A display dial repaints numbers only: the answer on hand is the same object.
+    expect(useFactoryStore.getState().lastResult).toBe(solved);
+  } finally {
+    act(() => {
+      useFactoryStore.getState().setRateUnit("second");
+      useFactoryStore.getState().setPowerDisplayUnit("eu");
+    });
+  }
+});
