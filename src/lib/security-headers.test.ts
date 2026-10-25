@@ -5,7 +5,7 @@ import {
   securityHeaders,
   STRICT_TRANSPORT_SECURITY,
   workerPolicy,
-} from "./security-headers";
+} from "../../security-headers.config";
 
 const production = { production: true };
 

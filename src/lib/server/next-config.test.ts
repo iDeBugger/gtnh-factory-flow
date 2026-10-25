@@ -63,24 +63,23 @@ describe("the build identity the config bakes in", () => {
     vi.unstubAllEnvs();
   });
 
-  it("imports from src/ only modules that import nothing themselves: next start loads the config again at run time", async () => {
+  it("imports nothing from src/, only self-contained files beside it: next start loads the config again at run time", async () => {
     // A site image that ships no src/ crashes on its first request at a
-    // config import it lacks, so every src/ module the config imports must
-    // be a self-contained file the image copies (the deploy's Dockerfile).
+    // config import it lacks, so the config's own files sit beside it (the
+    // deploy's Dockerfile copies them) and import nothing themselves.
     const { readFileSync } = await import("node:fs");
-    const source = readFileSync(new URL("../../../next.config.ts", import.meta.url), "utf8");
-    const imports = [...source.matchAll(/^\s*import[^;]*?from\s+["']([^"']+)["']/gm)].map(
-      (match) => match[1] ?? "",
-    );
-    const fromSrc = imports.filter((specifier) => /^(\.|@\/)/.test(specifier));
-    expect(fromSrc.sort()).toEqual(["./src/lib/security-headers", "./src/lib/server/request-body"]);
-    for (const specifier of fromSrc) {
-      const module = readFileSync(
-        new URL(`../../../${specifier.slice(2)}.ts`, import.meta.url),
-        "utf8",
-      );
+    const read = (file: string) => readFileSync(new URL(`../../../${file}`, import.meta.url), "utf8");
+    const importsOf = (source: string) =>
+      [...source.matchAll(/^\s*(?:import|export)[^;]*?from\s+["']([^"']+)["']/gm)].map((match) => match[1] ?? "");
+    const source = read("next.config.ts");
+    const local = importsOf(source).filter((specifier) => /^(\.|@\/)/.test(specifier));
+    expect(local.sort()).toEqual(["./body-limits.config", "./security-headers.config"]);
+    for (const specifier of local) {
+      const module = read(`${specifier.slice(2)}.ts`);
       expect(module, specifier).not.toMatch(/^\s*import\s(?!type\b)/m);
+      expect(importsOf(module), specifier).toEqual([]);
     }
+    expect(source).not.toMatch(/["']\.\/src\/|["']@\//);
     expect(source).not.toMatch(/require\(\s*["'](\.|@\/)/);
   });
 

@@ -1,9 +1,10 @@
 /**
  * The response headers every answer carries, built for next.config.ts.
  *
- * Dependency-free and imported by a relative path: next.config.ts is loaded
- * through Next's own require hook, which transpiles relative `.ts` imports
- * and knows no `@/` alias.
+ * Beside next.config.ts and dependency-free: `next start` loads the config
+ * again at run time, and the site image ships the config's own files but no
+ * `src/`. Next's require hook transpiles a relative `.ts` import and knows no
+ * `@/` alias.
  *
  * The document policy keeps `'unsafe-inline'` for scripts because the App
  * Router streams its payload as inline `<script>` tags whose content differs

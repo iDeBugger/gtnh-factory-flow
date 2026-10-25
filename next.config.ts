@@ -2,8 +2,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { NextConfig } from "next";
-import { securityHeaders } from "./src/lib/security-headers";
-import { PROXY_BODY_MAX_BYTES } from "./src/lib/server/request-body";
+import { PROXY_BODY_MAX_BYTES } from "./body-limits.config";
+import { securityHeaders } from "./security-headers.config";
 
 const datasetBackendUrl = process.env.GTNH_DATASET_BACKEND_URL?.replace(/\/+$/, "");
 
@@ -78,7 +78,7 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     // The headers are read at build into the routes manifest, which is also when NEXT_PUBLIC_* is fixed.
-    // Security headers first (src/lib/security-headers.ts: the policy, framing, nosniff, referrer, HSTS, and
+    // Security headers first (security-headers.config.ts: the policy, framing, nosniff, referrer, HSTS, and
     // the solver worker's own policy on the static chunks), then the texture cache rules.
     return [
       ...securityHeaders({

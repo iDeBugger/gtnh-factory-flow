@@ -30,7 +30,9 @@
   archive` has no git, so its Dockerfile must pass `ARG GTNH_BUILD_ID` to the build) or else
   `<APP_VERSION>-<git sha8>` (`-dirty` with uncommitted changes), or `APP_VERSION` with neither. `next.config.ts`
   imports nothing from `src/` (it reads `version.ts` as text): `next start` loads it again at run time and the site
-  image ships no `src/` (`next-config.test.ts` pins it). `datasetCacheHeaders` marks an answer immutable for a
+  image ships no `src/`. Its own modules sit beside it and import nothing (`security-headers.config.ts`,
+  `body-limits.config.ts`, which `request-body.ts` re-exports); the image must copy them with it
+  (`next-config.test.ts` pins it). `datasetCacheHeaders` marks an answer immutable for a
   year only when both keys are there and the version is this build's; anything else is `no-store`, so no build that
   changes a ranking is served from another build's URL, even under one APP_VERSION. Exam:
   `dataset-cache-headers.test.ts`, `browser-loader.test.ts`.
@@ -89,8 +91,8 @@
 - The image optimizer is off (`images.unoptimized` in next.config.ts): nothing uses next/image, and
   `/_next/image` would hand any same-origin PNG (uploads, dataset textures) to sharp. Pictures are served
   by the app's own routes or plain `<img>`; keep it that way.
-- Every answer carries the security headers of `src/lib/security-headers.ts` (built into the routes manifest
-  by `next.config.ts` at build): one Content-Security-Policy, `X-Frame-Options: SAMEORIGIN`, nosniff,
+- Every answer carries the security headers of `security-headers.config.ts` (beside next.config.ts, which builds
+  them into the routes manifest at build): one Content-Security-Policy, `X-Frame-Options: SAMEORIGIN`, nosniff,
   `Referrer-Policy`, the one HSTS value; `X-Powered-By` is off. The policy allows only the site's own origin for
   scripts, styles, fonts, fetch/WebSocket and workers (`blob:` workers too), `data:`/`blob:`/`https:` images,
   and no framing by other origins. `/_next/static/*` gets a second policy with `'unsafe-eval'`: the solver
