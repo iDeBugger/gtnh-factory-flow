@@ -71,7 +71,16 @@ import {
   inputOverrideAmount,
   switchesSlotToOwnProduct,
 } from "@/lib/model/recipe-input-overrides";
-import { releaseRevokedSubstitutes } from "@/lib/model/release-input-overrides";
+import {
+  findRevokedSubstitutes,
+  findSteamHandlerMoves,
+  keptSubstituteLine,
+  movedSubstituteLine,
+  REVOKED_SUBSTITUTES_NOTICE,
+  STEAM_HANDLER_NOTICE,
+  withNoticeLines,
+  type RevokedSubstitute,
+} from "@/lib/model/revoked-substitutes";
 import type { AlternativeCycleFace } from "@/lib/nei/alternative-cycle";
 import { createCropFarmPlaceholderRecipe, isCropFarmRecipe } from "@/lib/model/passive-production";
 import { buildPowerRecipe, isPowerRecipe } from "@/lib/power/power-recipe";
@@ -345,7 +354,16 @@ interface FactoryStore {
    * that stands in for it (matched by content on load), and the nodes on
    * it follow to the new id.
    */
-  refreshProjectRecipes: (recipes: Recipe[], migration?: Record<string, string>) => void;
+  /** The recipe refresh; answers the slot picks the fresh bodies no longer offer, for settleRevokedSubstitutes. */
+  refreshProjectRecipes: (recipes: Recipe[], migration?: Record<string, string>) => RevokedSubstitute[];
+  /**
+   * Settles revoked picks once their twins are known: a card whose pick has one twin on its own map moves onto it
+   * as an edit (wires kept, one undo step, sent to a live room like any edit); any other card stays as it is. The
+   * plan notice names every card either way.
+   */
+  settleRevokedSubstitutes: (settled: Array<{ revoked: RevokedSubstitute; twin?: Recipe }>) => void;
+  /** Adds the lines saying where cards saved on a steam machine went (`findSteamHandlerMoves`) to the plan notice. */
+  noteSteamHandlerMoves: (lines: string[]) => void;
   clearDataset: () => void;
   setDatasetLoading: (isLoading: boolean) => void;
   setProjectImporting: (isImporting: boolean) => void;
@@ -1425,6 +1443,7 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
     }
   },
   refreshProjectRecipes: (recipes, migration = {}) => quietly(() => {
+    let revoked: RevokedSubstitute[] = [];
     setPresentation((state) => {
       if (recipes.length === 0) {
         return state;
@@ -1434,12 +1453,7 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
       const refreshedFor = (storedId: string) =>
         recipesById.get(storedId) ??
         (migration[storedId] ? recipesById.get(migration[storedId]) : undefined);
-      const storedById = new Map<string, Recipe>();
-      for (const stored of state.project.recipes) {
-        const refreshed = refreshedFor(stored.id);
-        if (refreshed) storedById.set(refreshed.id, stored);
-      }
-      const refreshedProject = {
+      let project: FactoryProject = {
         ...state.project,
         recipes: state.project.recipes.map((recipe) => {
           const refreshedRecipe = refreshedFor(recipe.id);
@@ -1485,15 +1499,61 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
             : nextNode;
         }),
       };
-      // A substitute the fresh body no longer lists is one the game never took.
-      const project = releaseRevokedSubstitutes(refreshedProject, storedById);
+      // A steam multiblock with no fluid input hatch is never offered for a recipe with a fluid input
+      // (getRecipeMachineHandlers, and the pipeline per pack): a card saved on one says where it went.
+      const steamMoves = findSteamHandlerMoves(state.project, project);
+      const moved = new Set(steamMoves.map((entry) => entry.nodeId));
+      if (moved.size > 0) {
+        project = {
+          ...project,
+          nodes: project.nodes.map((node) => (moved.has(node.id) ? { ...node, machineHandlerId: undefined } : node)),
+        };
+      }
+      const steamLines = steamMoves.map((entry) => entry.line);
+      // A substitute the fresh body no longer lists is one the game never took. The card keeps it here (the
+      // refresh is quiet, so it must not rewire anything); settleRevokedSubstitutes moves or names it.
+      revoked = findRevokedSubstitutes(state.project, project);
 
       return {
         project,
         lastResult: solveBooks(project),
+        ...(steamLines.length > 0
+          ? { planNotice: withNoticeLines(state.planNotice, STEAM_HANDLER_NOTICE, steamLines) }
+          : {}),
       };
     });
+    return revoked;
   }),
+  noteSteamHandlerMoves: (lines) => {
+    if (lines.length === 0) return;
+    set((state) => ({ planNotice: withNoticeLines(state.planNotice, STEAM_HANDLER_NOTICE, lines) }));
+  },
+  settleRevokedSubstitutes: (settled) => {
+    if (settled.length === 0) return;
+    const lines: string[] = [];
+    for (const { revoked, twin } of settled) {
+      const state = get();
+      const node = state.project.nodes.find((entry) => entry.id === revoked.nodeId);
+      const recipe = state.project.recipes.find((entry) => entry.id === revoked.recipeId);
+      const view = node ? listNodeSections(node).find((entry) => entry.section === revoked.section)?.node : undefined;
+      const pick = view?.recipeInputOverrides?.[String(revoked.slot)];
+      // The card moved on since the refresh (an edit, a remote batch): nothing to say about it any more.
+      if (!node || !recipe || view?.recipeId !== revoked.recipeId || pick?.kind !== revoked.pick.kind || pick.id !== revoked.pick.id) {
+        continue;
+      }
+      // Only a card's own recipe, on a card that runs no other, moves: a shared machine's sections must all
+      // fit its machine, which a swap here would not check.
+      if (twin && revoked.section === 0 && !node.extraRecipes?.length && !state.isReadOnly && !refusesDatasetRecipe(state, twin)) {
+        set((current) => swapMachineRecipeToState(current, node.id, twin));
+        lines.push(movedSubstituteLine(recipe, revoked.pick));
+      } else {
+        lines.push(keptSubstituteLine(recipe, revoked));
+      }
+    }
+    if (lines.length > 0) {
+      set((state) => ({ planNotice: withNoticeLines(state.planNotice, REVOKED_SUBSTITUTES_NOTICE, lines) }));
+    }
+  },
   clearDataset: () => {
     set({
       dataset: undefined,

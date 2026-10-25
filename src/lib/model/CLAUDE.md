@@ -36,11 +36,16 @@ Types, Zod schemas, resource keys, recipe rules, and the load funnel
 - Unresolved oredict slots cycle their ART only; names stay "Any ...", and rates, wire
   colours, handles and solver identity stay fixed. Never store animation frames or invent a
   concrete source for an icon (`category-presentation.ts`).
-- A slot never switches to its own recipe's product (`switchesSlotToOwnProduct`): a pick
-  from "what makes X" leaves X out of the inputs, and the funnel lets go of saved ones
-  and the wires that fed them (`release-input-overrides.ts`). The recipe refresh likewise
-  lets go of a pick the stored body offered in that slot and the fresh body does not
-  (`releaseRevokedSubstitutes`): the funnel alone cannot tell such a pick from a real one.
+- A pick from "what makes X" never puts X in a slot of that recipe (`switchesSlotToOwnProduct`
+  in `buildRecipeInputOverrides`). The funnel never drops a saved pick or its wire: it has no
+  dataset, and a recipe that takes its own product can be a real loop (a Thaumcraft Crucible
+  turns any iron nugget into three).
+- A pick the stored body offered in a slot and the refreshed body does not is REVOKED
+  (`revoked-substitutes.ts`, found by `refreshProjectRecipes`, which stays quiet and changes
+  nothing). `settleRevokedSubstitutes` then moves a card onto its one same-map twin that takes
+  the pick in that slot (`swapMachineRecipe`: wires kept, one undo step, sent to a live room as
+  an edit, which every client makes the same way, so the plan never differs between them) and
+  leaves any other card as it is; the plan notice names each card.
 
 ## Shared machines (shared-machine.ts)
 

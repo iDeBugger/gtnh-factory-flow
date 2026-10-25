@@ -144,7 +144,12 @@ function buildResourceIndex(dataset) {
         recipeCount: 1,
         tooltip: resource.tooltip ?? indexed?.tooltip,
         oreDictionary: resource.oreDictionary ?? indexed?.oreDictionary,
-        alternatives: itemLevelAlternatives(indexed),
+        // The index entry is the resource itself, shared by every recipe that names it, so it takes only the
+        // catalog's item-level choices (an ore dictionary group's members). What one SLOT accepts (GT5U's
+        // SubstituteFluidStack, mOreDictAlt and unification) stays on that recipe's input: copied here, the
+        // Fertilizer's Water-or-Distilled-Water slot offered Distilled Water in every Water slot the server
+        // hydrates, and a machine's unified Steel Plate slot offered Refined Iron Plate in shaped crafting.
+        alternatives: indexed?.alternatives,
       });
     }
   }
@@ -176,20 +181,8 @@ function mergeResourceIcon(target, resource, indexed) {
     target.tooltip = resource.tooltip ?? indexed?.tooltip;
   }
   if (!target.alternatives) {
-    target.alternatives = itemLevelAlternatives(indexed);
+    target.alternatives = indexed?.alternatives;
   }
-}
-
-// The index entry is the resource itself, shared by every recipe that names it,
-// so it takes only the catalog's item-level choices (an ore dictionary group's
-// members). Alternatives on a recipe's input are what that one SLOT accepts
-// (GT5U's SubstituteFluidStack and mOreDictAlt) and stay on that recipe: the
-// Fertilizer recipe's Water slot also takes Distilled Water, and copying that
-// onto Water offered Distilled Water in every Water slot the server hydrates.
-// The same holds on every pack version: 2.8.1 has no fluid substitutes, but
-// its item slots leaked the same way (Steel Ingot offering Refined Iron).
-function itemLevelAlternatives(indexed) {
-  return indexed?.alternatives;
 }
 
 function currentIconPath(resourceIconPath, indexedIconPath) {

@@ -1,4 +1,6 @@
 import { DEFAULT_DATASET_MANIFEST_URL, pickDatasetVersionFor } from "@/lib/datasets";
+import { findRevokedSubstitutes, findSteamHandlerMoves } from "@/lib/model/revoked-substitutes";
+import { findRevokedSubstituteTwins } from "@/lib/datasets/revoked-substitute-twins";
 import {
   getRecipeDatasetRecipe,
   getRecipeDatasetRecipeIds,
@@ -215,7 +217,19 @@ async function openPlanJson(text: string, fallbackName: string): Promise<void> {
     return;
   }
   const hydration = await hydrateImportedProjectRecipes(importedProject, datasetVersion);
+  // The fresh bodies replace the file's, so a pick the file's body offered and the dataset no longer does is
+  // found here, as the landing refresh finds it for a stored plan.
+  const revoked = findRevokedSubstitutes(importedProject, hydration.project);
+  const steamMoves = findSteamHandlerMoves(importedProject, hydration.project);
   await importProjectAsDesign(refreshImportedProjectEdges(hydration.project), name);
+  useFactoryStore.getState().noteSteamHandlerMoves(steamMoves.map((entry) => entry.line));
+  if (revoked.length > 0) {
+    const landed = useFactoryStore.getState().project;
+    const settled = await findRevokedSubstituteTwins(DEFAULT_DATASET_MANIFEST_URL, datasetVersion, landed, revoked);
+    if (useFactoryStore.getState().project.id === landed.id) {
+      useFactoryStore.getState().settleRevokedSubstitutes(settled);
+    }
+  }
 }
 
 /** Open a plan file (.json, or a .png / .svg picture that carries the plan) as a new design tab. */

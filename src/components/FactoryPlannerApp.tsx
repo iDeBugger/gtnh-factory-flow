@@ -1,6 +1,7 @@
 "use client";
 
 import { startLandingRefresh } from "@/lib/datasets/refresh-project-recipes";
+import { findRevokedSubstituteTwins } from "@/lib/datasets/revoked-substitute-twins";
 import { datasetServesPlan } from "@/lib/datasets/dataset-cache";
 import { gameVersionOfDataset, planGameVersion } from "@/lib/model/game-version";
 import { bootWaitsForPlans, useOpenPlanVersionHint } from "@/lib/datasets/new-plan-version";
@@ -124,7 +125,24 @@ export function FactoryPlannerApp() {
           const state = useFactoryStore.getState();
           return state.dataset === dataset && datasetServesPlan(dataset, state.project);
         },
-        apply: refreshProjectRecipes,
+        apply: (refreshed, migration) => {
+          const revoked = refreshProjectRecipes(refreshed, migration);
+          const version = datasetManifest?.versions.find((entry) => entry.id === dataset?.datasetVersionId);
+          if (revoked.length === 0 || !version) return;
+          // A pick the fresh body no longer offers moves to its twin recipe or is named in the notice.
+          const refreshedPlan = useFactoryStore.getState().project;
+          void findRevokedSubstituteTwins(
+            datasetManifestUrl ?? DEFAULT_DATASET_MANIFEST_URL,
+            version,
+            refreshedPlan,
+            revoked,
+          ).then((settled) => {
+            const state = useFactoryStore.getState();
+            if (state.project.id === refreshedPlan.id && state.dataset === dataset && datasetServesPlan(dataset, state.project)) {
+              state.settleRevokedSubstitutes(settled);
+            }
+          });
+        },
         retry: () => setRefreshRetry((count) => count + 1),
       }),
     // refreshRetry re-runs the refresh after an answer an edit dropped.

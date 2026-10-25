@@ -231,26 +231,79 @@ function createSelfLoopProject(): FactoryProject {
 }
 
 describe("a slot filled with its own recipe's product, on load", () => {
-  it("puts the Distillation Tower back on Water", () => {
-    const tower = normalizeLoadedProject(createSelfLoopProject()).nodes.find((node) => node.id === "tower");
-
-    expect(tower?.recipeInputOverrides).toBeUndefined();
-  });
-
-  it("drops the Distilled Water wire into that slot and keeps the drawer and the tower's own output", () => {
+  // The funnel has no dataset to tell a leaked pick from a real one, so it
+  // leaves every pick and wire as saved; the recipe refresh settles leaked ones.
+  it("keeps the pick and its wire as saved", () => {
     const normalized = normalizeLoadedProject(createSelfLoopProject());
 
-    expect(normalized.edges.map((edge) => edge.id)).toEqual(["tower-to-reactor"]);
-    expect(normalized.storages?.map((storage) => storage.id)).toEqual(["drawer"]);
-  });
-
-  it("keeps a slot set to its own resource", () => {
-    const distillery = normalizeLoadedProject(createSelfLoopProject()).nodes.find(
-      (node) => node.id === "distillery",
+    expect(normalized.nodes.find((node) => node.id === "tower")?.recipeInputOverrides?.["0"]?.id).toBe(
+      "ic2distilledwater",
     );
-
-    expect(distillery?.recipeInputOverrides?.["0"]).toEqual(expect.objectContaining({ id: "water" }));
+    expect(normalized.edges.map((edge) => edge.id).sort()).toEqual(["drawer-to-tower", "tower-to-reactor"]);
   });
+
+  /**
+   * A Thaumcraft Crucible duplicates its own input: any iron nugget and
+   * Metallum make three Iron Nuggets. A player who wires Iron Nuggets into the
+   * nugget slot, from a feeder or from the card's own output, keeps the wire.
+   */
+  function crucibleProject(withPick: boolean, targetHandle: string): FactoryProject {
+    const nugget = { kind: "item", id: "gregtech:gt.metaitem.01@9032", displayName: "Iron Nugget" } as const;
+    const group = { kind: "item", id: "oredict:nuggetIron", displayName: "Ore Dictionary: nuggetIron" } as const;
+    return {
+      schemaVersion: PROJECT_SCHEMA_VERSION,
+      id: "crucible",
+      name: "Crucible",
+      recipes: [
+        {
+          id: "crucible-iron",
+          name: "Thaumcraft Crucible: Iron Nugget",
+          machineType: "Thaumcraft Crucible",
+          minimumTier: "ULV",
+          durationTicks: 20,
+          eut: 0,
+          inputs: [
+            { ...group, amount: 1, alternatives: [{ ...nugget, amount: 1 }] },
+            { kind: "aspect", id: "thaumcraft:aspect:metallum", amount: 1, displayName: "Metallum" },
+          ],
+          outputs: [{ ...nugget, amount: 3 }],
+        },
+      ],
+      nodes: [
+        {
+          id: "c",
+          recipeId: "crucible-iron",
+          machineCount: 1,
+          parallel: 1,
+          position: { x: 0, y: 0 },
+          ...(withPick ? { recipeInputOverrides: { "0": { ...group, ...nugget, amount: 1 } } } : {}),
+        },
+      ],
+      storages: [],
+      edges: [
+        {
+          id: "loop",
+          source: "c",
+          target: "c",
+          sourceHandle: `output:item:${encodeURIComponent(nugget.id)}`,
+          targetHandle,
+          resourceKind: "item",
+          resourceId: nugget.id,
+        },
+      ],
+      fuelProfiles: [],
+    } as unknown as FactoryProject;
+  }
+
+  for (const withPick of [true, false]) {
+    for (const handle of ["gregtech:gt.metaitem.01@9032", "oredict:nuggetIron"]) {
+      it(`keeps a Crucible's nugget loop (pick ${withPick ? "saved" : "absent"}, wired to ${handle})`, () => {
+        const normalized = normalizeLoadedProject(crucibleProject(withPick, `input:item:${encodeURIComponent(handle)}`));
+
+        expect(normalized.edges.map((edge) => edge.id)).toEqual(["loop"]);
+      });
+    }
+  }
 });
 
 describe("wires into a trash can survive a reload", () => {
