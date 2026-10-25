@@ -33,8 +33,15 @@ describe("how the served dataset files reach a browser", () => {
     vi.stubEnv("GTNH_DATASET_BACKEND_URL", "https://example.test/");
     const proxied = await loadConfig();
     expect(proxied.rewrites.beforeFiles).toEqual([
-      { source: "/api/datasets/:path*", destination: "https://example.test/api/datasets/:path*" },
-      { source: "/datasets/gtnh/:path*", destination: "https://example.test/datasets/gtnh/:path*" },
+      // The version segment is a published name's characters, so an encoded `..%2f` there is never forwarded.
+      {
+        source: "/api/datasets/:version([A-Za-z0-9._-]+)/:rest*",
+        destination: "https://example.test/api/datasets/:version/:rest*",
+      },
+      {
+        source: "/datasets/gtnh/:version([A-Za-z0-9._-]+)/:rest*",
+        destination: "https://example.test/datasets/gtnh/:version/:rest*",
+      },
     ]);
   });
 
