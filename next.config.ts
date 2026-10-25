@@ -74,15 +74,17 @@ const nextConfig: NextConfig = {
     // decoded path; it runs before these rules, so the dev proxy below never
     // sees the gzips, the shards or recipes.json.
     return {
+      // The version segment holds only the characters a published name may (dataset-path-gate.ts), so an
+      // encoded `..%2f` in it is never forwarded to the backend; keep the backend an instance of this app.
       beforeFiles: datasetBackendUrl
         ? [
             {
-              source: "/api/datasets/:path*",
-              destination: `${datasetBackendUrl}/api/datasets/:path*`,
+              source: "/api/datasets/:version([A-Za-z0-9._-]+)/:rest*",
+              destination: `${datasetBackendUrl}/api/datasets/:version/:rest*`,
             },
             {
-              source: "/datasets/gtnh/:path*",
-              destination: `${datasetBackendUrl}/datasets/gtnh/:path*`,
+              source: "/datasets/gtnh/:version([A-Za-z0-9._-]+)/:rest*",
+              destination: `${datasetBackendUrl}/datasets/gtnh/:version/:rest*`,
             },
           ]
         : [],
