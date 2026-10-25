@@ -136,7 +136,7 @@ describe("the clean drawer", () => {
     expect(box.hasAttribute("data-fixed")).toBe(true);
   });
 
-  it("is grabbed by a grip wider than its bar: past its top and sides, a little into the row, under the keys", () => {
+  it("is grabbed by a grip taller than its bar: a little into the row, never past the drawer, under the keys", () => {
     load(storage());
     const { container } = renderDrawer(stored(), "source");
     // The grip is the drawer's own pseudo-element, so the bar's tip rides the drawer and the bar has none.
@@ -145,7 +145,7 @@ describe("the clean drawer", () => {
     const css = readFileSync(`${process.cwd()}/src/components/flow/clean/drawer/drawer.css`, "utf8");
     const grip = /\n\.cd::before \{([^}]*)\}/.exec(css)?.[1] ?? "";
     const value = (name: string) => new RegExp(`\\b${name}: ([^;]+);`).exec(grip)?.[1];
-    expect([value("left"), value("right"), value("top"), value("height")]).toEqual(["-4px", "-4px", "-8px", "21px"]);
+    expect([value("left"), value("right"), value("top"), value("height")]).toEqual(["0", "0", "0", "13px"]);
     // Over the row's wiring handle (30), under the delete and side keys (41).
     expect(Number(value("z-index"))).toBeGreaterThan(30);
     expect(Number(value("z-index"))).toBeLessThan(41);
