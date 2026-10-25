@@ -77,15 +77,13 @@ describe("the file store", () => {
       store.put("board-images", "big.png", big, { overwrite: true }),
     ).rejects.toBeInstanceOf(FileTooLargeError);
     expect(await store.get("board-images", "big.png")).toBeUndefined();
-    // The feedback bucket holds 5 MB.
-    await store.put("feedback-files", "report/plan-1.json", big, { overwrite: true });
   });
 
   it("writes files only the owner can read", async () => {
-    await store.put("feedback-files", "report/picture.png", bytes("p"), { overwrite: true });
-    expect(statSync(path.join(root, "feedback-files", "report", "picture.png")).mode & 0o777).toBe(
+    await store.put("plan-previews", "post/preview.png", bytes("p"), { overwrite: true });
+    expect(statSync(path.join(root, "plan-previews", "post", "preview.png")).mode & 0o777).toBe(
       0o600,
     );
-    expect(statSync(path.join(root, "feedback-files", "report")).mode & 0o777).toBe(0o700);
+    expect(statSync(path.join(root, "plan-previews", "post")).mode & 0o777).toBe(0o700);
   });
 });

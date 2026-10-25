@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseFactoryProjectJson, serializeFactoryProject } from "@/lib/import-export/factory-json";
 import { decodePlanCode, encodePlanCode } from "@/lib/import-export/plan-code";
-import { parseFeedback } from "@/lib/server/feedback";
 import { mockLeftovers } from "@/lib/solver/plan/__fixtures__/mock-extras";
 import { boardSelectionPayloadSchema, factoryNodeSchema, factoryProjectSchema } from "./schemas";
 import { normalizeLoadedProject } from "./project-normalize";
@@ -44,8 +43,8 @@ describe("plan mode fields survive every path", () => {
     expectFields(await decodePlanCode(await encodePlanCode(planProject())));
   });
 
-  // The community post routes (create and edit), the account library sync and
-  // the feedback attachment each parse the uploaded plan with
+  // The community post routes (create and edit) and the account library sync
+  // each parse the uploaded plan with
   // factoryProjectSchema and store/forward `parsed.data`; the request body is
   // JSON. Round-trip exactly that.
   it("community post and library sync bodies", () => {
@@ -53,19 +52,6 @@ describe("plan mode fields survive every path", () => {
     const parsed = factoryProjectSchema.safeParse(body.plan);
     expect(parsed.success).toBe(true);
     expectFields(parsed.data as FactoryProject);
-  });
-
-  it("feedback attachment", () => {
-    const result = parseFeedback({
-      kind: "bug",
-      title: "Plan",
-      deviceId: "device",
-      plans: [{ name: "Plan", plan: planProject() }],
-    });
-    expect("error" in result).toBe(false);
-    if (!("error" in result)) {
-      expectFields(result.plans[0]!.plan);
-    }
   });
 
   it("blueprint and clipboard payloads carry a card's port rates", () => {

@@ -7,11 +7,10 @@ import { BOARD_IMAGE_MAX_BYTES } from "@/lib/community/types";
  * Uploaded files, kept in a directory on the server (`FILE_STORE_DIR`, a
  * mounted volume in production) and served only by the site's own routes:
  * board images by `/api/community/images/<month>/<name>`, previews by the
- * post's preview route after its access check, feedback files by
- * `/api/feedback/files/<report>/<file>`. Nothing in the directory is served
- * as a static file, so a private bucket stays private.
+ * post's preview route after its access check. Nothing in the directory is
+ * served as a static file, so a private bucket stays private.
  */
-export type FileBucket = "board-images" | "plan-previews" | "feedback-files";
+export type FileBucket = "board-images" | "plan-previews";
 
 export interface FileStore {
   put(
@@ -37,7 +36,6 @@ export const FILE_KEY =
 export const FILE_BUCKET_MAX_BYTES: Record<FileBucket, number> = {
   "board-images": BOARD_IMAGE_MAX_BYTES,
   "plan-previews": BOARD_IMAGE_MAX_BYTES,
-  "feedback-files": 5 * 1024 * 1024,
 };
 
 const BUCKETS = new Set<string>(Object.keys(FILE_BUCKET_MAX_BYTES));

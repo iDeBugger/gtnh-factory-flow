@@ -30,8 +30,8 @@ infra commit first.
 | `site` (`gtnh-site`) | `gtnh-site:<tag>` | edge, backend | `127.0.0.1:3300` | datasets (read-only), `files`, `client-files` | 4 GB |
 | `live` (`gtnh-live`) | `gtnh-live:<tag>` | edge, backend | `127.0.0.1:3301` | `live-journal` | 600 MB |
 
-- Networks: `edge` is a bridge on `172.30.61.0/24` (gateway `172.30.61.1`), the only one with a way out (the
-  feedback route calls api.github.com); `backend` is internal on `172.30.62.0/24`. The subnets are fixed because
+- Networks: `edge` is a bridge on `172.30.61.0/24` (gateway `172.30.61.1`), the only one with a way out;
+  `backend` is internal on `172.30.62.0/24`. The subnets are fixed because
   the firewall and `LIVE_TRUSTED_PROXIES` name them.
 - Only site and live publish ports, on loopback; nothing binds a public or ZeroTier address. The site trusts
   `X-Client-Ip` from any peer (`src/lib/server/client-address.ts`), which is safe only because Caddy and the
@@ -80,7 +80,6 @@ and how to make it.
 | `LIVE_TRUSTED_PROXIES` | live | run | `172.30.61.1`, the edge gateway (measured, below) |
 | `LIVE_MAX_PLAN_BYTES`, `LIVE_MAX_ROOMS` | live | run | optional, 64 MB and 500 |
 | `COMMUNITY_ADMIN_TOKEN` | site | run | optional; deletes any community post |
-| `GITHUB_FEEDBACK_TOKEN`, `GITHUB_FEEDBACK_REPO`, `GITHUB_FEEDBACK_WEB_REPO` | site | run | optional; no default repo: without the token, or the repo a report needs (`owner/name`), `/api/feedback` answers 503 |
 | `GTNH_PREWARM_FULL_DATASETS` | site | run | optional |
 | `NEXT_PUBLIC_MOD_AND_COMMUNITY` | site, live | build and run | empty on stage; the two must be equal |
 | `NEXT_PUBLIC_SITE_URL` | site | build | the target's `SITE_URL` |
@@ -119,7 +118,7 @@ here uses sudo or edits a file the role manages.
     with `X-Client-Ip {client_ip}` set and `CF-Connecting-IP` dropped. No body limit or body timeout on this
     route: a read timeout on an upgraded socket would cut a live session.
   - Everything else goes to `127.0.0.1:3300` with the same headers, `request_body max_size 8MB` for every request
-    (the largest legitimate body is a 4 MB image or feedback report, a 3 MB plan) and a 30 s body read timeout for
+    (the largest legitimate body is a 4 MB image or plan upload) and a 30 s body read timeout for
     POST, PUT and PATCH only (the app cannot stop Next waiting for a slow body's end), and `lb_try_duration 30s`
     to hold requests while the site restarts.
   - The Host header is passed through unchanged: the site's same-origin check compares Origin with Host.
@@ -259,22 +258,6 @@ docker logs gtnh-live 2>&1 | grep 'untrusted peer'       # LIVE_TRUSTED_PROXIES 
 Caddy's JSON log for the vhost is `/var/log/caddy/gtnh-stage.log`. A slow first API call after a start means the
 prewarm or the deploy regressed; the site's healthcheck allows 180 s before counting failures.
 
-## Emergency stop for feedback
-
-Without a deploy: a Caddy route answering 503 to `POST /api/feedback`, through the infra repo's `Caddyfile.j2` and
-an apply. It must be a `handle`, placed before the site's catch-all `handle`: Caddy runs `handle` blocks before a
-bare `respond`, so a top-level `respond` would never fire.
-
-```caddy
-@feedback {
-	method POST
-	path /api/feedback
-}
-handle @feedback {
-	respond 503
-}
-```
-
 ## Cloudflare later
 
 Not done yet; for the public site:
@@ -292,5 +275,5 @@ Not done yet; for the public site:
 - Board image reads (`GET /api/community/images/...`, up to 4 MB from disk each) spend one unit of the address's
   dataset budget; floods from many addresses need Cloudflare's cache (the answers are `immutable`) or a rate rule.
 - Moving the public site off the hosted Supabase project is a data step: dump and restore the community tables,
-  copy the `plan-previews` and `feedback-files` objects into the file store (the code no longer reads Supabase
+  copy the `plan-previews` objects into the file store (the code no longer reads Supabase
   Storage), and accept that stored plans' board images keep their `supabase.co` URLs while that bucket exists.

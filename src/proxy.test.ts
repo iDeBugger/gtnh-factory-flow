@@ -8,7 +8,6 @@ import {
   UPLOAD_FORM_OVERHEAD_BYTES,
 } from "@/lib/community/types";
 import { RESOLVE_RECIPES_MAX_BYTES } from "@/lib/datasets/resolve-recipes-limits";
-import { FEEDBACK_MAX_BYTES } from "@/lib/server/feedback";
 import {
   COMMENT_BODY_MAX_BYTES,
   PROXY_BODY_MAX_BYTES,
@@ -53,7 +52,7 @@ describe("the API proxy", () => {
     expect(proxy(request("POST", {})).status).toBe(200);
     expect(
       proxy(
-        new NextRequest("http://localhost:3000/api/feedback", {
+        new NextRequest("http://localhost:3000/api/community/auth/logout", {
           method: "POST",
           headers: { host: "localhost:3000", origin: "http://localhost:3000" },
         }),
@@ -141,7 +140,6 @@ describe("the dataset gate in the proxy", () => {
 describe("what Next holds of a write body while the proxy runs", () => {
   it("sits above every route's cap, so a body Next cut at it still answers 413", () => {
     for (const cap of [
-      FEEDBACK_MAX_BYTES,
       COMMUNITY_UPLOAD_BODY_MAX_BYTES,
       BOARD_IMAGE_MAX_BYTES + UPLOAD_FORM_OVERHEAD_BYTES,
       BLUEPRINT_BODY_MAX_BYTES,

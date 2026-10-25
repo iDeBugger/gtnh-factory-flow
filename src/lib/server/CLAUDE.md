@@ -251,8 +251,8 @@ which bypasses row security. No anon role exists, so a request without the token
 
 ## Sessions and secrets (session.ts)
 
-- `sessionSecret()` is the one owner of `COMMUNITY_HASH_SALT`: the session HMAC, `saltedKey` (rate-limit, feedback
-  and voter keys) and nothing else read it. In production a missing, blank or development value throws
+- `sessionSecret()` is the one owner of `COMMUNITY_HASH_SALT`: the session HMAC, `saltedKey` (rate-limit and voter
+  keys) and nothing else read it. In production a missing, blank or development value throws
   "Sign-in is not set up on this server." at the call, so a server without the secret has no sign-in, library or
   blueprints while the planner keeps serving; outside production the public development secret applies, so a
   checkout signs in with no setup. Never add a second read of the variable or a second default. The live service
@@ -307,8 +307,7 @@ which bypasses row security. No anon role exists, so a request without the token
   so every route that reads a body reads it through `request-body.ts` (`readJsonCapped`, `readTextCapped`,
   `readFormDataCapped`) with a cap sized to what the client sends: a declared `content-length` over the cap is refused
   without parsing, a chunked body stops at the cap, and the answer is 413 with the route's own sentence. The read
-  happens where it happened before, so every gate, 503 and auth check that ran ahead of it still does. Caps: feedback
-  `FEEDBACK_MAX_BYTES` (4 MiB); plan uploads and synced designs `COMMUNITY_UPLOAD_BODY_MAX_BYTES` (4 MiB of bytes,
+  happens where it happened before, so every gate, 503 and auth check that ran ahead of it still does. Caps: plan uploads and synced designs `COMMUNITY_UPLOAD_BODY_MAX_BYTES` (4 MiB of bytes,
   then the player-facing 3 Mi-character count `COMMUNITY_UPLOAD_MAX_BYTES`); board images and plan previews
   `BOARD_IMAGE_MAX_BYTES + UPLOAD_FORM_OVERHEAD_BYTES` (the multipart is re-parsed from the capped bytes); blueprint
   saves `BLUEPRINT_BODY_MAX_BYTES` (2 MiB, the payload's own 1.5 MB check stays behind it); comments
@@ -350,22 +349,8 @@ which bypasses row security. No anon role exists, so a request without the token
 - Tests run with the default (off). A test of a gated feature calls `withModAndCommunityOn()`
   (`src/test-support/mod-and-community.ts`); a test of the off side calls `withModAndCommunityUnset()`.
 
-## Feedback from the game (feedback.ts, app/api/feedback)
+## Client address (client-address.ts)
 
-- Off (above), a report whose `origin` is absent or `game` answers 404 before the 503 and before the gate counts
-  it; that early read stops at `FEEDBACK_MAX_BYTES` even with no `content-length`. `web` is unchanged.
-- The in-game planner's Feedback box posts to `/api/feedback`; each report becomes an issue through
-  `GITHUB_FEEDBACK_TOKEN` on the repo its origin names: the game's on `GITHUB_FEEDBACK_REPO`, the web planner's
-  (`origin: "web"`) on `GITHUB_FEEDBACK_WEB_REPO` (`feedbackRepo`, `owner/name`; all three in
-  the server's `/opt/gtnh/.env`). There is no default repo, so a fork or a fresh deployment never sends its players'
-  reports to someone else's: without the token, or without the repo a report needs, the route answers 503 "Reports
-  can't be sent yet." and opens nothing. The token needs Issues read and write on both repos.
-- It was flooded on 2026-10-12 (450 spam issues from about 5,000 residential addresses, the mod's user agent, made-up
-  versions), so `feedback-guard.ts` stands in front: the mod's shapes (device id, versions), an in-memory gate (30
-  a minute for the site and 6 a minute per address; 60 refusals in 10 minutes pause reports for 6 hours, each address
-  counting at most 3 of them, so a pause takes 20 addresses and one address can never trip it), 3 an hour and 10 a
-  day per address and per device, the same words once a month, and at most 10 issues an hour and 40 a day for the
-  whole site. Player text is escaped (no pictures, links or HTML in the issue).
 - The client address is Caddy's `X-Client-Ip` (its `client_ip`: the peer, or behind Cloudflare its
   CF-Connecting-IP, trusted only from Cloudflare's ranges), then CF-Connecting-IP, each only as an IP literal; nothing else is read (X-Forwarded-For names a
   Cloudflare edge or the client's own chain, nothing sets X-Real-Ip). One module, `client-address.ts`
@@ -373,23 +358,14 @@ which bypasses row security. No anon role exists, so a request without the token
   keyed on its /64; a request with neither header is `"local"` (`NO_ADDRESS`), which the dataset budget never
   refuses. It is trustworthy only because Caddy and the stack's own containers are the site's only peers: compose
   publishes the site on `127.0.0.1:3300` only and the firewall drops outside traffic to it (`docs/deploy.md`). Exam: `client-address.test.ts`.
-- Emergency stop without a deploy: a Caddy `handle` answering 503 to `POST /api/feedback`, placed before the
-  site's catch-all `handle`, through the infra repo's `roles/caddy/templates/Caddyfile.j2` and an apply
-  (`docs/deploy.md`, Emergency stop).
-- Plans and the picture go to the private `feedback-files` bucket (the file store, below), served by `/api/feedback/files/<id>/<file>`, only
-  once every check has passed; a report whose issue GitHub refuses has its files removed again. An attached plan is
-  stored and linked without its task board (`tasks`, `taskItems`, `taskComments`, `primaryView`: account ids, names,
-  screenshot files, coordinates) and without `metadata.communityPlanId` (`reportablePlan`); the box says "Tasks and
-  comments stay out." The mod strips names, paths and addresses from logs and crash reports before sending.
 
 ## Uploaded files (file-store.ts)
 
-- Board images, plan previews and feedback files live in a directory, `FILE_STORE_DIR` (a volume in production;
-  outside production `scratch/local-db/files` when unset), one folder per bucket: `board-images`, `plan-previews`,
-  `feedback-files`. Nothing there is a static file: each bucket is served only by its own route. Board images by
+- Board images and plan previews live in a directory, `FILE_STORE_DIR` (a volume in production; outside
+  production `scratch/local-db/files` when unset), one folder per bucket: `board-images`, `plan-previews`. Nothing there is a static file: each bucket is served only by its own route. Board images by
   `GET /api/community/images/<YYYY-MM>/<18 hex>.<png|jpg|gif|webp>` (any other name 404, `immutable`, nosniff,
   one unit of the address's dataset budget per read),
-  previews by the post's preview route after its access check, feedback files by `/api/feedback/files/<id>/<file>`.
+  previews by the post's preview route after its access check.
 - A key is one to three plain segments, none starting with a dot (`FILE_KEY`), resolved inside its bucket, else
   `FileKeyError`. Each bucket has a size cap (`FILE_BUCKET_MAX_BYTES`). A write lands whole (temp file, then link or
   rename); `overwrite: false` refuses an existing key. Directories `0700`, files `0600`.

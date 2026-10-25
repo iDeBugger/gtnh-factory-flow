@@ -139,7 +139,7 @@ if (existsSync(path.join(root, "src", "live", "main.ts"))) {
 start("next", [bin.next, "dev", "--port", String(webPort)], {
   ...shared,
   NEXT_PUBLIC_LIVE_URL: `ws://localhost:${livePort}/live`,
-  // Board images, previews and feedback files.
+  // Board images and plan previews.
   FILE_STORE_DIR: path.join(root, "scratch", "local-db", "files"),
   // The origin uploaded board images and other absolute links name.
   NEXT_PUBLIC_SITE_URL: `http://localhost:${webPort}`,
