@@ -77,8 +77,10 @@ effect within 30 s, dropping anyone no longer shared.
   flush gets through.
 - At most 8 plans open per account (across its sockets) and 500 in the service (`LIVE_MAX_ROOMS`), holding at most
   64 MB of plan JSON between them (`LIVE_MAX_PLAN_BYTES`; a room still opening counts at its plan's stored size,
-  `plan_bytes`, read before the plan, so plans fired open together are budgeted exactly). The budget is checked when
-  a room opens: rooms already open can still grow through edits, up to 3 MB each, until the next open notices.
+  `plan_bytes`, read before the plan, so plans fired open together are budgeted exactly). The size and the lease are
+  two reads, so a save between them can make the plan bigger than reserved: once the room holds its plan, the budget
+  is checked again with the plan's own size, and an empty room over it closes and the join is refused as `rate`.
+  The budget is checked when a room opens: rooms already open can still grow through edits, up to 3 MB each, until the next open notices.
   Resident memory is about four times the budget plus that growth plus the baseline, so the unit's memory cap and
   heap follow from it. A full service refuses the join as `rate` and the website asks again a few seconds later; it
   closes a plan nobody is in only when open rooms fill the budget, not when plans still being opened do (a "busy"

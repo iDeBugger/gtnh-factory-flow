@@ -78,7 +78,8 @@ export const SERVICE_LIMITS = {
    * (LIVE_MAX_PLAN_BYTES). Past it, joins that would open a room are refused
    * as `rate` like a full `maxRooms`. A room still opening counts at its
    * plan's stored size (`plan_bytes`, read before the plan), or at
-   * `maxPlanChars` when that cannot be read. Resident memory is about four
+   * `maxPlanChars` when that cannot be read, and the room is checked again
+   * at its own size once it holds the plan. Resident memory is about four
    * times this, plus the baseline, plus what rooms already open grow by
    * through edits before the next open checks the budget.
    */
@@ -237,6 +238,11 @@ class OpensInFlight {
   /** Bytes reserved for the docs being opened whose size is known. */
   get reservedBytes(): number {
     return this.reserved;
+  }
+
+  /** Bytes reserved for one doc being opened (0 when it is not). */
+  bytesFor(doc: string): number {
+    return this.byDoc.get(doc)?.bytes ?? 0;
   }
 
   /** Docs being opened that `rooms` does not hold yet (the query before the open is pending). */
@@ -1210,11 +1216,18 @@ export class LiveService {
     if (lingering.length >= this.limits.roomsPerAccount) {
       void lingering[0]!.closeIfEmpty();
     }
-    await this.joinRoom(conn, doc);
+    await this.joinRoom(conn, doc, true);
   }
 
-  /** Joins the room for `doc`, open or opening, in the room's own turn. */
-  private async joinRoom(conn: Connection, doc: string): Promise<void> {
+  /**
+   * Joins the room for `doc`, open or opening, in the room's own turn.
+   * `budgeted`: this join opened the room against a reservation made from the
+   * plan's stored size, read in a statement before the lease. A save landing
+   * between the two can make the plan read bigger than reserved, so the
+   * budget is checked again with the room's own size before anyone is in it:
+   * over, the room closes and the join is refused as busy.
+   */
+  private async joinRoom(conn: Connection, doc: string, budgeted = false): Promise<void> {
     // A room closing as we arrive is replaced by a fresh one.
     for (let attempt = 0; attempt < 3; attempt += 1) {
       let opened: Room | undefined;
@@ -1243,6 +1256,19 @@ export class LiveService {
           return false;
         }
         if (conn.ws.readyState !== WebSocket.OPEN || room.peers.has(conn)) {
+          return true;
+        }
+        // Counted once: the room at the size it holds, the other plans being
+        // opened at what they reserved. A room someone is already in costs
+        // nothing more to join.
+        if (
+          budgeted &&
+          room.idle &&
+          this.openPlanBytes() + this.opening.reservedBytes - this.opening.bytesFor(doc) >=
+            this.limits.maxOpenPlanBytes
+        ) {
+          void room.closeIfEmpty();
+          this.error(conn, "rate", "The live service is busy. Try again shortly.", { doc });
           return true;
         }
         // Checked in the room's turn against the members it holds, which

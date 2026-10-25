@@ -1102,6 +1102,26 @@ describe("the live service", { timeout: 30_000 }, () => {
     expect((await bob.join(small.doc)).doc).toBe(small.doc);
   });
 
+  it("checks the budget again with the plan it read, when the plan grew after its size was read", async () => {
+    const real = supabasePlanStore();
+    // The size read says a few bytes; a save between it and the lease made
+    // the plan 4 KB, past a 3 KB budget. The room closes before anyone is in.
+    const { port, service } = await startService({
+      store: { ...real, size: async () => 10 },
+      limits: { maxOpenPlanBytes: 3000 },
+    });
+    const grown = await makeDesign({ notes: "n".repeat(4096) });
+    const small = await makeDesign({ notes: "n".repeat(100) });
+    const ann = await TestClient.open(port, { who: "ann" });
+    await ann.hello();
+    ann.send({ t: "join", doc: grown.doc });
+    expect(await ann.next("error")).toMatchObject({ code: "rate", doc: grown.doc });
+    await until(() => service.stats.rooms === 0);
+    expect(ann.frames.filter((frame) => frame.t === "snapshot")).toEqual([]);
+    // A plan that fits still opens.
+    expect((await ann.join(small.doc)).doc).toBe(small.doc);
+  });
+
   it("counts the plans an account is still opening against its share", async () => {
     const real = supabasePlanStore();
     const { port, service } = await startService({
