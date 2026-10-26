@@ -61,18 +61,8 @@
       "rule": "2"
     },
     {
-      "from": "src/app/api/blueprints/[blueprintId]/vote/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
       "from": "src/app/api/community/plans/[planId]/card/route.tsx",
       "to": "src/components/flow/tier-colors.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/community/plans/[planId]/vote/route.ts",
-      "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
     {
@@ -346,8 +336,5 @@
       "rule": "8"
     }
   ],
-  "queriesInApp": [
-    "src/app/api/blueprints/[blueprintId]/vote/route.ts",
-    "src/app/api/community/plans/[planId]/vote/route.ts"
-  ]
+  "queriesInApp": []
 }

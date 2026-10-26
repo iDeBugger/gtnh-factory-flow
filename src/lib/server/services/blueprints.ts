@@ -13,7 +13,6 @@ import { parsePlanSearch } from "@/lib/community/search-query";
 import { boardSelectionPayloadSchema } from "@/lib/model/schemas";
 import { makeVoterKey } from "../auth/keys";
 import {
-  attachMyBlueprintVotes,
   countBlueprintMachines,
   parseHighestTier,
   parseResourceStats,
@@ -26,6 +25,7 @@ import { checkRateLimit } from "../limits/rate-limit";
 import * as blueprints from "../repos/blueprints";
 import { canReadBlueprint, isUuid } from "./access";
 import { fail, ok, type ServiceResult } from "./result";
+import { attachMyVotes } from "./votes";
 
 /**
  * Blueprints: an account's saved board selections, and the public shelf
@@ -141,7 +141,7 @@ async function listPublic(
     .slice(0, PUBLIC_BLUEPRINT_PAGE_SIZE)
     .map((row) => rowToBlueprintSummary(row, viewer.userId));
   if (deviceId) {
-    await attachMyBlueprintVotes(summaries, await makeVoterKey(request, deviceId));
+    await attachMyVotes("blueprint", summaries, await makeVoterKey(request, deviceId));
   }
   return ok({ blueprints: summaries, hasMore });
 }

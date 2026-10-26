@@ -8,7 +8,6 @@ import {
 import type { EntryIcon } from "@/lib/community/types";
 import { getNodeMachineBuildCount } from "@/lib/model/passive-production";
 import type { FactoryNode, Recipe } from "@/lib/model/types";
-import { getCommunityDb } from "./db";
 
 /**
  * Client-computed stat lines (same trust model as community plan stats).
@@ -120,30 +119,3 @@ export function rowToBlueprintSummary(
   };
 }
 
-/** Marks each summary with the actor's own vote, exactly like plan listings. */
-export async function attachMyBlueprintVotes(
-  blueprints: BlueprintSummary[],
-  actorKey: string,
-): Promise<void> {
-  if (blueprints.length === 0) {
-    return;
-  }
-
-  const db = getCommunityDb();
-  const { data, error } = await db
-    .from("blueprint_votes")
-    .select("blueprint_id,value")
-    .eq("voter_key", actorKey)
-    .in(
-      "blueprint_id",
-      blueprints.map((blueprint) => blueprint.id),
-    );
-  if (error || !data) {
-    return;
-  }
-
-  const votes = new Map(data.map((vote) => [vote.blueprint_id as string, vote.value as 1 | -1]));
-  for (const blueprint of blueprints) {
-    blueprint.myVote = votes.get(blueprint.id);
-  }
-}

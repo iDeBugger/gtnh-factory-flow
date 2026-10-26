@@ -13,10 +13,8 @@ import { factoryProjectSchema } from "@/lib/model/schemas";
 import { APP_VERSION } from "@/lib/version";
 import { makeActorKey, makeVoterKey } from "../auth/keys";
 import {
-  attachMyVotes,
   parseEntryIcon,
   PLAN_SUMMARY_COLUMNS,
-  readPlanVotesByVoter,
   rowToPlanSummary,
   type PlanRow,
 } from "../community-rows";
@@ -29,6 +27,7 @@ import { PLAN_PREVIEW_BUCKET, PLAN_PREVIEW_MAX_SIDE, readPngHeader } from "../pl
 import * as plans from "../repos/plans";
 import { canSeePlan, isUuid, ownsPlan } from "./access";
 import { fail, ok, type ServiceResult } from "./result";
+import { attachMyVotes, readMyVotes } from "./votes";
 
 /**
  * Community posts: the list, a post's page, sharing, editing and taking a
@@ -229,7 +228,7 @@ export async function listPlans(
     const votesKey = `votes|${voterKey}`;
     let votes = readPlanListCache<Map<string, 1 | -1>>(votesKey);
     if (!votes) {
-      votes = await readPlanVotesByVoter(voterKey);
+      votes = await readMyVotes("plan", voterKey);
       writePlanListCache(votesKey, votes);
     }
     for (const plan of summaries) {
@@ -264,7 +263,7 @@ export async function readPlan(
   const plan = rowToPlanSummary(row, viewer.userId);
   await refreshStaleStats(planId, plan);
   if (deviceId) {
-    await attachMyVotes([plan], await makeVoterKey(request, deviceId));
+    await attachMyVotes("plan", [plan], await makeVoterKey(request, deviceId));
   }
   return ok({ plan });
 }

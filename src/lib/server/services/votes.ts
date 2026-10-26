@@ -1,0 +1,182 @@
+import type { CommunityVoteResponse } from "@/lib/community/types";
+import { makeActorKey, makeVoterKey, saltedKey } from "../auth/keys";
+import { blueprintStorageErrorMessage, DbQueryError } from "../db";
+import { clientAddress } from "../http/client-address";
+import type { Viewer } from "../http/viewer";
+import { checkRateLimit } from "../limits/rate-limit";
+import { invalidatePlanListCache } from "../plan-list-cache";
+import * as blueprints from "../repos/blueprints";
+import * as plans from "../repos/plans";
+import * as votes from "../repos/votes";
+import type { VoteTarget } from "../repos/votes";
+import { canSeePlan } from "./access";
+import { fail, ok, type ServiceResult } from "./result";
+
+export type { VoteTarget } from "../repos/votes";
+
+/**
+ * Anonymous votes one address may cast or switch on one post (or blueprint)
+ * in a day. The anonymous voter key is the browser's device id, which a
+ * script can make up freely, so without this one address casts a vote per
+ * made-up id. Accounts are keyed by account and exempt: a household behind
+ * one address can each vote signed in.
+ */
+export const VOTES_PER_ADDRESS_PER_PLAN_PER_DAY = 3;
+/** What the next anonymous voter behind that address is told: a shared network, not haste. */
+export const NETWORK_VOTES_SPENT = "Too many votes from this network today. Sign in to vote.";
+
+const VOTING_FAILED = "Voting failed.";
+
+/** A vote as the route read it from the body. */
+export interface VoteInput {
+  deviceId: string;
+  value: 1 | -1;
+}
+
+/** The body's vote: a device id (cut to 64 characters) and an up or down value, else "Invalid vote.". */
+export function parseVoteInput(body: unknown): ServiceResult<VoteInput> {
+  const sent = (body ?? {}) as { deviceId?: unknown; value?: unknown };
+  const deviceId = typeof sent.deviceId === "string" ? sent.deviceId.slice(0, 64) : "";
+  const value = sent.value === 1 || sent.value === -1 ? sent.value : undefined;
+  if (!deviceId || value === undefined) {
+    return fail("bad-request", "Invalid vote.");
+  }
+  return ok({ deviceId, value });
+}
+
+/** What differs between voting on a post and on a blueprint; the algorithm is the same. */
+interface TargetRules {
+  /** The action the address's pace (60 votes in 10 minutes) is counted under. */
+  paceAction: string;
+  notFound: string;
+  /**
+   * Whether the row exists and this viewer may score it, or the answer for a
+   * failed read. A row the viewer may not vote on reads as missing.
+   */
+  mayVote(viewer: Viewer, id: string): Promise<ServiceResult<boolean>>;
+  /** What else a counted vote changes. */
+  afterVote(): void;
+}
+
+const RULES: Record<VoteTarget, TargetRules> = {
+  // A post must be one the voter may see (`canSeePlan`): an unpublished post
+  // is nobody else's to score.
+  plan: {
+    paceAction: "vote",
+    notFound: "Plan not found.",
+    async mayVote(viewer, id) {
+      let row;
+      try {
+        row = await plans.readAccess(id);
+      } catch {
+        return fail("unavailable", VOTING_FAILED, { status: 500 });
+      }
+      return ok(Boolean(row && canSeePlan(viewer, row)));
+    },
+    // The list's cached pages and the voter's cached votes are stale now.
+    afterVote: invalidatePlanListCache,
+  },
+  // Only a public blueprint is on the shelf, so only a public one is scored, its owner's included.
+  blueprint: {
+    paceAction: "blueprint-vote",
+    notFound: "Blueprint not found.",
+    async mayVote(_viewer, id) {
+      let row;
+      try {
+        row = await blueprints.readAccess(id);
+      } catch (error) {
+        if (!(error instanceof DbQueryError)) {
+          throw error;
+        }
+        return fail("unavailable", blueprintStorageErrorMessage(error, VOTING_FAILED), { status: 500 });
+      }
+      return ok(Boolean(row?.is_public));
+    },
+    afterVote: () => undefined,
+  },
+};
+
+/**
+ * Casts, switches, or (when the voter sends the vote they already hold)
+ * retracts a vote on a post or a blueprint. Votes are keyed by account or
+ * device id (`makeVoterKey`); the address only feeds the limits. In order:
+ * the address's pace, then the row, which must exist and be one the viewer
+ * may vote on, with the same answer either way so the route is no oracle for ids; then an
+ * anonymous cast or switch counts against the address's few a day on that
+ * row (a retraction does not); then the write and a recount.
+ */
+export async function castVote(
+  target: VoteTarget,
+  id: string,
+  viewer: Viewer,
+  input: VoteInput,
+  request: Request,
+): Promise<ServiceResult<CommunityVoteResponse>> {
+  const rules = RULES[target];
+  // The pace comes first, so probing ids stays limited.
+  if (!(await checkRateLimit(makeActorKey(request), rules.paceAction, 60, 60 * 10))) {
+    return fail("rate-limited", "Voting too fast. Slow down.");
+  }
+  const allowed = await rules.mayVote(viewer, id);
+  if (!allowed.ok) {
+    return allowed;
+  }
+  if (!allowed.value) {
+    return fail("not-found", rules.notFound);
+  }
+
+  const voterKey = await makeVoterKey(request, input.deviceId);
+  const existing = await votes.read(target, id, voterKey);
+  const retracting = existing === input.value;
+  if (!viewer.userId && !retracting) {
+    const perTarget = `votes:address:${saltedKey(clientAddress(request))}:${id}`;
+    if (!(await checkRateLimit(perTarget, "vote-cast", VOTES_PER_ADDRESS_PER_PLAN_PER_DAY, 24 * 60 * 60))) {
+      return fail("rate-limited", NETWORK_VOTES_SPENT);
+    }
+  }
+
+  let myVote: 1 | -1 | undefined;
+  if (retracting) {
+    await votes.remove(target, id, voterKey);
+    myVote = undefined;
+  } else {
+    await votes.upsert(target, id, voterKey, input.value);
+    myVote = input.value;
+  }
+  const { upvotes, downvotes } = await votes.recount(target, id);
+  rules.afterVote();
+  return ok({ upvotes, downvotes, score: upvotes - downvotes, myVote });
+}
+
+/** The voter's votes on every row of the target, by id; none when the read fails. */
+export async function readMyVotes(target: VoteTarget, voterKey: string): Promise<Map<string, 1 | -1>> {
+  try {
+    return await votes.byVoter(target, voterKey);
+  } catch {
+    return new Map();
+  }
+}
+
+/** Marks each item with the voter's own vote, so its arrows render already lit; a failed read marks none. */
+export async function attachMyVotes(
+  target: VoteTarget,
+  items: Array<{ id: string; myVote?: 1 | -1 }>,
+  voterKey: string,
+): Promise<void> {
+  if (items.length === 0) {
+    return;
+  }
+  let mine: Map<string, 1 | -1>;
+  try {
+    mine = await votes.byVoter(
+      target,
+      voterKey,
+      items.map((item) => item.id),
+    );
+  } catch {
+    return;
+  }
+  for (const item of items) {
+    item.myVote = mine.get(item.id);
+  }
+}

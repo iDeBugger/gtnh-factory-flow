@@ -1,17 +1,5 @@
 import { entryIconSchema } from "@/lib/model/schemas";
 import type { CommunityPlanSummary, EntryIcon, PlanResourceStat } from "@/lib/community/types";
-import { getCommunityDb } from "./db";
-
-/**
- * Anonymous votes one address may cast or switch on one post (or blueprint)
- * in a day. The anonymous voter key is the browser's device id, which a
- * script can make up freely, so without this one address casts a vote per
- * made-up id. Accounts are keyed by account and exempt: a household behind
- * one address can each vote signed in.
- */
-export const VOTES_PER_ADDRESS_PER_PLAN_PER_DAY = 3;
-/** What the next anonymous voter behind that address is told: a shared network, not haste. */
-export const NETWORK_VOTES_SPENT = "Too many votes from this network today. Sign in to vote.";
 
 /**
  * The one item face an author picks for a shared entry. Client-supplied but
@@ -104,46 +92,4 @@ export function rowToPlanSummary(row: PlanRow, sessionUserId?: string): Communit
     lastCommentAt: row.last_comment_at ?? undefined,
     lastActivityAt: row.last_activity_at ?? undefined,
   };
-}
-
-/**
- * Every vote one voter key has cast on posts, by post id; none when the read
- * fails. The list reads them all at once and keeps them a minute, since a
- * voter's votes change only when they vote, which empties the cache.
- */
-export async function readPlanVotesByVoter(voterKey: string): Promise<Map<string, 1 | -1>> {
-  const { data } = await getCommunityDb()
-    .from("community_votes")
-    .select("plan_id,value")
-    .eq("voter_key", voterKey)
-    .returns<Array<{ plan_id: string; value: 1 | -1 }>>();
-  return new Map((data ?? []).map((vote) => [vote.plan_id, vote.value]));
-}
-
-export async function attachMyVotes(
-  plans: CommunityPlanSummary[],
-  actorKey: string,
-): Promise<void> {
-  if (plans.length === 0) {
-    return;
-  }
-
-  const db = getCommunityDb();
-  const { data, error } = await db
-    .from("community_votes")
-    .select("plan_id,value")
-    .eq("voter_key", actorKey)
-    .in(
-      "plan_id",
-      plans.map((plan) => plan.id),
-    );
-
-  if (error || !data) {
-    return;
-  }
-
-  const votesByPlan = new Map(data.map((vote) => [vote.plan_id as string, vote.value as 1 | -1]));
-  for (const plan of plans) {
-    plan.myVote = votesByPlan.get(plan.id);
-  }
 }
