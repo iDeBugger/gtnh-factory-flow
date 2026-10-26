@@ -278,7 +278,7 @@ describe("the database roles", () => {
     }
   });
 
-  it("runs the library repositories as the site role, transactions and row locks included", async () => {
+  it("runs every site-side library repository function as the site role, transactions and row locks included", async () => {
     const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) });
     useDbForTests(db);
     const stamp = "2026-10-26T10:00:00.000Z";
@@ -317,6 +317,31 @@ describe("the database roles", () => {
           { requireLeaseFree: true, now: stamp },
         );
         expect(saved).toMatchObject({ name: "Renamed" });
+        const byOwner = await designs.saveAsOwner(
+          OWNER,
+          "d2",
+          {
+            user_id: OWNER,
+            id: "d2",
+            name: "Owner's",
+            icon: { kind: "item", id: "minecraft:stone" },
+            folder_id: null,
+            closed: false,
+            favorite: true,
+            sort_order: 1,
+            community_plan_id: null,
+            created_at: stamp,
+            updated_at: stamp,
+            plan_updated_at: stamp,
+            deleted_at: null,
+            plan: { nodes: [2] },
+          },
+          { requireLeaseFree: true, now: stamp },
+        );
+        expect(byOwner).toMatchObject({ name: "Owner's", favorite: true });
+        expect(await designs.read(OWNER, "d2", { withPlan: true })).toMatchObject({ plan: { nodes: [2] } });
+        expect(await designMembers.isMember(MEMBER, OWNER, "d2")).toBe(true);
+        expect(await designMembers.list(OWNER, "d2")).toEqual([{ id: MEMBER, username: "member" }]);
         expect((await designs.listOwn(OWNER, 10)).map((row) => row.id)).toContain("d2");
         expect((await designs.sharedWith(MEMBER)).map((row) => row.id).sort()).toEqual(["d1", "d2"]);
         expect(await designMembers.rowsFor(MEMBER)).toHaveLength(2);
