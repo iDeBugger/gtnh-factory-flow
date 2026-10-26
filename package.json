@@ -21,7 +21,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "predev": "node tools/copy-highs-wasm.mjs",
-    "prebuild": "node tools/copy-highs-wasm.mjs"
+    "prebuild": "node tools/copy-highs-wasm.mjs",
+    "db:types": "tsx tools/db/generate-types.ts"
   },
   "dependencies": {
     "@supabase/postgrest-js": "2.110.8",
@@ -29,8 +30,10 @@
     "gifenc": "^1.0.3",
     "highs": "^1.15.2",
     "html-to-image": "^1.11.13",
+    "kysely": "0.29.7",
     "lucide-react": "^1.16.0",
     "next": "16.4.1",
+    "pg": "8.23.1",
     "pngjs": "^7.0.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -40,9 +43,11 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "0.2.11",
     "@tailwindcss/postcss": "^4",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^20",
+    "@types/pg": "8.23.1",
     "@types/pngjs": "^6.0.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",

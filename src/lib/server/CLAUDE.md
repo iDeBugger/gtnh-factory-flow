@@ -395,6 +395,16 @@ which bypasses row security. No anon role exists, so a request without the token
   database credentials.
 - Next.js never loads PGlite: it reaches the database over HTTP at `LOCAL_DB_URL` (`tools/local-db/serve.ts`, data in
   `scratch/local-db/pgdata`). Tests open it in memory and register it in-process (`useInProcessLocalDb`).
+- The direct client (`getDb`, Kysely over `pg`, `db/client.ts`) sits beside the PostgREST one while repositories move
+  across, behind the same breaker (`db/guard.ts`); nothing queries through it yet. It reads `DATABASE_URL`; pool sizes and
+  timeouts are `db/settings.ts`. Values parse the same on `pg` and PGlite (`DB_TYPE_PARSERS`: timestamptz as PostgREST's
+  JSON text, bigint as a number); a jsonb column takes only `json(value)`. Row types are generated (`npm run db:types`,
+  `db/schema.test.ts` fails while `db/schema.ts` is stale). Tests reach one PGlite through both clients with
+  `useTestDb()` (`src/test-support/test-db.ts`) and fail queries with `withDbFault`.
+- `npm run dev:local` gives both processes `DATABASE_URL=postgres://postgres@127.0.0.1:54330/postgres`: the compose
+  file's pinned `postgres` image in the container `gtnh-local-db` when Docker answers (the stand-in then runs over it),
+  else PGlite's socket, whose multiplexer is not isolated under concurrent queries (`tools/local-db/serve.ts` has the
+  probe). `LOCAL_DB_PGLITE=1` forces PGlite.
 - The stand-in covers the query shapes this code sends (filters, or-trees, counts, single, upserts). Files are not in
   the database: `npm run dev:local` keeps them in `scratch/local-db/files` (the file store below).
   A new shape (an embed, an rpc) needs it added there and a case in `postgrest-cases.ts`, which `postgrest.test.ts`

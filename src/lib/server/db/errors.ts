@@ -79,3 +79,53 @@ export class DbQueryError extends Error {
     this.code = error?.code;
   }
 }
+
+/**
+ * The database could not be reached or could not answer in time, thrown by
+ * the direct client (`db/guard.ts`) with the original error as `cause`. Its
+ * message is the player copy, which `serverErrorResponse` passes on.
+ */
+export class DatabaseDownError extends Error {
+  constructor(cause?: unknown) {
+    super(COMMUNITY_DB_DOWN_MESSAGE, cause === undefined ? undefined : { cause });
+    this.name = "DatabaseDownError";
+  }
+}
+
+/** Socket errors that mean the server is gone or unreachable. */
+const DOWN_SOCKET_CODES = new Set(["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "EHOSTUNREACH"]);
+/**
+ * SQLSTATEs that mean the server stopped the work or has no room for it:
+ * 57014 a statement timeout or cancel, 57P01..57P03 a shutdown or a server
+ * not accepting connections yet, 53300 too many connections. Class 08 is
+ * every connection exception.
+ */
+const DOWN_SQLSTATES = new Set(["57014", "57P01", "57P02", "57P03", "53300"]);
+/** What `pg` and its pool throw with no code: the client's query timeout, the pool's connect timeout, a dropped socket. */
+const DOWN_MESSAGES = [
+  /^Query read timeout$/,
+  /timeout exceeded when trying to connect/,
+  /^Connection terminated/,
+  /is not queryable/,
+];
+
+/**
+ * Whether an error means the database is down (unreachable, timed out,
+ * shutting down, full), as opposed to a query it refused. Only these move the
+ * breaker; a constraint or syntax error is an answer and never counts.
+ */
+export function isDatabaseDown(error: unknown): boolean {
+  if (error instanceof DatabaseDownError) {
+    return true;
+  }
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  const { code, message } = error as { code?: unknown; message?: unknown };
+  if (typeof code === "string") {
+    if (DOWN_SOCKET_CODES.has(code) || DOWN_SQLSTATES.has(code) || /^08[0-9A-Z]{3}$/.test(code)) {
+      return true;
+    }
+  }
+  return typeof message === "string" && DOWN_MESSAGES.some((pattern) => pattern.test(message));
+}

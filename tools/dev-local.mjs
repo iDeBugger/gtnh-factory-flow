@@ -3,8 +3,16 @@
  * `npm run dev:local`: the whole site on this machine with no Supabase
  * credentials anywhere. Starts, in order:
  *
- * 1. the local database (PGlite, `tools/local-db/serve.ts`) on 127.0.0.1:54329,
- *    data in scratch/local-db/pgdata;
+ * 1. the local database (`tools/local-db/serve.ts`): the PostgREST stand-in on
+ *    127.0.0.1:54329 and Postgres's wire protocol on 127.0.0.1:54330
+ *    (`DATABASE_URL` for the direct client). When Docker answers, 54330 is
+ *    the compose file's pinned `postgres` image in the container
+ *    `gtnh-local-db` (data in the volume of that name, kept between runs; the
+ *    container stops with dev-local if dev-local started it) and the stand-in
+ *    runs over it. Otherwise, or with LOCAL_DB_PGLITE=1, PGlite with data in
+ *    scratch/local-db/pgdata and its socket on 54330, which is not isolated
+ *    under concurrent load (serve.ts's header has the probe): fine for one
+ *    player clicking around, and dev-local says so;
  * 2. the live service (`src/live/main.ts`) on :3001, journal in
  *    scratch/local-db/live-journal;
  * 3. `next dev` on :3000, uploaded files in scratch/local-db/files.
@@ -14,7 +22,7 @@
  * everything; the database closes cleanly first.
  */
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,6 +31,11 @@ const dbPort = Number(process.env.LOCAL_DB_PORT ?? 54329);
 const livePort = Number(process.env.LIVE_PORT ?? 3001);
 const webPort = Number(process.env.PORT ?? 3000);
 const dbUrl = `http://127.0.0.1:${dbPort}`;
+const pgPort = Number(process.env.LOCAL_DB_PG_PORT ?? 54330);
+const directUrl = `postgres://postgres@127.0.0.1:${pgPort}/postgres`;
+const CONTAINER = "gtnh-local-db";
+/** Whether this run started the container, and so stops it. */
+let startedContainer = false;
 
 const shared = {
   LOCAL_DB: "1",
@@ -31,7 +44,68 @@ const shared = {
   COMMUNITY_HASH_SALT: "local-development-salt-not-a-secret",
   LIVE_INTERNAL_TOKEN: "local-development-internal-token",
   LIVE_INTERNAL_URL: `http://127.0.0.1:${livePort}`,
+  DATABASE_URL: directUrl,
 };
+
+/** The `postgres` image the deploy runs, digest and all, so local SQL meets the same server. */
+function composePostgresImage() {
+  const compose = readFileSync(path.join(root, "tools", "deploy", "docker-compose.yml"), "utf8");
+  const image = /^\s*image:\s*(postgres:\S+)\s*$/m.exec(compose)?.[1];
+  if (!image) {
+    throw new Error("tools/deploy/docker-compose.yml names no postgres image");
+  }
+  return image;
+}
+
+function docker(args) {
+  return spawnSync("docker", args, { encoding: "utf8", timeout: 120_000 });
+}
+
+/**
+ * Starts the local Postgres container (made on first use) and answers
+ * whether this run started it. Throws when it cannot.
+ */
+function startPostgresContainer() {
+  const running = docker(["container", "inspect", "-f", "{{.State.Running}}", CONTAINER]);
+  if (running.status !== 0) {
+    const made = docker([
+      "run",
+      "--detach",
+      "--name",
+      CONTAINER,
+      "--publish",
+      `127.0.0.1:${pgPort}:5432`,
+      // Development only: it listens on this machine alone and checks no password.
+      "--env",
+      "POSTGRES_HOST_AUTH_METHOD=trust",
+      "--volume",
+      `${CONTAINER}:/var/lib/postgresql/data`,
+      composePostgresImage(),
+    ]);
+    if (made.status !== 0) {
+      throw new Error(`docker run failed: ${made.stderr.trim()}`);
+    }
+    return true;
+  }
+  const published = docker(["port", CONTAINER, "5432/tcp"]).stdout.trim();
+  if (published && !published.split(/\s+/).some((line) => line.endsWith(`:${pgPort}`))) {
+    throw new Error(
+      `the container ${CONTAINER} publishes ${published}, not ${pgPort}: remove it (docker rm -f ${CONTAINER}) or set LOCAL_DB_PG_PORT`,
+    );
+  }
+  if (running.stdout.trim() === "true") {
+    return false;
+  }
+  const started = docker(["start", CONTAINER]);
+  if (started.status !== 0) {
+    throw new Error(`docker start failed: ${started.stderr.trim()}`);
+  }
+  return true;
+}
+
+const dockerAnswers = () =>
+  process.env.LOCAL_DB_PGLITE !== "1" &&
+  spawnSync("docker", ["info", "--format", "{{.ServerVersion}}"], { timeout: 10_000 }).status === 0;
 
 const bin = {
   tsx: path.join(root, "node_modules", "tsx", "dist", "cli.mjs"),
@@ -106,6 +180,9 @@ async function stop(code = 0) {
       new Promise((resolve) => (child.exitCode !== null ? resolve() : child.once("exit", resolve))),
   );
   await Promise.race([Promise.all(exited), new Promise((resolve) => setTimeout(resolve, 5000))]);
+  if (startedContainer) {
+    docker(["stop", CONTAINER]);
+  }
   for (const child of children) {
     if (child.exitCode === null && child.pid) {
       if (process.platform === "win32") {
@@ -124,8 +201,24 @@ process.on("SIGTERM", () => void stop(0));
 // What `npm run dev` does first (its predev script).
 spawnSync(process.execPath, ["tools/copy-highs-wasm.mjs"], { cwd: root, stdio: "inherit" });
 
-start("local-db", [bin.tsx, "tools/local-db/serve.ts"], { LOCAL_DB_PORT: String(dbPort) });
-await waitFor(`${dbUrl}/rest/v1/community_users?select=id&limit=1`, "The local database");
+const dbEnv = { LOCAL_DB_PORT: String(dbPort), LOCAL_DB_PG_PORT: String(pgPort) };
+if (dockerAnswers()) {
+  startedContainer = startPostgresContainer();
+  dbEnv.LOCAL_DB_POSTGRES_URL = directUrl;
+  console.log(`[dev-local] Postgres in Docker (${CONTAINER}) on 127.0.0.1:${pgPort}`);
+} else {
+  // The PGlite socket allows 4 connections: 2 each for Next and the live
+  // service, released after a second idle so the other can take its turn.
+  Object.assign(shared, { DATABASE_POOL_MAX: "2", DATABASE_POOL_IDLE_MS: "1000" });
+  const why = process.env.LOCAL_DB_PGLITE === "1" ? "LOCAL_DB_PGLITE=1" : "Docker is not answering";
+  console.log(
+    `[dev-local] ${why}: the direct client uses PGlite's socket on 127.0.0.1:${pgPort}, ` +
+      "which is not isolated under concurrent queries. Start Docker for a real Postgres.",
+  );
+}
+
+start("local-db", [bin.tsx, "tools/local-db/serve.ts"], dbEnv);
+await waitFor(`${dbUrl}/rest/v1/community_users?select=id&limit=1`, "The local database", 120_000);
 
 if (existsSync(path.join(root, "src", "live", "main.ts"))) {
   start("live", [bin.tsx, "src/live/main.ts"], {

@@ -22,7 +22,7 @@
  *   memory limit and the heap from it.
  */
 import path from "node:path";
-import { isCommunityConfigured } from "@/lib/server/db";
+import { closeDb, configureDb, isCommunityConfigured } from "@/lib/server/db";
 import { assertLocalDbAllowed } from "@/lib/server/local-db/client";
 import { sessionSecret } from "@/lib/server/auth/session";
 import { LiveService } from "./service";
@@ -51,6 +51,8 @@ async function main() {
   if (!isCommunityConfigured()) {
     fatal("No database: set POSTGREST_URL and POSTGREST_SERVICE_TOKEN (or LOCAL_DB=1).");
   }
+  // The direct client's pool is sized and named for this process.
+  configureDb({ service: "live" });
   const journalDir = process.env.LIVE_JOURNAL_DIR;
   if (!journalDir && production) {
     fatal("LIVE_JOURNAL_DIR is not set.");
@@ -98,6 +100,7 @@ async function main() {
     console.log(`[live] ${signal}: storing open plans`);
     try {
       await service.stop();
+      await closeDb();
       console.log("[live] stopped");
     } catch (error) {
       // Plans not stored stay in their journals for the next start; the exit
