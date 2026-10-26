@@ -25,6 +25,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { containerMismatch } from "./local-db/container.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dbPort = Number(process.env.LOCAL_DB_PORT ?? 54329);
@@ -87,11 +88,20 @@ function startPostgresContainer() {
     }
     return true;
   }
-  const published = docker(["port", CONTAINER, "5432/tcp"]).stdout.trim();
-  if (published && !published.split(/\s+/).some((line) => line.endsWith(`:${pgPort}`))) {
-    throw new Error(
-      `the container ${CONTAINER} publishes ${published}, not ${pgPort}: remove it (docker rm -f ${CONTAINER}) or set LOCAL_DB_PG_PORT`,
-    );
+  const inspected = docker([
+    "container",
+    "inspect",
+    "-f",
+    "{{json .Config.Image}} {{json .HostConfig.PortBindings}}",
+    CONTAINER,
+  ]).stdout.trim();
+  const [image, portBindings] = inspected.split(" ").map((part) => JSON.parse(part));
+  const mismatch = containerMismatch(
+    { image, portBindings },
+    { image: composePostgresImage(), port: pgPort, name: CONTAINER },
+  );
+  if (mismatch) {
+    throw new Error(mismatch);
   }
   if (running.stdout.trim() === "true") {
     return false;
