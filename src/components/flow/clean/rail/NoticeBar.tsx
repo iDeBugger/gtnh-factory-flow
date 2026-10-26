@@ -8,7 +8,6 @@ import {
   useMemo,
   useRef,
   useSyncExternalStore,
-  type ReactNode,
 } from "react";
 import { useFactoryStore } from "@/store/factory-store";
 import { unservedPlanVersion } from "@/lib/datasets/dataset-cache";
@@ -236,7 +235,7 @@ export function PlanNoticeStack() {
 }
 
 /**
- * What the plan-mode board mounts in its notice corner: the notices, and the
+ * What the board mounts in its notice corner: the notices, and the
  * two floating pieces that belong with them (the spare popup a card's Forced
  * row opens, and the rail's tooltip).
  */
@@ -251,21 +250,10 @@ export function PlanBoardOverlays() {
 }
 
 /**
- * The board's notice corner has two dresses: plan-mode boards get the mod's
- * notices bar (`plan`), every other board keeps its classic notices (children).
- */
-export function PlanNoticeSwitch({ children }: { children: ReactNode }) {
-  const planMode = useFactoryStore((state) => state.project.planMode === true);
-  return planMode ? null : <>{children}</>;
-}
-
-/**
- * The plan-mode notices, stacked at the TOP of the board as the mod stacks them (under its top bar), left aligned and
+ * The board's notices, stacked at the TOP of the board as the mod stacks them (under its top bar), left aligned and
  * just below the board's toolbars so they never cover a key. Mounted once, beside the board's other overlays.
  */
 export function PlanTopNotices() {
-  const planMode = useFactoryStore((state) => state.project.planMode === true);
-  if (!planMode) return null;
   return (
     <div className="rail-notices-top nodrag pointer-events-none absolute z-30">
       <PlanBoardOverlays />

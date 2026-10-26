@@ -18,9 +18,9 @@ let width = 0;
 const watchers = new Set<() => void>();
 let latest: PanelFitState;
 
-function Harness({ wishes = WISHES, enabled = true }: { wishes?: PanelWishes; enabled?: boolean }) {
+function Harness({ wishes = WISHES }: { wishes?: PanelWishes }) {
   const ref = useRef<HTMLElement>(null);
-  latest = usePanelFit(ref, wishes, enabled);
+  latest = usePanelFit(ref, wishes);
   return <main ref={ref} data-testid="main" style={{ gridTemplateColumns: latest.initial.template }} />;
 }
 
@@ -182,12 +182,5 @@ describe("usePanelFit", () => {
   it("the other way round (Settings, Item browser): the items list on the left", () => {
     render(<Harness wishes={{ ...WISHES, itemsLeft: true }} />);
     expect(template()).toBe("256px minmax(0,1fr) 336px");
-  });
-
-  it("does nothing for a classic board", () => {
-    render(<Harness enabled={false} />);
-    resize(842);
-    expect(main().dataset.leftPx).toBeUndefined();
-    expect(shown()).toBe("IO");
   });
 });

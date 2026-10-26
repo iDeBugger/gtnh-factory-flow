@@ -43,9 +43,7 @@ import { BlueprintSaveDialog } from "./BlueprintSaveDialog";
 import { PowerSourceOverlay } from "./PowerSourceOverlay";
 import { FactoryFlow } from "./flow/FactoryFlow";
 import { useBoardSoundEffects } from "./flow/use-board-sound-effects";
-import { InspectorPanel } from "./InspectorPanel";
 import { PanelDrawer } from "./PanelDrawer";
-import { usePlanLayout } from "./use-plan-layout";
 import { PlanOverview } from "./PlanOverviewMount";
 import { ColumnStrip } from "./flow/clean/rail/OverviewRail";
 import { useRailView } from "./flow/clean/rail/rail-view";
@@ -53,15 +51,12 @@ import { PanelHandle } from "./PanelHandle";
 import { usePanelFit, type PanelFitState } from "./use-panel-fit";
 import { requestPanelOpen, type SidePanel } from "@/lib/panel-force";
 import {
-  INSPECTOR_WIDTH,
   ITEMS_DEFAULT_WIDTH,
   ITEMS_WIDTH,
   OVERVIEW_DEFAULT_WIDTH,
-  PANEL_RAIL_WIDTH,
-  workspaceColumns,
+  OVERVIEW_DRAWER_WIDTH,
 } from "@/lib/workspace-columns";
 import { RecipeBrowser } from "./RecipeBrowser";
-import { FoldGlyph } from "./flow/clean/fold/FoldKey";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 
 /** Settled when this page's design hydration has run, whatever it did: a hydration that throws still frees the boot load. */
@@ -87,7 +82,6 @@ export function FactoryPlannerApp() {
   const lastResult = useFactoryStore((state) => state.lastResult);
   const workspace = useWorkspaceView();
   const isCompact = useIsCompactViewport();
-  const barInGrid = usePlanLayout() && !isCompact;
   const hydrateResourceHistory = useFactoryStore((state) => state.hydrateResourceHistory);
   const hydrateDesigns = useDesignStore((state) => state.hydrate);
   const saveActiveProject = useDesignStore((state) => state.saveActiveProject);
@@ -357,16 +351,16 @@ export function FactoryPlannerApp() {
       <RecipeBookOpener />
       <PlacementRevealer />
       <SharedAddressSync />
-      {/* On a desktop plan board the mod's bar is the workspace grid's first row, across the overview, the board and
-          the items list. */}
-      {barInGrid ? null : <AppHeader onLoadDatasetVersion={loadDatasetVersion} />}
+      {/* On a desktop the mod's bar is the workspace grid's first row, across the overview, the board and the items
+          list. */}
+      {isCompact ? <AppHeader onLoadDatasetVersion={loadDatasetVersion} /> : null}
       {isCompact ? (
         <CompactWorkspace workspace={workspace} onLoadDatasetVersion={loadDatasetVersion} />
       ) : (
         <ColumnWorkspace
           workspace={workspace}
           onLoadDatasetVersion={loadDatasetVersion}
-          header={barInGrid ? <AppHeader onLoadDatasetVersion={loadDatasetVersion} /> : undefined}
+          header={<AppHeader onLoadDatasetVersion={loadDatasetVersion} />}
         />
       )}
       {/* The power source picker portals to the body, so it works from either
@@ -501,16 +495,13 @@ export function ColumnWorkspace({ workspace, onLoadDatasetVersion, header }: Wor
   // hidden board's solve) folds to a blank strip WITHOUT writing the workspace
   // view, so it returns as it was.
   const covering = useCoveringPage();
-  const poolMode = useFactoryStore((state) => state.project.poolMode === true);
-  const planLayout = usePlanLayout();
-  const worksheet = poolMode;
   // A task board has no overview (the game's): its columns take the overview's room too.
   const taskBoard = useFactoryStore((state) => TASKS_ENABLED && state.project.primaryView === "tasks");
   const settings = useDeviceSettings();
   const itemsLeft = settings.itemsLeft;
   const railOpen = useRailView().open;
-  const hideBoardPanels = Boolean(covering) || worksheet || (taskBoard && planLayout);
-  // Plan boards: the two side columns have the widths the player dragged them to and give way to the board as the
+  const hideBoardPanels = Boolean(covering) || taskBoard;
+  // The two side columns have the widths the player dragged them to and give way to the board as the
   // window narrows (src/lib/workspace-columns.ts, fitPanels); the grid is written onto `main` as the window resizes.
   const mainRef = useRef<HTMLElement>(null);
   const fit = usePanelFit(
@@ -523,19 +514,12 @@ export function ColumnWorkspace({ workspace, onLoadDatasetVersion, header }: Wor
       covering: hideBoardPanels,
       itemsLeft,
     },
-    planLayout,
   );
-  const columns = planLayout
-    ? fit.initial
-    : workspaceColumns({
-        itemsOpen: workspace.leftPanelOpen,
-        inspectorOpen: workspace.rightPanelOpen,
-        hideBoardPanels,
-      });
-  // Plan boards: which grid column the overview and the items take (the board is always the middle one).
+  const columns = fit.initial;
+  // Which grid column the overview and the items take (the board is always the middle one).
   const overviewColumn = columns.itemsSide === "left" ? 3 : 1;
   const itemsColumn = columns.itemsSide === "left" ? 1 : 3;
-  const itemsOpen = planLayout ? fit.itemsOpen : workspace.leftPanelOpen;
+  const itemsOpen = fit.itemsOpen;
   // The handle sits on each column's board-side edge.
   const itemsEdge = columns.itemsSide === "left" ? "right" : "left";
   const overviewEdge = itemsEdge === "left" ? "right" : "left";
@@ -543,7 +527,7 @@ export function ColumnWorkspace({ workspace, onLoadDatasetVersion, header }: Wor
   const items = itemsOpen ? (
     <ViewerAwareBrowser onLoadDatasetVersion={onLoadDatasetVersion} />
   ) : (
-    <PanelRail side={columns.itemsSide} label="Items" />
+    <ItemsStrip side={columns.itemsSide} />
   );
   const overview =
     covering || taskBoard ? (
@@ -558,22 +542,16 @@ export function ColumnWorkspace({ workspace, onLoadDatasetVersion, header }: Wor
 
   return (
     <>
-      {/* The four-column item browser is 256px wide; the resource column
-          keeps 234px for names, rates and controls. A closed column drops to a
-          rail wide enough for one button, so the way back is always on screen
-          and the board never has to give the width back to a hover target. */}
+      {/* A closed column drops to a strip wide enough for one button, so the way back is always on screen and the
+          board never has to give the width back to a hover target. */}
       <main
         ref={mainRef}
         data-items-side={columns.itemsSide}
-        data-plan-layout={planLayout ? "" : undefined}
+        data-plan-layout=""
         data-left-px={columns.leftPx}
         data-right-px={columns.rightPx}
         className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden"
         style={{
-          // Keep the toolbar's fit budget stable when Pool hides this column.
-          "--toolbar-hidden-panel-width": worksheet && !covering
-            ? `${workspace.rightPanelOpen ? INSPECTOR_WIDTH : PANEL_RAIL_WIDTH}px`
-            : "0px",
           gridTemplateColumns: columns.template,
           ...(header ? { gridTemplateRows: "auto minmax(0,1fr)" } : {}),
         } as CSSProperties}
@@ -604,15 +582,9 @@ export function ColumnWorkspace({ workspace, onLoadDatasetVersion, header }: Wor
             </div>
           </>
         ) : null}
-        {header ? null : planLayout ? (columns.itemsSide === "left" ? items : overview) : items}
+        {header ? null : columns.itemsSide === "left" ? items : overview}
         {header ? null : <BoardColumn />}
-        {header ? null : planLayout ? (
-          columns.itemsSide === "left" ? overview : items
-        ) : columns.inspectorShown ? (
-          <InspectorPanel />
-        ) : covering || worksheet ? null : (
-          <PanelRail side="right" label="Resources" />
-        )}
+        {header ? null : columns.itemsSide === "left" ? overview : items}
       </main>
     </>
   );
@@ -646,9 +618,6 @@ export function CompactWorkspace({ workspace, onLoadDatasetVersion }: WorkspaceP
   // The resource drawer reads the board's books; under a covering page it
   // is not there at all, handle included.
   const covering = useCoveringPage();
-  const poolMode = useFactoryStore((state) => state.project.poolMode === true);
-  const planLayout = usePlanLayout();
-  const worksheet = poolMode;
   // Both flags can be set from a desktop session: a phone shows neither then (the board), never both at once.
   const bothOpen = workspace.leftPanelOpen && workspace.rightPanelOpen;
   const itemsOpen = workspace.leftPanelOpen && !bothOpen;
@@ -656,12 +625,12 @@ export function CompactWorkspace({ workspace, onLoadDatasetVersion }: WorkspaceP
   const openLeft = () => writeWorkspaceView({ leftPanelOpen: true, rightPanelOpen: false });
   const openRight = () => writeWorkspaceView({ leftPanelOpen: false, rightPanelOpen: true });
 
-  // Each drawer keeps its flag (leftPanelOpen = items, rightPanelOpen =
-  // resources or overview); plan boards swap the side each slides in from.
+  // Each drawer keeps its flag (leftPanelOpen = items, rightPanelOpen = overview): the items slide in from the
+  // right, the overview from the left.
   return (
     <main
-      data-items-side={planLayout ? "right" : "left"}
-      data-plan-layout={planLayout ? "" : undefined}
+      data-items-side="right"
+      data-plan-layout=""
       data-left-px={0}
       data-right-px={0}
       data-compact="true"
@@ -669,7 +638,7 @@ export function CompactWorkspace({ workspace, onLoadDatasetVersion }: WorkspaceP
     >
       <BoardColumn />
       <PanelDrawer
-        side={planLayout ? "right" : "left"}
+        side="right"
         label="items"
         width={ITEMS_WIDTH}
         open={itemsOpen}
@@ -678,16 +647,16 @@ export function CompactWorkspace({ workspace, onLoadDatasetVersion }: WorkspaceP
       >
         <ViewerAwareBrowser onLoadDatasetVersion={onLoadDatasetVersion} />
       </PanelDrawer>
-      {covering || worksheet ? null : (
+      {covering ? null : (
         <PanelDrawer
-          side={planLayout ? "left" : "right"}
-          label={planLayout ? "overview" : "resources"}
-          width={INSPECTOR_WIDTH}
+          side="left"
+          label="overview"
+          width={OVERVIEW_DRAWER_WIDTH}
           open={sideOpen}
           onOpen={openRight}
           onClose={() => writeWorkspaceView({ rightPanelOpen: false })}
         >
-          {planLayout ? <PlanOverview inDrawer /> : <InspectorPanel />}
+          <PlanOverview inDrawer />
         </PanelDrawer>
       )}
     </main>
@@ -697,46 +666,14 @@ export function CompactWorkspace({ workspace, onLoadDatasetVersion }: WorkspaceP
 /** The task board comes with live plans; without them the app is exactly as before. */
 const TASKS_ENABLED = isLiveConfigured();
 
-/**
- * What a closed side column leaves behind: a 26px rail with the button that
- * reopens it and the column's name set sideways. A rail, not a hover-to-peek
- * edge, which fires by accident whenever the mouse crosses it.
- */
-function PanelRail({ side, label }: { side: "left" | "right"; label: "Items" | "Resources" }) {
-  // The flag follows what the column holds, not which side it sits on.
+/** The folded items column: the overview's own strip, so both folded columns look and work the same. */
+function ItemsStrip({ side }: { side: "left" | "right" }) {
   const open = () => {
-    writeWorkspaceView(label === "Items" ? { leftPanelOpen: true } : { rightPanelOpen: true });
+    writeWorkspaceView({ leftPanelOpen: true });
     // A window narrow enough to have folded it keeps it open now.
-    if (label === "Items") requestPanelOpen("items");
+    requestPanelOpen("items");
   };
-  // The items column folds to the overview's own strip (the owner: both folded columns look and work the same).
-  if (label === "Items") return <ColumnStrip label="ITEMS" open="Open the items" side={side} onOpen={open} />;
-
-  // One button, the whole rail: a bare chevron at the top and the name
-  // running down it. No box, no tooltip; the rail is the thing you click.
-  return (
-    <button
-      type="button"
-      onClick={open}
-      aria-label={`Show ${label}`}
-      className={[
-        "flex h-full w-full flex-col items-center gap-2 bg-surface pt-1.5 text-fg-muted transition-colors hover:bg-[#2a2d33]",
-        side === "left" ? "border-r border-line" : "border-l border-line",
-      ].join(" ")}
-    >
-      {/* The one fold arrow (the overview's), pointing the way the column opens. */}
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center">
-        <FoldGlyph direction={side === "left" ? "right" : "left"} />
-      </span>
-      <span
-        aria-hidden
-        className="min-h-0 flex-1 text-[12px] font-semibold uppercase tracking-widest"
-        style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
-      >
-        <span className={side === "right" ? "rotate-180" : undefined}>{label}</span>
-      </span>
-    </button>
-  );
+  return <ColumnStrip label="ITEMS" open="Open the items" side={side} onOpen={open} />;
 }
 
 function scheduleIdleWork(callback: () => void, timeout: number) {

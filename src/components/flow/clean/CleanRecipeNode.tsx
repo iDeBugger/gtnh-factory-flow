@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import type { NodeProps } from "@xyflow/react";
-import type { RecipeFlowNode, RecipeNodeData } from "../RecipeNode";
+import type { RecipeFlowNode, RecipeNodeData } from "../board-node-types";
 import { useRenderedHandles } from "../use-rendered-handles";
 import { CleanCard } from "./CleanCard";
 import { useCleanCardModel } from "./clean-model";

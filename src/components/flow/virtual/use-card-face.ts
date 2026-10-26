@@ -19,7 +19,7 @@ import { glanceBar, type GlanceBar } from "../clean/glance";
 import { useDeviceSettings } from "@/lib/device-settings";
 import { estimateRecipeCardHeight } from "./card-shell";
 import { useMachineHandlerIconEntries, useRecipeMapIcons } from "../machine-icons";
-import type { RecipeNodeData } from "../RecipeNode";
+import type { RecipeNodeData } from "../board-node-types";
 
 /**
  * What a shell knows about its card, without running the card's model.

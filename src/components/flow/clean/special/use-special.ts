@@ -63,7 +63,7 @@ import { useWorkspaceView } from "@/lib/workspace-view";
 import { buildRailPorts, deriveNodeVerdict } from "../../node-verdict";
 import { makeResourceHandleId } from "../../resource-handles";
 import { useRecipeMapIcons, type MachineHandlerIcon } from "../../machine-icons";
-import type { RecipeNodeData } from "../../RecipeNode";
+import type { RecipeNodeData } from "../../board-node-types";
 import {
   buildCountView,
   buildFootView,

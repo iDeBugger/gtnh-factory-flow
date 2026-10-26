@@ -67,8 +67,8 @@ export function onHandChange(listener: () => void): () => void {
   };
 }
 
-/** The wait the board's tooltips use right now: 0 outside plan-mode boards (classic behaviour). */
-let activeWait = 0;
+/** The wait every tooltip uses (the mod's `Tip.Wait`); tests set their own. */
+let activeWait = TIP_WAIT_MS;
 
 export function setRestWait(ms: number): void {
   activeWait = ms;

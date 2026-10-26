@@ -136,7 +136,7 @@ export function ModPowerPicker() {
       // The mod's size, as the bar and its menus wear it (CHROME_SCREEN_K on the interface's zoom), or smaller where the
       // board is too narrow for the sheet: the whole picker shrinks rather than its columns cutting the names off.
       // The items list is on the right, or on the left where the settings put it there.
-      const itemsLeft = main?.dataset.itemsSide === "left" && main.hasAttribute("data-plan-layout");
+      const itemsLeft = main?.dataset.itemsSide === "left";
       const items = (main ? Number((itemsLeft ? main.dataset.leftPx : main.dataset.rightPx) ?? 0) : 0) * getUiScale();
       const room = window.innerWidth - items;
       const zoom = Math.min(getUiScale() * CHROME_SCREEN_K, room / SHEET_W);

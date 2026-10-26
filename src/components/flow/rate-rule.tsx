@@ -121,7 +121,6 @@ export function useRateRule({
   const setStorageTargetMode = useFactoryStore((state) => state.setStorageTargetMode);
   const setStorageRule = useFactoryStore((state) => state.setStorageRule);
   const locked = useFactoryStore((state) => state.isReadOnly || state.checklistMode);
-  const signed = useFactoryStore((state) => state.project.poolMode === true);
   const mode = storageTargetMode(storage, role);
   const target = storage.targetPerSecond;
   const any = target === undefined || mode === "ignore";
@@ -137,16 +136,12 @@ export function useRateRule({
   const [pendingMode, setPendingMode] = useState<TargetMode | undefined>(undefined);
   const kind = storage.kind;
   const shownMode: TargetMode = any ? "ignore" : mode;
-  // A stored value in the direction it is shown: signed in Pool, a size on
-  // the board, where the store puts a source's minus back itself.
-  const direction = signed && input ? -1 : 1;
-  const place = (size: number) => (size === 0 ? 0 : direction * size);
 
   const beginEdit = (perSecond: number | undefined, nextMode?: TargetMode) => {
     if (locked) return;
     setOpen(false);
     setPendingMode(nextMode);
-    setDraft(perSecond === undefined ? "" : `${signed && input && perSecond !== 0 ? "-" : ""}${draftFor(perSecond, kind)}`);
+    setDraft(perSecond === undefined ? "" : draftFor(perSecond, kind));
     setEditing(true);
   };
   const cancelEdit = () => {
@@ -165,7 +160,7 @@ export function useRateRule({
     }
     if (target === undefined) {
       const pinned = Number(Math.abs(flowing).toPrecision(4));
-      if (pinned > 0) setStorageRule(storage.id, next, place(pinned));
+      if (pinned > 0) setStorageRule(storage.id, next, pinned);
       else beginEdit(undefined, next);
       return;
     }
@@ -194,7 +189,7 @@ export function useRateRule({
     if (!any && Math.abs(next - shown) < 1e-9) return;
     // Scrolling down on an empty box asks for nothing: no zero rule appears.
     if (any && next === 0) return;
-    const perSecond = place(next / unitScale);
+    const perSecond = next / unitScale;
     // The tick and the hush go FIRST: the write below is a project change,
     // and the board's sound watcher answers it with its own adjust tap the
     // moment it lands - one step, two sounds, if the hush comes after.
@@ -214,12 +209,9 @@ export function useRateRule({
       return;
     }
     const value = parseAmountWithSuffix(text);
-    // Not a number: the box keeps what it held. The board shows sizes and the
-    // direction is the drawer's; Pool takes the sign as typed, so a minus
-    // makes an input and brings the input's default rule.
-    if (value === undefined || !Number.isFinite(value) || (!signed && value < 0)) return;
-    const typedInput = signed && value !== 0 ? value < 0 : input;
-    const rule = pendingMode ?? (any ? (typedInput ? "exact" : "at-least") : mode);
+    // Not a number, or a minus: the box keeps what it held. The board shows sizes and the direction is the drawer's.
+    if (value === undefined || !Number.isFinite(value) || value < 0) return;
+    const rule = pendingMode ?? (any ? (input ? "exact" : "at-least") : mode);
     // Nor a number this rule cannot mean.
     if (value === 0 && rule !== "exact" && rule !== "at-most") return;
     const perSecond = value / rateMultiplierForKind(kind);
@@ -238,7 +230,7 @@ export function useRateRule({
   };
 
   return {
-    storage, result, flowing, kind, mode, target, any, input, signed, ask, locked, shownMode,
+    storage, result, flowing, kind, mode, target, any, input, ask, locked, shownMode,
     open, setOpen, editing, draft, setDraft, beginEdit, cancelEdit, choose, stepRule, stepRate, commit, clear,
   };
 }
@@ -417,7 +409,7 @@ export function RuleButton({ rule, variant = "drawer" }: { rule: RuleControl; va
  * to clear. */
 export function RateBox({ rule }: { rule: RateRule }) {
   const [box, setBox] = useState<HTMLButtonElement | null>(null);
-  const { storage, result, kind, any, target, input, signed, ask, locked, editing } = rule;
+  const { storage, result, kind, any, target, input, ask, locked, editing } = rule;
   // Native and non-passive, so Ctrl-scroll steps the rate instead of
   // zooming the page; the box is nowheel so the board camera leaves it.
   useNativeWheel(box, (event) => {
@@ -428,9 +420,9 @@ export function RateBox({ rule }: { rule: RateRule }) {
   });
   const unit = rateSuffixForKind(kind).trim();
   const unreachable = result?.targetUnreachable === true;
-  // Signed in Pool, the drawer's direction deciding; a size on the board.
-  const value = target === undefined ? 0 : (signed && input ? -1 : 1) * Math.abs(target);
-  const shown = `${signed && value !== 0 ? (value < 0 ? "−" : "+") : ""}${formatFieldNumber(value, kind)}`;
+  // A size: the drawer's side says the direction.
+  const value = target === undefined ? 0 : Math.abs(target);
+  const shown = formatFieldNumber(value, kind);
 
   if (editing) {
     return (
@@ -449,8 +441,8 @@ export function RateBox({ rule }: { rule: RateRule }) {
         onClick={(event) => event.stopPropagation()}
         onMouseDown={middleDownKeepsFocus}
         onAuxClick={rule.clear}
-        inputMode={signed ? "text" : "decimal"}
-        placeholder={rule.flowing > 0 ? `${signed && input ? "-" : ""}${draftFor(rule.flowing, kind)}` : "rate"}
+        inputMode="decimal"
+        placeholder={rule.flowing > 0 ? draftFor(rule.flowing, kind) : "rate"}
         aria-label="Your rate"
         className="storage-rate-field storage-rate-field--editing nodrag"
       />

@@ -34,7 +34,7 @@ import { isLiveConfigured } from "@/lib/live/live-config";
 
 /** Task boards come with live plans: no Add to a task row without them. */
 const TASKS_ENABLED = isLiveConfigured();
-import { checklistLocked } from "../RecipeNode";
+import { checklistLocked } from "../board-node-types";
 import { wheelChangesValues } from "@/lib/device-settings";
 import { MobPickerMenu } from "../MobPickerMenu";
 import { freeInputRowLabel, isBeeSpeciesInput, isControllerSlotInput } from "@/lib/model/free-input";

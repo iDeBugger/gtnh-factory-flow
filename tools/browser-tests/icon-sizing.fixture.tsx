@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { ResourceIcon } from "@/components/nei/ResourceIcon";
-import { EnergyHatchArt } from "@/components/flow/EnergyHatchMenu";
+import { ArtBox } from "@/components/flow/clean/menus/ArtBox";
 import "./icon-sizing.css";
 const oilBerry = new URL("./fixtures/oil-berry.png", import.meta.url).href;
 const aluminaDust = new URL("./fixtures/alumina-dust.png", import.meta.url).href;
@@ -126,10 +126,7 @@ createRoot(document.getElementById("root")!).render(
       )}
       <div data-case="hatch" data-box="32" data-art="70.4">
         <p>Hatch</p>
-        <EnergyHatchArt
-          entry={{ id: "fixture", displayName: "Hatch", iconPath: image }}
-          boxClass="h-8 w-8"
-        />
+        <ArtBox src={image} alt="Hatch" size={32} />
       </div>
     </div>
   </main>,

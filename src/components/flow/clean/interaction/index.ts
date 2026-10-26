@@ -1,7 +1,6 @@
 import { installAcceptPaint } from "./accept";
 import { installPromptSync } from "./prompt-sync";
 import { ensureTipHost } from "./TipHost";
-import "./rest-wait";
 
 /**
  * Starts what the board's interactions need once, however many clean cards

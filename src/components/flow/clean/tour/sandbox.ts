@@ -34,9 +34,9 @@ export function sandboxActive(): boolean {
   return saved !== undefined;
 }
 
-/** A fresh plan for the tour: the new-design project in the merged mode, named for the tour. */
+/** A fresh plan for the tour: the new-design project, named for the tour. */
 export function tourProject(): FactoryProject {
-  return { ...structuredClone(createNewProject()), name: TOUR_PLAN_NAME, planMode: true };
+  return { ...structuredClone(createNewProject()), name: TOUR_PLAN_NAME };
 }
 
 export async function enterSandbox(): Promise<void> {

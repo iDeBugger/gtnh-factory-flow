@@ -7,7 +7,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { formatCompact } from "@/lib/model/resources";
 import { powerDisplayFromEuT, powerDisplaySuffix, rateMultiplierForKind, rateSuffixForKind } from "@/lib/model/rate-unit";
 import { useFactoryStore, useRateDisplayUnits } from "@/store/factory-store";
-import { POCKET_CARD_SOURCE_HANDLE, POCKET_CARD_TARGET_HANDLE, type PocketFlowNode } from "../../PocketNode";
+import { POCKET_CARD_SOURCE_HANDLE, POCKET_CARD_TARGET_HANDLE, type PocketFlowNode } from "../../board-node-types";
 import { useClickSlop } from "../interaction/click-slop";
 import { tipAttrs } from "../interaction/tip-spec";
 import { ResourceGlyph } from "../rail/OverviewRail";

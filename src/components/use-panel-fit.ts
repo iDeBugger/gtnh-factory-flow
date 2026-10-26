@@ -62,7 +62,7 @@ function writeColumns(main: HTMLElement, columns: WorkspaceColumns): void {
  * the grid is written straight onto it (shell px), and only a fold by the window is state, so the board re-renders
  * when a column folds or comes back, never per pixel of a resize or of a drag.
  */
-export function usePanelFit(mainRef: RefObject<HTMLElement | null>, wishes: PanelWishes, enabled: boolean): PanelFitState {
+export function usePanelFit(mainRef: RefObject<HTMLElement | null>, wishes: PanelWishes): PanelFitState {
   const [auto, setAuto] = useState({ items: false, overview: false });
   const wishesRef = useRef(wishes);
   const forced = useRef({ items: false, overview: false });
@@ -94,16 +94,16 @@ export function usePanelFit(mainRef: RefObject<HTMLElement | null>, wishes: Pane
 
   // Before paint, and again whenever what the player wants changes.
   useLayoutEffect(() => {
-    if (enabled) apply();
-  }, [apply, enabled, wishes.itemsOpen, wishes.overviewOpen, wishes.itemsWidth, wishes.overviewWidth, wishes.covering, wishes.itemsLeft]);
+    apply();
+  }, [apply, wishes.itemsOpen, wishes.overviewOpen, wishes.itemsWidth, wishes.overviewWidth, wishes.covering, wishes.itemsLeft]);
 
   useEffect(() => {
     const main = mainRef.current;
-    if (!enabled || !main || typeof ResizeObserver === "undefined") return;
+    if (!main || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(apply);
     observer.observe(main);
     return () => observer.disconnect();
-  }, [apply, enabled, mainRef]);
+  }, [apply, mainRef]);
 
   const openAgainstWindow = useCallback(
     (panel: SidePanel) => {
@@ -116,7 +116,7 @@ export function usePanelFit(mainRef: RefObject<HTMLElement | null>, wishes: Pane
     [apply],
   );
 
-  useEffect(() => (enabled ? onPanelOpenRequest(openAgainstWindow) : undefined), [enabled, openAgainstWindow]);
+  useEffect(() => onPanelOpenRequest(openAgainstWindow), [openAgainstWindow]);
 
   const widthOf = useCallback((panel: SidePanel) => {
     const state = fitRef.current;

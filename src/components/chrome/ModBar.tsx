@@ -4,7 +4,6 @@ import "./chrome.css";
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { isCompactViewport, useIsCompactViewport } from "@/lib/compact-view";
-import { usePlanLayout } from "@/components/use-plan-layout";
 import { leaveLibrary, openLibrary, useLibraryTab } from "@/lib/library/library-tab";
 import { isPowerDisplayUnit } from "@/lib/model/rate-unit";
 import { useWorkspaceView, writeWorkspaceView } from "@/lib/workspace-view";
@@ -98,7 +97,6 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
   const workspace = useWorkspaceView();
   // A phone: the two side columns are drawers over the board, one at a time; their keys sit first in the bar.
   const compact = useIsCompactViewport();
-  const planLayout = usePlanLayout();
   const bothOpen = workspace.leftPanelOpen && workspace.rightPanelOpen;
   const itemsOpen = workspace.leftPanelOpen && !bothOpen;
   const sideOpen = workspace.rightPanelOpen && !bothOpen;
@@ -186,8 +184,8 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
         <>
           <BarKey
             id="drawer-side"
-            label={planLayout ? "Overview" : "Resources"}
-            tip={planLayout ? "Overview: inputs, outputs and machines" : "Resources"}
+            label="Overview"
+            tip="Overview: inputs, outputs and machines"
             open={sideOpen}
             onClick={() =>
               writeWorkspaceView(sideOpen ? { rightPanelOpen: false } : { rightPanelOpen: true, leftPanelOpen: false })

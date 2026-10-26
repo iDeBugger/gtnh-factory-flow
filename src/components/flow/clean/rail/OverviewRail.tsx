@@ -40,7 +40,7 @@ import { formatAmountWithSuffix, RULE_MARK, RULE_NAME, RULE_STEPS } from "../../
 import { AmpsChip, TierChip } from "../CleanCard";
 import { useCleanCardModel, wheelDraft } from "../clean-model";
 import { powerPanelTip } from "../interaction/tips";
-import type { RecipeNodeData } from "../../RecipeNode";
+import type { RecipeNodeData } from "../../board-node-types";
 import { CC, tierChipColors } from "../tokens";
 import { UP_TO_COLOR, UP_TO_WORD, shownReason, upToSentence } from "../up-to-reason";
 import { PIN_RULE_LABEL } from "@/lib/model/pin-rule";

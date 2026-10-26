@@ -1,17 +1,13 @@
 /**
- * The desktop workspace's column arithmetic, kept out of the component so the
- * two layouts can be tested without a DOM.
- *
- * Classic boards: items browser left, board, resource inspector right.
- * Plan-mode boards (`project.planMode`, not Pool): the overview rail left, the
- * board, the items browser right, like NEI beside the mod's board, or the other
- * way round (the settings' "Item browser"). There is no inspector on those.
- * Their two side columns are resizable and give way to the board (`fitPanels`).
+ * The desktop workspace's column arithmetic, kept out of the component so it can be tested without a DOM: the
+ * overview rail left, the board, the items browser right, like NEI beside the mod's board, or the other way round
+ * (the settings' "Item browser"). The two side columns are resizable and give way to the board (`fitPanels`).
  *
  * All lengths are SHELL px.
  */
 export const ITEMS_WIDTH = 256;
-export const INSPECTOR_WIDTH = 234;
+/** The overview's drawer on a phone. */
+export const OVERVIEW_DRAWER_WIDTH = 234;
 /** Wide enough for one 24px button plus its border. */
 export const PANEL_RAIL_WIDTH = 26;
 
@@ -20,7 +16,7 @@ export const OVERVIEW_DEFAULT_WIDTH = 336;
 /** Two thirds of the default: its rows (a rule key, a rate box, a name) still read. */
 export const OVERVIEW_MIN_WIDTH = 224;
 export const OVERVIEW_MAX_WIDTH = 480;
-/** The items list's default; its fixed width on a phone's drawer and on classic boards. */
+/** The items list's default; its fixed width on a phone's drawer. */
 export const ITEMS_DEFAULT_WIDTH = ITEMS_WIDTH;
 /** Three item columns (3 slots of 32 and the 6 px margins), which is also the least its page keys need. */
 export const ITEMS_MIN_WIDTH = 108;
@@ -46,39 +42,11 @@ export function clampItemsWidth(width: number): number {
 
 export type ItemsSide = "left" | "right";
 
-export interface WorkspaceColumnsInput {
-  itemsOpen: boolean;
-  /** The inspector column is open. */
-  inspectorOpen: boolean;
-  /** A page covers the board, or the Pool worksheet is up: nothing reads the board's solve. */
-  hideBoardPanels: boolean;
-}
-
 export interface WorkspaceColumns {
   itemsSide: ItemsSide;
   leftPx: number;
   rightPx: number;
-  /** Whether the classic inspector column holds its panel (not the rail or nothing). */
-  inspectorShown: boolean;
   template: string;
-}
-
-/** The classic layout: items left, the inspector right, both at their fixed widths. */
-export function workspaceColumns(input: WorkspaceColumnsInput): WorkspaceColumns {
-  const itemsPx = input.itemsOpen ? ITEMS_WIDTH : PANEL_RAIL_WIDTH;
-  const inspectorShown = input.inspectorOpen && !input.hideBoardPanels;
-  const rightPx = inspectorShown
-    ? INSPECTOR_WIDTH
-    : input.hideBoardPanels
-      ? 0
-      : PANEL_RAIL_WIDTH;
-  return {
-    itemsSide: "left",
-    leftPx: itemsPx,
-    rightPx,
-    inspectorShown,
-    template: `${itemsPx}px minmax(0,1fr) ${rightPx}px`,
-  };
 }
 
 /** One side column of a plan board, as the player has it. */
@@ -180,15 +148,14 @@ export function planColumns(fit: PanelFit, itemsLeft: boolean): WorkspaceColumns
     itemsSide: itemsLeft ? "left" : "right",
     leftPx,
     rightPx,
-    inspectorShown: false,
     template: `${leftPx}px minmax(0,1fr) ${rightPx}px`,
   };
 }
 
 /**
  * Where a full-screen search or picker begins and ends so it leaves the items
- * browser (and, on plan boards, the overview) bright beside it. SHELL px.
- * `classicLeft` is the measured browser width the classic layout already used.
+ * browser and the overview bright beside it. SHELL px. `classicLeft` answers
+ * the left inset while no workspace is mounted.
  */
 export function overlayInsets(
   scale: number,

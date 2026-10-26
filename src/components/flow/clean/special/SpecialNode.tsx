@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import type { RecipeNodeData } from "../../RecipeNode";
+import type { RecipeNodeData } from "../../board-node-types";
 import { useRenderedHandles } from "../../use-rendered-handles";
 import { SpecialCard } from "./SpecialCard";
 import {

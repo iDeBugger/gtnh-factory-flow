@@ -4,22 +4,13 @@ import { describe, expect, it } from "vitest";
 import type { FactoryStorage } from "@/lib/model/types";
 import { parseAmountWithSuffix } from "../../rate-rule";
 import { drawerMixes } from "../tokens";
-import { buildDrawerView, drawerKindFor, formatRateField, supportsCleanDrawer } from "./drawer-model";
+import { buildDrawerView, drawerKindFor, formatRateField } from "./drawer-model";
 
 function storage(patch: Partial<FactoryStorage> = {}): FactoryStorage {
   return { id: "s", kind: "item", resourceId: "x", displayName: "X", position: { x: 0, y: 0 }, ...patch };
 }
 
-describe("which drawers are clean", () => {
-  it("draws source, product, byproduct, trash and an unwired drawer", () => {
-    for (const role of ["source", "product", "byproduct", "trash", "idle"] as const) {
-      expect(supportsCleanDrawer({ kind: "item" }, role)).toBe(true);
-    }
-  });
-  it("draws power drawers and buffers too: the classic drawer is no longer reachable", () => {
-    expect(supportsCleanDrawer({ kind: "power" }, "product")).toBe(true);
-    expect(supportsCleanDrawer({ kind: "item" }, "buffer")).toBe(true);
-  });
+describe("a drawer's kind", () => {
   it("folds a byproduct into a product, as the mod does", () => {
     expect(drawerKindFor("byproduct", {})).toBe("product");
     expect(drawerKindFor("idle", { targetPerSecond: -2 })).toBe("source");

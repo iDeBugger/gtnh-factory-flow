@@ -17,7 +17,6 @@ import {
   stepWholeAmp,
   stepPowerOfFourAmps,
 } from "./hatch-input";
-import { listPowerWinsCached } from "./power-wins";
 import { useFactoryStore } from "@/store/factory-store";
 import { getMachineBehaviour } from "@/lib/machines/machine-table";
 
@@ -320,16 +319,6 @@ describe("per-card hatch input", () => {
     const loaded = normalizeLoadedProject(store.getState().project);
     expect(loaded.nodes[1].hatchAmps).toBe(4);
   });
-  it("keys the breakpoint ladder by voltage, not the current amps", () => {
-    const r = recipe("Nano Forge", 120);
-    r.minimumTier = "MV";
-    const a = node({ hatchVoltageTier: "MV", hatchAmps: 4 });
-    const low = listPowerWinsCached(r, a, "2.9");
-    expect(listPowerWinsCached(r, { ...a, hatchAmps: 100 }, "2.9")).toBe(low);
-    const high = listPowerWinsCached(r, { ...a, hatchVoltageTier: "HV" }, "2.9");
-    expect(high.some((w) => w.overclockSteps > 0)).toBe(true);
-    expect(low.every((w) => w.overclockSteps === 0)).toBe(true);
-  });
   it("names the lone-hatch clamp and rounds EU/t entry without rounding typed amps", () => {
     expect(hatchEquivalent(1, "IV")).toContain("only counts as 1A");
     expect(hatchEquivalent(4, "IV")).toBe("= 2 IV hatches");
@@ -384,12 +373,6 @@ describe("raw EU/t and whole amp steps", () => {
       hatchAmps: report.amps,
     };
     expect(getOverclockedRecipeStats(r, raw, "2.9")).toEqual(getOverclockedRecipeStats(r, explicit, "2.9"));
-  });
-  it("keeps raw and explicit hatch power ladders separate", () => {
-    const r = recipe("Industrial Arc Furnace", 120);
-    const n = node({ hatchVoltageTier: "ULV", hatchAmps: 100 });
-    expect(listPowerWinsCached(r, n, "2.9")).toHaveLength(0);
-    expect(listPowerWinsCached(r, { ...n, powerInputMode: "eut" }, "2.9")).not.toHaveLength(0);
   });
 });
 

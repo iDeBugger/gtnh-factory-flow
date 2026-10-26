@@ -28,20 +28,6 @@ const NAME_BOX = 71;
 /** The words beside a spill's Forced out tile (drawer.css .cd[data-spill] .cd-num and .cd-name). */
 const SPILL_WORDS = 41;
 
-/**
- * Whether the clean drawer draws this one: every drawer. A power drawer is the same source or product drawer with
- * EU in it (its picture the bolt in its amber box); a buffer is its own kind. The classic drawer is no longer
- * reachable from the board.
- */
-export function supportsCleanDrawer(
-  _storage: Pick<FactoryStorage, "kind">,
-  _role: StorageRole,
-): boolean {
-  void _storage;
-  void _role;
-  return true;
-}
-
 /** The mod's kind: trash is steel, a source blue, everything that leaves the plan orange, a buffer teal. */
 export function drawerKindFor(
   role: StorageRole,

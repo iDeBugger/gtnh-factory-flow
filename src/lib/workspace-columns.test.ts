@@ -16,22 +16,8 @@ import {
   overlayInsets,
   panelDragLimits,
   planColumns,
-  workspaceColumns,
   type PanelFitInput,
 } from "./workspace-columns";
-
-const base = { itemsOpen: true, inspectorOpen: true, hideBoardPanels: false };
-
-describe("workspaceColumns (the classic layout)", () => {
-  it("items 256 left, inspector 234 right", () => {
-    expect(workspaceColumns(base)).toMatchObject({ itemsSide: "left", template: "256px minmax(0,1fr) 234px", inspectorShown: true });
-  });
-
-  it("closed columns are 26px rails; a covering page removes the right one", () => {
-    expect(workspaceColumns({ ...base, itemsOpen: false, inspectorOpen: false }).template).toBe("26px minmax(0,1fr) 26px");
-    expect(workspaceColumns({ ...base, hideBoardPanels: true }).template).toBe("256px minmax(0,1fr) 0px");
-  });
-});
 
 const open = (width: number) => ({ open: true, forced: false, width });
 const wide = (over: Partial<PanelFitInput> = {}): PanelFitInput => ({
@@ -226,7 +212,7 @@ describe("planColumns", () => {
   const fit = fitPanels(wide({ width: 1641 }));
 
   it("the overview on the left and the items list on the right", () => {
-    expect(planColumns(fit, false)).toMatchObject({ itemsSide: "right", leftPx: 336, rightPx: 256, inspectorShown: false, template: "336px minmax(0,1fr) 256px" });
+    expect(planColumns(fit, false)).toMatchObject({ itemsSide: "right", leftPx: 336, rightPx: 256, template: "336px minmax(0,1fr) 256px" });
   });
 
   it("or the other way round (Settings, Item browser)", () => {
@@ -241,12 +227,12 @@ describe("planColumns", () => {
 });
 
 describe("overlayInsets", () => {
-  it("classic layout falls back to the measured browser", () => {
-    document.body.innerHTML = "<main data-items-side='left'></main>";
+  it("falls back to the measured browser while no workspace is mounted", () => {
+    document.body.innerHTML = "";
     expect(overlayInsets(1, () => 256)).toEqual({ left: 256, right: 0 });
   });
 
-  it("plan layout leaves both columns bright", () => {
+  it("leaves both columns bright", () => {
     document.body.innerHTML = "<main data-plan-layout data-items-side='right' data-left-px='234' data-right-px='256'></main>";
     expect(overlayInsets(1, () => 999)).toEqual({ left: 234, right: 256 });
   });

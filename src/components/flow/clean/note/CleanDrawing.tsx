@@ -5,7 +5,7 @@ import { memo, useRef, useState, type PointerEvent as ReactPointerEvent } from "
 import { ANNOTATION_MIN_BOX, BOARD_GRID } from "@/lib/board-grid";
 import type { FactoryAnnotation } from "@/lib/model/types";
 import { useFactoryStore } from "@/store/factory-store";
-import { ANNOTATION_DRAG_HANDLE_CLASS, type AnnotationFlowNode } from "../../AnnotationNode";
+import { ANNOTATION_DRAG_HANDLE_CLASS, type AnnotationFlowNode } from "../../board-node-types";
 import {
   DRAWING,
   arrowEnds,

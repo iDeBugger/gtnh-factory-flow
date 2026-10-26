@@ -4,9 +4,8 @@ import { memo } from "react";
 import type { NodeProps } from "@xyflow/react";
 import { useFactoryStore } from "@/store/factory-store";
 import { storageRoleFor, type StorageRole } from "@/lib/model/storage-role";
-import { StorageNode, type StorageFlowNode } from "../../StorageNode";
+import type { StorageFlowNode } from "../../board-node-types";
 import { CleanDrawer } from "./CleanDrawer";
-import { supportsCleanDrawer } from "./drawer-model";
 
 /**
  * Which sides of each drawer are wired, for the whole edge list at once (bit 1 an edge into it, bit 2 one out of
@@ -29,25 +28,22 @@ function wiredSidesOf(edges: ReadonlyArray<{ source: string; target: string }>, 
 }
 
 /**
- * The drawer of every board: always the clean drawer (source, product, byproduct, trash, and EU as a source or
- * product). The classic card is no longer reachable from here. Registered as `storageNode` in FactoryFlow.
+ * The drawer of every board (source, product, byproduct, trash, buffer, and EU as a source or product), in the role
+ * its wires give it. Registered as `storageNode` in FactoryFlow.
  */
-function StorageNodeSwitchComponent(props: NodeProps<StorageFlowNode>) {
+function CleanStorageNodeComponent(props: NodeProps<StorageFlowNode>) {
   const { data, selected } = props;
   const { storage } = data;
-  // Read off this drawer's own wires, as the classic drawer does: the whole-board map would re-render every
-  // drawer whenever any other drawer's wiring changed.
+  // Read off this drawer's own wires: the whole-board map would re-render every drawer whenever any other drawer's
+  // wiring changed.
   const role = useFactoryStore((state): StorageRole => {
     const sides = wiredSidesOf(state.project.edges, storage.id);
     return storageRoleFor(storage, (sides & 1) !== 0, (sides & 2) !== 0, state.project.poolMode === true);
   });
-  if (supportsCleanDrawer(storage, role)) {
-    return <CleanDrawer data={data} selected={selected === true} role={role} />;
-  }
-  return <StorageNode {...props} />;
+  return <CleanDrawer data={data} selected={selected === true} role={role} />;
 }
 
-export const StorageNodeSwitch = memo(
-  StorageNodeSwitchComponent,
+export const CleanStorageNode = memo(
+  CleanStorageNodeComponent,
   (previous, next) => previous.data === next.data && previous.selected === next.selected,
 );

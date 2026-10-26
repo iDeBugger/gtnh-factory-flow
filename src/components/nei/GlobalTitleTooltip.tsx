@@ -6,7 +6,7 @@ import { getUiScale } from "@/lib/ui-scale";
 import { isTouchPointer } from "@/lib/pointer-kind";
 import { TOOLTIP_PANEL_CLASS } from "./tooltip-style";
 import { ensureTipHost } from "@/components/flow/clean/interaction/TipHost";
-import { restWait } from "@/components/flow/clean/interaction/rest-wait";
+import { restWait } from "@/components/flow/clean/interaction/rest-tracker";
 
 /**
  * Renders every browser `title` attribute as the planner's own tooltip.

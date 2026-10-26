@@ -8,7 +8,7 @@ import { useFactoryStore } from "@/store/factory-store";
 import type { DatasetManifest } from "@/lib/datasets/types";
 import { unconvertedView } from "./clean/clean-model";
 import { RecipeNodeSwitch } from "./clean/CleanRecipeNode";
-import type { RecipeFlowNode } from "./RecipeNode";
+import type { RecipeFlowNode } from "./board-node-types";
 
 vi.mock("@/lib/compact-view", () => ({ isCompactViewport: () => false }));
 

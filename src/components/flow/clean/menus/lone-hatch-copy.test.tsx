@@ -2,7 +2,6 @@
 import { afterEach, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import type { FactoryNode, Recipe } from "@/lib/model/types";
-import { PowerReadout } from "../../HatchPowerControls";
 import { PowerFactsPanel } from "./PowerInputPanel";
 import { powerFacts } from "./power-facts";
 import { workingLines } from "./working-lines";
@@ -46,11 +45,6 @@ it("tells a 2A Large Chemical Reactor that one hatch works at 1A", () => {
   const panel = render(<PowerFactsPanel facts={powerFacts(r, card(r.id, 2), 0, false, "2.9")} />);
   expect(panel.container.textContent).toContain("1A ×HV= 512 EU/t");
   expect(panel.container.textContent).toContain("(one hatch works at 1A)");
-  cleanup();
-  const readout = render(
-    <PowerReadout recipe={r} node={card(r.id, 2)} gameVersion="2.9" mode="build" />,
-  );
-  expect(readout.container.textContent).toContain("(one hatch works at 1A)");
 });
 
 it("says nothing of the sort for a Mega Blast Furnace or a 4A supply", () => {

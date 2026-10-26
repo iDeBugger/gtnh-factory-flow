@@ -56,7 +56,7 @@ import {
   type MachineHandlerIcon,
 } from "../machine-icons";
 import { orderMachineHandlers } from "../MachinePicker";
-import type { RecipeNodeData } from "../RecipeNode";
+import type { RecipeNodeData } from "../board-node-types";
 import { CC, CC_GEOMETRY } from "./tokens";
 import { mixHex } from "./colors";
 import { UP_TO_COLOR } from "./up-to-reason";

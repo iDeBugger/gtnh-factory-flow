@@ -86,7 +86,6 @@ export function ExportImageDialog({ onClose }: { onClose: () => void }) {
   useDialogA11y(dialogRef, { onClose });
   const project = useFactoryStore((state) => state.project);
   const result = useFactoryStore((state) => state.lastResult);
-  const mode = project.poolMode ? "pool" : project.solveMode ? "solve" : "build";
   const activeTabName = useDesignStore(
     (state) =>
       state.designs.find((design) => design.id === state.activeDesignId)?.name ?? "Untitled",
@@ -191,7 +190,7 @@ export function ExportImageDialog({ onClose }: { onClose: () => void }) {
     [background, backgroundColor, cardDetail, includeAnnotations],
   );
 
-  // Recapture when the mode, card look, paper or rates change. The summary
+  // Recapture when the card look, paper or rates change. The summary
   // bar and its visibility controls compose on top of the existing image.
   useEffect(() => {
     let cancelled = false;
@@ -221,7 +220,7 @@ export function ExportImageDialog({ onClose }: { onClose: () => void }) {
         setCapturing(false);
       });
     };
-    // Let the mode switch mount its worksheet/canvas and publish its capture listener.
+    // Let the board publish its capture listener first.
     const frame = requestAnimationFrame(() => attempt(2));
     return () => {
       cancelled = true;
@@ -229,7 +228,7 @@ export function ExportImageDialog({ onClose }: { onClose: () => void }) {
     };
     // rateUnit repaints the BOARD, not the request: the photograph must be
     // retaken to show the new numbers.
-  }, [requestBoardCapture, rateUnit, mode]);
+  }, [requestBoardCapture, rateUnit]);
 
   const previewUrl = useMemo(
     () => (capture?.blob ? URL.createObjectURL(capture.blob) : undefined),
@@ -503,7 +502,7 @@ export function ExportImageDialog({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             </div>
-            <div className={mode === "pool" ? "hidden" : "flex items-center gap-2"}>
+            <div className="flex items-center gap-2">
               <span className="text-xs font-medium text-fg-subtle">Cards</span>
               <div className="flex overflow-hidden rounded border border-line-strong">
                 {CARD_DETAILS.map((entry) => (
@@ -609,7 +608,7 @@ export function ExportImageDialog({ onClose }: { onClose: () => void }) {
               />
               Inputs and outputs
             </label>
-            <label className={mode === "pool" ? "hidden" : "flex items-center gap-1.5"}>
+            <label className="flex items-center gap-1.5">
               <input
                 type="checkbox"
                 checked={includeAnnotations}

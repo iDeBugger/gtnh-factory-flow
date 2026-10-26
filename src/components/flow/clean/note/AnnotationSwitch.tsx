@@ -2,28 +2,22 @@
 
 import { memo } from "react";
 import type { NodeProps } from "@xyflow/react";
-import { AnnotationNode, type AnnotationFlowNode } from "../../AnnotationNode";
-import { useFactoryStore } from "@/store/factory-store";
+import type { AnnotationFlowNode } from "../../board-node-types";
 import { CleanDrawing } from "./CleanDrawing";
 import { StickyNote, type StickyNoteFlowNode } from "./StickyNote";
 
 /**
- * What FactoryFlow registers as `annotationNode`: on a plan board (`project.planMode`) a text annotation is a
- * sticky note, drawn as the mod draws it, and a box, zone, arrow or image is `CleanDrawing` (docs/annotations.md);
- * everywhere else the classic annotation.
+ * What FactoryFlow registers as `annotationNode`: a text annotation is a sticky note, drawn as the mod draws it, and
+ * a box, zone or arrow is `CleanDrawing` (docs/annotations.md). A picture is kept in the data and shown nowhere.
  */
 function AnnotationSwitchComponent(props: NodeProps<AnnotationFlowNode>) {
-  const planMode = useFactoryStore((state) => state.project.planMode === true);
-  if (planMode && props.data.annotation.kind === "text") {
+  if (props.data.annotation.kind === "text") {
     return <StickyNote {...(props as unknown as NodeProps<StickyNoteFlowNode>)} />;
   }
-  if (planMode && props.data.annotation.kind === "image") {
-    return null; // pictures are not supported: kept in the data, shown nowhere
+  if (props.data.annotation.kind === "image") {
+    return null;
   }
-  if (planMode) {
-    return <CleanDrawing {...props} />;
-  }
-  return <AnnotationNode {...props} />;
+  return <CleanDrawing {...props} />;
 }
 
 export const AnnotationSwitch = memo(AnnotationSwitchComponent);

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { Recipe } from "@/lib/model/types";
 import { getNodePowerReport, describePowerStall } from "./power-report";
 import { getEffectiveVoltageOrdinal, getNodePowerAmps, getNodeRunTier } from "./power";
-import { listPowerWins, nextPowerWin, previousPowerWin } from "./power-wins";
 import { getVoltageTierIndex } from "@/lib/model/tiers";
 
 /** A synthetic LCR recipe: the table marks the machine a multiblock. */
@@ -137,37 +136,5 @@ describe("typed power budget", () => {
       powerEuT: 500,
     }, "2.9");
     expect(report.state).toBe("over-tier");
-  });
-});
-
-describe("power wins", () => {
-  it("lists where a budget starts buying something: the draw, then each power-of-four step", () => {
-    const recipe = lcrRecipe(480, "HV");
-    const wins = listPowerWins(recipe, { overclockTier: "HV" }, "2.9");
-    const euTs = wins.map((win) => win.euT);
-    // The recipe runs from its own draw; each overclock costs four times more.
-    expect(euTs.slice(0, 4)).toEqual([480, 1920, 7680, 30720]);
-    expect(wins[0]!.gain).toBe("runs");
-    expect(wins[1]!.gain).toBe("1 overclock");
-    expect(wins[2]!.gain).toBe("2 overclocks");
-    // Ascending, no duplicates.
-    for (let i = 1; i < euTs.length; i += 1) {
-      expect(euTs[i]!).toBeGreaterThan(euTs[i - 1]!);
-    }
-  });
-
-  it("includes parallel gains on a tier-scaled machine", () => {
-    const wins = listPowerWins(icbRecipe(), { overclockTier: "LV" }, "2.9");
-    expect(wins.some((win) => win.gain.includes("parallels"))).toBe(true);
-  });
-
-  it("walks to the next and previous win from any budget", () => {
-    const wins = listPowerWins(lcrRecipe(480, "HV"), { overclockTier: "HV" }, "2.9");
-    expect(nextPowerWin(wins, 6000)?.euT).toBe(7680);
-    expect(previousPowerWin(wins, 6000)?.euT).toBe(1920);
-    // Sitting exactly on a win steps to the neighbours, not itself.
-    expect(nextPowerWin(wins, 1920)?.euT).toBe(7680);
-    expect(previousPowerWin(wins, 1920)?.euT).toBe(480);
-    expect(previousPowerWin(wins, 480)).toBeUndefined();
   });
 });

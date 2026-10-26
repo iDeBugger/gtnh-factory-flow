@@ -229,8 +229,8 @@ describe("StickyNote", () => {
 });
 
 describe("AnnotationSwitch", () => {
-  const mount = (annotation: FactoryAnnotation, planMode: boolean) => {
-    load([annotation], planMode);
+  const mount = (annotation: FactoryAnnotation) => {
+    load([annotation], true);
     return render(
       <ReactFlowProvider>
         <AnnotationSwitch {...(props(annotation) as unknown as Parameters<typeof AnnotationSwitch>[0])} />
@@ -238,12 +238,8 @@ describe("AnnotationSwitch", () => {
     );
   };
 
-  it("draws a text annotation as a sticky note on a plan board, the classic text note elsewhere", () => {
-    const plan = mount(note(), true);
-    expect(plan.container.querySelector(".sn")).not.toBeNull();
-    plan.unmount();
-    const classic = mount(note(), false);
-    expect(classic.container.querySelector(".sn")).toBeNull();
+  it("draws a text annotation as a sticky note", () => {
+    expect(mount(note()).container.querySelector(".sn")).not.toBeNull();
   });
 });
 

@@ -13,7 +13,7 @@ import { ResourceIcon } from "@/components/nei/ResourceIcon";
 import { useFactoryStore } from "@/store/factory-store";
 import { CardActionsMenu } from "../menus/CardActionsMenu";
 import { CropPickerMenu } from "../../CropPickerMenu";
-import { checklistLocked } from "../../RecipeNode";
+import { checklistLocked } from "../../board-node-types";
 import {
   CardFoot,
   UnconvertedLine,

@@ -80,8 +80,6 @@
   zoom: var(--ui-scale-inverse);
 }
 
-
-
 /*
  * Theme tokens. The app renders dark, and only dark.
  *
@@ -199,18 +197,6 @@
      weights so both can be on at once. */
   --glow-line: #ffd257;
   --glow-halo: rgba(255, 202, 84, 0.8);
-
-  /* The board's heartbeat. EVERY breathing mark on the board runs for exactly
-     this long so none drift apart; they are also pinned to one phase in JS
-     (animation-phase.ts, which lists them). */
-  --board-pulse: 1.9s;
-}
-
-/* The pointed-at resource row, redrawn wide over the board. It grows out of
-   the real row's width (measured on pointer arrival, handed over as
-   --row-start-width), so it reads as the row itself widening. */
-.resource-row-expand {
-  animation: resource-row-expand 130ms ease-out;
 }
 
 /*
@@ -241,151 +227,6 @@
   }
 }
 
-@keyframes resource-row-expand {
-  from {
-    width: var(--row-start-width, 100%);
-  }
-}
-
-/* The row's star and eye, and the gap they open, arrive with the widening.
-   The wide copy is freshly mounted, so a transition has no previous value to
-   run from; an animation's `from` does. Same 130ms as the widening. */
-.resource-row-expand .resource-row-marks-gap {
-  animation: resource-row-marks-gap 130ms ease-out;
-}
-
-@keyframes resource-row-marks-gap {
-  from {
-    width: 0;
-  }
-}
-
-.resource-row-expand .resource-row-marks {
-  animation: resource-row-marks 130ms ease-out;
-}
-
-@keyframes resource-row-marks {
-  from {
-    opacity: 0;
-  }
-}
-
-/* Held still while the copy is measured for how wide it has to be. Every
-   animation on it starts from a smaller value than it ends at, so a measurement
-   taken while they are running comes back short. */
-.resource-row-measuring,
-.resource-row-measuring * {
-  animation: none !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .resource-row-expand,
-  .resource-row-expand .resource-row-marks-gap,
-  .resource-row-expand .resource-row-marks {
-    animation: none;
-  }
-}
-
-.resource-glow {
-  outline: 3px solid var(--glow-line);
-  outline-offset: 3px;
-  filter: drop-shadow(0 0 10px var(--glow-halo));
-  /* The wash below is positioned against the card. */
-  position: relative;
-}
-
-/* An outline alone loses a card in a crowd, so a lit card also WASHES in the
-   glow colour and breathes. Colour tags and the selection ring are static,
-   so the movement cannot be confused with them.
-
-   The wash is a pseudo-element animating OPACITY only: animating the card's
-   background would repaint every matching card every frame. */
-.resource-glow::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--glow-halo);
-  /* Above the card's own surfaces, below its ports and buttons, and never a
-     click target. */
-  pointer-events: none;
-  z-index: 2;
-  animation: resource-breathe var(--board-pulse) ease-in-out infinite;
-}
-
-@keyframes resource-breathe {
-  0%,
-  100% {
-    opacity: 0.12;
-  }
-  50% {
-    opacity: 0.38;
-  }
-}
-
-/* Zoomed out, a card is already a big glowing item face. The wash there has to
-   fight the LED look rather than sit under it, so it goes harder and the
-   outline gets thicker — at that distance a 3px frame is a hairline. */
-.factory-flow-board[data-detail-level="glance"] .resource-glow {
-  outline-width: 6px;
-  outline-offset: 4px;
-}
-
-.factory-flow-board[data-detail-level="glance"] .resource-glow::after {
-  animation-name: resource-breathe-led;
-}
-
-@keyframes resource-breathe-led {
-  0%,
-  100% {
-    opacity: 0.22;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
-
-/* Whoever asked for reduced motion gets the strong wash without the breathing:
-   the point is "this card, here", and a steady tint says that too. */
-@media (prefers-reduced-motion: reduce) {
-  .resource-glow::after {
-    animation: none;
-    opacity: 0.3;
-  }
-}
-
-/* Pulled into a hovered port's flow scope: lit, but quieter than the direct
-   resource match above. */
-.flow-scope-glow {
-  outline: 2px solid var(--glow-line);
-  outline-offset: 2px;
-}
-
-/* Drawer highlights follow the SILHOUETTE, not the box. The square outline
-   and the full-box wash switch off here, and StorageNode draws them back as
-   shape-clipped layers (.storage-rim / .storage-wash) that wear the tile's
-   own polygon. Only the drop-shadow survives from the shared rule: a filter
-   follows the rendered alpha, cut corners included. */
-[data-storage-node-id].resource-glow,
-[data-storage-node-id].flow-scope-glow {
-  outline: none;
-}
-[data-storage-node-id].resource-glow::after {
-  content: none;
-}
-
-/* The shape-clipped wash breathes on the same clock as the square one. */
-.storage-wash {
-  animation: resource-breathe var(--board-pulse) ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .storage-wash {
-    animation: none;
-    opacity: 0.3;
-  }
-}
-
 /* Zoomed out a storage card is already reduced to its item; a glowing frame
    around a glowing icon is noise. LED mode glows nothing — the wires and
    machine cards still light, the drawer itself stays quiet. The selection
@@ -393,11 +234,6 @@
 .factory-flow-board[data-detail-level="glance"] [data-storage-node-id] {
   outline: none !important;
   filter: none !important;
-}
-
-.factory-flow-board[data-detail-level="glance"] .storage-rim--glow,
-.factory-flow-board[data-detail-level="glance"] .storage-wash {
-  display: none;
 }
 
 @theme inline {
@@ -734,23 +570,6 @@ textarea {
   }
 }
 
-/* Value motion (board-motion.tsx): the port gauges glide to their new
-   reading on the same clock the numbers ease on (VALUE_TWEEN_MS), so a bar
-   and the rate under it tell one story while they move. */
-.factory-flow-board--value-motion .flow-port-bar > i {
-  transition: width 1000ms cubic-bezier(0.33, 1, 0.68, 1);
-}
-
-.factory-flow-board--value-motion .flow-port-ghost {
-  transition:
-    left 1000ms cubic-bezier(0.33, 1, 0.68, 1),
-    width 1000ms cubic-bezier(0.33, 1, 0.68, 1);
-}
-
-.factory-flow-board--value-motion .flow-port-caret {
-  transition: left 1000ms cubic-bezier(0.33, 1, 0.68, 1);
-}
-
 /* Zoom detail steps; node-detail.ts decides what each step keeps and when.
    Zoomed out, a node is reduced to its one legible fact.
 
@@ -851,28 +670,6 @@ textarea {
   transition: opacity 560ms ease, visibility 0s 560ms;
 }
 
-/* The smart views' card colour (glanceCardVars in node-colors.ts): the node
-   always carries inert --glance-* variables, and only this rule, behind the
-   detail attribute, applies them, so React never reads the zoom.
-   !important: at the glance step the view wash outranks a painted card's
-   inline box-shadow ring. */
-.factory-flow-board[data-detail-level="glance"] [data-glance-paint] .recipe-node-window {
-  background-color: var(--glance-face);
-  box-shadow:
-    inset 0 0 0 2px var(--glance-border),
-    inset 4px 4px 0 var(--glance-bevel-light),
-    inset -4px -4px 0 var(--glance-bevel-dark),
-    0 0 0 2px var(--glance-ring) !important;
-}
-
-/* The wash GLIDES: crossing the threshold fades the colour in with the rest
-   of the far view, and a solver tick that moves a card's utilisation eases
-   the heat rather than snapping it. Unscoped by detail level so the fade
-   plays in both directions. */
-.factory-flow-board--value-motion .recipe-node-window {
-  transition: background-color 560ms ease, box-shadow 560ms ease;
-}
-
 /* Lines take the speed-view colour with the same fade the cards get. */
 .factory-flow-board--value-motion .react-flow__edge path {
   transition: stroke 560ms ease;
@@ -883,8 +680,7 @@ textarea {
    identity tile's border is an inline shorthand. Drawers are excluded: a
    width on their bare card div paints a currentColor (white) box; their
    silhouette is kept instead (below). */
-.factory-flow-board[data-detail-level="glance"] .trash-node-card,
-.factory-flow-board[data-detail-level="glance"] .glance-identity-tile {
+.factory-flow-board[data-detail-level="glance"] .trash-node-card{
   border-width: min(calc(2px / var(--board-zoom, 1)), 12px) !important;
 }
 
@@ -895,24 +691,6 @@ textarea {
 .factory-flow-board[data-detail-level="glance"] [data-node-glance-root] > .storage-shape {
   visibility: visible;
   opacity: 1;
-}
-
-.factory-flow-board[data-detail-level="glance"] .storage-shape-fill {
-  inset: min(calc(2px / var(--board-zoom, 1)), 12px) !important;
-}
-
-/* The identity glance's hover reveal: name, count and I/O rates below the
-   card. Pure CSS (hover must never rebuild the board), glance step only.
-   Scaled by 1 / --board-zoom (published by NodeDetailController) so it
-   renders at constant SCREEN size; the transform origin is the panel's top
-   centre, so translateX still centres it. */
-.glance-io {
-  display: none;
-}
-
-.factory-flow-board[data-detail-level="glance"] .react-flow__node:hover .glance-io {
-  display: flex;
-  transform: translateX(-50%) scale(calc(1 / var(--board-zoom, 1)));
 }
 
 /* While a reveal is up it beats EVERYTHING: the nodes layer lifts over the
@@ -988,31 +766,11 @@ textarea {
   image-rendering: pixelated;
 }
 
-/*
- * Scrolls without a scrollbar taking a bite out of a short strip in a
- * fixed-height bar. Wheel, trackpad, drag and keyboard still scroll; arrows
- * beside the strip are the visible affordance.
- */
-.no-scrollbar {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
 /* Icons must never become the browser's native drag ghost - dragging on the
    board moves nodes and pulls wires, nothing else. */
 img {
   -webkit-user-drag: none;
   user-drag: none;
-}
-
-.factory-flow-board--moving .react-flow__edges,
-.factory-flow-board--moving .react-flow__edgelabel-renderer,
-.factory-flow-board--moving .react-flow__nodes {
-  pointer-events: none;
 }
 
 /* While paint mode is active the whole board keeps the brush cursor, so the
@@ -1085,18 +843,6 @@ img {
    its siblings. */
 .factory-flow-board--dragging .react-flow__nodes {
   z-index: 2100 !important;
-}
-
-/* A node with an open picker popup must beat everything: the edge layer can
-   sit above the nodes layer (80 vs 20), so the whole nodes layer lifts
-   while any popup is open, and the owning node rises above its selected (20)
-   and dragging (30) siblings. */
-.factory-flow-board .react-flow__nodes:has(.recipe-node-popup-open) {
-  z-index: 2200 !important;
-}
-
-.factory-flow-board .react-flow__node:has(.recipe-node-popup-open) {
-  z-index: 40 !important;
 }
 
 .factory-flow-board .react-flow__edgelabel-renderer {
@@ -1187,15 +933,6 @@ img {
   pointer-events: none !important;
 }
 
-.factory-flow-board--wiring .recipe-node-shell:has(.flow-usage-stat:hover) .flow-port--bind,
-.factory-flow-board--wiring .recipe-node-shell:has(.flow-usage-stat:hover) .flow-plug--hungry,
-.factory-flow-board--wiring .recipe-node-shell:has(.flow-usage-stat:hover) .flow-plug--clogged,
-.factory-flow-board--wiring .recipe-node-shell:has(.flow-usage-stat:hover) .flow-plug--blocked {
-  outline: none;
-  filter: none;
-  z-index: auto;
-}
-
 /* Visible at rest: a solid thumb and recessed track across app scrollers. */
 * {
   scrollbar-color: var(--mc-ink-muted) var(--mc-25);
@@ -1262,54 +999,18 @@ img {
   }
 }
 
-/*
-   Seamless loop: the overlay is INVISIBLE at both ends of the cycle, so the
-   restart never snaps - it eases in empty, wipes across, and eases out full.
-*/
-@keyframes recipe-search-arrow-fill {
-  0% {
-    clip-path: inset(0 100% 0 0);
-    opacity: 0;
-  }
-  14% {
-    clip-path: inset(0 88% 0 0);
-    opacity: 1;
-  }
-  68% {
-    clip-path: inset(0 0 0 0);
-    opacity: 1;
-  }
-  100% {
-    clip-path: inset(0 0 0 0);
-    opacity: 0;
-  }
-}
-
 .recipe-search-skeleton {
   animation: recipe-search-skeleton-breathe 1.8s ease-in-out infinite;
 }
 
-.recipe-search-arrow-fill {
-  animation: recipe-search-arrow-fill 1.8s ease-in-out infinite;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .recipe-search-skeleton,
-  .recipe-search-arrow-fill {
+  .recipe-search-skeleton{
     animation: none;
   }
 
   .recipe-search-skeleton {
     opacity: 0.6;
   }
-}
-
-.nei-tab-strip {
-  scrollbar-width: none;
-}
-
-.nei-tab-strip::-webkit-scrollbar {
-  display: none;
 }
 
 .minecraft-title {
@@ -1376,38 +1077,6 @@ html:not([data-app-font="minecraft"]) [class*="[text-shadow:"] {
   --verdict-unwired-ink: #eef2f8;
 }
 
-/* The card's alert channel: one colour set, chosen once by the reason, read
-   by every mark on the card (binding input wash, slowed bars, short plugs,
-   badges, carets). This is what makes the marks and the word agree by
-   construction — there is no second place to get a colour from. */
-.recipe-node-shell {
-  --state-wash: var(--mc-71);
-  --state-edge: var(--mc-47);
-  --state-bar: var(--rail-bar-calm);
-  --state-badge: #4a5a6c;
-  --state-accent: #cfd6e0;
-}
-
-/* Starved sits at ~55° — near enough true yellow to read as a different
-   SIGNAL from the amber next door (~39°), not as a paler version of it. Kept
-   desaturated so it stays the quietest mark on the board: this state costs
-   nobody anything, and the colour should not imply otherwise. */
-.recipe-node-shell[data-verdict="starved"] {
-  --state-wash: #403e29;
-  --state-edge: #87844f;
-  --state-bar: #b0aa66;
-  --state-badge: #736f38;
-  --state-accent: #cfcb93;
-}
-
-.recipe-node-shell[data-verdict="blocked"] {
-  --state-wash: #57451b;
-  --state-edge: #c99b2e;
-  --state-bar: var(--rail-bar-hot);
-  --state-badge: #cf8e00;
-  --state-accent: #ffd76a;
-}
-
 /* A drawer's SILHOUETTE and COLOUR both name its role, because they fail
  * differently: colour (ROLE_TINTS in StorageNode.tsx: red source, green
  * product and byproduct, steel buffer and trash) reads at any distance, and
@@ -1422,9 +1091,7 @@ html:not([data-app-font="minecraft"]) [class*="[text-shadow:"] {
    the rule list has to open past the drawer's edge - so the title bar clips
    itself to the silhouette's top (--band-radius / --band-clip), and the port
    chip is inset clear of the cuts (--storage-cm). */
-.storage-shape,
-.storage-shape-fill,
-.storage-shape-content {
+.storage-shape{
   /* Square by default: that is PRODUCT (the crate the plan ships), and idle
      inherits it. */
   clip-path: none;
@@ -1435,14 +1102,12 @@ html:not([data-app-font="minecraft"]) [class*="[text-shadow:"] {
    `clip-path: inset(round)` rather than `border-radius`, because a radius
    alone does NOT clip children - it only rounds the element's own
    background, and the fill is a child of the frame. */
-.storage-shape[data-storage-shape="source"],
-.storage-shape[data-storage-shape="source"] .storage-shape-fill {
+.storage-shape[data-storage-shape="source"]{
   clip-path: inset(0 round 12px);
 }
 
 /* BYPRODUCT: the shield - square shoulders, tapered base. */
-.storage-shape[data-storage-shape="byproduct"],
-.storage-shape[data-storage-shape="byproduct"] .storage-shape-fill {
+.storage-shape[data-storage-shape="byproduct"]{
   clip-path: polygon(
     0 0,
     100% 0,
@@ -1455,16 +1120,14 @@ html:not([data-app-font="minecraft"]) [class*="[text-shadow:"] {
 
 /* TRASH: the bin - square shoulders, sides tapering straight down to a
    narrower base. */
-.storage-shape[data-storage-shape="trash"],
-.storage-shape[data-storage-shape="trash"] .storage-shape-fill {
+.storage-shape[data-storage-shape="trash"]{
   clip-path: polygon(0 0, 100% 0, calc(100% - 9px) 100%, 9px 100%);
 }
 
 /* BUFFER: the hexagon, points left and right - a pipe joint the flow passes
    through, in one side and out the other. Strict buffers share the shape;
    the inlay rings and the mode key say which one it is running. */
-.storage-shape[data-storage-shape="buffer"],
-.storage-shape[data-storage-shape="buffer"] .storage-shape-fill {
+.storage-shape[data-storage-shape="buffer"]{
   clip-path: polygon(
     10px 0,
     calc(100% - 10px) 0,
@@ -1475,308 +1138,8 @@ html:not([data-app-font="minecraft"]) [class*="[text-shadow:"] {
   );
 }
 
-.storage-shape[data-storage-shape="product"],
-.storage-shape[data-storage-shape="product"] .storage-shape-fill {
+.storage-shape[data-storage-shape="product"]{
   border-radius: 4px;
-}
-
-.storage-node-card .storage-shape-fill::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(155deg, rgba(255,255,255,0.06), transparent 48%, rgba(0,0,0,0.12));
-}
-
-/* The body under the title bar wears a darker accent, painted on the
-   silhouette's clipped fill so it runs edge to edge and follows every cut. */
-.storage-node-card .storage-shape-fill::before {
-  content: "";
-  position: absolute;
-  inset: 18px 0 0;
-  background: rgba(0,0,0,0.24);
-  box-shadow: inset 0 1px 0 rgba(0,0,0,0.35);
-}
-
-.factory-flow-board[data-detail-level="glance"] .storage-shape-fill::before {
-  display: none;
-}
-
-/* Per silhouette: the title bar's own clip and side padding, and the port
-   chip's side margin, each measured against the frame (cut + 2px border +
-   the buffer's inlay ring). */
-.storage-shape-content {
-  --storage-hp: 3px;
-  --storage-cm: 4px;
-  --band-radius: 0;
-  --band-clip: none;
-}
-
-.storage-shape-content[data-storage-shape="product"],
-.storage-shape-content[data-storage-shape="idle"] {
-  --band-radius: 2px 2px 0 0;
-}
-
-.storage-shape-content[data-storage-shape="source"] {
-  --storage-hp: 6px;
-  --storage-cm: 5px;
-  --band-radius: 10px 10px 0 0;
-}
-
-.storage-shape-content[data-storage-shape="byproduct"] {
-  --storage-cm: 11px;
-}
-
-.storage-shape-content[data-storage-shape="trash"] {
-  --storage-cm: 11px;
-  --band-clip: polygon(0.3px 0, calc(100% - 0.3px) 0, calc(100% - 2.3px) 100%, 2.3px 100%);
-}
-
-.storage-shape-content[data-storage-shape="buffer"] {
-  --storage-hp: 12px;
-  --storage-cm: 12px;
-  --band-clip: polygon(9.6px 0, calc(100% - 9.6px) 0, calc(100% - 5.1px) 100%, 5.1px 100%);
-}
-
-/* The TITLE BAR: the move grip, one cell tall under the frame's 2px. The
-   name stays centred while it fits: the side columns share leftover room
-   equally but only insist on the keys they hold (--side-l / --side-r), so a
-   long name takes an empty side before it fades. */
-.storage-title-bar {
-  --side-l: 13px;
-  --side-r: 13px;
-  display: grid;
-  grid-template-columns: minmax(var(--side-l), 1fr) minmax(0, auto) minmax(var(--side-r), 1fr);
-  align-items: center;
-  gap: 2px;
-  height: 18px;
-  margin: 2px 2px 0;
-  padding: 0 calc(var(--storage-hp) - 2px);
-  border-radius: var(--band-radius);
-  clip-path: var(--band-clip);
-  border-bottom: 1px solid rgba(0,0,0,0.5);
-  background: color-mix(in srgb, var(--storage-tint) 30%, #0b0d10);
-  cursor: grab;
-}
-
-/* A ratio drawer carries two keys on the right; a source none. */
-.storage-title-bar--wide {
-  --side-r: 30px;
-}
-
-.storage-title-bar--no-end {
-  --side-r: 0px;
-}
-
-.storage-title-side {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.storage-title-side--end {
-  justify-content: flex-end;
-}
-
-.storage-title-name {
-  min-width: 0;
-  /* The fade lands on this padding while the name fits. */
-  padding: 0 4px;
-  overflow: hidden;
-  color: #e8e9ee;
-  font-size: 9.5px;
-  font-weight: 700;
-  line-height: 11px;
-  text-align: center;
-  white-space: nowrap;
-  text-shadow: 0 1px 1px rgba(0,0,0,0.45);
-  /* Names fade where they run out, never an ellipsis. A centred name that
-     fits never reaches the fade. */
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 6px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 6px), transparent);
-  pointer-events: none;
-}
-
-/* The machine card's own button: square, bevelled, dark. */
-.storage-title-key {
-  position: relative;
-  z-index: 40;
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 13px;
-  height: 13px;
-  padding: 0;
-  border: 1.5px solid #111317;
-  background: #34373e;
-  box-shadow: inset 1px 1px 0 rgba(255,255,255,0.2), inset -1px -1px 0 rgba(0,0,0,0.45);
-  color: #e8e9ee;
-  cursor: pointer;
-}
-
-.storage-title-key svg {
-  width: 8px;
-  height: 8px;
-  stroke-width: 2.6;
-}
-
-.storage-title-key:hover {
-  background: #454952;
-}
-
-.storage-title-key--delete::before {
-  content: "";
-  width: 6px;
-  height: 1.5px;
-  background: #fff;
-}
-
-.storage-title-key--delete:hover {
-  background: #9c3543;
-}
-
-/* The PORT CHIP: the whole body under the title bar, the wire zone, and it
-   answers like a machine's port row - click for recipes, right click for
-   uses, drag to wire. Its dark ground is the fill's ::before above; the
-   content is padded clear of the silhouette's cuts. */
-.storage-port-chip {
-  position: relative;
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  min-height: 0;
-  margin: 0 2px 2px;
-  padding: 4px calc(var(--storage-cm) + 3px) 3px calc(var(--storage-cm) + 2px);
-  cursor: crosshair;
-}
-
-/* Solve's ruled chip: the rule row and the reading well as one group,
-   centred, so the space above the rule row equals the space below the
-   well. */
-.storage-port-chip:not(.storage-port-chip--centered) {
-  padding-top: 3px;
-  padding-bottom: 3px;
-}
-
-.storage-port-chip:not(.storage-port-chip--centered) > .storage-chip-text {
-  align-self: stretch;
-  justify-content: center;
-}
-
-/* The reading well: what flows and its bar in a quiet panel of its own,
-   sized to them, under the rule row you set. Kept faint: it groups the
-   reading, it does not compete with it. */
-.storage-chip-reading {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  /* Always the height it has with its bar, so choosing Any or a rule never
-     moves anything; with no bar the rate sits in the middle of it. */
-  min-height: 25px;
-  padding: 2px 4px 3px;
-  border: 1px solid rgba(0,0,0,0.26);
-  background: rgba(0,0,0,0.12);
-  box-shadow: inset 0 1px 0 rgba(0,0,0,0.16);
-  pointer-events: none;
-}
-
-/* Build, and every drawer without a rule: the picture and the rate as one
-   centred group. */
-.storage-port-chip--centered {
-  justify-content: center;
-}
-
-.storage-port-chip--centered > .storage-chip-text {
-  flex: 0 1 auto;
-  align-items: flex-start;
-}
-
-.storage-chip-icon {
-  position: relative;
-  z-index: 10;
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  pointer-events: none;
-}
-
-/* No z-index here: a stacking context would pin the rule row under the
-   face's wire handle (z-30). Its children compete with the handle directly. */
-.storage-chip-text {
-  position: relative;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
-  min-width: 0;
-}
-
-.storage-chip-text > [data-ratio-setup-output] {
-  z-index: 40;
-}
-
-/* A non-strict buffer's rate is its surplus, and a quiet word under it,
-   centred on the rate, says so. */
-.storage-chip-surplus {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  pointer-events: none;
-}
-
-.storage-chip-surplus-word {
-  color: #a8afbb;
-  font-size: 8px;
-  font-weight: 700;
-  line-height: 9px;
-  white-space: nowrap;
-}
-
-/* The number in one steady size, the unit beside it small and quiet. One
-   line height per size, so the reading never changes height with the font. */
-.storage-chip-rate {
-  display: flex;
-  align-items: baseline;
-  gap: 1.5px;
-  pointer-events: none;
-}
-
-.storage-chip-rate--small {
-  height: 13px;
-  line-height: 13px;
-}
-
-.storage-chip-rate--large {
-  height: 15px;
-  line-height: 15px;
-}
-
-.storage-chip-rate-number {
-  font-weight: 800;
-}
-
-.storage-chip-rate-unit {
-  font-weight: 700;
-  opacity: 0.72;
-}
-
-/* Solve's rule row: a rule BUTTON with a ▾, and your rate in a sunken BOX. */
-.storage-rule-row {
-  position: relative;
-  z-index: 40;
-  display: flex;
-  align-items: stretch;
-  gap: 2px;
-  height: 14px;
-  min-width: 0;
 }
 
 .storage-rule-button {
@@ -2046,522 +1409,6 @@ html:not([data-app-font="minecraft"]) [class*="[text-shadow:"] {
   font-size: 11px;
 }
 
-/* The real rate against your rate, in the port bars' colours. */
-.storage-rate-bar {
-  position: relative;
-  display: block;
-  height: 3px;
-  background: var(--rail-bar-track);
-  box-shadow: inset 0 1px 0 rgba(0,0,0,0.35);
-  pointer-events: none;
-}
-
-/* No rule, no bar: the well keeps its height (min-height above) and the rate
-   centres in it. */
-.storage-rate-bar--empty {
-  display: none;
-}
-
-.storage-rate-bar > i {
-  --fill: var(--rail-bar-ok);
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--fill) 70%, #fff), var(--fill) 70%);
-}
-
-.storage-rate-bar > i[data-tone="bad"] {
-  --fill: var(--rail-bar-bad);
-}
-
-.storage-rate-bar > i[data-tone="calm"] {
-  --fill: var(--rail-bar-calm);
-}
-
-.factory-flow-board--value-motion .storage-rate-bar > i {
-  transition: width 1000ms cubic-bezier(0.33, 1, 0.68, 1);
-}
-
-/* Chalk. The state channel feeds the port marks, so every bare slot picks
-   these up for free through .flow-port--bind. */
-.recipe-node-shell[data-verdict="unwired"] {
-  --state-wash: #39414d;
-  --state-edge: #c8d2e0;
-  --state-bar: #eef2f8;
-  --state-badge: #5d6877;
-  --state-accent: #ffffff;
-}
-
-/* Three unwired marks on one clock (--board-pulse), loudest on the slots you
-   must fix, then the reason cell, then a quiet ring on the card.
-
-   All three are compositor-only: the element holds the dim state and a
-   ::after carries the lit state, fading on OPACITY. Animating border,
-   background or box-shadow is a paint property and repaints every marked
-   card every frame. */
-
-/* The loud one: a slot with no wire is dashed, like an unfinished line on a
-   plan, and gains a halo at the top of the breath. */
-@keyframes unwired-port-breathe {
-  0%,
-  100% {
-    opacity: 0;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-/* The middle one: the whole REASON cell, label included. Its opacity
-   breathes, and the background wash rides a ::after on the same clock
-   (unwired-wash-breathe below). */
-@keyframes unwired-reason-breathe {
-  0%,
-  100% {
-    opacity: 0.62;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-@keyframes unwired-wash-breathe {
-  0%,
-  100% {
-    opacity: 0;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-/* The quiet one: the card itself, a ring only. Width is constant (see the
-   dead-loop ring: a ring thinning below a device pixel at glance zoom
-   vanishes). The dim ring sits on the element, the lit ring on a fading
-   ::after. */
-@keyframes unwired-ring-breathe {
-  0%,
-  100% {
-    opacity: 0;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-.recipe-node-shell[data-verdict="unwired"] .flow-port--bind {
-  position: relative;
-  border-style: dashed;
-  border-color: #8f9bad;
-  background: #2f3640;
-}
-
-.recipe-node-shell[data-verdict="unwired"] .flow-port--bind::after {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  pointer-events: none;
-  border: 2px dashed #ffffff;
-  box-shadow: 0 0 0 2px rgba(238, 242, 248, 0.5);
-  opacity: 0;
-  animation: unwired-port-breathe var(--board-pulse) ease-in-out infinite;
-}
-
-.recipe-node-shell[data-verdict="unwired"] .verdict-reason-cell {
-  position: relative;
-  animation: unwired-reason-breathe var(--board-pulse) ease-in-out infinite;
-}
-
-.recipe-node-shell[data-verdict="unwired"] .verdict-reason-cell::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: rgba(238, 242, 248, 0.16);
-  opacity: 0;
-  animation: unwired-wash-breathe var(--board-pulse) ease-in-out infinite;
-}
-
-.unwired-ring {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  --unwired-ring: 2px;
-  --unwired-halo: 12px;
-  box-shadow: 0 0 0 var(--unwired-ring) rgba(200, 210, 224, 0.25);
-}
-
-.unwired-ring::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  box-shadow:
-    0 0 0 var(--unwired-ring) rgba(238, 242, 248, 0.85),
-    0 0 var(--unwired-halo) 2px rgba(220, 230, 244, 0.28);
-  opacity: 0;
-  animation: unwired-ring-breathe var(--board-pulse) ease-in-out infinite;
-}
-
-/* Zoomed out the card says nothing else, so the ring is allowed to be the
-   loud thing on it. Custom properties rather than a second @keyframes, so
-   crossing the threshold does not restart the animation and re-scatter every
-   card's phase. */
-.factory-flow-board[data-detail-level="glance"] .unwired-ring {
-  --unwired-ring: 6px;
-  --unwired-halo: 30px;
-}
-
-.factory-flow-board[data-detail-level="glance"] [data-node-glance-root] > .unwired-ring {
-  visibility: visible;
-  opacity: 1;
-}
-
-/* The board-level tally breathes on the same clock as the cards it counts. */
-.unwired-notice {
-  position: relative;
-  animation: unwired-reason-breathe var(--board-pulse) ease-in-out infinite;
-}
-
-.unwired-notice::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: rgba(238, 242, 248, 0.16);
-  opacity: 0;
-  animation: unwired-wash-breathe var(--board-pulse) ease-in-out infinite;
-}
-
-/* Same bargain the dead-loop ring strikes: keep the mark, drop the movement. */
-@media (prefers-reduced-motion: reduce) {
-  .recipe-node-shell[data-verdict="unwired"] .flow-port--bind,
-  .recipe-node-shell[data-verdict="unwired"] .verdict-reason-cell,
-  .unwired-notice,
-  .unwired-ring {
-    animation: none;
-  }
-  .recipe-node-shell[data-verdict="unwired"] .flow-port--bind {
-    border-color: #ffffff;
-  }
-  .recipe-node-shell[data-verdict="unwired"] .flow-port--bind::after,
-  .recipe-node-shell[data-verdict="unwired"] .verdict-reason-cell::after,
-  .unwired-notice::after {
-    content: none;
-  }
-  .unwired-ring {
-    box-shadow: 0 0 0 var(--unwired-ring) rgba(238, 242, 248, 0.85);
-  }
-  .unwired-ring::after {
-    content: none;
-  }
-}
-
-.factory-flow-board--calm .recipe-node-shell[data-verdict="unwired"] .flow-port--bind,
-.factory-flow-board--calm .recipe-node-shell[data-verdict="unwired"] .verdict-reason-cell,
-.factory-flow-board--calm .unwired-ring {
-  animation: none;
-}
-
-.factory-flow-board--calm .recipe-node-shell[data-verdict="unwired"] .flow-port--bind::after,
-.factory-flow-board--calm .recipe-node-shell[data-verdict="unwired"] .verdict-reason-cell::after,
-.factory-flow-board--calm .unwired-notice::after {
-  content: none;
-}
-
-.factory-flow-board--calm .unwired-ring {
-  box-shadow: 0 0 0 var(--unwired-ring) #7b8b9c;
-}
-
-.factory-flow-board--calm .unwired-ring::after {
-  content: none;
-}
-
-/* The one state whose wash is cool. See --verdict-clogged-ink. */
-.recipe-node-shell[data-verdict="clogged"] {
-  --state-wash: #1e3b4d;
-  --state-edge: #4b87a8;
-  --state-bar: #6fb2d6;
-  --state-badge: #2f6683;
-  --state-accent: #a8d8ef;
-}
-
-.recipe-node-shell[data-verdict="bottleneck"],
-.recipe-node-shell[data-verdict="dead-loop"] {
-  --state-wash: #5d2323;
-  --state-edge: #c34c4c;
-  --state-bar: var(--rail-bar-bad);
-  --state-badge: #c22525;
-  --state-accent: #ff9c9c;
-}
-
-/* A dead loop is a fault in the circle, not in any one card, so every card in
-   the ring breathes on the shared clock and the eye joins them up.
-
-   `.dead-loop-ring` (RecipeNode.tsx) is its own element inside the WINDOW,
-   not on the shell: the shell includes the unpainted tab zone, and a glow
-   there boxes empty space. It is not the window itself because the window's
-   frame and bevel ARE its box-shadow.
-
-   The ring's WIDTH is constant; only colour and halo move. Board pixels are
-   scaled by zoom, so a ring thinning below a device pixel far out vanishes
-   rather than dims. Nothing that must survive zoom-out may animate its size.
-   Same two layers as the unwired ring: dim shadow on the element, lit one on
-   a ::after, and only the ::after's OPACITY animates. */
-@keyframes dead-loop-breathe {
-  0%,
-  100% {
-    opacity: 0;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-.dead-loop-ring {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  --dead-loop-ring: 3px;
-  --dead-loop-halo: 10px;
-  --dead-loop-halo-lit: 24px;
-  box-shadow:
-    0 0 0 var(--dead-loop-ring) #a83b3b,
-    0 0 var(--dead-loop-halo) 1px rgba(200, 60, 60, 0.25);
-}
-
-.dead-loop-ring::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  box-shadow:
-    0 0 0 var(--dead-loop-ring) #ff6b6b,
-    0 0 var(--dead-loop-halo-lit) 6px rgba(255, 90, 90, 0.6);
-  opacity: 0;
-  animation: dead-loop-breathe var(--board-pulse) ease-in-out infinite;
-}
-
-/* The clog lock: the dead loop's mirror, in the clog family's blue. Same
-   constant-width bargain for the same zoom reason, same shared clock. */
-@keyframes clog-lock-breathe {
-  0%,
-  100% {
-    opacity: 0;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-.clog-lock-ring {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  --dead-loop-ring: 3px;
-  --dead-loop-halo: 10px;
-  --dead-loop-halo-lit: 24px;
-  box-shadow:
-    0 0 0 var(--dead-loop-ring) #3d7291,
-    0 0 var(--dead-loop-halo) 1px rgba(111, 178, 214, 0.25);
-}
-
-.clog-lock-ring::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  box-shadow:
-    0 0 0 var(--dead-loop-ring) #6fb2d6,
-    0 0 var(--dead-loop-halo-lit) 6px rgba(120, 190, 230, 0.6);
-  opacity: 0;
-  animation: clog-lock-breathe var(--board-pulse) ease-in-out infinite;
-}
-
-/* Selection, the over-tier warning and a search hit: the same overlay trick,
-   on the card's box rather than the shell's. The rings are written inline
-   from RecipeNode (their widths stack); this rule owns only the box. One
-   above the dead-loop ring, so a selection stays visible inside a dead ring's
-   halo. */
-.card-outline {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  pointer-events: none;
-}
-
-/* The glance step hides every child of a card's glance root; these rings are
-   the exception, since zoomed out is where they matter most. Same
-   specificity as the hide rule and after it, so it wins. */
-.factory-flow-board[data-detail-level="glance"] [data-node-glance-root] > .dead-loop-ring,
-.factory-flow-board[data-detail-level="glance"] [data-node-glance-root] > .card-outline {
-  visibility: visible;
-  opacity: 1;
-}
-
-/* Zoomed out, 3px is less than a device pixel, so the ring grows. Sizes ride
-   custom properties, not a second @keyframes: swapping animation-name
-   restarts the animation and scatters the ring's shared phase. */
-.factory-flow-board[data-detail-level="glance"] .dead-loop-ring {
-  --dead-loop-ring: 8px;
-  --dead-loop-halo: 26px;
-  --dead-loop-halo-lit: 56px;
-}
-
-/* Reduced motion and the presentation toggle both want the mark without the
-   movement: hold it at the bright end rather than dropping the signal. */
-@media (prefers-reduced-motion: reduce) {
-  .dead-loop-ring {
-    box-shadow:
-      0 0 0 var(--dead-loop-ring) #ff6b6b,
-      0 0 var(--dead-loop-halo-lit) 4px rgba(255, 90, 90, 0.4);
-  }
-  .dead-loop-ring::after {
-    content: none;
-  }
-}
-
-.factory-flow-board--calm .dead-loop-ring {
-  box-shadow: 0 0 0 var(--dead-loop-ring) #7b8b9c;
-}
-
-.factory-flow-board--calm .dead-loop-ring::after {
-  content: none;
-}
-
-/* The ring's wires, on the SAME clock as its cards. Sharing --board-pulse is
-   not enough: an animation's clock starts when it is applied, so marks that
-   mount at different moments drift apart. Every mark in a ring is pinned to
-   the document timeline in JS; see animation-phase.ts. */
-@keyframes dead-loop-wire-breathe {
-  0%,
-  100% {
-    opacity: 0.22;
-  }
-  50% {
-    opacity: 0.75;
-  }
-}
-
-.dead-loop-wire {
-  animation: dead-loop-wire-breathe var(--board-pulse) ease-in-out infinite;
-}
-
-@keyframes clog-lock-wire-breathe {
-  0%,
-  100% {
-    opacity: 0.22;
-  }
-  50% {
-    opacity: 0.75;
-  }
-}
-
-.clog-lock-wire {
-  animation: clog-lock-wire-breathe var(--board-pulse) ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dead-loop-wire {
-    animation: none;
-    opacity: 0.6;
-  }
-  .clog-lock-wire {
-    animation: none;
-    opacity: 0.6;
-  }
-}
-
-.factory-flow-board--calm .dead-loop-wire {
-  animation: none;
-  opacity: 0.35;
-  stroke: #7b8b9c;
-}
-
-.factory-flow-board--calm .clog-lock-wire {
-  animation: none;
-  opacity: 0.35;
-  stroke: #7b8b9c;
-}
-
-/* PULSE TIERS (animation-phase.ts, useBoardPulseGate). Every running animation
-   is a compositor layer and a main-thread tick: 200 cards with an unwired port
-   idled at 35 ms a frame, 2,580 layers. The board therefore caps how much of it
-   breathes, by the number of cards carrying a mark, on the board's data-pulse:
-
-   (none)  a small board: everything breathes, as above.
-   ring    one animation a card, its ring; the slot, reason cell and wash marks
-           and the hovered-resource glow are steady, at about mid breath.
-   still   nothing breathes; every mark is steady.
-
-   The steady values sit in the middle of each mark's range. Later in the
-   file than the rules they override, with one more class of specificity. */
-.factory-flow-board[data-pulse] .recipe-node-shell[data-verdict="unwired"] .flow-port--bind::after {
-  animation: none;
-  opacity: 0.5;
-}
-.factory-flow-board[data-pulse] .recipe-node-shell[data-verdict="unwired"] .verdict-reason-cell {
-  animation: none;
-  opacity: 0.8;
-}
-.factory-flow-board[data-pulse]
-  .recipe-node-shell[data-verdict="unwired"]
-  .verdict-reason-cell::after {
-  animation: none;
-  opacity: 0.5;
-}
-.factory-flow-board[data-pulse] .resource-glow::after,
-.factory-flow-board[data-pulse] .storage-wash {
-  animation: none;
-  opacity: 0.3;
-}
-.factory-flow-board[data-pulse="still"] .unwired-ring::after {
-  animation: none;
-  opacity: 0.55;
-}
-.factory-flow-board[data-pulse="still"] .dead-loop-ring::after,
-.factory-flow-board[data-pulse="still"] .clog-lock-ring::after {
-  animation: none;
-  opacity: 0.6;
-}
-.factory-flow-board[data-pulse="still"] .dead-loop-wire,
-.factory-flow-board[data-pulse="still"] .clog-lock-wire {
-  animation: none;
-  opacity: 0.5;
-}
-
-/* Hovering the usage cell lights the marks that produced that word; a card
-   has one reason, so every mark on it belongs to that word. Pure CSS: hover
-   must never rebuild a node. */
-.recipe-node-shell:has(.flow-usage-stat:hover) .flow-port--bind,
-.recipe-node-shell:has(.flow-usage-stat:hover) .flow-plug--hungry,
-.recipe-node-shell:has(.flow-usage-stat:hover) .flow-plug--clogged,
-.recipe-node-shell:has(.flow-usage-stat:hover) .flow-plug--blocked {
-  outline: 3px solid var(--state-edge);
-  outline-offset: 1px;
-  filter: brightness(1.2) saturate(1.15);
-  z-index: 12;
-}
-
-.flow-port {
-  background: var(--mc-71);
-  border: 2px solid var(--mc-47);
-  box-shadow:
-    inset 1px 1px 0 var(--mc-93),
-    inset -1px -1px 0 var(--mc-47);
-}
-
-/* A port name wraps to TWO compact lines instead of ending in three dots.
-   CLAMP ONLY: the size and weight are utilities on the element, so a name
-   whose stylesheet is late renders small and unclamped, not as 16px text
-   bursting out of the chip. Pure CSS, no text measurement. */
-.flow-port-name {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-}
-
 /* Blueprint overwrite picker: every folded board is a target, ringed in amber
    dashes; the one under the pointer goes solid and brighter. */
 .factory-flow-board--blueprint-picking .react-flow__node-pocketNode {
@@ -2576,129 +1423,6 @@ html:not([data-app-font="minecraft"]) [class*="[text-shadow:"] {
 .factory-flow-board--blueprint-picking .react-flow__node-pocketNode:hover > div {
   outline-style: solid;
   filter: brightness(1.18);
-}
-
-/* The input that sets the speed. Which colour it wears is the CARD's answer,
-   not the port's: gold when nobody is waiting on the shortage, amber when
-   somebody is. The mark always means the same thing — "this is the one" — so
-   it can take the card's urgency without ever changing meaning. */
-.flow-port--bind {
-  background: var(--state-wash);
-  border-color: var(--state-edge);
-}
-
-.flow-port--hot {
-  background: var(--port-hot-bg);
-  border-color: var(--port-hot-edge);
-}
-
-.flow-port--idle {
-  border-style: dashed;
-  opacity: 0.82;
-}
-
-.flow-port-bar {
-  position: relative;
-  height: 3px;
-  overflow: visible;
-  background: var(--rail-bar-track);
-  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.35);
-}
-
-.flow-port-bar > i {
-  display: block;
-  height: 100%;
-  background: var(--rail-bar-ok);
-}
-
-/* Wanted is bigger than the machine: the bar ends in a hard white notch and
-   a ×N tab bursts past it — a full bar with a burst can't read as "done". */
-.flow-port-bar--burst {
-  border-right: 2px solid rgba(255, 255, 255, 0.9);
-}
-
-/* Headroom feeding would unlock: hatched, never solid. */
-.flow-port-ghost {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  /* Tight stripes: at 3px a narrow ghost segment only fits one band and
-     reads as a stray triangle instead of hatching. */
-  background: repeating-linear-gradient(
-    45deg,
-    rgba(226, 232, 244, 0.4) 0 1.5px,
-    transparent 1.5px 3px
-  );
-}
-
-/* The WANT mark: a small caret under the bar at the asked position. */
-.flow-port-caret {
-  position: absolute;
-  top: 100%;
-  margin-top: 1px;
-  width: 0;
-  height: 0;
-  transform: translateX(-3px);
-  border-left: 3px solid transparent;
-  border-right: 3px solid transparent;
-  border-bottom: 4px solid #f5c542;
-}
-
-.flow-port--bind .flow-port-caret {
-  border-bottom-color: var(--state-accent);
-}
-
-.flow-port-burst {
-  flex: none;
-  border: 1px dashed var(--port-hot-edge);
-  background: rgba(207, 142, 0, 0.28);
-  color: #ffd76a;
-  font-size: 8px;
-  font-weight: 800;
-  line-height: 11px;
-  padding: 0 3px;
-  white-space: nowrap;
-}
-
-.flow-port--bind .flow-port-burst,
-.flow-port--slowed .flow-port-burst {
-  border-color: var(--state-edge);
-  background: var(--state-wash);
-  color: var(--state-accent);
-}
-
-.flow-port--bind .flow-port-bar > i {
-  background: var(--state-bar);
-}
-
-.flow-port--hot .flow-port-bar > i {
-  background: var(--rail-bar-hot);
-}
-
-.flow-port--calm .flow-port-bar > i {
-  background: var(--rail-bar-calm);
-}
-
-/* Outputs of a supply-short machine run slow through no fault of their own:
-   the card's colour says how much that costs, the neutral chip says the
-   problem isn't here. */
-.flow-port--slowed .flow-port-bar > i {
-  background: var(--state-bar);
-}
-
-/* Dashes marching source -> target inside the stroke. The offset counts DOWN
-   because routes are built source endpoint first. The travel is one dash+gap
-   period (--flow-march-period, per edge), so the loop is seamless.
-
-   No prefers-reduced-motion guard on purpose: the user switches this mode on
-   to watch things move, and silently disabling it reads as a broken button. */
-@keyframes flow-rate-march {
-  from {
-    stroke-dashoffset: 0;
-  }
-  to {
-    stroke-dashoffset: calc(-1 * var(--flow-march-period, 22px));
-  }
 }
 
 /* ---------- output couplings: the slim plug chip at the node's edge ---------- */
@@ -2729,112 +1453,6 @@ html:not([data-app-font="minecraft"]) [class*="[text-shadow:"] {
     inset -1px -1px 0 rgba(0, 0, 0, 0.3);
 }
 
-.flow-plug-top {
-  display: flex;
-  justify-content: center;
-  font-size: 8px;
-  font-weight: 800;
-  line-height: 10px;
-  font-variant-numeric: tabular-nums;
-}
-
-.flow-plug-bar {
-  display: flex;
-  align-items: center;
-}
-
-.flow-plug-track {
-  display: block;
-  flex: 1;
-  height: 4px;
-  background: rgba(0, 0, 0, 0.35);
-  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.35);
-}
-
-.flow-plug-track > i {
-  display: block;
-  height: 100%;
-  min-width: 2px;
-}
-
-/* Hungry and blocked are one shortfall seen from its two ends. Both read the
-   card's state channel, so the plug and the REASON word never disagree. */
-.flow-plug--hungry,
-.flow-plug--blocked,
-.flow-plug--clogged {
-  background: var(--state-wash);
-  border-color: var(--state-edge);
-}
-
-.flow-plug--hungry .flow-plug-track > i,
-.flow-plug--blocked .flow-plug-track > i,
-.flow-plug--clogged .flow-plug-track > i {
-  background: var(--state-bar);
-}
-
-.flow-plug--fed {
-  background: var(--port-fed-bg);
-  border-color: var(--port-fed-edge);
-}
-.flow-plug--fed .flow-plug-track > i {
-  background: var(--rail-bar-ok);
-}
-
-/* A dump has no ask to be a percent of — muted word, no bar. */
-.flow-plug--dump {
-  color: var(--mc-ink-muted);
-}
-
-/* Nothing wired: an open invitation, not a warning. */
-.flow-socket-empty {
-  position: relative;
-  display: flex;
-  flex: none;
-  width: 30px;
-  align-self: stretch;
-  margin-left: 2px;
-  align-items: center;
-  justify-content: center;
-  border: 2px dashed var(--mc-47);
-  color: var(--mc-ink-muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-/* Inside the chip, bottom right, clear of the name of the port above. */
-.flow-port-badge {
-  position: absolute;
-  bottom: 1px;
-  right: 1px;
-  z-index: 2;
-  border: 1px solid rgba(0, 0, 0, 0.5);
-  padding: 0 4px;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 13px;
-  color: #fff;
-  white-space: nowrap;
-}
-
-.flow-port--bind .flow-port-badge {
-  background: var(--state-badge);
-}
-
-.flow-port--hot .flow-port-badge {
-  background: #cf8e00;
-}
-
-/* A port pulled into the hovered flow scope wears the glow colour
-   (--glow-line). No brightness filter: it would also brighten the ring,
-   clipping the gold to a flat yellow that no longer matches the wires. */
-.flow-port--flow-lit {
-  position: relative;
-  z-index: 15;
-  box-shadow:
-    0 0 0 2px var(--glow-line),
-    0 0 10px 2px var(--glow-halo);
-}
-
 /* ===== Calm colours (the presentation toggle) ============================
    One class on the board root steps every STATUS colour down to steel; the
    words and marks stay. Interaction colours (selection, flow-scope, drop
@@ -2853,83 +1471,14 @@ html:not([data-app-font="minecraft"]) [class*="[text-shadow:"] {
   --port-fed-edge: var(--mc-47);
 }
 
-/* Every card's alert channel steps down to steel. The REASON word and the
-   zoomed-out percent keep their card's own ink. */
-.factory-flow-board--calm .recipe-node-shell,
-.factory-flow-board--calm .recipe-node-shell[data-verdict="starved"],
-.factory-flow-board--calm .recipe-node-shell[data-verdict="blocked"],
-.factory-flow-board--calm .recipe-node-shell[data-verdict="clogged"],
-.factory-flow-board--calm .recipe-node-shell[data-verdict="unwired"],
-.factory-flow-board--calm .recipe-node-shell[data-verdict="bottleneck"] {
-  --state-wash: var(--mc-71);
-  --state-edge: var(--mc-47);
-  --state-bar: #7b8b9c;
-  --state-badge: #4a5a6c;
-  --state-accent: #cfd6e0;
-  --verdict-starved-ink: var(--mc-ink);
-  --verdict-blocked-ink: var(--mc-ink);
-  --verdict-bottleneck-ink: var(--mc-ink);
-  --verdict-clogged-ink: var(--mc-ink);
-  --verdict-unwired-ink: var(--mc-ink);
-}
-
 /* On a painted card --mc-71 above is that card's own neutral, because its
    ramp is declared on the same element. */
-
-/* The accents that don't read the channel: the default want caret and the
-   ×N burst on an otherwise neutral port. */
-.factory-flow-board--calm .flow-port-caret {
-  border-bottom-color: #cfd6e0;
-}
-
-.factory-flow-board--calm .flow-port-burst {
-  border-color: #8b95a3;
-  background: rgba(90, 102, 118, 0.35);
-  color: #dfe5ee;
-}
-
-.factory-flow-board--calm .flow-port--hot .flow-port-badge {
-  background: #4a5a6c;
-}
-
-/* The usage-hover teaching link stays, in steel: with the alert channel calmed
-   to near-black the outline would all but vanish. */
-.factory-flow-board--calm .recipe-node-shell:has(.flow-usage-stat:hover) .flow-port--bind,
-.factory-flow-board--calm .recipe-node-shell:has(.flow-usage-stat:hover) .flow-plug--hungry,
-.factory-flow-board--calm .recipe-node-shell:has(.flow-usage-stat:hover) .flow-plug--clogged,
-.factory-flow-board--calm .recipe-node-shell:has(.flow-usage-stat:hover) .flow-plug--blocked {
-  outline-color: #9db0c4;
-}
-
-/* Storage cards: the net line stops signing its number in red and green. */
-.factory-flow-board--calm .storage-net-line {
-  color: #a8afbb;
-}
 
 /* Editing chrome (delete/clone on drawer, tank and trash headers) hides in a
    presentation. The recipe card's head buttons, footer and dials are gated
    in JSX instead, because their grid columns and heights leave with them. */
 .factory-flow-board--calm .board-edit-chrome {
   display: none;
-}
-
-
-
-/* The connection line's SNAPPED state: white marching dots riding the green
-   pipe toward the slot it caught. Class-gated so reduced motion simply
-   leaves the dots parked. */
-@keyframes connection-march {
-  to {
-    stroke-dashoffset: -12;
-  }
-}
-.connection-march {
-  animation: connection-march 0.45s linear infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .connection-march {
-    animation: none;
-  }
 }
 
 /* A wire whose pair is snapped by the CURRENT drag - releasing would toggle

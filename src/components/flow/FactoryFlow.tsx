@@ -1,19 +1,11 @@
 "use client";
 
-import { ChecklistKeys, useChecklistBoard, checklistCursorStyle } from "./ChecklistMode";
+import { useChecklistBoard, checklistCursorStyle } from "./ChecklistMode";
 
 import { emitBoardCameraMove } from "@/lib/board-camera-signal";
-
-import { useDropdownDismiss } from "@/lib/hooks/use-dropdown-dismiss";
 import { useViewerLock } from "./use-viewer-lock";
-import { StorageRatioEditor } from "./StorageRatioEditor";
 import { LivePresenceLayer } from "./LivePresenceLayer";
 import { isLiveConfigured } from "@/lib/live/live-config";
-import { PoolWorksheet } from "../pool/PoolWorksheet";
-import { capturePoolWorksheet } from "../export/capture-pool-worksheet";
-import { formatRatioShare, getProjectRatioBranches } from "@/lib/model/storage-ratios";
-import { labelRatioArrows, layoutRatioLabels, type RatioWireLabel } from "./ratio-label-layout";
-import { RatioWireLabel as RatioWireLabelControl } from "./RatioWireLabel";
 
 import {
   BaseEdge,
@@ -23,7 +15,6 @@ import {
   SelectionMode,
   applyNodeChanges,
   getNodesBounds,
-  getSmoothStepPath,
   getViewportForBounds,
   type Connection,
   type ConnectionLineComponentProps,
@@ -40,42 +31,9 @@ import {
   useStoreApi,
 } from "@xyflow/react";
 // React Flow's portals, with their target looked up once rather than on every store change.
-import { FlowEdgeLabelPortal as EdgeLabelRenderer, FlowViewportPortal as ViewportPortal } from "./virtual/flow-portals";
+import { FlowViewportPortal as ViewportPortal } from "./virtual/flow-portals";
 import { toBlob, toSvg } from "html-to-image";
-import {
-  Activity,
-  AlignJustify,
-  AppWindow,
-  Ban,
-  Box,
-  Combine,
-  Grid2x2,
-  Eye,
-  Focus,
-  Gauge,
-  Grid3x3,
-  Grip,
-  Hammer,
-  Hexagon,
-  ImagePlus,
-  LoaderCircle,
-  Magnet,
-  Minus,
-  MoveUpRight,
-  Network,
-  Paintbrush,
-  Pencil,
-  Plus,
-  Redo2,
-  Square,
-  Trash2,
-  TriangleAlert,
-  Type,
-  Undo2,
-  X,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
+import { Box, Combine, LoaderCircle } from "lucide-react";
 import {
   memo,
   useCallback,
@@ -105,10 +63,7 @@ import {
   makeResourceKey,
   resourceMatchesInput,
 } from "@/lib/model";
-import { fetchLitresPerCell } from "@/lib/datasets/cell-ratio";
 import { BoardContextMenu, type BoardMenuTarget } from "./BoardContextMenu";
-import { listPoolCellPairs } from "@/lib/solver/pool-mode";
-import "./pool-mode.css";
 import "./scroll-camera.css";
 import "./node-containment.css";
 import { ScrollCamera } from "./scroll-camera";
@@ -138,10 +93,7 @@ import {
   type BoardClipboardPayload,
   type BoardFraming,
 } from "@/store/factory-store";
-import { activeVersionServesPlan } from "@/lib/datasets/dataset-cache";
-import { PlanVersionNotice } from "./PlanVersionNotice";
 import { dropFilesOnPlanBoard } from "@/lib/import-export/open-plan-file";
-import { getStorageRoles } from "@/lib/model/storage-role";
 import { useBlueprintStore } from "@/store/blueprint-store";
 import { pastePayloadIntoPlan } from "./paste-payload";
 import {
@@ -179,7 +131,6 @@ import {
   getServerBoardTiltSnapshot,
   subscribeBoardTilt,
 } from "./board-tilt";
-import { BoardHelp } from "./BoardHelp";
 import { PerfHud } from "./PerfHud";
 import {
   ANNOTATION_DEFAULT_ARROW,
@@ -222,28 +173,22 @@ import {
   zoomForRect,
   type BoardRect,
 } from "./board-camera";
-import { type RecipeFlowNode } from "./RecipeNode";
 import { RecipeNodeSwitch } from "./clean/CleanRecipeNode";
 import { unconvertedCardRecipes } from "@/lib/model/unconverted-card";
-import { StorageNodeSwitch } from "./clean/drawer/CleanStorageNode";
+import { CleanStorageNode } from "./clean/drawer/CleanStorageNode";
 import { CleanDrawerFace } from "./clean/drawer/CleanDrawer";
-import { PlanNoticeSwitch, PlanTopNotices } from "./clean/rail/NoticeBar";
+import { PlanTopNotices } from "./clean/rail/NoticeBar";
 import { registerBoardCommands, reportArrange } from "../chrome/board-commands";
 import { BoardMinimap } from "./clean/minimap/BoardMinimap";
 import { registerMinimapRoutes } from "./clean/minimap/minimap-feed";
 import { TourBridge, TourHost, TourOffer } from "./clean/tour";
-import { GT_NODE_COLORS, GT_NODE_COLOR_PALETTE, flowRampColor } from "./node-colors";
+import { GT_NODE_COLORS, flowRampColor } from "./node-colors";
 import {
-  CANVAS_PATTERNS,
-  CANVAS_PATTERN_LABEL,
   readBoardViewSnapshot,
   useBoardView,
   writeBoardView,
-  type BoardView,
-  type CanvasPattern,
-  type GlanceMode,
 } from "./board-view";
-import { CANVAS_THEMES, getCanvasTheme, type CanvasTheme } from "./canvas-themes";
+import { getCanvasTheme } from "./canvas-themes";
 import { GrainBackground, RuledBackground, TiledBackground } from "./board-pattern";
 import {
   readBoardMotionSnapshot,
@@ -252,7 +197,6 @@ import {
   useMotionValue,
   writeBoardMotion,
 } from "./board-motion";
-import { readImageSize, uploadBoardImage } from "@/lib/community/images";
 import { getDeleteCursor, getPaintBrushCursor } from "./paint-cursor";
 import {
   canonicalizeResourceHandleId,
@@ -285,7 +229,6 @@ import { getRouterTuning, routerTuningKey, subscribeRouterTuning } from "./route
 import { proxyPath } from "@/lib/board-arrange-optimize";
 import { routePoints } from "@/lib/route-metrics";
 import { registerBoardGeometryReader, registerBoardScoreReader } from "./board-score";
-import { flattenBoards } from "@/lib/model/flatten-boards";
 import {
   ARRANGE_STEPS,
   ArrangeCancelled,
@@ -309,13 +252,9 @@ import {
 } from "@/lib/model/custom-rate";
 import { getFluidTankSlot, isFluidTankRecipe } from "@/lib/model/fluid-tank";
 import { isTrashRecipe, TRASH_ANY_RESOURCE_ID } from "@/lib/model/trash";
-import { GT_VOLTAGE_TIERS } from "@/lib/model/tiers";
-import { GT_TIER_COLORS } from "./tier-colors";
-import { isPowerDisplayUnit, type RateUnit } from "@/lib/model/rate-unit";
 import { useIsCompactViewport } from "@/lib/compact-view";
 import { useUiScale } from "@/lib/ui-scale";
-import { subscribeDeviceSettings, wheelChangesValues } from "@/lib/device-settings";
-import { BOARD_TOOL_SCALE, useToolbarFold } from "./toolbar-fold";
+import { subscribeDeviceSettings } from "@/lib/device-settings";
 import { browseHoveredPort } from "./port-browse";
 import { useBoardTouchGestures } from "./board-touch-gestures";
 import { useBoardCameraControls } from "./board-camera-controls";
@@ -332,11 +271,7 @@ import {
 } from "./edge-detail";
 import { compareEdgeDepth, edgeCasingWidth } from "./edge-geometry";
 import { EDGE_HOP_MAX_RADIUS, buildHoppedPath, type HopSpan } from "./wire-hops";
-import { describeDeathSpiral, findDeathSpirals } from "./death-spiral";
-import { describeClogLock, findClogLocks } from "./clog-lock";
 import { loopEdges, type LoopTone } from "./clean/loops";
-import { findUnwiredNodeIds } from "./node-verdict";
-import { useBoardPulseGate, useBoardPulseSync } from "./animation-phase";
 import { useSlicedMount } from "./sliced-mount";
 import { boardVirtualizer, geometryPublishKey } from "./virtual/card-virtualizer";
 import { boardEdges } from "./virtual/board-edges";
@@ -385,42 +320,33 @@ import {
   snapshotEdgePulses,
   snapshotEdgeWaypointDots,
 } from "./edge-pulse";
-import { StorageTileFace, type StorageFlowNode } from "./StorageNode";
 import { TrashNode, type TrashFlowNode } from "./TrashNode";
 import {
-  POCKET_CARD_SOURCE_HANDLE,
-  POCKET_CARD_TARGET_HANDLE,
-  PocketNode,
-  type PocketFlowNode,
-} from "./PocketNode";
-import {
+  ANNOTATION_DRAG_HANDLE_CLASS,
   BOARD_DRAG_HANDLE_CLASS,
   BOARD_EDGE,
-  BoardFloor,
-  BoardNode,
+  POCKET_CARD_SOURCE_HANDLE,
+  POCKET_CARD_TARGET_HANDLE,
+  type AnnotationFlowNode,
   type BoardNodeData,
   type BoardWindowFlowNode,
-} from "./BoardNode";
+  type PocketFlowNode,
+  type RecipeFlowNode,
+  type StorageFlowNode,
+} from "./board-node-types";
 import {
   boardWindowSize,
   collectPocketDescendantIds,
   computeBoardLevelView,
   computeOpenBoardRects,
-  boardBodyRect,
-  pickBoardOwnerFor,
 } from "@/lib/model/board-windows";
 import {
-  computePocketSummaries,
   countPocketCrossings,
   pocketCardHeight,
 } from "./pocket-summary";
-import {
-  ANNOTATION_DRAG_HANDLE_CLASS,
-  type AnnotationFlowNode,
-} from "./AnnotationNode";
 import { AnnotationSwitch } from "./clean/note/AnnotationSwitch";
-import { BoardNodeSwitch, PocketNodeSwitch } from "./clean/group/GroupSwitch";
-import { GroupFloor } from "./clean/group/CleanGroupFrame";
+import { CleanGroupFrame, GroupFloor } from "./clean/group/CleanGroupFrame";
+import { CleanGroupSummary } from "./clean/group/CleanGroupSummary";
 import { setBoardSizeSource, boardSizeOf } from "./clean/group/group-sizes";
 import { clearGroupDrop, groupDropSound, groupUnder, showGroupDrop } from "./clean/group/group-drop";
 import { computeGroupSummaries } from "./clean/group/group-summary";
@@ -439,11 +365,11 @@ const MOVE_END_SETTLE_MS = 120;
 
 const nodeTypes = {
   recipeNode: RecipeNodeSwitch,
-  storageNode: StorageNodeSwitch,
+  storageNode: CleanStorageNode,
   trashNode: TrashNode,
   annotationNode: AnnotationSwitch,
-  pocketNode: PocketNodeSwitch,
-  boardNode: BoardNodeSwitch,
+  pocketNode: CleanGroupSummary,
+  boardNode: CleanGroupFrame,
 } satisfies NodeTypes;
 
 type BoardFlowNode =
@@ -474,7 +400,6 @@ const edgeTypes = {
   resourceEdge: ResourceEdge,
 } satisfies EdgeTypes;
 
-
 const connectionLineStyle = {
   stroke: "#00d9ff",
   strokeWidth: 5,
@@ -496,16 +421,6 @@ const DEFAULT_FLUID_EDGE_COLOR = "#2f89c5";
 const BOARD_GRID_SIZE = BOARD_GRID;
 /** Stable identity: a fresh array each render would re-init React Flow's snap. */
 const BOARD_GRID_SNAP: [number, number] = [BOARD_GRID_SIZE, BOARD_GRID_SIZE];
-
-/** One glyph per background pattern, for the view menu's pattern row. */
-const CANVAS_PATTERN_ICON: Record<CanvasPattern, LucideIcon> = {
-  dots: Grip,
-  lines: Grid3x3,
-  cross: Plus,
-  ruled: AlignJustify,
-  graph: Grid2x2,
-  none: Ban,
-};
 
 /** Module-level so the board never re-renders on a fresh object identity. */
 const PRO_OPTIONS = { hideAttribution: true };
@@ -730,7 +645,6 @@ const EXPORT_PNG_PIXEL_RATIO = 2;
 const EXPORT_PNG_MAX_PIXEL_SIDE = 8192;
 const FLOW_EDGE_LABEL_SELECT_EVENT = "gtnh-flow.edge-label-select";
 type ResourceEdgeData = {
-  ratio?: { input?: number; output?: number };
   resource: Pick<
     ResourceAmount,
     "kind" | "id" | "amount" | "displayName" | "iconPath" | "iconAtlas" | "dominantColor"
@@ -776,10 +690,6 @@ type ResourceEdgeData = {
     isSupplyCapped: boolean;
   };
   isFlowHighlighted?: boolean;
-  /** This wire is part of a ring that has wound down and cannot restart. */
-  isDeadLoop?: boolean;
-  /** This wire is part of a jam whose surplus has nowhere to go. */
-  isClogLock?: boolean;
   /** A plan board's dead loop or clog lock runs along this wire (`PlanSolveExtras.loops`, clean/loops.ts). */
   planLoop?: LoopTone;
   /**
@@ -1875,7 +1785,6 @@ export function FactoryFlow() {
   // Blueprint overwrite picker mode: a shelf row is waiting for the user to
   // click a pocket (banner up top, pockets ringed).
   const overwritePicking = useBlueprintStore((state) => state.overwritePicking);
-  const wrapSelectionInBoard = useFactoryStore((state) => state.wrapSelectionInBoard);
   const combineNodesIntoMachine = useFactoryStore((state) => state.combineNodesIntoMachine);
   const expandPocket = useFactoryStore((state) => state.expandPocket);
   const paintPocket = useFactoryStore((state) => state.paintPocket);
@@ -1886,46 +1795,6 @@ export function FactoryFlow() {
   const connectNodesBatch = useFactoryStore((state) => state.connectNodesBatch);
   const connectCustomRate = useFactoryStore((state) => state.connectCustomRate);
   const connectTrash = useFactoryStore((state) => state.connectTrash);
-  // Pool mode's cell-fluid bridges need the Canner's litres-per-cell for every
-  // cell/fluid pair the plan names in both forms. Fetched as the plan changes
-  // and stored on the plan (`poolCellRatios`) so the solve and every shared
-  // copy read the same numbers; a pair the Canner does not know stays
-  // unbridged, never guessed. One request per pair while the board is mounted.
-  const poolPairsSignature = useFactoryStore((state) =>
-    state.project.poolMode === true
-      ? listPoolCellPairs(state.project)
-          .filter((pair) => !state.project.poolCellRatios?.[pair.cellId])
-          .map((pair) => `${pair.cellId}=${pair.fluidId}`)
-          .join("|")
-      : "",
-  );
-  const poolRatioAsked = useRef(new Set<string>());
-  // A ratio is written onto the plan, so it is asked only of the plan's own version.
-  const poolVersionServes = useFactoryStore(activeVersionServesPlan);
-  useEffect(() => {
-    if (!poolPairsSignature || !poolVersionServes) {
-      return;
-    }
-    const state = useFactoryStore.getState();
-    const version = state.datasetManifest?.versions.find(
-      (entry) => entry.id === state.selectedDatasetVersionId,
-    );
-    if (!version) {
-      return;
-    }
-    for (const pairKey of poolPairsSignature.split("|")) {
-      if (poolRatioAsked.current.has(pairKey)) {
-        continue;
-      }
-      poolRatioAsked.current.add(pairKey);
-      const [cellId, fluidId] = pairKey.split("=") as [string, string];
-      void fetchLitresPerCell(version, cellId, fluidId).then((litres) => {
-        if (litres) {
-          useFactoryStore.getState().setPoolCellRatios({ [cellId]: litres });
-        }
-      });
-    }
-  }, [poolPairsSignature, poolVersionServes]);
   const addStorageForConnection = useFactoryStore((state) => state.addStorageForConnection);
   const deleteNode = useFactoryStore((state) => state.deleteNode);
   const deleteStorage = useFactoryStore((state) => state.deleteStorage);
@@ -1987,24 +1856,16 @@ export function FactoryFlow() {
 
   // What each minimized board says about itself, read from the plan-wide
   // solve (a minimized board has no books of its own; see pocket-summary.ts).
-  // Built here rather than in the card so an unrelated store write cannot
-  // make every card redo it.
-  const pocketSummaries = useMemo(
-    () => computePocketSummaries(project, pocketView.visiblePockets, result),
-    [project, result, pocketView.visiblePockets],
-  );
   // Plan boards: every group's summary (docs/groups.md, "What the summary says"), the open frames' machine counts too.
   const averageMachineDraw = useWorkspaceView().averageMachineDraw;
   const groupSummaries = useMemo(
     () =>
-      project.planMode === true
-        ? computeGroupSummaries(
-            project,
-            result,
-            (project.pockets ?? []).map((pocket) => pocket.id),
-            !averageMachineDraw,
-          )
-        : undefined,
+      computeGroupSummaries(
+        project,
+        result,
+        (project.pockets ?? []).map((pocket) => pocket.id),
+        !averageMachineDraw,
+      ),
     [project, result, averageMachineDraw],
   );
 
@@ -2075,7 +1936,7 @@ export function FactoryFlow() {
             data: reuseObjectIdentity(boardNodeDataCache, pocket.id, {
               pocket,
               memberCount: memberCounts.get(pocket.id) ?? 0,
-              ...(groupSummaries ? { machines: groupSummaries.get(pocket.id)?.machines ?? 0 } : {}),
+              machines: groupSummaries.get(pocket.id)?.machines ?? 0,
             }),
           }) satisfies BoardWindowFlowNode,
       ),
@@ -2144,7 +2005,7 @@ export function FactoryFlow() {
             }),
           }) satisfies StorageFlowNode,
       ),
-      ...visibleAnnotations(project.annotations ?? [], project.planMode === true)
+      ...visibleAnnotations(project.annotations ?? [])
         .filter((annotation) => pocketView.isLevelShown(annotation.pocketId))
         .map(
         (annotation) =>
@@ -2165,9 +2026,7 @@ export function FactoryFlow() {
               annotation.kind === "zone" ||
               annotation.kind === "image"
                 ? -5
-                : project.planMode === true
-                  ? STICKY_NOTE_Z_INDEX
-                  : 1000,
+                : STICKY_NOTE_Z_INDEX,
             className:
               annotation.kind === "box" ||
               annotation.kind === "zone" ||
@@ -2191,8 +2050,7 @@ export function FactoryFlow() {
             zIndex: CARD_Z_INDEX,
             data: reuseObjectIdentity(pocketNodeDataCache, pocket.id, {
               pocket,
-              summary: pocketSummaries.get(pocket.id),
-              ...(groupSummaries ? { groupSummary: groupSummaries.get(pocket.id) } : {}),
+              groupSummary: groupSummaries.get(pocket.id),
             }),
           }) satisfies PocketFlowNode,
       ),
@@ -2202,10 +2060,8 @@ export function FactoryFlow() {
     activeNodeBottlenecks,
     hoveredUsageNodeId,
     groupSummaries,
-    pocketSummaries,
     pocketView,
     project.annotations,
-    project.planMode,
     project.nodes,
     project.pockets,
     project.storages,
@@ -2218,14 +2074,9 @@ export function FactoryFlow() {
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<string[]>([]);
   const [isNodeDragging, setNodeDragging] = useState(false);
-  // Pool mode: the wire layers fade out (globals.css, factory-flow-board--pool).
-  const poolMode = useFactoryStore((state) => state.project.poolMode === true);
-  const worksheet = poolMode;
   const [annotationTool, setAnnotationTool] = useState<BoardDrawTool | undefined>(undefined);
-  // Shared by the brush and the annotation tools: the last colour picked in
-  // the palette is what a new box/arrow/note is created with. Blue is legible
-  // on every paper the board ships with.
-  const [activeColorTag, setActiveColorTag] = useState<FactoryNodeColorTag>("blue");
+  // What a new box or arrow is drawn in: blue is legible on every paper the board ships with.
+  const activeColorTag: FactoryNodeColorTag = "blue";
   const [isDeleteMode, setDeleteMode] = useState(false);
   const checklistMode = useFactoryStore((state) => state.checklistMode);
   useEffect(() => {
@@ -2278,12 +2129,6 @@ export function FactoryFlow() {
   // swap, strict mode's double mount) must wait its turn, not error.
   const exportQueueRef = useRef<Promise<void>>(Promise.resolve());
   const boardRef = useRef<HTMLDivElement>(null);
-  // Every breathing mark under this element - dead rings and their wires,
-  // unwired cards and the notice about them, the hovered-resource wash - shares
-  // one period (--board-pulse) and, from here, one phase. See animation-phase.ts.
-  useBoardPulseSync(boardRef);
-  // ...and a budget of how many may run at once: see useBoardPulseGate.
-  useBoardPulseGate(boardRef);
   // Cards off screen are skipped by the browser; see node-containment.ts.
   useNodeContainment(boardRef);
   const flowInstanceRef = useRef<ReactFlowInstance<BoardFlowNode, ResourceFlowEdge> | null>(null);
@@ -2292,14 +2137,10 @@ export function FactoryFlow() {
   const isCompact = useIsCompactViewport();
   // The mod's top bar (src/components/chrome) carries the keys the board's own toolbars used to: plan boards on a
   // desktop screen leave them out.
-  const modBar = project.planMode === true;
   // The board's zoom ceiling carries the interface size (ui-scale.ts); the
   // prop must follow the setting live, so it is a hook rather than a getter.
   const uiScale = useUiScale();
   const boardMaxZoomValue = BOARD_MAX_ZOOM * uiScale;
-  // The two top toolbars fold into their triggers when the BOARD is too
-  // narrow for both rows, whatever the window: see toolbar-fold.ts.
-  const toolbarFold = useToolbarFold(boardRef, isCompact);
 
   // A board being resized publishes its frame here (board-resize.ts). The
   // frame's node takes the new rect and its members shift the opposite way,
@@ -2945,10 +2786,6 @@ export function FactoryFlow() {
     // A machine merely idle for lack of demand keeps a ceiling of 1 - hooking
     // up a new consumer genuinely would speed it up.
     const supplyCeilings = new Map<string, number>();
-    // Built once for the whole edge pass, not once per edge: the index itself
-    // is cached per solve, but the lookup below runs for every wire.
-    const deathSpiralEdges = findDeathSpirals(project, result).byEdge;
-    const clogLockEdges = findClogLocks(project, result).byEdge;
     // A plan board's rings: the wires joining their cards along their rows.
     const planLoopEdges = loopEdges(project.edges, result.plan?.loops);
     const ceilingFor = (sourceId: string) => {
@@ -3153,16 +2990,6 @@ export function FactoryFlow() {
     // What the grid solve needs about every wire, collected as the edge
     // objects are built and published in one shot below.
     const gridRouteInputs: GridRouteEdgeInput[] = [];
-    const ratioByEdge = new Map<string, number>();
-    for (const branches of getProjectRatioBranches(project).values()) {
-      branches.forEach((branch) => {
-        for (const edge of branch.edges) ratioByEdge.set(edge.id, branch.share / branch.edges.length);
-      });
-    }
-    const inputRatioByEdge = new Map<string, number>();
-    for (const branches of getProjectRatioBranches(project, "input").values()) {
-      for (const branch of branches) for (const edge of branch.edges) inputRatioByEdge.set(edge.id, branch.share / branch.edges.length);
-    }
     const builtEdges = project.edges.flatMap((edge, edgeIndex) => {
       // View remap only; the project edge is never touched. An endpoint inside
       // a minimized board renders against that board's card; a wire with no
@@ -3284,10 +3111,6 @@ export function FactoryFlow() {
         type: "resourceEdge",
         data: {
           resource,
-          ratio: (sourceIsPocket || !ratioByEdge.has(edge.id)) && (targetIsPocket || !inputRatioByEdge.has(edge.id)) ? undefined : {
-            output: sourceIsPocket || !ratioByEdge.has(edge.id) ? undefined : (channelEdgeIdsByRepresentative.get(edge.id) ?? [edge.id]).reduce((sum, id) => sum + (ratioByEdge.get(id) ?? 0), 0),
-            input: targetIsPocket || !inputRatioByEdge.has(edge.id) ? undefined : (channelEdgeIdsByRepresentative.get(edge.id) ?? [edge.id]).reduce((sum, id) => sum + (inputRatioByEdge.get(id) ?? 0), 0),
-          },
           color: edgeColor,
           demand,
           // Always the real flow. demand can sit at the full-speed rate on
@@ -3318,10 +3141,6 @@ export function FactoryFlow() {
           routeIndex: edgeIndex,
           bundle: edgeBundles.get(edge.id),
           isFlowHighlighted,
-          // The ring's own wires carry the mark so the circle reads as one
-          // shape, not N red cards that happen to sit together.
-          isDeadLoop: deathSpiralEdges.has(edge.id),
-          isClogLock: clogLockEdges.has(edge.id),
           planLoop: planLoopEdges.get(edge.id),
           flowRate: anyLineMode
             ? {
@@ -3348,7 +3167,6 @@ export function FactoryFlow() {
     });
 
     publishGridRouteEdges(gridRouteInputs);
-    publishRatioLabelInputs(builtEdges.flatMap((edge) => edge.data?.ratio ? [{ id: edge.id, ...edge.data.ratio }] : []));
 
     // Paint order IS depth, and it must be the SAME order hop rendering uses,
     // or a line hops over something drawn on top of it anyway.
@@ -3373,7 +3191,6 @@ export function FactoryFlow() {
     anyLineMode,
     speedColorMode,
     layoutVersion,
-    pocketSummaries,
     pocketView,
     edgeProject,
     recipeSearch,
@@ -3912,11 +3729,6 @@ export function FactoryFlow() {
   const handleConnect = useCallback(
     (connection: Connection) => {
       connectCompletedRef.current = true;
-      // Pool mode has no wires: a port-to-port drag lands nothing. (A drag
-      // into empty space still makes a drawer, whose side is the link.)
-      if (useFactoryStore.getState().project.poolMode) {
-        return;
-      }
       if (connection.source && connection.target) {
         const sourceHandle = parseResourceHandleId(connection.sourceHandle);
         const targetHandle = parseResourceHandleId(connection.targetHandle);
@@ -4086,24 +3898,6 @@ export function FactoryFlow() {
         spawnHandleId,
       );
       voidDropReason = "Drawer already exists";
-      // POOL MODE: no sources (the pool feeds every input), and ONE product
-      // drawer per resource - a second would only be the same ask twice.
-      if (project.poolMode) {
-        if (spawnSide === "input") {
-          voidDropWillSpawn = false;
-          voidDropReason = "Pool mode feeds inputs by itself";
-        } else if (
-          (project.storages ?? []).some(
-            (storage) =>
-              storage.kind === dragged.kind &&
-              storage.resourceId === dragged.id &&
-              getStorageRoles(project).get(storage.id) === "product",
-          )
-        ) {
-          voidDropWillSpawn = false;
-          voidDropReason = "You already have a product drawer for this";
-        }
-      }
       voidDropGhostStorage = {
         id: "__void-drop-ghost__",
         kind: dragged.kind,
@@ -4217,15 +4011,9 @@ export function FactoryFlow() {
         getNodeCardHandleAtPosition(project, clientPosition, draggedResource),
       ].filter((candidate): candidate is ResolvedResourceHandle => Boolean(candidate));
 
-      // POOL MODE has no wires, so no card is ever a target: the only thing
-      // a drag can do is make a product drawer, wherever it is let go.
-      const targetHandle = project.poolMode
-        ? undefined
-        : draggedResource
-          ? (candidates.find((candidate) =>
-              isUsableDropTarget(project, draggedResource, candidate),
-            ) ?? candidates[0])
-          : candidates[0];
+      const targetHandle = draggedResource
+        ? (candidates.find((candidate) => isUsableDropTarget(project, draggedResource, candidate)) ?? candidates[0])
+        : candidates[0];
 
       if (connectCompletedRef.current) {
         return;
@@ -4425,7 +4213,6 @@ export function FactoryFlow() {
     };
   }, []);
 
-
   const updateFlowViewportCenter = useCallback(() => {
     const instance = flowInstanceRef.current;
     const board = boardRef.current;
@@ -4510,26 +4297,6 @@ export function FactoryFlow() {
   const performFlowImageExport = useCallback(
     async (request: FlowExportRequest) => {
       const { format, requestId, fileName, projectJson } = request;
-      const worksheetElement = boardRef.current?.querySelector<HTMLElement>("[data-pool-worksheet]");
-      if (worksheetElement) {
-        let capture: FlowExportCapture | undefined;
-        let failure: string | undefined;
-        try {
-          capture = await capturePoolWorksheet(worksheetElement, request);
-          if (!request.capture && fileName && projectJson) {
-            if (capture.svgText) {
-              downloadBlob(new Blob([embedProjectJsonInSvg(capture.svgText, projectJson)], { type: "image/svg+xml" }), `${fileName}.svg`);
-            } else if (capture.blob) {
-              downloadBlob(await embedProjectJsonInPng(capture.blob, projectJson, capture.background), `${fileName}.png`);
-            }
-          }
-        } catch (error) {
-          failure = error instanceof Error ? error.message : "Worksheet image export failed.";
-        } finally {
-          dispatchImageExportComplete(requestId, capture, failure);
-        }
-        return;
-      }
       const viewportElement = boardRef.current?.querySelector<HTMLElement>(".react-flow__viewport");
 
       if (!viewportElement) {
@@ -4817,38 +4584,8 @@ export function FactoryFlow() {
   // it does.
   const recipeSearchOpen = useFactoryStore((state) => Boolean(state.recipeBrowserResource));
 
-  /**
-   * Whether the selection could become a board: everything in it lives on
-   * the root canvas, and none of it IS a board. Nothing may sit in two boards
-   * at once, and nesting by marquee must not happen by accident.
-   */
-  const selectionCanWrap = useMemo(() => {
-    if (selectedNodeIds.length < 2) {
-      return false;
-    }
-    // Plan boards: any selection can be grouped (groupItems sorts out where the group sits).
-    if (project.planMode === true) {
-      return true;
-    }
-    const chosen = new Set(selectedNodeIds);
-    if ((project.pockets ?? []).some((pocket) => chosen.has(pocket.id))) {
-      return false;
-    }
-    const housed = (entry: { id: string; pocketId?: string }) =>
-      chosen.has(entry.id) && entry.pocketId !== undefined;
-    return !(
-      project.nodes.some(housed) ||
-      (project.storages ?? []).some(housed) ||
-      (project.annotations ?? []).some(housed)
-    );
-  }, [
-    project.annotations,
-    project.nodes,
-    project.planMode,
-    project.pockets,
-    project.storages,
-    selectedNodeIds,
-  ]);
+  // Any selection of two or more can be grouped (groupItems sorts out where the group sits).
+  const selectionCanWrap = selectedNodeIds.length >= 2;
 
   // SHARED MACHINES: several selected cards that one machine could run can
   // fold into one card. Only recipe cards count (no drawers, boards or
@@ -4873,27 +4610,16 @@ export function FactoryFlow() {
       return false;
     }
 
-    // Plan boards: a group round the selection where it stands (docs/groups.md); the group becomes the selection.
-    if (useFactoryStore.getState().project.planMode === true) {
-      const groupId = useFactoryStore.getState().groupSelection(selectedNodeIds, boardSizeOf);
-      if (!groupId) {
-        return false;
-      }
-      playEditSfx("board.merge");
-      setSelectedNodeIds([groupId]);
-      setSelectedEdgeIds([]);
-      return true;
-    }
-    // The frame appears around the cards where they stand; nothing moves
-    // and no wire changes, so there is nothing to confirm first.
-    const boardId = wrapSelectionInBoard(selectedNodeIds);
-    if (!boardId) {
+    // A group round the selection where it stands (docs/groups.md); the group becomes the selection.
+    const groupId = useFactoryStore.getState().groupSelection(selectedNodeIds, boardSizeOf);
+    if (!groupId) {
       return false;
     }
-    setSelectedNodeIds([]);
+    playEditSfx("board.merge");
+    setSelectedNodeIds([groupId]);
     setSelectedEdgeIds([]);
     return true;
-  }, [selectedNodeIds, setSelectedEdgeIds, setSelectedNodeIds, wrapSelectionInBoard]);
+  }, [selectedNodeIds, setSelectedEdgeIds, setSelectedNodeIds]);
 
   const pasteBoardClipboard = useCallback(() => {
     if (!boardClipboard) {
@@ -4919,8 +4645,6 @@ export function FactoryFlow() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // A worksheet never edits an invisible canvas selection.
-      if (useFactoryStore.getState().project.poolMode && document.querySelector("[data-pool-worksheet]")) return;
       if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
         const key = event.key.toLowerCase();
         // Keys that change the plan leave a covered board alone.
@@ -5214,18 +4938,15 @@ export function FactoryFlow() {
         return;
       }
       if (node.type === "annotationNode") {
-        // A box, zone or arrow on a plan board has its own menu; a sticky note answers for itself.
+        // A box, zone or arrow has its own menu; a sticky note answers for itself.
         const drawn = useFactoryStore.getState().project.annotations?.find((entry) => entry.id === node.id);
-        if (drawn && drawn.kind !== "text" && useFactoryStore.getState().project.planMode === true) {
+        if (drawn && drawn.kind !== "text") {
           event.preventDefault();
           setBoardMenu({ kind: "annotation", id: node.id, ...menuPoint(event) });
         }
         return;
       }
-      if (
-        (node.type === "boardNode" || node.type === "pocketNode") &&
-        useFactoryStore.getState().project.planMode === true
-      ) {
+      if (node.type === "boardNode" || node.type === "pocketNode") {
         // A group, open (its title strip or border) or collapsed: its own menu (docs/groups.md).
         event.preventDefault();
         setBoardMenu({ kind: "group", id: node.id, ...menuPoint(event) });
@@ -5267,10 +4988,6 @@ export function FactoryFlow() {
     [expandChannelEdgeIds, menuPoint],
   );
 
-  const handleShowNodes = useCallback(
-    (nodeIds: string[]) => frameBoardCards(nodeIds),
-    [frameBoardCards],
-  );
   // The Fit key fills the board with the plan, as close as the board itself zooms: on a big screen a small plan
   // would otherwise stop at 1:1, a speck in the middle. Landing on a plan (opening one) keeps the 1:1 cap.
   const handleFitView = useCallback(
@@ -5330,20 +5047,13 @@ export function FactoryFlow() {
   // zoom. Owns the wheel outright — zoomOnScroll is off below.
   useBoardCameraControls({ boardRef, instanceRef: flowInstanceRef });
 
-  // Compact windows fold each toolbar into a single button, and only one
-  // unfolds at a time: any two expanded rows would cross on a phone-width board.
-  const [openToolGroup, setOpenToolGroup] = useState<ToolGroupId | undefined>(undefined);
-  const handleToolGroupToggle = useCallback((group: ToolGroupId | undefined) => {
-    setOpenToolGroup((current) => (current === group ? undefined : group));
-  }, []);
-
   // Auto-arrange: lay the visible level out left to right and reframe. Reads
   // the store at click time so the callback stays stable — the toolbar it
   // lives on must not re-render per project edit.
   // The arrange in flight, for the loader; undefined when none is.
   const [arrangeProgress, setArrangeProgress] = useState<ArrangeProgress | undefined>(undefined);
   const arrangeRunningRef = useRef(false);
-  const handleAutoArrange = useCallback(async (options: { keepBoards: boolean }) => {
+  const handleAutoArrange = useCallback(async () => {
     // One at a time: a click while one runs is ignored.
     if (arrangeRunningRef.current) {
       return;
@@ -5351,13 +5061,8 @@ export function FactoryFlow() {
     arrangeRunningRef.current = true;
     setArrangeProgress({ seq: 0, step: 0, stage: "Reading the board", done: 0, total: 1 });
     const state = useFactoryStore.getState();
-    // Unless Keep boards is on, every board is dissolved first (members
-    // surface where the frame stood) and the arrange lays out one flat set
-    // of cards. With Keep boards on, each board is sealed and only placed.
-    // Plan boards always keep their groups: each is one block, its insides untouched (docs/groups.md, Arrange).
-    const dumpBoards =
-      !options.keepBoards && state.project.planMode !== true && (state.project.pockets?.length ?? 0) > 0;
-    const project = dumpBoards ? flattenBoards(state.project) : state.project;
+    // Groups stay: each is one block, its insides untouched (docs/groups.md, Arrange).
+    const project = state.project;
     let computed: Awaited<ReturnType<typeof computeAutoArrangement>>;
     try {
       computed = await computeAutoArrangement(
@@ -5406,9 +5111,6 @@ export function FactoryFlow() {
       setOwners,
       setBoardThemes,
       removeAnnotationIds: staleInkIds,
-      // The dump for real: every board goes, its members ride `moves`
-      // (root positions from the flattened plan) and surface on the canvas.
-      removeBoards: dumpBoards ? (state.project.pockets ?? []).map((pocket) => pocket.id) : undefined,
     });
     useFactoryStore.getState().frameBoardNodes();
   }, []);
@@ -5418,7 +5120,7 @@ export function FactoryFlow() {
   useEffect(
     () =>
       registerBoardCommands({
-        arrange: () => void handleAutoArrange({ keepBoards: false }),
+        arrange: () => void handleAutoArrange(),
         cancelArrange,
         fit: handleFitView,
         openBoardMenu: (at) => {
@@ -5439,52 +5141,6 @@ export function FactoryFlow() {
   useEffect(() => {
     reportArrange(arrangeProgress, ARRANGE_STEPS.length);
   }, [arrangeProgress]);
-
-  // Stable references keep the memoized PaintToolbar from re-rendering on the
-  // per-frame FactoryFlow renders a node drag produces.
-  const handlePaintModeChange = useCallback(
-    (tag: FactoryNodeColorTag | null | undefined) => {
-      if (tag !== undefined) useFactoryStore.getState().setChecklistMode(false);
-      setAnnotationTool(undefined);
-      setDeleteMode(false);
-      // The brush leaves the smart view alone: coloured views live only at
-      // the glance step, so up close the paint shows where it lands.
-      setNodeColorPaintMode(tag);
-    },
-    [setNodeColorPaintMode],
-  );
-  const handlePaintColorSelect = useCallback(
-    (tag: FactoryNodeColorTag) => {
-      setActiveColorTag(tag);
-      // Changing colour mid-paint keeps painting with the new colour.
-      if (nodeColorPaintMode !== undefined) {
-        setNodeColorPaintMode(tag);
-      }
-    },
-    [nodeColorPaintMode, setNodeColorPaintMode],
-  );
-  const handleAnnotationToolChange = useCallback(
-    (tool: BoardDrawTool | undefined) => {
-      if (tool) useFactoryStore.getState().setChecklistMode(false);
-      setNodeColorPaintMode(undefined);
-      setDeleteMode(false);
-      setAnnotationTool(tool);
-      // A half-clicked zone dies with its tool; the other tools never leave a
-      // draft behind (theirs live only inside one press-drag-release).
-      annotationDraftRef.current = undefined;
-      setAnnotationDraft(undefined);
-    },
-    [setNodeColorPaintMode],
-  );
-  const handleDeleteModeChange = useCallback(
-    (enabled: boolean) => {
-      if (enabled) useFactoryStore.getState().setChecklistMode(false);
-      setNodeColorPaintMode(undefined);
-      setAnnotationTool(undefined);
-      setDeleteMode(enabled);
-    },
-    [setNodeColorPaintMode],
-  );
 
   /**
    * What each held card may not be dragged onto, worked out once at drag
@@ -5637,16 +5293,9 @@ export function FactoryFlow() {
         // A frame is not asked to be in or out of anything: it is blocked
         // outright by its neighbours. Only cards click in and out of rooms,
         // and never into a room they are travelling with.
-        // Plan boards: a group's frame is no wall. A card joins the group its centre is let go over, and the frame
-        // grows to hold it (docs/groups.md), so nothing clicks in or out on the way.
-        const regions: PlacementRegion[] = heldIsOpenFrame || project.planMode === true
-          ? []
-          : openFrames
-              .filter((rect) => !carried.has(rect.id))
-              .map((rect) => ({
-                outer: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-                inner: boardBodyRect(rect),
-              }));
+        // A group's frame is no wall. A card joins the group its centre is let go over, and the frame grows to hold
+        // it (docs/groups.md), so nothing clicks in or out on the way.
+        const regions: PlacementRegion[] = [];
 
         // Positions arrive in the parent's space; the blockers are in flow
         // space, so the held card's own frame origin closes the gap.
@@ -5659,10 +5308,10 @@ export function FactoryFlow() {
         });
       }
       dragConstraintsRef.current = constraints;
-      // Plan boards: the group under the carried card lights up (group-drop.ts). Only when a card, drawer or note is
-      // what the pointer carries; a carried group keeps its own parent.
+      // The group under the carried card lights up (group-drop.ts). Only when a card, drawer or note is what the
+      // pointer carries; a carried group keeps its own parent.
       groupDropRef.current = undefined;
-      if (project.planMode === true && !boardIds.has(node.id) && !ridesAlong(node.id)) {
+      if (!boardIds.has(node.id) && !ridesAlong(node.id)) {
         const excluded = new Set<string>();
         for (const id of carried) if (boardIds.has(id)) excluded.add(id);
         const owner = ownerOf(node.id) ?? project.annotations?.find((entry) => entry.id === node.id)?.pocketId;
@@ -5816,28 +5465,19 @@ export function FactoryFlow() {
         const width = internal?.measured?.width ?? 0;
         const height = internal?.measured?.height ?? 0;
         const currentOwner = ownerOf(entry.id);
-        const planBoard = project.planMode === true;
-        // Plan boards (groups, docs/groups.md): a card joins the group its centre is let go over, the frame grows to
-        // hold it; a carried group keeps its parent; what rides in a carried group stays in it.
-        if (planBoard && ridesAlong(entry.id)) {
+        // Groups (docs/groups.md): a card joins the group its centre is let go over, the frame grows to hold it; a
+        // carried group keeps its parent; what rides in a carried group stays in it.
+        if (ridesAlong(entry.id)) {
           return { id: entry.id, position: entry.position };
         }
-        // A card belongs to the room it is WHOLLY inside; the magnet never
-        // leaves it across a wall. Clear of every frame, it leaves its board.
         // The group lit while carried is where the carried cards land (the pointer aimed there, whatever the magnet
         // slid them clear of); with nothing lit, the group under the card's centre.
         const aimed = groupDropRef.current;
-        const landing = planBoard
-          ? pocketIdSet.has(entry.id)
-            ? currentOwner
-            : aimed
-              ? aimed.target
-              : groupUnder(frames, { x: absolute.x, y: absolute.y, width, height }, BOARD_WINDOW_TITLE_HEIGHT, excluded)
-          : pickBoardOwnerFor(
-              frames,
-              { x: absolute.x, y: absolute.y, width, height },
-              excluded,
-            );
+        const landing = pocketIdSet.has(entry.id)
+          ? currentOwner
+          : aimed
+            ? aimed.target
+            : groupUnder(frames, { x: absolute.x, y: absolute.y, width, height }, BOARD_WINDOW_TITLE_HEIGHT, excluded);
         const origin = landing !== undefined ? frameById.get(landing) : undefined;
 
         // The magnet, in flow space: slide off anything solid, then convert
@@ -5868,17 +5508,13 @@ export function FactoryFlow() {
           : { id: entry.id, position, owner: { pocketId: landing } };
       });
 
-      // A board's walls never move to swallow a drop that would not fit. A group's do (plan boards): it grows to hold
-      // what joined it, and the drop says in or out by its sound.
-      if (unmoved) {
-        // A click: nothing to write.
-      } else if (project.planMode === true) {
+      // A group's walls move: it grows to hold what joined it, and the drop says in or out by its sound. A click
+      // writes nothing.
+      if (!unmoved) {
         const joined = moves.filter((move) => "owner" in move && move.owner?.pocketId !== undefined).length;
         const left = moves.filter((move) => "owner" in move && move.owner?.pocketId === undefined).length;
         moveBoardItems(moves, boardSizeOf);
         groupDropSound(joined, left);
-      } else {
-        moveBoardItems(moves);
       }
       clearGroupDrop();
       groupDropRef.current = undefined;
@@ -6048,76 +5684,6 @@ export function FactoryFlow() {
     [activeColorTag, addAnnotation],
   );
 
-  /**
-   * A picture becomes a board annotation: uploaded to the image bucket, sized
-   * into whole cells from its own pixels, and dropped at the drop point or in
-   * the middle of the view. Every refusal surfaces as a plain dialog.
-   */
-  const placeImageFile = useCallback(
-    async (file: File | Blob, dropPoint?: { x: number; y: number }) => {
-      // A plan board has no picture annotations (it shows sticky notes only).
-      if (useFactoryStore.getState().project.planMode === true) {
-        return;
-      }
-      try {
-        const [imageUrl, natural] = await Promise.all([
-          uploadBoardImage(file),
-          readImageSize(file),
-        ]);
-        const scale = Math.min(1, 600 / natural.width, 480 / natural.height);
-        const width = Math.max(
-          BOARD_GRID * 2,
-          Math.round((natural.width * scale) / BOARD_GRID) * BOARD_GRID,
-        );
-        const height = Math.max(
-          BOARD_GRID * 2,
-          Math.round((natural.height * scale) / BOARD_GRID) * BOARD_GRID,
-        );
-        const instance = flowInstanceRef.current;
-        const boardRect = boardRef.current?.getBoundingClientRect();
-        const centre =
-          dropPoint ??
-          (instance && boardRect
-            ? instance.screenToFlowPosition({
-                x: boardRect.left + boardRect.width / 2,
-                y: boardRect.top + boardRect.height / 2,
-              })
-            : { x: 0, y: 0 });
-        addAnnotation({
-          kind: "image",
-          imageUrl,
-          colorTag: activeColorTag,
-          position: { x: centre.x - width / 2, y: centre.y - height / 2 },
-          size: { width, height },
-        });
-      } catch (error) {
-        window.alert(error instanceof Error ? error.message : "Image upload failed.");
-      }
-    },
-    [activeColorTag, addAnnotation],
-  );
-
-  // Ctrl+V with a picture on the OS clipboard drops it on the board. Real
-  // paste events only carry files when there IS an image, so this never
-  // shadows the board's own copy/paste, which rides the keydown handler.
-  useEffect(() => {
-    const handlePaste = (event: ClipboardEvent) => {
-      if (isEditableKeyboardTarget(event.target)) {
-        return;
-      }
-      const file = Array.from(event.clipboardData?.files ?? []).find((candidate) =>
-        candidate.type.startsWith("image/"),
-      );
-      if (!file) {
-        return;
-      }
-      event.preventDefault();
-      void placeImageFile(file);
-    };
-    window.addEventListener("paste", handlePaste);
-    return () => window.removeEventListener("paste", handlePaste);
-  }, [placeImageFile]);
-
   const handleAnnotationPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       const tool = annotationTool;
@@ -6238,19 +5804,6 @@ export function FactoryFlow() {
     };
   }, [annotationTool]);
 
-  // Switching into a coloured view drops the brush: zoomed out under a view
-  // wash, a paint stroke would land invisibly.
-  const handleGlanceModeChange = useCallback(
-    (mode: GlanceMode) => {
-      if (mode !== "identity") {
-        setNodeColorPaintMode(undefined);
-      }
-      writeBoardView({ glanceMode: mode });
-    },
-    [setNodeColorPaintMode],
-  );
-
-
   const checklistCapture = useChecklistBoard(visibleFlowEdges);
   const viewerCapture = useViewerLock(boardRef, isReadOnly);
   const checklistNodes = useMemo(() => {
@@ -6308,8 +5861,6 @@ export function FactoryFlow() {
         "factory-flow-board relative h-full min-h-[480px] compact:min-h-0 overflow-hidden border-x border-line bg-canvas",
         checklistMode ? "checklist-active" : "",
         isNodeDragging ? "factory-flow-board--dragging" : "",
-        poolMode ? "factory-flow-board--pool" : "",
-        worksheet ? "factory-flow-board--worksheet" : "",
         paintCursor ? "factory-flow-board--painting" : "",
         annotationTool ? "factory-flow-board--annotating" : "",
         isDeleteMode ? "factory-flow-board--deleting" : "",
@@ -6361,7 +5912,7 @@ export function FactoryFlow() {
             : undefined),
         } as CSSProperties
       }
-      onPointerDownCapture={(event) => { if (!worksheet && !checklistCapture(event) && !viewerCapture(event) && !isReadOnly) handleAnnotationPointerDown(event); }}
+      onPointerDownCapture={(event) => { if (!checklistCapture(event) && !viewerCapture(event) && !isReadOnly) handleAnnotationPointerDown(event); }}
       onMouseDownCapture={(event) => { if (!checklistCapture(event)) viewerCapture(event); }}
       onTouchStartCapture={(event) => { if (!checklistCapture(event)) viewerCapture(event); }}
       onClickCapture={(event) => { if (!checklistCapture(event)) viewerCapture(event); }}
@@ -6369,10 +5920,8 @@ export function FactoryFlow() {
       onContextMenuCapture={(event) => { if (!checklistCapture(event)) viewerCapture(event); }}
       onKeyDownCapture={(event) => { if (!checklistCapture(event)) viewerCapture(event); }}
       onWheelCapture={checklistCapture}
-      // A picture file dropped on the board becomes an image annotation. An
-      // item dragged from the items column drops a product drawer there (as
-      // the board menu's "New product drawer"); wiring it into an input
-      // turns it into a source.
+      // An item dragged from the items column drops a product drawer there (as the board menu's "New product
+      // drawer"); wiring it into an input turns it into a source. A file opens as a plan.
       onDragOver={(event) => {
         const types = event.dataTransfer.types;
         if (types.includes("Files") || (!isReadOnly && types.includes(RESOURCE_DRAG_TYPE))) {
@@ -6389,32 +5938,16 @@ export function FactoryFlow() {
           if (resource && point) useFactoryStore.getState().addPoolStorage(resource, "drain", point);
           return;
         }
-        // A plan file dropped on a plan board opens as a new plan; a picture has no place there (plan boards hide
+        // A plan file dropped on the board opens as a new plan; a picture has no place there (the board shows no
         // image annotations), so it says so instead of placing one nothing shows.
-        if (useFactoryStore.getState().project.planMode === true) {
-          const dropped = Array.from(event.dataTransfer.files);
-          if (dropped.length > 0) {
-            event.preventDefault();
-            void dropFilesOnPlanBoard(dropped);
-          }
-          return;
+        const dropped = Array.from(event.dataTransfer.files);
+        if (dropped.length > 0) {
+          event.preventDefault();
+          void dropFilesOnPlanBoard(dropped);
         }
-        const file = Array.from(event.dataTransfer.files).find((candidate) =>
-          candidate.type.startsWith("image/"),
-        );
-        if (!file) {
-          return;
-        }
-        event.preventDefault();
-        const point = flowInstanceRef.current?.screenToFlowPosition({
-          x: event.clientX,
-          y: event.clientY,
-        });
-        void placeImageFile(file, point);
       }}
     >
       {boardMenu && !isReadOnly ? <BoardContextMenu target={boardMenu} onClose={closeBoardMenu} /> : null}
-      <StorageRatioEditor />
       <ReactFlow
         nodes={mounted.nodes}
         edges={shownEdges}
@@ -6552,44 +6085,9 @@ export function FactoryFlow() {
         className="pointer-events-none absolute inset-0 z-10 shadow-[inset_0_0_60px_10px_rgba(0,0,0,0.35)]"
       />
       <SolvingBooksOverlay />
-      {worksheet ? <PoolWorksheet /> : null}
-      {!isReadOnly && !modBar ? <PaintToolbar
-        paintMode={nodeColorPaintMode}
-        onPaintModeChange={handlePaintModeChange}
-        activeColorTag={activeColorTag}
-        onColorSelect={handlePaintColorSelect}
-        annotationTool={annotationTool}
-        onAnnotationToolChange={handleAnnotationToolChange}
-        onPlaceImage={placeImageFile}
-        isDeleteMode={isDeleteMode}
-        onDeleteModeChange={handleDeleteModeChange}
-        view={boardView}
-        onViewChange={writeBoardView}
-        onAutoArrange={handleAutoArrange}
-        folded={toolbarFold.paint}
-        openGroup={openToolGroup}
-        onToggleGroup={handleToolGroupToggle}
-        shiftedDown={false}
-      /> : null}
-      {modBar ? null : (
-        <SourceToolbar
-          readOnly={isReadOnly}
-          folded={!isReadOnly && toolbarFold.build}
-          openGroup={openToolGroup}
-          onToggleGroup={handleToolGroupToggle}
-          shiftedDown={false}
-        />
-      )}
-      {/* The phone sheet on compact only: a desktop window narrow enough to
-          fold the paint row still gets the panel or the spread. The mod's bar
-          carries its own help key. */}
-      {modBar ? null : <BoardHelp compact={isCompact} />}
       {/* Toggled from the dev menu (shift-click the version chip). Sits above
           the help button; see PerfHud.tsx. */}
       <PerfHud />
-      {arrangeProgress && !modBar ? (
-        <ArrangeLoader progress={arrangeProgress} onCancel={cancelArrange} />
-      ) : null}
       {timelapseActive ? (
         // Settings live in the dev menu; this only ends the run (as do Esc
         // and any click on the board).
@@ -6633,13 +6131,6 @@ export function FactoryFlow() {
         canCombine={selectionCanCombine}
         onCombine={combineSelectedMachines}
       />
-      {modBar ? null : (
-        <SmartViewToolbar
-          glanceMode={boardView.glanceMode}
-          onModeChange={handleGlanceModeChange}
-          onFitView={handleFitView}
-        />
-      )}
       <HopMapLegend />
       <PlanTopNotices />
       {/* The notices share one column, so none sits on top of another.
@@ -6655,12 +6146,6 @@ export function FactoryFlow() {
           recipeSearchOpen ? "opacity-20 grayscale [&_*]:pointer-events-none" : "",
         ].join(" ")}
       >
-        <PlanNoticeSwitch>
-        <UnwiredNotice onShow={handleShowNodes} />
-        <DeathSpiralNotice onShow={handleShowNodes} />
-        <ClogLockNotice onShow={handleShowNodes} />
-        </PlanNoticeSwitch>
-        <PlanVersionNotice />
         <RecipeAddChips />
       </div>
       {isProjectImporting ? <FlowLoadingOverlay /> : null}
@@ -6669,165 +6154,6 @@ export function FactoryFlow() {
     </div>
   );
 }
-
-/**
- * The board's to-do list, in one line: how many cards still have a slot with
- * no wire on it. Unfinished work, not a fault: chalk-white to match the mark
- * on the cards (--verdict-unwired-ink), never alert colours. Not dismissible;
- * it disappears once the last slot is connected.
- */
-const UnwiredNotice = memo(function UnwiredNotice({
-  onShow,
-}: {
-  onShow: (nodeIds: string[]) => void;
-}) {
-  const project = useFactoryStore((state) => state.project);
-  const lastResult = useFactoryStore((state) => state.lastResult);
-  const unwired = useMemo(
-    () => findUnwiredNodeIds(project, lastResult),
-    [project, lastResult],
-  );
-
-  if (unwired.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="unwired-notice nodrag pointer-events-auto flex max-w-[min(calc(92*var(--ui-vw)),560px)] flex-wrap items-center justify-center gap-x-2 gap-y-1.5 border-2 border-[#c8d2e0] bg-[#2b3038] px-2 py-1.5 font-mono text-[12px] text-[#e8ecf2] shadow-[inset_2px_2px_0_#5d6877,inset_-2px_-2px_0_#171a1f,4px_4px_0_rgba(0,0,0,0.35)]">
-      <span className="shrink-0 font-bold tracking-[0.5px] text-[#eef2f8]">NOT WIRED UP</span>
-      {/* One line, always: the cards explain themselves. */}
-      <span className="text-[#c2cad6]">
-        {unwired.length === 1
-          ? "1 machine has a slot with nothing on it"
-          : `${unwired.length} machines have slots with nothing on them`}
-      </span>
-      <button
-        type="button"
-        onClick={() => onShow(unwired)}
-        className="shrink-0 border border-[#c8d2e0] bg-[#454f5e] px-2 py-0.5 font-bold text-[#ffffff] hover:bg-[#566275]"
-      >
-        Show me
-      </button>
-    </div>
-  );
-});
-
-
-/**
- * A ring of machines that has wound down to a standstill and cannot restart.
- * A board-level notice because its cause is the ring itself: every card in it
- * can only point at the next one. Dismissal is keyed to the ring's identity,
- * so dismissing it does not silence the next one.
- */
-const DeathSpiralNotice = memo(function DeathSpiralNotice({
-  onShow,
-}: {
-  onShow: (nodeIds: string[]) => void;
-}) {
-  const project = useFactoryStore((state) => state.project);
-  const lastResult = useFactoryStore((state) => state.lastResult);
-  const [dismissedId, setDismissedId] = useState<string | undefined>(undefined);
-  const spirals = useMemo(
-    () => findDeathSpirals(project, lastResult).spirals,
-    [project, lastResult],
-  );
-
-  const spiral = spirals[0];
-  if (!spiral || dismissedId === spiral.id) {
-    return null;
-  }
-  const story = describeDeathSpiral(spiral);
-
-  return (
-    <div className="nodrag pointer-events-auto flex max-w-[min(calc(92*var(--ui-vw)),560px)] flex-wrap items-center justify-center gap-x-2 gap-y-1.5 border-2 border-[#c34c4c] bg-[#2b1c1c] px-2 py-1.5 font-mono text-[12px] text-[#f2e4e4] shadow-[inset_2px_2px_0_#7a3636,inset_-2px_-2px_0_#1a1010,4px_4px_0_rgba(0,0,0,0.35)]">
-      <span className="shrink-0 font-bold tracking-[0.5px] text-[#ff9c9c]">DEAD LOOP</span>
-      <span className="text-[#e6d2d2]">{story.short}</span>
-      {spirals.length > 1 ? (
-        <span className="shrink-0 text-[#b89a9a]">
-          +{spirals.length - 1} more
-        </span>
-      ) : null}
-      <button
-        type="button"
-        onClick={() => onShow(spiral.machineIds)}
-        className="shrink-0 border border-[#c34c4c] bg-[#4a2424] px-2 py-0.5 font-bold text-[#ffd0d0] hover:bg-[#63302f]"
-      >
-        Show me
-      </button>
-      <button
-        type="button"
-        onClick={() => setDismissedId(spiral.id)}
-        title="Dismiss"
-        aria-label="Dismiss this notice"
-        className="flex h-5 w-5 shrink-0 items-center justify-center border border-[#7a3636] text-[#e0b3b3] hover:bg-[#4a2424]"
-      >
-        ×
-      </button>
-    </div>
-  );
-});
-
-/**
- * The dead loop's mirror, in the clog family's blue: machines frozen because
- * their own surplus has nowhere to go (the fix is a drawer, not a feeder).
- * Board-level and dismissed per jam identity, like DeathSpiralNotice.
- */
-const ClogLockNotice = memo(function ClogLockNotice({
-  onShow,
-}: {
-  onShow: (nodeIds: string[]) => void;
-}) {
-  const project = useFactoryStore((state) => state.project);
-  const lastResult = useFactoryStore((state) => state.lastResult);
-  const [dismissedId, setDismissedId] = useState<string | undefined>(undefined);
-  const [showIndex, setShowIndex] = useState(0);
-  const locks = useMemo(
-    () => findClogLocks(project, lastResult).locks,
-    [project, lastResult],
-  );
-
-  const lock = locks[0];
-  if (!lock || dismissedId === lock.id) {
-    return null;
-  }
-  const story = describeClogLock(lock);
-  // "Show me" lands on the worst surplus first and each further click walks
-  // the other vent sites, one card at a time; framing the whole jam points at
-  // nothing.
-  const showTargets = lock.ventNodeIds.length > 0 ? lock.ventNodeIds : lock.machineIds;
-  const showAt = showIndex % showTargets.length;
-
-  return (
-    <div className="nodrag pointer-events-auto flex max-w-[min(calc(92*var(--ui-vw)),560px)] flex-wrap items-center justify-center gap-x-2 gap-y-1.5 border-2 border-[#4c7ec3] bg-[#1a222b] px-2 py-1.5 font-mono text-[12px] text-[#e4ecf2] shadow-[inset_2px_2px_0_#365d7a,inset_-2px_-2px_0_#10161a,4px_4px_0_rgba(0,0,0,0.35)]">
-      <span className="shrink-0 font-bold tracking-[0.5px] text-[#9cc9ff]">CLOG LOCK</span>
-      <span className="text-[#d2e0e6]">{story.short}</span>
-      {locks.length > 1 ? (
-        <span className="shrink-0 text-[#9aaab8]">
-          +{locks.length - 1} more
-        </span>
-      ) : null}
-      <button
-        type="button"
-        onClick={() => {
-          onShow([showTargets[showAt]!]);
-          setShowIndex(showAt + 1);
-        }}
-        className="shrink-0 border border-[#4c7ec3] bg-[#24384a] px-2 py-0.5 font-bold text-[#d0e6ff] hover:bg-[#2f4a63]"
-      >
-        {showTargets.length > 1 ? `Show me (${showAt + 1}/${showTargets.length})` : "Show me"}
-      </button>
-      <button
-        type="button"
-        onClick={() => setDismissedId(lock.id)}
-        title="Dismiss"
-        aria-label="Dismiss this notice"
-        className="flex h-5 w-5 shrink-0 items-center justify-center border border-[#365d7a] text-[#b3cbe0] hover:bg-[#24384a]"
-      >
-        ×
-      </button>
-    </div>
-  );
-});
 
 /**
  * Every open board's paper, painted in one viewport-space layer under the
@@ -6839,7 +6165,6 @@ const ClogLockNotice = memo(function ClogLockNotice({
 const EMPTY_BOARD_FLOORS: Array<{ pocket: FactoryPocket; width: number; height: number }> = [];
 
 const BoardFloors = memo(function BoardFloors() {
-  const planMode = useFactoryStore((state) => state.project.planMode === true);
   const floors = useStore(
     (state) => {
       // This selector runs on EVERY store notification, every pan and drag
@@ -6879,8 +6204,6 @@ const BoardFloors = memo(function BoardFloors() {
           entry.pocket.id === other.pocket.id &&
           entry.pocket.position.x === other.pocket.position.x &&
           entry.pocket.position.y === other.pocket.position.y &&
-          entry.pocket.theme === other.pocket.theme &&
-          entry.pocket.pattern === other.pocket.pattern &&
           entry.pocket.colorTag === other.pocket.colorTag &&
           entry.width === other.width &&
           entry.height === other.height
@@ -6896,18 +6219,9 @@ const BoardFloors = memo(function BoardFloors() {
     <ViewportPortal>
       {/* Under the wires (10) and above the backdrop ink (-5). */}
       <div className="pointer-events-none absolute left-0 top-0" style={{ zIndex: -4 }}>
-        {floors.map((floor) =>
-          planMode ? (
-            <GroupFloor key={floor.pocket.id} pocket={floor.pocket} width={floor.width} height={floor.height} />
-          ) : (
-          <BoardFloor
-            key={floor.pocket.id}
-            pocket={floor.pocket}
-            width={floor.width}
-            height={floor.height}
-          />
-          ),
-        )}
+        {floors.map((floor) => (
+          <GroupFloor key={floor.pocket.id} pocket={floor.pocket} width={floor.width} height={floor.height} />
+        ))}
       </div>
     </ViewportPortal>
   );
@@ -6953,7 +6267,7 @@ const SelectionActionsBar = memo(function SelectionActionsBar({
   onCombine,
 }: {
   selectionCount: number;
-  /** False when something selected is already on a board, or is one. */
+  /** False under two selected. */
   canWrap: boolean;
   onWrap: () => boolean;
   /** True when one machine could run every selected card's recipes (shared-machine.ts). */
@@ -6961,7 +6275,6 @@ const SelectionActionsBar = memo(function SelectionActionsBar({
   onCombine: () => boolean;
 }) {
   const isCompact = useIsCompactViewport();
-  const planBoard = useFactoryStore((state) => state.project.planMode === true);
   if (selectionCount < 2 || (!canWrap && !canCombine)) {
     return null;
   }
@@ -6994,583 +6307,14 @@ const SelectionActionsBar = memo(function SelectionActionsBar({
       <button
         type="button"
         onClick={onWrap}
-        title={planBoard ? "Group these (Ctrl+G)" : "Wrap in a board (Ctrl+G)"}
+        title="Group these (Ctrl+G)"
         // Plain chrome, like every other button: boards have no house colour.
         className="flex h-9 items-center gap-1.5 whitespace-nowrap border-2 border-[var(--mc-15)] bg-[var(--mc-49)] px-3 font-mono text-[12px] font-bold text-white shadow-[inset_2px_2px_0_var(--mc-85),inset_-2px_-2px_0_var(--mc-25)] hover:brightness-110"
       >
         <Box className="h-4 w-4" />
-        {planBoard ? "Group" : `Wrap ${selectionCount} in a board`}
+        Group
       </button>
       ) : null}
-    </div>
-  );
-});
-
-/** Which of the board's toolbars is unfolded while folded (see toolbar-fold.ts). */
-type ToolGroupId = "build" | "paint";
-
-interface ToolGroupProps {
-  id: ToolGroupId;
-  folded: boolean;
-  openGroup?: ToolGroupId;
-  onToggle: (group: ToolGroupId | undefined) => void;
-  /** The trigger's mark. */
-  icon: LucideIcon;
-  /** What it opens, in words, for the trigger's label. */
-  label: string;
-  /** Which corner the toolbar lives in, and so which way it unfolds. */
-  side: "left" | "right";
-  children: React.ReactNode;
-}
-
-/**
- * A shared plate behind one FAMILY of buttons, so a toolbar reads as its
- * groups without labels. The palette's bevelled slab, lighter than the board
- * so the darker faces read as recessed keys. A lone button in a plated row
- * gets a plate too, so baselines line up. It casts the cards' drop-shadow
- * (.react-flow__node in globals.css), so chrome and cards sit at one height.
- */
-function ToolTray({
-  children,
-  helpAnchor,
-  raised = false,
-}: {
-  children: React.ReactNode;
-  /** Names the tray to the board's help sheet, which rings it. */
-  helpAnchor?: string;
-  /** A dropdown must sit above trays that wrap onto the next line. */
-  raised?: boolean;
-}) {
-  return (
-    <div
-      data-toolbar-tray
-      style={{ zoom: BOARD_TOOL_SCALE }}
-      data-help-anchor={helpAnchor}
-      className={`${raised ? "relative z-30 " : ""}pointer-events-auto flex shrink-0 items-start gap-1 border-2 border-[var(--mc-15)] bg-[var(--mc-78)] p-1 shadow-[inset_2px_2px_0_var(--mc-100),inset_-2px_-2px_0_var(--mc-33)] [filter:drop-shadow(6px_8px_7px_rgba(0,0,0,0.45))]`}
-    >
-      {children}
-    </div>
-  );
-}
-
-/**
- * Close an open fold-out through the shared dropdown rule. Every toolbar
- * fold-out opens on CLICK, never hover: hover-open menus stack over one
- * another when the pointer crosses the row quickly.
- */
-function useFoldoutDismiss(
-  open: boolean,
-  ref: React.RefObject<HTMLDivElement | null>,
-  close: () => void,
-) {
-  // The one dropdown rule (use-dropdown-dismiss.ts): press outside, Escape,
-  // wheel, scroll, resize, a board pan, or the mouse drifting away.
-  useDropdownDismiss(open, { refs: [ref], onClose: close, fade: true });
-}
-
-/**
- * The two faces of every board toggle; ON is the pressed light key. The
- * palette's swatches keep a cyan ring instead: a selection mark there has to
- * stand against any hue, including this grey.
- */
-const TOOL_FACE_ON = "bg-[var(--mc-85)] text-[var(--mc-ink)] shadow-[inset_2px_2px_0_var(--mc-100)]";
-const TOOL_FACE_OFF =
-  "bg-[var(--mc-49)] text-white shadow-[inset_2px_2px_0_var(--mc-85),inset_-2px_-2px_0_var(--mc-25)] hover:brightness-110";
-
-/**
- * A toolbar folded into one button, for boards too narrow to carry it; the
- * open one unfolds over empty canvas. Folding is decided per toolbar by the
- * BOARD's width in toolbar-fold.ts, not the window's. Unfolded this renders
- * its children and nothing else, so the DOM is unchanged.
- */
-function ToolGroup({
-  id,
-  folded,
-  openGroup,
-  onToggle,
-  icon: Icon,
-  label,
-  side,
-  children,
-}: ToolGroupProps) {
-  if (!folded) {
-    return <>{children}</>;
-  }
-
-  const isOpen = openGroup === id;
-  // The row unfolds DOWNWARDS onto a line of its own, absolutely positioned:
-  // the triggers share the top line, and a folded row takes no width, so a
-  // trigger never shifts.
-  //
-  // `invisible` rather than `opacity-0`: every button in these rows sets
-  // `pointer-events-auto`, which would override a `pointer-events-none` here
-  // and leave invisible buttons taking taps. It costs the fade on the way out.
-  const row = (
-    <div
-      className={[
-        // `w-max`, or the row inherits the folded toolbar's one-button width
-        // and wraps into a vertical column. top-10 leaves a small gap below
-        // the plated trigger.
-        "absolute top-10 flex w-max max-w-[calc(var(--board-width,calc(100*var(--ui-vw)))-24px)] flex-wrap items-start gap-1 transition-[opacity,transform] duration-100",
-        side === "left" ? "left-0 justify-start" : "right-0 justify-end",
-        isOpen ? "translate-y-0 opacity-100" : "invisible -translate-y-1 opacity-0",
-      ].join(" ")}
-    >
-      {children}
-    </div>
-  );
-  const trigger = (
-    // Plated like everything beside it, so the folded triggers stand level
-    // with the undo/redo plate on the same line.
-    <ToolTray>
-      <button
-        type="button"
-        onClick={() => onToggle(id)}
-        // Folded, the trigger IS the toolbar to the help sheet: the row is
-        // still in the DOM but invisible, so the ring goes on this button.
-        data-help-anchor={id}
-        aria-expanded={isOpen}
-        aria-label={isOpen ? `Hide ${label}` : `Show ${label}`}
-        title={isOpen ? `Hide ${label}` : label}
-        className={[
-          "pointer-events-auto relative z-10 flex h-8 w-8 shrink-0 items-center justify-center border-2 border-[var(--mc-15)]",
-          isOpen ? TOOL_FACE_ON : TOOL_FACE_OFF,
-        ].join(" ")}
-      >
-        <Icon className="h-4 w-4" />
-      </button>
-    </ToolTray>
-  );
-
-  return side === "left" ? (
-    <>
-      {trigger}
-      {row}
-    </>
-  ) : (
-    <>
-      {row}
-      {trigger}
-    </>
-  );
-}
-
-/**
- * The smart-view switch, bottom right: what a zoomed-out card leads with.
- * Exactly one glance mode is always in force.
- */
-const SmartViewToolbar = memo(function SmartViewToolbar({
-  glanceMode,
-  onModeChange,
-  onFitView,
-}: {
-  glanceMode: BoardView["glanceMode"];
-  /** Picking a coloured view drops the paint brush. */
-  onModeChange: (mode: GlanceMode) => void;
-  /** Zoom out until the whole plan is on screen, and centre it. */
-  onFitView: () => void;
-}) {
-  const buttonClass = (active: boolean) =>
-    [
-      "pointer-events-auto flex h-9 w-9 items-center justify-center border-2 border-[var(--mc-15)]",
-      active ? TOOL_FACE_ON : TOOL_FACE_OFF,
-    ].join(" ");
-
-  return (
-    <div
-      data-help-anchor="glance"
-      className="nodrag pointer-events-none absolute bottom-3 right-3 z-20 flex items-start gap-[0.4rem]"
-    >
-      {/* On its own plate: this one moves the camera, the row beside it
-          changes what every card shows. */}
-      <ToolTray>
-        <button
-          type="button"
-          onClick={onFitView}
-          className={buttonClass(false)}
-          title="Fit on screen"
-          aria-label="Fit the plan on the screen"
-        >
-          <Focus className="h-4 w-4" />
-        </button>
-      </ToolTray>
-      {/* The smart views. Every one of them is a zoomed-out reading: up close
-          the cards always look like themselves, whichever is picked. */}
-      <ToolTray>
-        <button
-          type="button"
-          onClick={() => onModeChange("identity")}
-          className={buttonClass(glanceMode === "identity")}
-          title="Big icons"
-          aria-label="Big icons"
-          aria-pressed={glanceMode === "identity"}
-        >
-          <Box className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onModeChange("status")}
-          className={buttonClass(glanceMode === "status")}
-          title="Speed"
-          aria-label="Speed"
-          aria-pressed={glanceMode === "status"}
-        >
-          <Gauge className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onModeChange("usage")}
-          className={buttonClass(glanceMode === "usage")}
-          title="Usage"
-          aria-label="Usage"
-          aria-pressed={glanceMode === "usage"}
-        >
-          <TriangleAlert className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onModeChange("power")}
-          className={buttonClass(glanceMode === "power")}
-          title="Power"
-          aria-label="Power"
-          aria-pressed={glanceMode === "power"}
-        >
-          <Zap className="h-4 w-4" />
-        </button>
-      </ToolTray>
-    </div>
-  );
-});
-
-const RATE_UNIT_CHOICES: Array<{ unit: RateUnit; label: string; title: string }> = [
-  { unit: "tick", label: "/t", title: "Per tick" },
-  { unit: "second", label: "/s", title: "Per second" },
-  { unit: "minute", label: "/m", title: "Per minute" },
-  { unit: "hour", label: "/h", title: "Per hour" },
-  // The odd one out, and dressed as such (gold face, its own sound): not a
-  // clock but the EU each output cost to make. See rate-unit.ts.
-  { unit: "eu", label: "EU", title: "EU per unit made" },
-];
-
-/** The rate key's face while it reads energy: gold, like the readings. */
-const TOOL_FACE_ENERGY =
-  "bg-amber-300 text-black shadow-[inset_2px_2px_0_#fde68a,inset_-2px_-2px_0_#b45309] hover:brightness-110";
-
-/** One tap of the rate dial, in the voice the chosen unit speaks. */
-function playRateDial(unit: RateUnit, step: number): void {
-  playBoardSound(unit === "eu" ? "dialEnergy" : "dialRate", { step });
-}
-
-
-/**
- * The left toolbar: undo/redo on their own plate, then (foldable) the rate
- * and power unit dials and the checklist keys.
- */
-const SourceToolbar = memo(function SourceToolbar({
-  readOnly = false,
-  folded,
-  openGroup,
-  onToggleGroup,
-  shiftedDown,
-}: {
-  readOnly?: boolean;
-  folded: boolean;
-  openGroup?: ToolGroupId;
-  onToggleGroup: (group: ToolGroupId | undefined) => void;
-  /** A banner has the top line: step down one. */
-  shiftedDown: boolean;
-}) {
-  const rateUnit = useFactoryStore((state) => state.rateUnit);
-  const setRateUnit = useFactoryStore((state) => state.setRateUnit);
-  const rateChoice =
-    RATE_UNIT_CHOICES.find((choice) => choice.unit === rateUnit) ?? RATE_UNIT_CHOICES[1];
-  const [isRateMenuOpen, setRateMenuOpen] = useState(false);
-  const rateRef = useRef<HTMLDivElement | null>(null);
-  const closeRateMenu = useCallback(() => setRateMenuOpen(false), []);
-  useFoldoutDismiss(isRateMenuOpen, rateRef, closeRateMenu);
-  // The power unit key beside it: EU/t, or amps of a chosen tier; the second
-  // board-wide view dial, worked like the rate unit's.
-  const powerDisplayUnit = useFactoryStore((state) => state.powerDisplayUnit);
-  const setPowerDisplayUnit = useFactoryStore((state) => state.setPowerDisplayUnit);
-  const [isPowerUnitMenuOpen, setPowerUnitMenuOpen] = useState(false);
-  const powerUnitRef = useRef<HTMLDivElement | null>(null);
-  const closePowerUnitMenu = useCallback(() => setPowerUnitMenuOpen(false), []);
-  useFoldoutDismiss(isPowerUnitMenuOpen, powerUnitRef, closePowerUnitMenu);
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("gtnh-factory-flow.power-display-unit.v1");
-      if (isPowerDisplayUnit(saved)) setPowerDisplayUnit(saved);
-    } catch { /* Use EU/t when storage is unavailable. */ }
-  }, [setPowerDisplayUnit]);
-
-  // Subscribe to the DEPTHS, not the history arrays: a selector returning the
-  // array itself would re-render this toolbar on every project edit.
-  const undo = useFactoryStore((state) => state.undo);
-  const redo = useFactoryStore((state) => state.redo);
-  const canUndo = useFactoryStore((state) => state.liveUndo ? state.liveUndo.canUndo : state.undoHistory.length > 0);
-  const canRedo = useFactoryStore((state) => state.liveUndo ? state.liveUndo.canRedo : state.redoHistory.length > 0);
-  const historyButtonClass = (enabled: boolean) =>
-    [
-      "pointer-events-auto relative z-10 flex h-8 w-8 items-center justify-center border-2 border-[var(--mc-15)] bg-[var(--mc-49)] text-white shadow-[inset_2px_2px_0_var(--mc-85),inset_-2px_-2px_0_var(--mc-25)]",
-      enabled ? "hover:brightness-110" : "cursor-not-allowed opacity-40",
-    ].join(" ");
-
-  return (
-    <div
-      data-board-toolbar
-      data-help-anchor="build"
-      className={[
-        "nodrag pointer-events-none absolute left-[var(--toolbar-inset,0.75rem)] flex items-start gap-[0.4rem]",
-        // Lifted while either unit menu hangs below, so a notice card cannot
-        // paint over it - the same lift the paint row gives its fold-outs.
-        isRateMenuOpen || isPowerUnitMenuOpen ? "z-40" : "z-20",
-        // When a banner takes the top line the row steps down; its fold-out
-        // follows, since that is positioned against this root.
-        shiftedDown ? "top-14" : "top-3",
-      ].join(" ")}
-    >
-      {/* History first, and set apart on its own plate: it undoes everything
-          the rest of the board does, so it belongs to no other group. */}
-      {!readOnly && <ToolTray>
-        <button
-          type="button"
-          onClick={undo}
-          disabled={!canUndo}
-          className={historyButtonClass(canUndo)}
-          title={canUndo ? "Undo (Ctrl+Z)" : "Nothing to undo"}
-          aria-label="Undo"
-        >
-          <Undo2 className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={redo}
-          disabled={!canRedo}
-          className={historyButtonClass(canRedo)}
-          title={canRedo ? "Redo (Ctrl+Shift+Z)" : "Nothing to redo"}
-          aria-label="Redo"
-        >
-          <Redo2 className="h-4 w-4" />
-        </button>
-      </ToolTray>}
-      {/* Undo and redo stay out of the fold-out even on a phone: a mistake
-          is not the moment to go hunting for them. */}
-      <ToolGroup
-        id="build"
-        folded={folded}
-        openGroup={openGroup}
-        onToggle={onToggleGroup}
-        icon={Hammer}
-        label="build tools"
-        side="left"
-      >
-      {/* How the numbers read: ONE key wearing the current unit, opening
-          the units as a named list. */}
-      <ToolTray raised={isRateMenuOpen || isPowerUnitMenuOpen}>
-        <div ref={rateRef} className="relative flex">
-          <button
-            type="button"
-            onClick={() => setRateMenuOpen((was) => !was)}
-            onWheel={(event) => {
-              // The key is also a wheel dial: scroll up climbs the ladder,
-              // clamped at the ends. Stopped so the board never zooms.
-              if (!wheelChangesValues()) return;
-              event.stopPropagation();
-              const index = RATE_UNIT_CHOICES.findIndex((choice) => choice.unit === rateUnit);
-              const next = Math.min(
-                RATE_UNIT_CHOICES.length - 1,
-                Math.max(0, index + (event.deltaY < 0 ? 1 : -1)),
-              );
-              if (next !== index) {
-                playRateDial(RATE_UNIT_CHOICES[next]!.unit, next);
-                setRateUnit(RATE_UNIT_CHOICES[next]!.unit);
-              }
-            }}
-            aria-expanded={isRateMenuOpen}
-            aria-label={`Rate unit: ${rateChoice.title.toLowerCase()}`}
-            className={[
-              "pointer-events-auto relative z-10 flex h-8 w-8 items-center justify-center border-2 border-[var(--mc-15)] font-mono text-[12px] font-black",
-              isRateMenuOpen ? TOOL_FACE_ON : rateUnit === "eu" ? TOOL_FACE_ENERGY : TOOL_FACE_OFF,
-            ].join(" ")}
-          >
-            {rateChoice.label}
-          </button>
-          {isRateMenuOpen ? (
-            <div className="absolute left-0 top-[calc(100%+10px)] z-30 flex w-max flex-col gap-1 border-2 border-[var(--mc-15)] bg-[var(--mc-78)] p-1 shadow-[4px_4px_0_rgba(0,0,0,0.45)]">
-              {RATE_UNIT_CHOICES.map((choice, index) => (
-                <button
-                  key={choice.unit}
-                  type="button"
-                  onClick={() => {
-                    playRateDial(choice.unit, index);
-                    setRateUnit(choice.unit);
-                    setRateMenuOpen(false);
-                  }}
-                  aria-pressed={rateUnit === choice.unit}
-                  className={[
-                    "pointer-events-auto flex items-center gap-2 border-2 p-1 pr-2 text-left",
-                    rateUnit === choice.unit
-                      ? choice.unit === "eu"
-                        ? "border-white bg-amber-300 text-black ring-2 ring-amber-200"
-                        : "border-white bg-[var(--mc-85)] text-[var(--mc-ink)] ring-2 ring-cyan-300"
-                      : choice.unit === "eu"
-                        ? "border-amber-700 bg-[var(--mc-49)] text-amber-300 hover:bg-[var(--mc-61)]"
-                        : "border-[var(--mc-15)] bg-[var(--mc-49)] text-white hover:bg-[var(--mc-61)]",
-                  ].join(" ")}
-                >
-                  <span className="flex h-6 w-7 shrink-0 items-center justify-center font-mono text-[12px] font-black">
-                    {choice.label}
-                  </span>
-                  <span className="whitespace-nowrap font-mono text-[11px] font-semibold">
-                    {choice.title}
-                  </span>
-                </button>
-              ))}
-              <div className="pt-0.5 text-center font-mono text-[9px] font-semibold uppercase tracking-[0.5px] text-[var(--mc-ink-muted)]">
-                Display only
-              </div>
-            </div>
-          ) : null}
-        </div>
-        {/* The POWER unit: EU/t, or amps of a tier (EU/t over the tier's
-            voltage), since dynamos, cables and hatches are rated in amps at
-            a voltage. */}
-        <div ref={powerUnitRef} className="relative flex">
-          <button
-            type="button"
-            onClick={() => setPowerUnitMenuOpen((was) => !was)}
-            onWheel={(event) => {
-              // Same wheel dial as the rate key: EU/t is the floor, the
-              // tiers climb from it.
-              if (!wheelChangesValues()) return;
-              event.stopPropagation();
-              const ladder: Array<typeof powerDisplayUnit> = [
-                "eu",
-                ...GT_VOLTAGE_TIERS.map((entry) => entry.tier),
-              ];
-              const index = ladder.indexOf(powerDisplayUnit);
-              const next = Math.min(
-                ladder.length - 1,
-                Math.max(0, index + (event.deltaY < 0 ? 1 : -1)),
-              );
-              if (next !== index) {
-                playBoardSound("dialPower", { step: next });
-                setPowerDisplayUnit(ladder[next]!);
-              }
-            }}
-            aria-expanded={isPowerUnitMenuOpen}
-            aria-label={
-              powerDisplayUnit === "eu"
-                ? "Power unit: EU per tick"
-                : `Power unit: amps of ${powerDisplayUnit}`
-            }
-            className={[
-              // Fixed width: the tier names run two to three letters and a
-              // wheel-scroll through them must not pump the toolbar.
-              "pointer-events-auto relative z-10 flex h-8 w-[76px] items-center justify-center gap-1 whitespace-nowrap border-2 px-1 font-mono text-[11px] font-bold",
-              // In a tier mode the WHOLE key IS the tier chip the machine
-              // cards wear: same bevel, same text shadow, same weight.
-              powerDisplayUnit === "eu"
-                ? `border-[var(--mc-15)] font-black text-amber-400 ${isPowerUnitMenuOpen ? TOOL_FACE_ON : TOOL_FACE_OFF}`
-                : `shadow-[inset_2px_2px_0_rgba(255,255,255,0.55),inset_-2px_-2px_0_rgba(0,0,0,0.45)] ${isPowerUnitMenuOpen ? "brightness-110" : "hover:brightness-110"}`,
-            ].join(" ")}
-            style={
-              powerDisplayUnit === "eu"
-                ? undefined
-                : {
-                    background: GT_TIER_COLORS[powerDisplayUnit as keyof typeof GT_TIER_COLORS].background,
-                    borderColor: GT_TIER_COLORS[powerDisplayUnit as keyof typeof GT_TIER_COLORS].border,
-                    color: GT_TIER_COLORS[powerDisplayUnit as keyof typeof GT_TIER_COLORS].text,
-                    textShadow: `1px 1px 0 ${GT_TIER_COLORS[powerDisplayUnit as keyof typeof GT_TIER_COLORS].shadow}`,
-                  }
-            }
-          >
-            <Zap className="h-3 w-3 fill-current" />
-            {/* The board's one amps notation: number, then A, then tier -
-                "2.5 A LV" - and the key names the unit half of it, "A LV".
-                The game's underline convention rides only the tier word. */}
-            {powerDisplayUnit === "eu" ? (
-              "EU/t"
-            ) : (
-              <span className="whitespace-nowrap">
-                A{" "}
-                <span
-                  style={{
-                    textDecoration: GT_TIER_COLORS[powerDisplayUnit as keyof typeof GT_TIER_COLORS].underline
-                      ? "underline"
-                      : undefined,
-                  }}
-                >
-                  {powerDisplayUnit}
-                </span>
-              </span>
-            )}
-          </button>
-          {isPowerUnitMenuOpen ? (
-            // EU/t and the fifteen tiers, one uniform 4x4 grid of equal
-            // cells - EU/t is a choice like any other, not a banner.
-            <div className={`absolute ${folded ? "right-0" : "left-0"} top-[calc(100%+10px)] z-30 grid w-max grid-cols-4 gap-1 border-2 border-[var(--mc-15)] bg-[var(--mc-78)] p-1 shadow-[4px_4px_0_rgba(0,0,0,0.45)]`}>
-              <button
-                type="button"
-                onClick={() => {
-                  playBoardSound("dialPower", { step: 0 });
-                  setPowerDisplayUnit("eu");
-                  setPowerUnitMenuOpen(false);
-                }}
-                aria-pressed={powerDisplayUnit === "eu"}
-                aria-label="EU per tick"
-                className={[
-                  // The EU/t cell wears the same bevel as the tier chips,
-                  // on the toolbar's dark face with the amber bolt.
-                  "pointer-events-auto flex h-8 items-center justify-center gap-1 border-2 px-1.5 font-mono text-[11px] font-bold shadow-[inset_2px_2px_0_rgba(255,255,255,0.25),inset_-2px_-2px_0_rgba(0,0,0,0.45)]",
-                  powerDisplayUnit === "eu"
-                    ? "border-[var(--mc-15)] bg-[var(--mc-61)] text-amber-400 ring-2 ring-cyan-300"
-                    : "border-[var(--mc-15)] bg-[var(--mc-49)] text-amber-400 hover:bg-[var(--mc-61)]",
-                ].join(" ")}
-              >
-                <Zap className="h-3 w-3 fill-current" />
-                EU/t
-              </button>
-              {GT_VOLTAGE_TIERS.map(({ tier }, index) => (
-                <button
-                  key={tier}
-                  type="button"
-                  onClick={() => {
-                    // Rung 1 upward: the EU/t cell is the ladder's floor.
-                    playBoardSound("dialPower", { step: index + 1 });
-                    setPowerDisplayUnit(tier);
-                    setPowerUnitMenuOpen(false);
-                  }}
-                  aria-pressed={powerDisplayUnit === tier}
-                  aria-label={`Amps of ${tier}`}
-                  className={[
-                    // The machine cards' own chip treatment: bevel, text
-                    // shadow, bold - the menu is a tray of the real chips.
-                    "pointer-events-auto flex h-8 items-center justify-center border-2 px-1.5 font-mono text-[11px] font-bold shadow-[inset_2px_2px_0_rgba(255,255,255,0.55),inset_-2px_-2px_0_rgba(0,0,0,0.45)]",
-                    powerDisplayUnit === tier ? "ring-2 ring-cyan-300" : "hover:brightness-110",
-                  ].join(" ")}
-                  style={{
-                    background: GT_TIER_COLORS[tier].background,
-                    borderColor: GT_TIER_COLORS[tier].border,
-                    color: GT_TIER_COLORS[tier].text,
-                    textShadow: `1px 1px 0 ${GT_TIER_COLORS[tier].shadow}`,
-                    textDecoration: GT_TIER_COLORS[tier].underline ? "underline" : undefined,
-                  }}
-                >
-                  {tier}
-                </button>
-              ))}
-              <div className="col-span-4 pt-0.5 text-center font-mono text-[9px] font-semibold uppercase tracking-[0.5px] text-[var(--mc-ink-muted)]">
-                Display only
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </ToolTray>
-      <ToolTray>
-        <ChecklistKeys folded={folded} />
-      </ToolTray>
-      </ToolGroup>
     </div>
   );
 });
@@ -7983,684 +6727,6 @@ function AnnotationDraftPreview({
   );
 }
 
-/**
- * A hidden file input behind a toolbar button: picking a file IS the gesture.
- * The button spins while the upload is out.
- */
-function AddImageButton({ onPlaceImage }: { onPlaceImage: (file: File) => Promise<void> }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  return (
-    <>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/gif,image/webp"
-        className="hidden"
-        onChange={async (event) => {
-          const file = event.target.files?.[0];
-          // Cleared so picking the same file twice still fires onChange.
-          event.target.value = "";
-          if (!file) {
-            return;
-          }
-          setBusy(true);
-          try {
-            await onPlaceImage(file);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      />
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        disabled={busy}
-        className={[
-          "flex items-center gap-2 border-2 border-[var(--mc-15)] bg-[var(--mc-49)] p-1 pr-2 text-left text-white hover:bg-[var(--mc-61)]",
-          busy ? "cursor-wait opacity-70" : "",
-        ].join(" ")}
-        title="Add an image"
-        aria-label="Add an image"
-      >
-        <span className="flex h-7 w-7 items-center justify-center">
-          {busy ? (
-            <LoaderCircle className="h-4 w-4 animate-spin" />
-          ) : (
-            <ImagePlus className="h-4 w-4" />
-          )}
-        </span>
-        <span className="whitespace-nowrap font-mono text-[11px] font-semibold">Add an image</span>
-      </button>
-    </>
-  );
-}
-
-const ANNOTATION_TOOLS: Array<{
-  kind: BoardDrawTool;
-  label: string;
-  Icon: typeof Square;
-}> = [
-  { kind: "board", label: "Draw board", Icon: AppWindow },
-  { kind: "box", label: "Draw box", Icon: Square },
-  { kind: "zone", label: "Draw zone", Icon: Hexagon },
-  { kind: "arrow", label: "Draw arrow", Icon: MoveUpRight },
-  { kind: "text", label: "Add text note", Icon: Type },
-];
-
-/** A theme row's little preview: its paper, its texture, three of its dots. */
-function ThemeSwatch({ theme }: { theme: CanvasTheme }) {
-  return (
-    <span
-      aria-hidden
-      className="flex h-7 w-11 shrink-0 items-center justify-center gap-1 border border-[var(--mc-15)]"
-      style={{ backgroundColor: theme.base, backgroundImage: theme.texture }}
-    >
-      {[0, 1, 2].map((dot) => (
-        <span key={dot} className="h-[3px] w-[3px]" style={{ backgroundColor: theme.patternColor }} />
-      ))}
-    </span>
-  );
-}
-
-
-/**
- * Board VIEW options, one button and a sheet that names each option. Set
- * apart from the paint and annotation tools: those change the plan, these
- * only how you look at it. Memoized because FactoryFlow re-renders every
- * frame of a node drag; with stable callbacks this renders only when the
- * view or its open state changes.
- */
-const BoardViewMenu = memo(function BoardViewMenu({
-  view,
-  onChange,
-  open,
-  onOpenChange,
-  arrange,
-}: {
-  view: BoardView;
-  onChange: (patch: Partial<BoardView>) => void;
-  /** Held by the paint toolbar, which lifts the row's z while the sheet is out. */
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** Auto-arrange: its one setting, and the button that runs it. */
-  arrange: {
-    keepBoards: boolean;
-    onToggleKeepBoards: () => void;
-    onArrange: (options: { keepBoards: boolean }) => void;
-  };
-}) {
-  const { canvasPattern } = view;
-  // Motion is device taste, not plan state: read and written through its own
-  // store (board-motion.tsx), never through the plan-view snapshot.
-  const boardMotion = useBoardMotion();
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const closeSheet = useCallback(() => onOpenChange(false), [onOpenChange]);
-  useFoldoutDismiss(open, rootRef, closeSheet);
-
-  const toggles: Array<{
-    id: string;
-    on: boolean;
-    label: string;
-    line?: string;
-    Icon: LucideIcon;
-    flip: () => void;
-  }> = [
-    {
-      id: "fixed-edge-width",
-      on: view.fixedEdgeWidth,
-      label: "Fixed edge width",
-      Icon: Minus,
-      flip: () => onChange({ fixedEdgeWidth: !view.fixedEdgeWidth }),
-    },
-    // The two motion switches: device taste, so they write to their own store
-    // and never travel with a shared plan.
-    {
-      id: "smooth",
-      on: boardMotion.moveMotion,
-      label: "Smooth movement",
-      line: "Cards move smoothly instead of jumping.",
-      Icon: Magnet,
-      flip: () => writeBoardMotion({ moveMotion: !boardMotion.moveMotion }),
-    },
-    {
-      id: "numbers",
-      on: boardMotion.valueMotion,
-      label: "Live numbers",
-      line: "Numbers change smoothly.",
-      Icon: Activity,
-      flip: () => writeBoardMotion({ valueMotion: !boardMotion.valueMotion }),
-    },
-  ];
-
-  return (
-    <div ref={rootRef} className="pointer-events-auto relative flex">
-      <button
-        type="button"
-        onClick={() => onOpenChange(!open)}
-        aria-expanded={open}
-        className={[
-          "relative z-10 flex h-8 w-8 items-center justify-center border-2 border-[var(--mc-15)]",
-          open ? TOOL_FACE_ON : TOOL_FACE_OFF,
-        ].join(" ")}
-        title="View options"
-        aria-label="View options"
-      >
-        <Eye className="h-4 w-4" />
-      </button>
-      {open ? (
-        <div className="absolute right-0 top-[calc(100%+6px)] z-30 flex max-h-[calc(70*var(--ui-vh))] w-[300px] max-w-[calc(100*var(--ui-vw)-24px)] flex-col gap-1 overflow-y-auto border-2 border-[var(--mc-15)] bg-[var(--mc-78)] p-1 shadow-[4px_4px_0_rgba(0,0,0,0.45)]">
-          {/* The background's paper... */}
-          <div className="grid grid-cols-2 gap-1">
-            {CANVAS_THEMES.map((theme) => (
-              <button
-                key={theme.id}
-                type="button"
-                onClick={() => onChange({ canvasTheme: theme.id })}
-                className={[
-                  "flex items-center gap-2 border-2 p-1 text-left",
-                  view.canvasTheme === theme.id
-                    ? "border-white bg-[var(--mc-85)] ring-2 ring-cyan-300"
-                    : "border-[var(--mc-15)] bg-[var(--mc-49)] hover:bg-[var(--mc-61)]",
-                ].join(" ")}
-                aria-label={`Background style: ${theme.name}`}
-                aria-pressed={view.canvasTheme === theme.id}
-              >
-                <ThemeSwatch theme={theme} />
-                <span className="min-w-0 truncate text-[11px] font-semibold leading-tight text-[var(--mc-ink)]">
-                  {theme.name}
-                </span>
-              </button>
-            ))}
-          </div>
-          {/* ...and its pattern, one key per choice. */}
-          <div className="flex gap-1">
-            {CANVAS_PATTERNS.map((pattern) => {
-              const PatternIcon = CANVAS_PATTERN_ICON[pattern];
-              return (
-                <button
-                  key={pattern}
-                  type="button"
-                  onClick={() => onChange({ canvasPattern: pattern })}
-                  title={CANVAS_PATTERN_LABEL[pattern]}
-                  aria-label={`Background pattern: ${CANVAS_PATTERN_LABEL[pattern]}`}
-                  aria-pressed={canvasPattern === pattern}
-                  className={[
-                    "flex h-9 flex-1 items-center justify-center border-2 border-[var(--mc-15)]",
-                    canvasPattern === pattern ? TOOL_FACE_ON : TOOL_FACE_OFF,
-                  ].join(" ")}
-                >
-                  <PatternIcon className="h-4 w-4" />
-                </button>
-              );
-            })}
-          </div>
-          {/* No grid or line-colour rows: the grid is always on, and colour
-              by speed is the smart view's switch, bottom right. */}
-          {toggles.map(({ id, on, label, line, Icon, flip }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={flip}
-              aria-pressed={on}
-              className={[
-                "flex items-start gap-2 border-2 p-2 text-left",
-                on
-                  ? `border-[var(--mc-good)] ${TOOL_FACE_ON}`
-                  : `border-[var(--mc-15)] ${TOOL_FACE_OFF}`,
-              ].join(" ")}
-            >
-              <Icon className="mt-[1px] h-4 w-4 shrink-0" />
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="flex items-baseline justify-between gap-2">
-                  <span className="font-mono text-[12px] font-black uppercase">{label}</span>
-                  <span
-                    className={[
-                      "font-mono text-[10px] font-black tracking-[1px]",
-                      on ? "text-[var(--mc-good)]" : "text-[var(--mc-ink-muted)]",
-                    ].join(" ")}
-                  >
-                    {on ? "ON" : "OFF"}
-                  </span>
-                </span>
-                {line ? <span className="font-mono text-[11px] leading-snug opacity-80">{line}</span> : null}
-              </span>
-            </button>
-          ))}
-          {/* ARRANGE, at the foot of the sheet: its one setting, then the
-              button. By default the arrange dissolves every board. */}
-          <div className="mt-1 border-t-2 border-[var(--mc-15)] pt-1">
-            <button
-              type="button"
-              onClick={arrange.onToggleKeepBoards}
-              aria-pressed={arrange.keepBoards}
-              className={[
-                "flex w-full items-start gap-2 border-2 p-2 text-left",
-                arrange.keepBoards
-                  ? `border-[var(--mc-good)] ${TOOL_FACE_ON}`
-                  : `border-[var(--mc-15)] ${TOOL_FACE_OFF}`,
-              ].join(" ")}
-            >
-              <Network className="mt-[1px] h-4 w-4 shrink-0" />
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="flex items-baseline justify-between gap-2">
-                  <span className="font-mono text-[12px] font-black uppercase">Keep boards on rearrange</span>
-                  <span
-                    className={[
-                      "font-mono text-[10px] font-black tracking-[1px]",
-                      arrange.keepBoards ? "text-[var(--mc-good)]" : "text-[var(--mc-ink-muted)]",
-                    ].join(" ")}
-                  >
-                    {arrange.keepBoards ? "ON" : "OFF"}
-                  </span>
-                </span>
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onOpenChange(false);
-                arrange.onArrange({ keepBoards: arrange.keepBoards });
-              }}
-              className="mt-1 flex w-full items-center justify-center gap-2 border-2 border-[var(--mc-15)] bg-[var(--mc-49)] p-2 font-mono text-[12px] font-black uppercase text-white shadow-[inset_2px_2px_0_var(--mc-85),inset_-2px_-2px_0_var(--mc-25)] hover:brightness-110"
-              aria-label="Arrange the board"
-            >
-              <Network className="h-4 w-4" />
-              Arrange
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-});
-
-/**
- * THE ARRANGE LOADER: one bar across every step of the arrange, each step an
- * equal share, the steps listed under it with the current one lit, and a
- * Cancel key. Within a step the bar moves with that step's own count (search
- * trials, polish judge calls); a step with no count fills as it ends.
- */
-function ArrangeLoader({
-  progress,
-  onCancel,
-}: {
-  progress: ArrangeProgress;
-  onCancel: () => void;
-}) {
-  const steps = ARRANGE_STEPS.length;
-  const within = Math.min(progress.done, progress.total) / Math.max(progress.total, 1);
-  const overall = Math.min(1, (Math.min(progress.step, steps) + within) / steps);
-  // Dressed like the Settings dialog. The running step's marker spins the
-  // whole time the worker runs, because the bar moves only in steps; the
-  // arrange runs off the main thread, so a frozen spinner means a stuck tab.
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="pointer-events-none absolute inset-0 z-[60] flex items-center justify-center bg-neutral-950/40"
-    >
-      <div className="pointer-events-auto w-[26rem] max-w-[calc(100*var(--ui-vw)-32px)] border-2 border-[var(--mc-15)] bg-[var(--mc-49)] text-[var(--mc-ink)] shadow-[inset_2px_2px_0_var(--mc-85),inset_-2px_-2px_0_var(--mc-25),4px_4px_0_rgba(0,0,0,0.45)]">
-        <div className="flex items-center justify-between border-b-2 border-[var(--mc-15)] px-4 py-2.5">
-          <h2 className="text-sm font-bold">Arranging the board</h2>
-          <span className="font-mono text-sm tabular-nums text-[var(--mc-ink-muted)]">
-            {Math.round(overall * 100)}%
-          </span>
-        </div>
-        <div className="px-4 py-3">
-          <div className="flex h-3 w-full gap-[3px] border-2 border-[var(--mc-15)] bg-[var(--mc-25)] p-[2px]">
-            {ARRANGE_STEPS.map((step, index) => {
-              const fill = index < progress.step ? 1 : index === progress.step ? within : 0;
-              return (
-                <div key={step.key} className="h-full flex-1 overflow-hidden bg-[var(--mc-36)]">
-                  <div
-                    className="h-full bg-[var(--mc-good)] transition-[width] duration-150"
-                    style={{ width: `${Math.round(fill * 100)}%` }}
-                  />
-                </div>
-              );
-            })}
-          </div>
-          <ol className="mt-3 flex flex-col divide-y divide-[var(--mc-36)]">
-            {ARRANGE_STEPS.map((step, index) => {
-              const state = index < progress.step ? "done" : index === progress.step ? "now" : "next";
-              return (
-                <li
-                  key={step.key}
-                  className={[
-                    "flex min-h-8 items-center gap-2 py-1 font-mono text-[12px] uppercase",
-                    state === "now"
-                      ? "font-black text-[var(--mc-ink)]"
-                      : state === "done"
-                        ? "text-[var(--mc-ink-muted)]"
-                        : "text-[var(--mc-ink-muted)] opacity-50",
-                  ].join(" ")}
-                >
-                  {state === "now" ? (
-                    <LoaderCircle
-                      aria-hidden
-                      className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--mc-good)]"
-                    />
-                  ) : (
-                    <span
-                      aria-hidden
-                      className={[
-                        "inline-block h-3 w-3 shrink-0 border-2 border-[var(--mc-15)]",
-                        state === "done" ? "bg-[var(--mc-good)]" : "bg-[var(--mc-36)]",
-                      ].join(" ")}
-                    />
-                  )}
-                  <span>{step.label}</span>
-                  {state === "now" && progress.stage !== step.label ? (
-                    <span className="ml-auto truncate text-[11px] font-normal normal-case text-[var(--mc-ink-muted)]">
-                      {progress.stage}
-                    </span>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-        <div className="flex items-center justify-between gap-3 border-t-2 border-[var(--mc-15)] px-4 py-2.5">
-          <span className="text-xs text-[var(--mc-ink-muted)]">Every move is checked against the real wires.</span>
-          <button
-            type="button"
-            onClick={onCancel}
-            className={`h-7 border-2 border-[var(--mc-15)] px-3 font-mono text-[12px] font-black uppercase ${TOOL_FACE_OFF}`}
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// A browser preference, not part of the plan: two people sharing a setup
-// each keep their own habit.
-const ARRANGE_KEEP_BOARDS_KEY = "gtnh-factory-flow.arrange-keep-boards.v1";
-
-const PaintToolbar = memo(function PaintToolbar({
-  paintMode,
-  onPaintModeChange,
-  activeColorTag,
-  onColorSelect,
-  annotationTool,
-  onAnnotationToolChange,
-  onPlaceImage,
-  isDeleteMode,
-  onDeleteModeChange,
-  view,
-  onViewChange,
-  onAutoArrange,
-  folded,
-  openGroup,
-  onToggleGroup,
-  shiftedDown,
-}: {
-  paintMode?: FactoryNodeColorTag | null;
-  onPaintModeChange: (tag: FactoryNodeColorTag | null | undefined) => void;
-  activeColorTag: FactoryNodeColorTag;
-  onColorSelect: (tag: FactoryNodeColorTag) => void;
-  annotationTool?: BoardDrawTool;
-  onAnnotationToolChange: (tool: BoardDrawTool | undefined) => void;
-  onPlaceImage: (file: File) => Promise<void>;
-  isDeleteMode: boolean;
-  onDeleteModeChange: (enabled: boolean) => void;
-  /** The view menu rides this row's corner slot; see BoardViewMenu. */
-  view: BoardView;
-  onViewChange: (patch: Partial<BoardView>) => void;
-  /** Runs the arrange; the fold-out's setting rides along per press. */
-  onAutoArrange: (options: { keepBoards: boolean }) => void;
-  folded: boolean;
-  openGroup?: ToolGroupId;
-  onToggleGroup: (group: ToolGroupId | undefined) => void;
-  shiftedDown: boolean;
-}) {
-  const activeColor = GT_NODE_COLORS[activeColorTag];
-  // A plan board's markup is the sticky note (right-click the board): no box, zone, arrow, text or image tools.
-  const planMode = useFactoryStore((state) => state.project.planMode === true);
-  // Every fold-out on this row opens on CLICK (see useFoldoutDismiss). The
-  // draw tools live under ONE slot: the menu holds them all with their names;
-  // the face opens it, or cancels when a tool is armed.
-  const [isDrawMenuOpen, setDrawMenuOpen] = useState(false);
-  const drawRef = useRef<HTMLDivElement | null>(null);
-  const closeDrawMenu = useCallback(() => setDrawMenuOpen(false), []);
-  useFoldoutDismiss(isDrawMenuOpen, drawRef, closeDrawMenu);
-  // The view sheet's open state lives here so the whole row can lift its z
-  // while it is out, as it does for the draw menu.
-  const [isViewMenuOpen, setViewMenuOpen] = useState(false);
-  // The arrange setting, remembered per browser; the default dissolves every
-  // board.
-  const [keepBoards, setKeepBoards] = useState(() => {
-    try {
-      return localStorage.getItem(ARRANGE_KEEP_BOARDS_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
-  const onToggleKeepBoards = useCallback(() => {
-    setKeepBoards((was) => {
-      try {
-        localStorage.setItem(ARRANGE_KEEP_BOARDS_KEY, was ? "0" : "1");
-      } catch {
-        // Private windows without storage still get the toggle for the session.
-      }
-      return !was;
-    });
-  }, []);
-
-  // The bin, last on the right and on a plate of its own: it takes things
-  // OFF the board, so it stands past every tool that puts things on. Outside
-  // the fold group until the board is too narrow even for the folded row.
-  const binTray = (
-    <>
-      <ToolTray>
-        <button
-          type="button"
-          onClick={() => onDeleteModeChange(!isDeleteMode)}
-          data-help-anchor="paint"
-          className={[
-            "pointer-events-auto relative z-10 flex h-8 w-8 items-center justify-center border-2 border-[var(--mc-15)]",
-            isDeleteMode ? TOOL_FACE_ON : TOOL_FACE_OFF,
-          ].join(" ")}
-          title={isDeleteMode ? "Stop deleting" : "Delete tool"}
-          aria-label={isDeleteMode ? "Stop deleting" : "Delete tool"}
-        >
-          {/* The pressed face says "on"; the red icon still says what is armed. */}
-          <Trash2 className={isDeleteMode ? "h-4 w-4 text-red-500" : "h-4 w-4"} />
-        </button>
-      </ToolTray>
-    </>
-  );
-
-  // The pencil and the view options share the last plate before the bin;
-  // both fold under the trigger on a narrow board or a phone.
-  const viewTray = (
-    <>
-        <ToolTray helpAnchor="view">
-          {/* THE PENCIL: every way of marking the board in one drop-down (the
-              annotation tools, paint with its colours, an image). The key is
-              pressed while a tool or paint is armed, and a click cancels it. */}
-          <div ref={drawRef} className="relative flex items-start">
-            <div
-              className={[
-                "absolute right-0 top-[calc(100%+10px)] flex w-max flex-col gap-1 border-2 border-[var(--mc-15)] bg-[var(--mc-78)] p-1 shadow-[inset_2px_2px_0_var(--mc-100),inset_-2px_-2px_0_var(--mc-33)] transition-[opacity,transform] duration-100",
-                isDrawMenuOpen
-                  ? "pointer-events-auto translate-y-0 opacity-100"
-                  : "pointer-events-none -translate-y-1 opacity-0",
-              ].join(" ")}
-            >
-              {ANNOTATION_TOOLS.filter(({ kind }) => !planMode || kind === "board").map(({ kind, label, Icon }) => (
-                <button
-                  key={kind}
-                  type="button"
-                  onClick={() => {
-                    onAnnotationToolChange(kind);
-                    setDrawMenuOpen(false);
-                  }}
-                  aria-pressed={annotationTool === kind}
-                  className={[
-                    "flex items-center gap-2 border-2 p-1 pr-2 text-left",
-                    annotationTool === kind
-                      ? "border-white bg-[var(--mc-85)] text-[var(--mc-ink)] ring-2 ring-cyan-300"
-                      : "border-[var(--mc-15)] bg-[var(--mc-49)] text-white hover:bg-[var(--mc-61)]",
-                  ].join(" ")}
-                >
-                  <span className="flex h-7 w-7 items-center justify-center">
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <span className="whitespace-nowrap font-mono text-[11px] font-semibold">
-                    {label}
-                  </span>
-                </button>
-              ))}
-              <div className="my-0.5 border-t-2 border-[var(--mc-15)]" />
-              {/* Paint: the row arms the brush in the current colour; the
-                  swatches under it pick the colour AND arm it, the eraser
-                  arms erase. */}
-              <button
-                type="button"
-                onClick={() => {
-                  onPaintModeChange(paintMode !== undefined ? undefined : activeColorTag);
-                  setDrawMenuOpen(false);
-                }}
-                aria-pressed={paintMode !== undefined}
-                className={[
-                  "flex items-center gap-2 border-2 p-1 pr-2 text-left",
-                  paintMode !== undefined
-                    ? "border-white bg-[var(--mc-85)] text-[var(--mc-ink)] ring-2 ring-cyan-300"
-                    : "border-[var(--mc-15)] bg-[var(--mc-49)] text-white hover:bg-[var(--mc-61)]",
-                ].join(" ")}
-              >
-                <span className="flex h-7 w-7 items-center justify-center">
-                  {paintMode === null ? <X className="h-4 w-4" /> : <Paintbrush className="h-4 w-4" />}
-                </span>
-                <span className="whitespace-nowrap font-mono text-[11px] font-semibold">
-                  {paintMode === null ? "Erasing colours" : "Paint cards"}
-                </span>
-                <span
-                  aria-hidden
-                  className="ml-auto h-4 w-4 border-2 border-[var(--mc-15)] shadow-[inset_1px_1px_0_rgba(255,255,255,0.45),inset_-1px_-1px_0_rgba(0,0,0,0.45)]"
-                  style={{ backgroundColor: activeColor.swatch }}
-                />
-              </button>
-              <div className="grid grid-cols-9 gap-1 px-1 pb-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onPaintModeChange(null);
-                    setDrawMenuOpen(false);
-                  }}
-                  className={[
-                    "flex h-6 w-6 items-center justify-center border-2 bg-[var(--mc-49)] text-white shadow-[inset_1px_1px_0_var(--mc-85),inset_-1px_-1px_0_var(--mc-25)]",
-                    paintMode === null ? "border-white ring-2 ring-cyan-300" : "border-[var(--mc-15)]",
-                  ].join(" ")}
-                  title="Erase colours"
-                  aria-label="Erase colours"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-                {GT_NODE_COLOR_PALETTE.map((entry) => (
-                  <button
-                    key={entry.tag}
-                    type="button"
-                    onClick={() => {
-                      onColorSelect(entry.tag);
-                      onPaintModeChange(entry.tag);
-                      setDrawMenuOpen(false);
-                    }}
-                    className={[
-                      "h-6 w-6 border-2 shadow-[inset_1px_1px_0_rgba(255,255,255,0.45),inset_-1px_-1px_0_rgba(0,0,0,0.45)]",
-                      activeColorTag === entry.tag && paintMode !== null
-                        ? "border-white ring-2 ring-cyan-300"
-                        : "border-[var(--mc-15)]",
-                    ].join(" ")}
-                    style={{ backgroundColor: entry.color.swatch }}
-                    title={`Paint ${entry.tag}`}
-                    aria-label={`Paint ${entry.tag}`}
-                  />
-                ))}
-              </div>
-              {planMode ? null : (
-                <>
-                  <div className="my-0.5 border-t-2 border-[var(--mc-15)]" />
-                  <AddImageButton
-                    onPlaceImage={async (file) => {
-                      setDrawMenuOpen(false);
-                      await onPlaceImage(file);
-                    }}
-                  />
-                </>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (annotationTool !== undefined || paintMode !== undefined) {
-                  onAnnotationToolChange(undefined);
-                  onPaintModeChange(undefined);
-                  setDrawMenuOpen(false);
-                  return;
-                }
-                setDrawMenuOpen((was) => !was);
-              }}
-              aria-expanded={isDrawMenuOpen}
-              data-help-anchor="paint"
-              className={[
-                "pointer-events-auto relative z-10 flex h-8 w-8 items-center justify-center border-2 border-[var(--mc-15)]",
-                annotationTool !== undefined || paintMode !== undefined ? TOOL_FACE_ON : TOOL_FACE_OFF,
-              ].join(" ")}
-              title={annotationTool !== undefined || paintMode !== undefined ? "Stop" : "Markup"}
-              aria-label={annotationTool !== undefined || paintMode !== undefined ? "Stop marking up" : "Markup tools"}
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-          </div>
-              <BoardViewMenu
-            view={view}
-            onChange={onViewChange}
-            open={isViewMenuOpen}
-            onOpenChange={setViewMenuOpen}
-            arrange={{ keepBoards, onToggleKeepBoards, onArrange: onAutoArrange }}
-          />
-        </ToolTray>
-    </>
-  );
-
-
-  return (
-    <>
-    <div
-      data-board-toolbar
-      className={[
-        "nodrag pointer-events-none absolute right-[var(--toolbar-inset,0.75rem)] flex items-start gap-[0.4rem]",
-        shiftedDown ? "top-14" : "top-3",
-        // An open fold-out hangs below the row and can cross another toolbar,
-        // which at the same z and later in the DOM would paint over it and
-        // take its clicks. The row lifts while any of its fold-outs is out.
-        isDrawMenuOpen || isViewMenuOpen
-          ? "z-40"
-          : "z-20",
-      ].join(" ")}
-    >
-      <ToolGroup
-        id="paint"
-        folded={folded}
-        openGroup={openGroup}
-        onToggle={onToggleGroup}
-        icon={Pencil}
-        label="markup and view tools"
-        side="right"
-      >
-      {viewTray}
-      {binTray}
-      </ToolGroup>
-    </div>
-    </>
-  );
-});
-
 function ResourceEdgeComponent({
   id,
   sourceX,
@@ -8803,11 +6869,9 @@ function ResourceEdgeComponent({
   });
   const visualSource = visualSourceCandidates[0];
   const visualTarget = visualTargetCandidates[0];
-  // Ratio percentages use the ordinary triangles as their canvas controls,
-  // including in pulse mode. Other wires use dashes or arrows, never both.
+  // A wire uses dashes or arrows, never both.
   const showArrowHead =
-    (flowRate?.pulse !== true || (data?.ratio && hasEdgeDetail(detailLevel, EDGE_DETAIL_LABELS))) &&
-    (isHighlighted || hasEdgeDetail(detailLevel, EDGE_DETAIL_ARROWS));
+    flowRate?.pulse !== true && (isHighlighted || hasEdgeDetail(detailLevel, EDGE_DETAIL_ARROWS));
   // Every wire routes individually through the board-wide grid solve; its
   // lane sharing makes a fan-out ride as one ribbon. No rate labels: the port
   // chips carry the numbers.
@@ -8860,10 +6924,6 @@ function ResourceEdgeComponent({
         liveRoute.morphing ? undefined : routedEdge.hopSpans,
       )
     : [];
-  const ratioLabels = data?.ratio && hasEdgeDetail(detailLevel, EDGE_DETAIL_LABELS) ? labelRatioArrows(routeArrows, getRatioLabelsForEdge(id).flatMap((label) => {
-    const point = getPointAtPolylineRatio(liveRoute.points, label.ratio);
-    return point ? [{ ...label, point }] : [];
-  })) : [];
   // The dots the user has pinned, or the draft while one is mid-drag. Only
   // the DOT follows the pointer; the wire takes its real route on release.
   const activeWaypoints = draftWaypoints ?? data?.waypoints;
@@ -8998,11 +7058,6 @@ function ResourceEdgeComponent({
 
   return (
     <>
-      {ratioLabels.map((label) => (
-        <EdgeLabelRenderer key={label.key}>
-          <RatioWireLabelControl edgeId={id} label={label} shares={data?.ratio ?? {}} arrowFill={arrowFill} />
-        </EdgeLabelRenderer>
-      ))}
       {checklistMode && liveRoute.path ? (
         <ViewportPortal>
           {/* Only the invisible hit target clears port hit boxes. The visible
@@ -9092,36 +7147,6 @@ function ResourceEdgeComponent({
               stroke-dashoffset per edge repaints the whole board every frame. */}
         </>
       )}
-      {/* A wire going round a dead ring, breathing on the cards' clock. The
-          ONE animated path allowed on the edge layer: a ring is a handful of
-          wires, so the damage rect is the ring, not the board. Opacity only,
-          so nothing reroutes. */}
-      {data?.isDeadLoop ? (
-        <path
-          className="dead-loop-wire"
-          d={liveRoute.path}
-          fill="none"
-          stroke="#ff6b6b"
-          strokeWidth={coreStrokeWidth + 4}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ pointerEvents: "none" }}
-        />
-      ) : null}
-      {/* The clog lock's wires, same bargain in the clog family's blue: one
-          breathing overlay, opacity only, damage rect the size of the jam. */}
-      {data?.isClogLock ? (
-        <path
-          className="clog-lock-wire"
-          d={liveRoute.path}
-          fill="none"
-          stroke="#6fb2d6"
-          strokeWidth={coreStrokeWidth + 4}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ pointerEvents: "none" }}
-        />
-      ) : null}
       {/* A plan board's ring along this wire: lit in its tone, steady (clean.css `.cc-loop-wire`). */}
       {data?.planLoop ? (
         <path
@@ -9142,7 +7167,7 @@ function ResourceEdgeComponent({
             <polygon
               key={index}
               data-resource-edge-arrow={id}
-              points={ratioLabels.find((label) => label.arrowIndex === index)?.polygon ?? arrow}
+              points={arrow}
               fill={arrowFill}
               stroke={darkenHexColor(edgeColor, 0.6)}
               strokeWidth={isGlobalView ? 2.5 : 1.5}
@@ -9307,7 +7332,6 @@ function ResourceConnectionLine({
   toX,
   toY,
   fromPosition,
-  toPosition,
   connectionStatus,
 }: ConnectionLineComponentProps<BoardFlowNode>) {
   // The ghost overlay follows this exact point; see lastConnectionFlowPoint.
@@ -9317,40 +7341,13 @@ function ResourceConnectionLine({
   const snap = getConnectionSnap(toX, toY);
   const endX = snap?.point.x ?? toX;
   const endY = snap?.point.y ?? toY;
-  const endPosition = snap ? (snap.side === "input" ? Position.Left : Position.Right) : toPosition;
 
-  const [edgePath] = getSmoothStepPath({
-    sourceX: fromX,
-    sourceY: fromY,
-    sourcePosition: fromPosition,
-    targetX: endX,
-    targetY: endY,
-    targetPosition: endPosition,
-  });
   // What THIS release would do, told by the pipe. A snapped end will connect,
   // whatever React Flow thinks (it reports "valid" only on a handle). Off
   // every card the pipe is green-dashed when release spawns a drawer,
   // red-dashed when it does nothing. Over a refusing card it goes red,
   // agreeing with the card's own wash.
   const overSolidCard = !snap && isPointOverSolidCard(toX, toY);
-  // POOL MODE: nothing connects, so the line carries no verdict (the ghost
-  // and its reason card do). A faint neutral dashed thread still runs from
-  // the port, or the drag reads as broken.
-  if (useFactoryStore.getState().project.poolMode) {
-    return (
-      <g className="react-flow__connection">
-        <path
-          d={edgePath}
-          fill="none"
-          stroke="#c8ced8"
-          strokeWidth={3}
-          strokeLinecap="round"
-          strokeDasharray="6 8"
-          opacity={0.22}
-        />
-      </g>
-    );
-  }
   const verdict = snap
     ? "connect"
     : connectionStatus === "invalid" || overSolidCard
@@ -9358,73 +7355,20 @@ function ResourceConnectionLine({
       : voidDropWillSpawn
         ? "spawn"
         : "dead";
-  // Snapped is GREEN and solid with white marching dots toward the caught
-  // slot; a spawnable void is green dashed; refusals and dead voids are red.
   const deleting = verdict === "connect" && snapWillDeleteEdge;
   // A snap whose release would DELETE the existing wire draws no pipe at all:
   // nothing new happens, and the doomed wire's own flashing says it.
   if (deleting) {
     return <g className="react-flow__connection" />;
   }
-  // The plan-mode board draws the mod's line: 3 px, three orthogonal segments.
-  if (useFactoryStore.getState().project.planMode) {
-    return (
-      <CleanVerdictLine
-        from={{ x: fromX, y: fromY, position: fromPosition }}
-        to={{ x: endX, y: endY }}
-        pointer={{ x: toX, y: toY }}
-        verdict={verdict}
-      />
-    );
-  }
-  const color = verdict === "connect" ? "#22c55e" : verdict === "spawn" ? "#22c55e" : "#ef4444";
-  const dashed = verdict === "spawn" || verdict === "dead";
-
+  // The mod's line: 3 px, three orthogonal segments.
   return (
-    <g className="react-flow__connection">
-      <path
-        d={edgePath}
-        fill="none"
-        stroke="#052e36"
-        strokeWidth={9}
-        strokeLinecap="round"
-        opacity={0.75}
-      />
-      <path
-        d={edgePath}
-        fill="none"
-        stroke={color}
-        strokeWidth={5}
-        strokeLinecap="round"
-        strokeDasharray={dashed ? "10 8" : undefined}
-        opacity={0.98}
-        style={{ filter: `drop-shadow(0 0 5px ${color})` }}
-      />
-      {verdict === "connect" ? (
-        <path
-          className="connection-march"
-          d={edgePath}
-          fill="none"
-          stroke="#ffffff"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeDasharray="2 10"
-          opacity={0.9}
-        />
-      ) : null}
-      {/* A hollow end: release will make a drawer here. Solid otherwise. */}
-      <circle
-        cx={endX}
-        cy={endY}
-        r={6}
-        fill={verdict === "spawn" ? "none" : color}
-        stroke={verdict === "spawn" ? color : "#052e36"}
-        strokeWidth={2}
-      />
-      {/* Over the void, the HTML overlay (VoidDropGhost) carries the rest:
-          the drawer preview when release spawns one, the reason card when
-          it does nothing. The line only signals. */}
-    </g>
+    <CleanVerdictLine
+      from={{ x: fromX, y: fromY, position: fromPosition }}
+      to={{ x: endX, y: endY }}
+      pointer={{ x: toX, y: toY }}
+      verdict={verdict}
+    />
   );
 }
 
@@ -9502,10 +7446,7 @@ function VoidDropGhost() {
         paintDoomedEdge(doomed?.id);
       }
       lastSnapKeyRef.current = snapKey;
-      // Pool mode: the ghost shows everywhere, since nothing else can
-      // happen on release wherever the pointer is.
-      const poolMode = useFactoryStore.getState().project.poolMode === true;
-      const elsewhere = !poolMode && (snap || isPointOverSolidCard(point.x, point.y));
+      const elsewhere = snap || isPointOverSolidCard(point.x, point.y);
       ghost.style.display = elsewhere ? "none" : "";
       // Both cards sit CENTRED on the pointer: that is exactly where a
       // release puts the drawer.
@@ -9554,7 +7495,7 @@ function VoidDropGhost() {
                 opacity: 0.62,
               }}
             >
-              {useFactoryStore.getState().project.planMode === true && ghostStorage.kind !== "power" ? (<CleanDrawerFace storage={ghostStorage} role={voidDropGhostRole} />) : (<StorageTileFace storage={ghostStorage} role={voidDropGhostRole} />)}
+              <CleanDrawerFace storage={ghostStorage} role={voidDropGhostRole} />
             </div>
           </>
         ) : (
@@ -10106,8 +8047,6 @@ function getBestDirectEdgePoints({
   return undefined;
 }
 
-
-
 /**
  * The shape the router is about to draw between two cards, for a wire that
  * has no route yet: the arranger's own proxy path over the measured card
@@ -10172,8 +8111,6 @@ function offsetPointFromSide(point: { x: number; y: number }, side: Position, di
 function isVerticalSide(side: string) {
   return side === "top" || side === "bottom";
 }
-
-
 
 function compactPolylinePoints(points: Array<{ x: number; y: number } | undefined>) {
   const compacted: Array<{ x: number; y: number }> = [];
@@ -10378,31 +8315,6 @@ function collectHoppedRouteSegments(
   return segments;
 }
 
-// Shares and published routes are stable across camera frames. Cache the joint
-// label layout, then each edge follows its live wire using the chosen fraction.
-let ratioLabelInputs: { id: string; input?: number; output?: number }[] = [];
-let ratioLabelInputsKey = "";
-let ratioLabelLayoutKey = "";
-let ratioLabelLayout = new Map<string, RatioWireLabel[]>();
-function publishRatioLabelInputs(inputs: typeof ratioLabelInputs) {
-  const key = JSON.stringify(inputs);
-  if (key === ratioLabelInputsKey) return;
-  ratioLabelInputs = inputs;
-  ratioLabelInputsKey = key;
-}
-function getRatioLabelsForEdge(edgeId: string): RatioWireLabel[] {
-  const key = `${gridSolveSignature}|${ratioLabelInputsKey}`;
-  if (key !== ratioLabelLayoutKey) {
-    ratioLabelLayoutKey = key;
-    ratioLabelLayout = layoutRatioLabels(ratioLabelInputs.map((entry) => ({
-      id: entry.id,
-      points: getLastDirectEdgePoints(entry.id) ?? [],
-      input: entry.input === undefined ? undefined : formatRatioShare(entry.input),
-      output: entry.output === undefined ? undefined : formatRatioShare(entry.output),
-    })));
-  }
-  return ratioLabelLayout.get(edgeId) ?? [];
-}
 function getPointAtPolylineRatio(points: Array<{ x: number; y: number }>, ratio: number) {
   const segments = getPolylineSegments(points);
   const totalLength = segments.reduce((sum, segment) => sum + segment.length, 0);
@@ -12264,15 +10176,6 @@ function paintNodeDropFit(
   const selector = onlyUnpainted
     ? ".react-flow__node:not([data-drop-fit])"
     : ".react-flow__node";
-
-  // POOL MODE: nothing connects, so every card reads "none" (no wash), which
-  // also leaves the snap map empty so the pipe never jumps to a slot.
-  if (project.poolMode) {
-    for (const element of document.querySelectorAll<HTMLElement>(selector)) {
-      element.dataset.dropFit = "none";
-    }
-    return;
-  }
 
   for (const element of document.querySelectorAll<HTMLElement>(selector)) {
     const id = element.dataset.id;

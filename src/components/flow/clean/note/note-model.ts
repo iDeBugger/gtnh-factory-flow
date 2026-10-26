@@ -210,12 +210,9 @@ export function isStickyNote(annotation: Pick<FactoryAnnotation, "kind">): boole
   return annotation.kind === "text";
 }
 
-/** The annotations a board shows: every kind but pictures, which a plan board no longer supports (the data keeps them). */
-export function visibleAnnotations<T extends Pick<FactoryAnnotation, "kind">>(
-  annotations: readonly T[],
-  planMode: boolean,
-): T[] {
-  return planMode ? annotations.filter((annotation) => annotation.kind !== "image") : [...annotations];
+/** The annotations a board shows: every kind but pictures, which the board does not support (the data keeps them). */
+export function visibleAnnotations<T extends Pick<FactoryAnnotation, "kind">>(annotations: readonly T[]): T[] {
+  return annotations.filter((annotation) => annotation.kind !== "image");
 }
 
 /** A new note as the mod makes one: yellow, 180 by 120, at a board point, empty. */

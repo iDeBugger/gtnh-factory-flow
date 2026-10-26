@@ -9,9 +9,6 @@ vi.mock("./flow/FactoryFlow", () => ({ FactoryFlow: () => <div data-testid="boar
 vi.mock("./RecipeBrowser", () => ({
   RecipeBrowser: () => <aside data-testid="items" data-help-anchor="browser" />,
 }));
-vi.mock("./InspectorPanel", () => ({
-  InspectorPanel: () => <aside data-testid="inspector" />,
-}));
 vi.mock("./AppHeader", () => ({ AppHeader: () => null }));
 vi.mock("./PlanIdentityDrawer", () => ({ PlanIdentityDrawer: () => null }));
 vi.mock("./TabConflictNotice", () => ({ TabConflictNotice: () => null }));
@@ -29,13 +26,7 @@ import { DEFAULT_WORKSPACE_VIEW, readWorkspaceViewSnapshot, writeWorkspaceView }
 import { writeDeviceSettings } from "@/lib/device-settings";
 import { leaveWelcomeTab } from "@/lib/welcome/welcome-tab";
 import { useDesignStore } from "@/store/design-store";
-import { useFactoryStore } from "@/store/factory-store";
 import { resetLandingRefreshMemory } from "@/lib/datasets/refresh-project-recipes";
-
-function setProject(patch: { planMode?: boolean; poolMode?: boolean }) {
-  const project = useFactoryStore.getState().project;
-  useFactoryStore.setState({ project: { ...project, ...patch } });
-}
 
 function renderColumns() {
   return render(<ColumnWorkspace workspace={readWorkspaceViewSnapshot()} onLoadDatasetVersion={() => {}} />);
@@ -59,33 +50,21 @@ describe("workspace layout", () => {
     writeWorkspaceView({ ...DEFAULT_WORKSPACE_VIEW, leftPanelOpen: true, rightPanelOpen: true });
     leaveWelcomeTab();
     useDesignStore.setState({ isHydrated: true, activeDesignId: "d1" });
-    setProject({ planMode: false, poolMode: false });
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  it("keeps the classic layout on boards that are not in plan mode", () => {
-    const { container } = renderColumns();
-    expect(order(container)).toEqual(["items", "board", "inspector"]);
-    const main = container.querySelector("main")!;
-    expect(main.getAttribute("data-items-side")).toBe("left");
-    expect(main.style.gridTemplateColumns).toBe("256px minmax(0,1fr) 234px");
-  });
-
-  it("puts the overview left, the items right and no inspector in plan mode", () => {
-    setProject({ planMode: true });
+  it("puts the overview left and the items right", () => {
     const { container } = renderColumns();
     expect(order(container)).toEqual(["plan-overview", "board", "items"]);
-    expect(screen.queryByTestId("inspector")).toBeNull();
     const main = container.querySelector("main")!;
     expect(main.getAttribute("data-items-side")).toBe("right");
     expect(main.style.gridTemplateColumns).toBe("336px minmax(0,1fr) 256px");
   });
 
   it("puts the items left and the overview right when the settings say so, each strip folding to its own side", () => {
-    setProject({ planMode: true });
     act(() => writeDeviceSettings({ itemsLeft: true }));
     try {
       const { container } = renderColumns();
@@ -101,7 +80,6 @@ describe("workspace layout", () => {
   });
 
   it("folds the overview to a strip that survives a reload", () => {
-    setProject({ planMode: true });
     const first = renderColumns();
     act(() => writeRailView({ open: false }));
     first.unmount();
@@ -114,7 +92,6 @@ describe("workspace layout", () => {
   });
 
   it("folds the items to a 26px rail on the right, the overview's own strip", () => {
-    setProject({ planMode: true });
     act(() => writeWorkspaceView({ leftPanelOpen: false }));
     act(() => writeRailView({ open: false }));
     const { container } = renderColumns();
@@ -131,40 +108,22 @@ describe("workspace layout", () => {
     expect(readWorkspaceViewSnapshot().leftPanelOpen).toBe(true);
   });
 
-  it("keeps the classic columns for the Pool worksheet even in plan mode", () => {
-    setProject({ planMode: true, poolMode: true });
-    const { container } = renderColumns();
-    expect(container.querySelector("main")!.getAttribute("data-items-side")).toBe("left");
-    expect(screen.queryByTestId("plan-overview")).toBeNull();
-  });
-
   describe("compact", () => {
     function renderCompact() {
       return render(<CompactWorkspace workspace={readWorkspaceViewSnapshot()} onLoadDatasetVersion={() => {}} />);
     }
 
-    it("keeps items on the left and resources on the right on classic boards", () => {
+    it("puts the overview drawer left and the items right", () => {
       act(() => writeWorkspaceView({ leftPanelOpen: false, rightPanelOpen: false }));
-      const { container } = renderCompact();
-      expect(screen.getByRole("button", { name: "Show items" }).className).toContain("left-0");
-      expect(screen.getByRole("button", { name: "Show resources" }).className).toContain("right-0");
-      expect(container.querySelector("main")!.getAttribute("data-items-side")).toBe("left");
-    });
-
-    it("swaps the drawers in plan mode: overview left, items right", () => {
-      act(() => writeWorkspaceView({ leftPanelOpen: false, rightPanelOpen: false }));
-      setProject({ planMode: true });
-      const { container } = renderCompact();
+        const { container } = renderCompact();
       expect(screen.getByRole("button", { name: "Show overview" }).className).toContain("left-0");
       expect(screen.getByRole("button", { name: "Show items" }).className).toContain("right-0");
       expect(container.querySelector("main")!.getAttribute("data-items-side")).toBe("right");
-      expect(screen.queryByRole("button", { name: "Show resources" })).toBeNull();
     });
 
     it("opening one drawer closes the other", () => {
       act(() => writeWorkspaceView({ leftPanelOpen: false, rightPanelOpen: false }));
-      setProject({ planMode: true });
-      renderCompact();
+        renderCompact();
       fireEvent.click(screen.getByRole("button", { name: "Show overview" }));
       expect(readWorkspaceViewSnapshot()).toMatchObject({ rightPanelOpen: true, leftPanelOpen: false });
       fireEvent.click(screen.getByRole("button", { name: "Show items" }));

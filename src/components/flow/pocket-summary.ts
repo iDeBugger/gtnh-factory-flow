@@ -1,5 +1,4 @@
 import { BOARD_GRID } from "@/lib/board-grid";
-import { getNodeMachineBuildCount } from "@/lib/model/passive-production";
 import { makeResourceKey } from "@/lib/model/resources";
 import type {
   FactoryPocket,
@@ -36,29 +35,6 @@ export interface PocketCrossing {
 }
 
 const RATE_EPSILON = 1e-6;
-
-export interface PocketSummary {
-  /**
-   * What the contents ASK FOR that nothing inside makes: the board read as
-   * a little factory, wires ignored. Red, like the plan's own Inputs.
-   */
-  needs: PocketCrossing[];
-  /**
-   * What the contents MAKE that nothing inside drinks. Green, like the
-   * plan's own Outputs.
-   */
-  offers: PocketCrossing[];
-  /** Resources arriving from outside on a wire, busiest first. */
-  incoming: PocketCrossing[];
-  /** Resources leaving for outside on a wire, busiest first. */
-  outgoing: PocketCrossing[];
-  /** Machines inside, nested boards included. */
-  machineCount: number;
-  /** Cards inside, nested boards included. */
-  memberCount: number;
-  /** What those machines are drawing at the speed they are running. */
-  euPerTick: number;
-}
 
 /*
  * No cap: a board with forty crossings draws forty lines. A summary that
@@ -262,85 +238,6 @@ function computeBoardBalance(
   return { needs: sortCrossings(needs), offers: sortCrossings(offers) };
 }
 
-export function computePocketSummaries(
-  project: FactoryProject,
-  pockets: FactoryPocket[],
-  result?: ThroughputResult,
-): Map<string, PocketSummary> {
-  const summaries = new Map<string, PocketSummary>();
-  if (pockets.length === 0) {
-    return summaries;
-  }
-
-  const icons = buildResourceIconLookup(project);
-  const recipesById = new Map(project.recipes.map((recipe) => [recipe.id, recipe]));
-
-  for (const pocket of pockets) {
-    const memberIds = pocketMemberIds(project, pocket.id);
-    const incoming = new Map<string, PocketCrossing>();
-    const outgoing = new Map<string, PocketCrossing>();
-
-    for (const edge of project.edges) {
-      const sourceInside = memberIds.has(edge.source);
-      const targetInside = memberIds.has(edge.target);
-      if (sourceInside === targetInside) {
-        continue;
-      }
-      const side = targetInside ? incoming : outgoing;
-      const key = `${edge.resourceKind}:${edge.resourceId}`;
-      // Several wires carrying one resource across one border are ONE line
-      // on the card, exactly as they are one drawn wire on the board.
-      const existing = side.get(key);
-      const rate = result?.edges[edge.id]?.transferredPerSecond ?? 0;
-      if (existing) {
-        existing.ratePerSecond += rate;
-        existing.wireCount += 1;
-        continue;
-      }
-      const icon = icons.get(key);
-      side.set(key, {
-        key,
-        kind: edge.resourceKind,
-        resourceId: edge.resourceId,
-        displayName: icon?.displayName ?? edge.label,
-        iconPath: icon?.iconPath,
-        iconAtlas: icon?.iconAtlas,
-        dominantColor: icon?.dominantColor,
-        ratePerSecond: rate,
-        wireCount: 1,
-      });
-    }
-
-    let machineCount = 0;
-    let euPerTick = 0;
-    for (const node of project.nodes) {
-      if (!memberIds.has(node.id)) {
-        continue;
-      }
-      machineCount += getNodeMachineBuildCount(recipesById.get(node.recipeId), node);
-      const nodeResult = result?.nodes[node.id];
-      if (nodeResult) {
-        // Solver figures are FULL SPEED; what a board is drawing is what its
-        // machines are actually running at.
-        euPerTick += nodeResult.euT * Math.min(Math.max(nodeResult.utilization ?? 0, 0), 1);
-      }
-    }
-
-    const balance = computeBoardBalance(project, memberIds, icons, result);
-    summaries.set(pocket.id, {
-      needs: balance.needs,
-      offers: balance.offers,
-      incoming: sortCrossings(incoming),
-      outgoing: sortCrossings(outgoing),
-      machineCount,
-      memberCount: memberIds.size,
-      euPerTick,
-    });
-  }
-
-  return summaries;
-}
-
 /** Busiest first, then by name, so the card's order is stable and useful. */
 function sortCrossings(crossings: Map<string, PocketCrossing>): PocketCrossing[] {
   return [...crossings.values()].sort((left, right) => {
@@ -358,30 +255,3 @@ type ResourceIconMeta = Pick<
   "displayName" | "iconPath" | "iconAtlas" | "dominantColor"
 >;
 
-function buildResourceIconLookup(project: FactoryProject): Map<string, ResourceIconMeta> {
-  const icons = new Map<string, ResourceIconMeta>();
-  const add = (resource: Pick<ResourceAmount, "kind" | "id"> & ResourceIconMeta) => {
-    const key = `${resource.kind}:${resource.id}`;
-    const existing = icons.get(key);
-    if (!existing || (!existing.iconPath && resource.iconPath)) {
-      icons.set(key, resource);
-    }
-  };
-
-  for (const recipe of project.recipes) {
-    for (const resource of [...recipe.inputs, ...recipe.outputs]) {
-      add(resource);
-    }
-  }
-  for (const storage of project.storages ?? []) {
-    add({
-      kind: storage.kind,
-      id: storage.resourceId,
-      displayName: storage.displayName,
-      iconPath: storage.iconPath,
-      iconAtlas: storage.iconAtlas,
-      dominantColor: storage.dominantColor,
-    });
-  }
-  return icons;
-}

@@ -73,7 +73,6 @@ export function BoardContextMenu({
   const group = useFactoryStore((state) =>
     target.kind === "group" ? state.project.pockets?.find((entry) => entry.id === target.id) : undefined,
   );
-  const planMode = useFactoryStore((state) => state.project.planMode === true);
   const datasetManifestUrl = useFactoryStore((state) => state.datasetManifestUrl);
   const datasetManifest = useFactoryStore((state) => state.datasetManifest);
   const selectedDatasetVersionId = useFactoryStore((state) => state.selectedDatasetVersionId);
@@ -192,7 +191,7 @@ export function BoardContextMenu({
           }}
         />
       ) : null}
-      {target.kind === "pane" && planMode ? (
+      {target.kind === "pane" ? (
         <>
           <MenuRow label="Add sticky note" onClick={run(() => addStickyNoteAt(target.flow))} />
           <MenuRow label="Add box" onClick={run(() => addBoxAt(target.flow))} />
