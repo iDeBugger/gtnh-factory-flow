@@ -34,19 +34,20 @@ class SingleConnectionAdapter extends PostgresAdapter {
  * whatever `connect` returns.
  */
 function fakeDialect(
-  answer: () => Error | undefined,
+  answer: (sqlText: string) => Error | undefined,
   options: { connect?: () => Error | undefined; singleConnection?: boolean } = {},
 ) {
   const calls = { acquired: 0, queries: 0 };
   const connection: DatabaseConnection = {
-    async executeQuery<R>(): Promise<QueryResult<R>> {
+    async executeQuery<R>(query: CompiledQuery): Promise<QueryResult<R>> {
       calls.queries += 1;
-      const error = answer();
+      const error = answer(query.sql);
       if (error) throw error;
       return { rows: [] };
     },
-    async *streamQuery() {
-      throw new Error("no streaming");
+    async *streamQuery<R>(): AsyncIterableIterator<QueryResult<R>> {
+      calls.queries += 1;
+      yield { rows: [] };
     },
   };
   const driver: Driver = {
@@ -60,6 +61,9 @@ function fakeDialect(
     beginTransaction: async () => undefined,
     commitTransaction: async () => undefined,
     rollbackTransaction: async () => undefined,
+    savepoint: async (connection, name) => {
+      await connection.executeQuery(CompiledQuery.raw(`savepoint ${name}`));
+    },
     releaseConnection: async () => undefined,
     destroy: async () => undefined,
   };
@@ -178,6 +182,20 @@ describe("the direct client's guard", () => {
     await expect(ping(db)).rejects.toBeInstanceOf(DatabaseDownError);
     expect(dbBreakerOpen()).toBe(true);
     failing = false;
+  });
+
+  it("a savepoint goes through the guard; a stream is refused", async () => {
+    const { calls, db } = fakeDialect((sqlText) =>
+      sqlText.startsWith("savepoint") ? withCode("ECONNRESET") : undefined,
+    );
+    const tx = await db.startTransaction().execute();
+    await expect(tx.savepoint("a").execute()).rejects.toBeInstanceOf(DatabaseDownError);
+    await tx.rollback().execute();
+
+    const queries = calls.queries;
+    const stream = db.selectFrom("community_users").select("id").stream();
+    await expect(stream.next()).rejects.toThrow(/stream/);
+    expect(calls.queries).toBe(queries);
   });
 
   it("passes a refused query on as it is, and never counts it", async () => {

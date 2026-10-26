@@ -81,12 +81,12 @@ class GuardedConnection implements DatabaseConnection {
     return result;
   }
 
-  streamQuery<R>(
-    compiledQuery: CompiledQuery,
-    chunkSize: number,
-    options?: Parameters<DatabaseConnection["streamQuery"]>[2],
-  ): AsyncIterableIterator<QueryResult<R>> {
-    return this.inner.streamQuery<R>(compiledQuery, chunkSize, options);
+  /**
+   * Refused: a stream yields rows over time, so neither the breaker's count
+   * nor the down mapping could follow it, and nothing here reads one.
+   */
+  async *streamQuery<R>(): AsyncIterableIterator<QueryResult<R>> {
+    throw new Error("The database client does not stream results: read a page at a time.");
   }
 }
 
@@ -178,7 +178,14 @@ class GuardedDriver implements Driver {
     if (!this.inner.savepoint) {
       throw new Error("This database driver has no savepoints.");
     }
-    await this.inner.savepoint(unwrap(connection), savepointName, compileQuery);
+    if (connection instanceof FailedConnection) {
+      throw connection.error;
+    }
+    try {
+      await this.inner.savepoint(unwrap(connection), savepointName, compileQuery);
+    } catch (error) {
+      throw settle(error);
+    }
   }
 
   async rollbackToSavepoint(
@@ -189,7 +196,14 @@ class GuardedDriver implements Driver {
     if (!this.inner.rollbackToSavepoint) {
       throw new Error("This database driver has no savepoints.");
     }
-    await this.inner.rollbackToSavepoint(unwrap(connection), savepointName, compileQuery);
+    if (connection instanceof FailedConnection) {
+      throw connection.error;
+    }
+    try {
+      await this.inner.rollbackToSavepoint(unwrap(connection), savepointName, compileQuery);
+    } catch (error) {
+      throw settle(error);
+    }
   }
 
   async releaseSavepoint(
@@ -200,7 +214,14 @@ class GuardedDriver implements Driver {
     if (!this.inner.releaseSavepoint) {
       throw new Error("This database driver has no savepoints.");
     }
-    await this.inner.releaseSavepoint(unwrap(connection), savepointName, compileQuery);
+    if (connection instanceof FailedConnection) {
+      throw connection.error;
+    }
+    try {
+      await this.inner.releaseSavepoint(unwrap(connection), savepointName, compileQuery);
+    } catch (error) {
+      throw settle(error);
+    }
   }
 
   async releaseConnection(
