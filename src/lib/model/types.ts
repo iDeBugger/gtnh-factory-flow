@@ -849,24 +849,9 @@ export interface FuelProfile {
 export interface PlanViewState {
   canvasPattern?: string;
   canvasTheme?: string;
-  /** Historical: older plans carry it, nothing reads it. */
-  lineHeatMode?: boolean;
-  /** Historical: older plans carry it, nothing reads it. */
-  lineLabelsMode?: boolean;
-  fixedEdgeWidth?: boolean;
-  linePulseMode?: boolean;
-  calmMode?: boolean;
-  /** Historical: older plans carry it, nothing applies it. The smart view is
-   * personal, and opening a setup always starts on the identity view. */
-  glanceMode?: string;
   rateUnit?: "tick" | "second" | "minute" | "hour" | "eu";
   leftPanelOpen?: boolean;
   rightPanelOpen?: boolean;
-  showHiddenResources?: boolean;
-  favouritesOnly?: boolean;
-  trendsOpen?: boolean;
-  hiddenResourceKeys?: string[];
-  favouriteResourceKeys?: string[];
 }
 
 /**

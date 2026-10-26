@@ -13,18 +13,10 @@ import { parseFactoryProjectJson, serializeFactoryProject } from "@/lib/import-e
  */
 const VIEW: PlanViewState = {
   canvasPattern: "lines",
-  lineHeatMode: true,
-  linePulseMode: false,
-  calmMode: true,
-  glanceMode: "status",
+  canvasTheme: "charcoal",
   rateUnit: "hour",
   leftPanelOpen: false,
   rightPanelOpen: true,
-  showHiddenResources: true,
-  favouritesOnly: false,
-  trendsOpen: false,
-  hiddenResourceKeys: ["item:cobblestone"],
-  favouriteResourceKeys: ["item:iron_ingot", "fluid:water"],
 };
 
 function project(view?: PlanViewState): FactoryProject {
@@ -86,7 +78,7 @@ describe("a shared plan's view state", () => {
   });
 
   it("keeps a partial view rather than rejecting the plan", () => {
-    const partial: PlanViewState = { rateUnit: "minute", favouriteResourceKeys: ["item:tin"] };
+    const partial: PlanViewState = { rateUnit: "minute", leftPanelOpen: true };
     const restored = parseFactoryProjectJson(serializeFactoryProject(project(partial)));
 
     expect(restored.view).toEqual(partial);

@@ -2882,10 +2882,7 @@ export function FactoryFlow() {
       flowHeatById.set(edge.id, heat);
       // Widths come off the lane-fraction menu: a full lane (16px) at the
       // hottest, a sliver at the coldest.
-      publishedEdgeStrokeWidths.set(
-        edge.id,
-        boardView.fixedEdgeWidth ? FLOW_MODE_MIN_WIDTH : laneWidthForHeat(heat),
-      );
+      publishedEdgeStrokeWidths.set(edge.id, laneWidthForHeat(heat));
     }
 
     // Prune ghost routes synchronously (the pruneNodeDataCaches effect runs
@@ -3149,7 +3146,7 @@ export function FactoryFlow() {
           // speed-view stroke at the point of use (it knows the LOD step).
           stroke: edgeColor,
           strokeOpacity: 0.95,
-          strokeWidth: boardView.fixedEdgeWidth ? FLOW_MODE_MIN_WIDTH : laneWidthForHeat(flowHeat),
+          strokeWidth: laneWidthForHeat(flowHeat),
         },
       })];
     });
@@ -3175,7 +3172,6 @@ export function FactoryFlow() {
     );
   }, [
     activeFlowResourceKey,
-    boardView.fixedEdgeWidth,
     anyLineMode,
     speedColorMode,
     layoutVersion,

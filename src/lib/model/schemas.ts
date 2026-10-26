@@ -615,19 +615,9 @@ export const fuelProfileSchema = z
 export const planViewStateSchema = z.object({
   canvasPattern: z.string().optional(),
   canvasTheme: z.string().optional(),
-  lineHeatMode: z.boolean().optional(),
-  fixedEdgeWidth: z.boolean().optional(),
-  linePulseMode: z.boolean().optional(),
-  calmMode: z.boolean().optional(),
-  glanceMode: z.string().optional(),
   rateUnit: z.enum(["tick", "second", "minute", "hour", "eu"]).optional(),
   leftPanelOpen: z.boolean().optional(),
   rightPanelOpen: z.boolean().optional(),
-  showHiddenResources: z.boolean().optional(),
-  favouritesOnly: z.boolean().optional(),
-  trendsOpen: z.boolean().optional(),
-  hiddenResourceKeys: z.array(z.string()).optional(),
-  favouriteResourceKeys: z.array(z.string()).optional(),
 });
 
 /** The task board's bounds: what one task, checklist line or comment may hold. */

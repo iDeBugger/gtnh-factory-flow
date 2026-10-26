@@ -94,12 +94,13 @@ describe("compact viewport", () => {
 
     const { applyPlanView } = await import("./plan-view");
     const { readWorkspaceViewSnapshot } = await import("./workspace-view");
-    applyPlanView({ leftPanelOpen: true, rightPanelOpen: true, favouritesOnly: true });
+    const { getActiveRateUnit } = await import("./model/rate-unit");
+    applyPlanView({ leftPanelOpen: true, rightPanelOpen: true, rateUnit: "hour" });
 
     const workspace = readWorkspaceViewSnapshot();
     expect(workspace.leftPanelOpen).toBe(false);
     expect(workspace.rightPanelOpen).toBe(false);
     // Everything else the plan carries still lands.
-    expect(workspace.favouritesOnly).toBe(true);
+    expect(getActiveRateUnit()).toBe("hour");
   });
 });

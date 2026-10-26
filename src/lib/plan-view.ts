@@ -17,8 +17,8 @@ import { useFactoryStore } from "@/store/factory-store";
 /**
  * Reading and restoring the workspace arrangement a shared setup carries.
  *
- * Three separate homes feed this: the board's own view settings, the resource
- * panel's marks and toggles, and the board-wide rate unit. Gathering them in
+ * Three separate homes feed this: the board's own view settings, the side
+ * columns, and the board-wide rate unit. Gathering them in
  * one place means the share dialog and the open-a-setup path each deal with a
  * single object rather than knowing where each setting lives.
  */
@@ -31,19 +31,9 @@ export function capturePlanView(): PlanViewState {
   return {
     canvasPattern: board.canvasPattern,
     canvasTheme: board.canvasTheme,
-    fixedEdgeWidth: board.fixedEdgeWidth,
-    linePulseMode: board.linePulseMode,
-    // The smart view (glanceMode) is deliberately NOT captured: it is a
-    // personal reading of the board, and a saved setup always opens on the
-    // default identity view.
     rateUnit: getActiveRateUnit(),
     leftPanelOpen: workspace.leftPanelOpen,
     rightPanelOpen: workspace.rightPanelOpen,
-    showHiddenResources: workspace.showHiddenResources,
-    favouritesOnly: workspace.favouritesOnly,
-    trendsOpen: workspace.trendsOpen,
-    hiddenResourceKeys: workspace.hiddenResourceKeys,
-    favouriteResourceKeys: workspace.favouriteResourceKeys,
   };
 }
 
@@ -51,11 +41,11 @@ export function capturePlanView(): PlanViewState {
  * How much of a saved arrangement to put back.
  *
  * `all` is someone OPENING a shared setup: they asked to see it the way its
- * author left it, columns and resource marks included.
+ * author left it, columns included.
  *
  * `board` is switching between your own tabs. The board's own look belongs to
- * the plan, but the side COLUMNS and the hidden/starred resource marks belong
- * to the person, so a tab switch leaves them alone.
+ * the plan, but the side COLUMNS belong to the person, so a tab switch leaves
+ * them alone.
  */
 export type PlanViewScope = "all" | "board";
 
@@ -91,71 +81,36 @@ export function applyPlanView(
  * fields leave the viewer's own setting alone.
  */
 function applyViewSettings(view: PlanViewState | undefined, scope: PlanViewScope): void {
-  // The smart view is never taken from a plan, even one that recorded it.
-  // Opening a setup lands on the default identity view; switching your own
-  // tabs leaves your choice alone.
-  if (scope === "all") {
-    writeBoardView({ glanceMode: "identity" });
-  }
   if (!view) {
     return;
   }
 
-  const flag = (value: boolean | undefined) => (typeof value === "boolean" ? { value } : undefined);
   const boardPatch: Parameters<typeof writeBoardView>[0] = {};
-
-  if (typeof view.fixedEdgeWidth === "boolean") boardPatch.fixedEdgeWidth = view.fixedEdgeWidth;
   if (view.canvasPattern && CANVAS_PATTERNS.includes(view.canvasPattern as CanvasPattern)) {
     boardPatch.canvasPattern = view.canvasPattern as CanvasPattern;
   }
   if (isCanvasThemeId(view.canvasTheme)) {
     boardPatch.canvasTheme = view.canvasTheme;
   }
-  // Deliberately NOT applied from a plan: `glanceMode` (see the reset above),
-  // `lineHeatMode`, `linePulseMode` and `lineLabelsMode` (retired features
-  // that would arrive with no control to turn them off), and `calmMode` (session-only: a stored value would strand the
-  // viewer in softened colours with no control to turn it off).
   if (Object.keys(boardPatch).length > 0) {
     writeBoardView(boardPatch);
   }
 
-  if (scope === "board") {
-    // Everything below here is the workspace around the board rather than the
-    // board itself, and a tab switch leaves it alone. See PlanViewScope.
-    if (view.rateUnit) {
-      useFactoryStore.getState().setRateUnit(view.rateUnit);
+  if (scope === "all") {
+    // The columns are the workspace around the board rather than the board itself, and a tab switch leaves them
+    // alone (see PlanViewScope). On compact windows the columns are drawers over the board, so the author's open
+    // columns would bury the board; they are skipped there.
+    const workspacePatch: Parameters<typeof writeWorkspaceView>[0] = {};
+    if (!isCompactViewport()) {
+      for (const key of ["leftPanelOpen", "rightPanelOpen"] as const) {
+        if (typeof view[key] === "boolean") {
+          workspacePatch[key] = view[key];
+        }
+      }
     }
-    return;
-  }
-
-  const workspacePatch: Parameters<typeof writeWorkspaceView>[0] = {};
-  // On compact windows the columns are drawers over the board, so the
-  // author's open columns would bury the board; skip them there.
-  const panelKeys = isCompactViewport() ? [] : (["leftPanelOpen", "rightPanelOpen"] as const);
-  for (const key of [
-    ...panelKeys,
-    "showHiddenResources",
-    "favouritesOnly",
-    "trendsOpen",
-  ] as const) {
-    const set = flag(view[key]);
-    if (set) {
-      workspacePatch[key] = set.value;
+    if (Object.keys(workspacePatch).length > 0) {
+      writeWorkspaceView(workspacePatch);
     }
-  }
-  if (view.favouriteResourceKeys) {
-    workspacePatch.favouriteResourceKeys = [...view.favouriteResourceKeys];
-  }
-  if (view.hiddenResourceKeys) {
-    // Starred always wins over hidden (the rule the marks are written under),
-    // so a key in both cannot reach a state the UI has no button for.
-    const starred = new Set(workspacePatch.favouriteResourceKeys ?? []);
-    workspacePatch.hiddenResourceKeys = view.hiddenResourceKeys.filter(
-      (key) => !starred.has(key),
-    );
-  }
-  if (Object.keys(workspacePatch).length > 0) {
-    writeWorkspaceView(workspacePatch);
   }
 
   if (view.rateUnit) {
