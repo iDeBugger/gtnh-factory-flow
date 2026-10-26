@@ -15,7 +15,7 @@ import { makeActorKey, makeVoterKey } from "../auth/keys";
 import {
   attachMyVotes,
   parseEntryIcon,
-  type PLAN_SUMMARY_COLUMNS,
+  PLAN_SUMMARY_COLUMNS,
   readPlanVotesByVoter,
   rowToPlanSummary,
   type PlanRow,
@@ -119,25 +119,31 @@ export interface PlanLinkRow {
 }
 
 /**
+ * The column lists a by-score read may ask for, by name: a closed set, so a
+ * caller cannot pass a list whose rows do not match the type it gets back.
+ */
+const BY_SCORE_COLUMNS = {
+  summary: PLAN_SUMMARY_COLUMNS,
+  links: "id,created_at,updated_at",
+} as const;
+
+/** The rows each by-score column list reads. */
+interface ByScoreRows {
+  summary: PlanRow;
+  links: PlanLinkRow;
+}
+
+/**
  * The published posts, best score first, up to `limit`: the posts the
- * sitemap and llms.txt name, pages a stranger can open. Throws when the
+ * sitemap and llms.txt name, pages a stranger can open. `summary` reads a
+ * post's listing columns, `links` only its id and dates. Throws when the
  * database does not answer; both callers then list no post.
  */
-export function publicPlansByScore(
+export function publicPlansByScore<K extends keyof ByScoreRows>(
   limit: number,
-  columns: typeof PLAN_SUMMARY_COLUMNS,
-): Promise<PlanRow[]>;
-export function publicPlansByScore(
-  limit: number,
-  columns: "id,created_at,updated_at",
-): Promise<PlanLinkRow[]>;
-export function publicPlansByScore(
-  limit: number,
-  columns: plans.PublicByScoreColumns,
-): Promise<PlanRow[] | PlanLinkRow[]> {
-  return plans.publicByScore<PlanRow | PlanLinkRow>(limit, columns) as Promise<
-    PlanRow[] | PlanLinkRow[]
-  >;
+  columns: K,
+): Promise<ByScoreRows[K][]> {
+  return plans.publicByScore<ByScoreRows[K]>(limit, BY_SCORE_COLUMNS[columns]);
 }
 
 /**

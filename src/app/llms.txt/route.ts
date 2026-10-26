@@ -1,5 +1,4 @@
 import { siteUrl } from "@/lib/site-url";
-import { PLAN_SUMMARY_COLUMNS } from "@/lib/server/community-rows";
 import { publicPlansByScore } from "@/lib/server/services/community-plans";
 import { isDatabaseConfigured } from "@/lib/server/services/config";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
@@ -20,7 +19,7 @@ async function topPlans(base: string): Promise<string[]> {
     return [];
   }
   try {
-    const rows = await publicPlansByScore(10, PLAN_SUMMARY_COLUMNS);
+    const rows = await publicPlansByScore(10, "summary");
     // A name and a description are player text: one line each, with no markdown of their own.
     return rows.map(
       (row) =>

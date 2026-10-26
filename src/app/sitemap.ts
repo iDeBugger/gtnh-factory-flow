@@ -26,7 +26,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   try {
-    const rows = await publicPlansByScore(1000, "id,created_at,updated_at");
+    const rows = await publicPlansByScore(1000, "links");
     for (const row of rows) {
       entries.push({
         url: `${base}/?plan=${encodeURIComponent(row.id)}`,
