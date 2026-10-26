@@ -100,7 +100,7 @@ export type LeaseOutcome =
   /** The design is there, but its lease is no longer this room's. */
   | "lost";
 
-/** An icon as the column takes it: SQL null when there is none, as PostgREST wrote it. */
+/** An icon as the column takes it: SQL null when there is none, never a jsonb null. */
 const iconParam = (icon: unknown) => (icon === null || icon === undefined ? null : json(icon));
 
 /** The owner's designs, tombstones included, newest edit first. */

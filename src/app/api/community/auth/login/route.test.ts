@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { useTestDb } from "@/test-support/test-db";
 import { forgetSessionUsers } from "@/lib/server/auth/sessions";
-import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
+import { resetDbBreaker } from "@/lib/server/db";
 import { hashPassword } from "@/lib/server/auth/passwords";
 import { POST } from "./route";
 
@@ -12,16 +12,16 @@ import { POST } from "./route";
  * minutes, and a burst is counted one by one.
  */
 
-useTestDb();
+const testDb = useTestDb();
 
 const LOCKED = { error: "Too many attempts for this account. Try again in 15 minutes." };
 const WRONG = { error: "Wrong username or password." };
 
 async function makeUser(username: string, password: string) {
-  const { error } = await getCommunityDb()
-    .from("community_users")
-    .insert({ username, password_hash: await hashPassword(password) });
-  expect(error).toBeNull();
+  await testDb()
+    .db.insertInto("community_users")
+    .values({ username, password_hash: await hashPassword(password) })
+    .execute();
 }
 
 function signIn(username: string, password: string, address: string): Promise<Response> {

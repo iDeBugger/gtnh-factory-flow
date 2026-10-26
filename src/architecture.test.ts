@@ -29,7 +29,7 @@ const MAX_ALLOWED: Record<string, number> = {
   "1": 11,
   "2": 1,
   "4": 1,
-  "5": 1,
+  "5": 0,
   "6": 1,
   "7": 4,
   "8": 48,
@@ -219,18 +219,12 @@ const isUiOrStore = (file: string): boolean => /^src\/(components|store)\//.test
 /** What only repositories may hold: the database client and its SQL. */
 const isDatabaseLayer = (file: string): boolean => /^src\/lib\/server\/(db|repos)\//.test(file);
 
-/**
- * The PostgREST stand-in for tests and dev: a database of its own, which
- * answers PostgREST requests with SQL. It goes with the PostgREST client.
- */
-const isStandIn = (file: string): boolean => file.startsWith("src/lib/server/local-db/");
-
 /** The one module whose SQL is text it reads from the repository: the migrations. */
 const MIGRATIONS_FILE = "src/lib/server/db/migrations.ts";
 
 /** The packages and modules that open a database connection. */
-const CLIENT_PACKAGES = /^pkg:(@supabase\/postgrest-js|kysely|pg)(\/|$)/;
-const CLIENT_MODULES = new Set(["src/lib/server/db/client.ts", "src/lib/server/db/rest.ts"]);
+const CLIENT_PACKAGES = /^pkg:(kysely|pg)(\/|$)/;
+const CLIENT_MODULES = new Set(["src/lib/server/db/client.ts"]);
 
 /**
  * What a service may import from lib/server: other services, repositories,
@@ -239,7 +233,7 @@ const CLIENT_MODULES = new Set(["src/lib/server/db/client.ts", "src/lib/server/d
  * the query-free helpers the services share with routes and repositories
  * (row shapes and icons, library rows and stamps, the lease clock, blueprint
  * payloads, the plan list cache, the plan solver, the file store). Never
- * the HTTP plumbing, the stand-in or the clients.
+ * the HTTP plumbing or the client.
  */
 const isServiceTarget = (file: string): boolean =>
   /^src\/lib\/server\/(services|repos|auth|limits)\//.test(file) ||
@@ -268,7 +262,7 @@ function isImpurePackage(name: string): boolean {
     name.startsWith("node:") ||
     NODE_BUILTINS.has(name) ||
     /^(react|react-dom|zustand|ws|pg|kysely|next)(\/|$)/.test(name) ||
-    /^(@xyflow|@supabase)\//.test(name)
+    /^@xyflow\//.test(name)
   );
 }
 
@@ -324,7 +318,7 @@ const RULES: Record<string, (edge: Edge) => boolean> = {
   "7": ({ from, to }) => from.startsWith("src/store/") && to.startsWith("src/components/"),
   // 8. Non-UI lib never imports the UI or the stores.
   "8": ({ from, to }) => from.startsWith("src/lib/") && !isServer(from) && isUiOrStore(to),
-  // 9. Only the data layer loads a database client (kysely, pg, postgrest-js, db/client, db/rest).
+  // 9. Only the data layer loads a database client (kysely, pg, db/client).
   //    tools/ is out of scope: its scripts (the dev database server, the type generator, the
   //    migration runner) open a database themselves and answer no request.
   "9": ({ from, to }) =>
@@ -409,15 +403,14 @@ function sendsQuery(text: string): boolean {
   return QUERY_TEXT.test(text) || KYSELY_QUERY_TEXT.test(text);
 }
 
-/** Files outside the data layer (and the stand-in) that send a query. */
+/** Files outside the data layer that send a query. */
 function queriesOutsideDataLayer(graph: Map<string, SourceFile>): string[] {
   return [...graph.values()]
     .filter(
       (file) =>
         file.path.startsWith("src/") &&
         !isExempt(file.path) &&
-        !isDatabaseLayer(file.path) &&
-        !isStandIn(file.path),
+        !isDatabaseLayer(file.path),
     )
     .filter((file) => sendsQuery(file.text))
     .map((file) => file.path)
@@ -496,7 +489,7 @@ function namesImported(file: SourceFile, target: string): string[] {
 const DB_ENTRY = "src/lib/server/db/index.ts";
 
 /** The db entry's database handles: only the data layer takes one. */
-const CLIENT_HANDLES = new Set(["getDb", "getCommunityDb", "*", "import()"]);
+const CLIENT_HANDLES = new Set(["getDb", "*", "import()"]);
 
 /** Files outside the data layer that take a database handle from the db entry. */
 function clientHandleImports(graph: Map<string, SourceFile>): string[] {
@@ -546,23 +539,19 @@ function exportedNames(file: SourceFile): string[] {
 }
 
 /** The modules that define or gather the database handles, and the names they hand on. */
-const HANDLE_MODULES = new Set([
-  DB_ENTRY,
-  "src/lib/server/db/client.ts",
-  "src/lib/server/db/rest.ts",
-]);
-const HANDLE_NAMES = new Set(["getDb", "getCommunityDb", "createDbClient", "sql", "CompiledQuery"]);
+const HANDLE_MODULES = new Set([DB_ENTRY, "src/lib/server/db/client.ts"]);
+const HANDLE_NAMES = new Set(["getDb", "createDbClient", "sql", "CompiledQuery"]);
 
 /**
- * `getDb` or `getCommunityDb` used as a value other than called (`const
- * handle = getDb`), which could hand the handle on under a new name. Its
- * declaration and import or export lists are no use.
+ * `getDb` used as a value other than called (`const handle = getDb`),
+ * which could hand the handle on under a new name. Its declaration and
+ * import or export lists are no use.
  */
 function handleValues(file: SourceFile): string[] {
-  if (!/\bget(Community)?Db\b/.test(file.text)) return [];
+  if (!/\bgetDb\b/.test(file.text)) return [];
   const found = new Set<string>();
   const visit = (node: ts.Node): void => {
-    if (ts.isIdentifier(node) && (node.text === "getDb" || node.text === "getCommunityDb")) {
+    if (ts.isIdentifier(node) && node.text === "getDb") {
       const parent = node.parent;
       const used =
         !(ts.isCallExpression(parent) && parent.expression === node) &&
@@ -614,7 +603,7 @@ const SERVICE_DB_NAMES = new Set([
   "COMMUNITY_DB_DOWN_MESSAGE",
   "storageErrorMessage",
 ]);
-const CONFIG_DB_NAMES = new Set(["isCommunityConfigured", "isDatabaseConfigured"]);
+const CONFIG_DB_NAMES = new Set(["isDatabaseConfigured"]);
 
 function serviceDbNames(graph: Map<string, SourceFile>): string[] {
   return [...graph.values()]
@@ -892,7 +881,7 @@ describe("the layers", () => {
       'db.from("plans")',
       'communityDb.from("x")',
       'planDb.from("x")',
-      "getCommunityDb().from('x')",
+      "client().from('x')",
       "  .from(`community_plans`)",
       'tx\n  .from("x")',
     ]) {
@@ -936,14 +925,14 @@ describe("the layers", () => {
     const repo = (name: string) => `src/lib/server/repos/handle-${name}.ts`;
     const fixtures: Record<string, string> = {
       [repo("named")]: 'export { getDb } from "../db";',
-      [repo("renamed")]: 'export { getCommunityDb as plans } from "../db";',
+      [repo("renamed")]: 'export { getDb as plans } from "../db";',
       [repo("star")]: 'export * from "../db";',
       [repo("sql")]: 'import { sql } from "kysely";\nexport { sql };',
       [repo("default")]: 'import { getDb } from "../db";\nexport default getDb;',
       [repo("declared")]: "export const sql = 1;\nexport function rows() { return []; }",
       [repo("alias-const")]: 'import { getDb } from "../db";\nexport const handle = getDb;',
       [repo("alias-object")]:
-        'import { getCommunityDb } from "../db";\nexport const handles = { rest: getCommunityDb };',
+        'import { getDb } from "../db";\nexport const handles = { direct: getDb };',
       [repo("fine")]: 'import { getDb } from "../db";\nexport const count = () => getDb();',
     };
     const bad = new Map(
@@ -951,12 +940,12 @@ describe("the layers", () => {
     );
     expect(handleReexports(bad)).toEqual([
       `${repo("alias-const")}: getDb as a value`,
-      `${repo("alias-object")}: getCommunityDb as a value`,
+      `${repo("alias-object")}: getDb as a value`,
       `${repo("declared")}: sql`,
       `${repo("default")}: getDb`,
       `${repo("default")}: getDb as a value`,
       `${repo("named")}: getDb`,
-      `${repo("renamed")}: getCommunityDb`,
+      `${repo("renamed")}: getDb`,
       `${repo("sql")}: sql`,
       `${repo("star")}: *`,
     ]);
@@ -1004,7 +993,7 @@ describe("the layers", () => {
       "src/lib/server/services/require-fixture.ts":
         'export const handle = () => require("../db").getDb();',
       "src/lib/server/import-fixture.ts":
-        'export const handle = async () => (await import("./db")).getCommunityDb();',
+        'export const handle = async () => (await import("./db")).getDb();',
     };
     const bad = new Map(
       Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
@@ -1144,18 +1133,18 @@ describe("the layers", () => {
         'import { Kysely } from "kysely";',
         'import { getDb, json } from "../db";',
         'import { readJsonBody } from "../http/request-body";',
-        'import { openLocalDatabase } from "../local-db/database";',
+        'import { toWebRequest } from "../http/node-http";',
         'export const rows = () => getDb().selectFrom("community_plans").selectAll();',
       ].join("\n"),
       [live]: 'import { createDbClient } from "@/lib/server/db/client";',
       [helper]: [
         'import * as db from "./db";',
-        'export const rows = () => db.getCommunityDb().from("community_plans").select("id");',
+        'export const rows = () => db.getDb().selectFrom("community_plans").select("id");',
       ].join("\n"),
       [clients]: [
         'import pg from "pg";',
-        'import { PostgrestClient } from "@supabase/postgrest-js";',
-        'import { getCommunityDb } from "./db/rest";',
+        'import { Kysely } from "kysely";',
+        'import { createDbClient } from "./db/client";',
       ].join("\n"),
       [repo]: [
         'import { sql } from "kysely";',
@@ -1181,8 +1170,8 @@ describe("the layers", () => {
       Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
     );
     expect(breaks(bad).map(key)).toEqual([
+      `10|${services}|src/lib/server/http/node-http.ts`,
       `10|${services}|src/lib/server/http/request-body.ts`,
-      `10|${services}|src/lib/server/local-db/database.ts`,
       `11|${db}|src/lib/server/repos/plans.ts`,
       `11|${repo}|src/lib/server/auth/keys.ts`,
       `11|${repo}|src/lib/server/http/viewer.ts`,
@@ -1190,9 +1179,9 @@ describe("the layers", () => {
       `11|${repo}|src/lib/server/live-notify.ts`,
       `11|${repo}|src/lib/server/services/access.ts`,
       `5|${live}|src/lib/server/db/client.ts`,
-      `9|${clients}|pkg:@supabase/postgrest-js`,
+      `9|${clients}|pkg:kysely`,
       `9|${clients}|pkg:pg`,
-      `9|${clients}|src/lib/server/db/rest.ts`,
+      `9|${clients}|src/lib/server/db/client.ts`,
       `9|${services}|pkg:kysely`,
       `9|${live}|src/lib/server/db/client.ts`,
     ]);
@@ -1247,7 +1236,7 @@ describe("the layers", () => {
         'import type { Viewer } from "../http/viewer";',
         'import { parseEntryIcon } from "../community-rows";',
       ].join("\n"),
-      "src/lib/server/services/config.ts": 'import { isCommunityConfigured } from "../db";',
+      "src/lib/server/services/config.ts": 'import { isDatabaseConfigured } from "../db";',
       "src/lib/server/repos/good-fixture.ts": [
         'import { sql } from "kysely";',
         'import { getDb, json } from "../db";',

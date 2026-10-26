@@ -3,13 +3,13 @@
  * `npm run dev:local`: the whole site on this machine with no Supabase
  * credentials anywhere. Starts, in order:
  *
- * 1. the local database (`tools/local-db/serve.ts`): the PostgREST stand-in on
- *    127.0.0.1:54329 and Postgres's wire protocol on 127.0.0.1:54330
- *    (`DATABASE_URL` for the direct client). When Docker answers, 54330 is
- *    the compose file's pinned `postgres` image in the container
- *    `gtnh-local-db` (data in the volume of that name, kept between runs; the
- *    container stops with dev-local if dev-local started it) and the stand-in
- *    runs over it. Otherwise, or with LOCAL_DB_PGLITE=1, PGlite with data in
+ * 1. the local database (`tools/local-db/serve.ts`): Postgres's wire protocol
+ *    on 127.0.0.1:54330 (`DATABASE_URL`), with a control listener on
+ *    127.0.0.1:54329. When Docker answers, 54330 is the compose file's pinned
+ *    `postgres` image in the container `gtnh-local-db` (data in the volume of
+ *    that name, kept between runs; the container stops with dev-local if
+ *    dev-local started it) and serve.ts applies the migrations to it.
+ *    Otherwise, or with LOCAL_DB_PGLITE=1, PGlite with data in
  *    scratch/local-db/pgdata and its socket on 54330, which is not isolated
  *    under concurrent load (serve.ts's header has the probe): fine for one
  *    player clicking around, and dev-local says so;
@@ -17,8 +17,8 @@
  *    scratch/local-db/live-journal;
  * 3. `next dev` on :3000, uploaded files in scratch/local-db/files.
  *
- * Next.js and the live service run with LOCAL_DB=1 and a development-only
- * COMMUNITY_HASH_SALT, so sign-ins made here work only here. Ctrl+C stops
+ * Next.js and the live service run with that DATABASE_URL and a
+ * development-only COMMUNITY_HASH_SALT, so sign-ins made here work only here. Ctrl+C stops
  * everything; the database closes cleanly first.
  */
 import { spawn, spawnSync } from "node:child_process";
@@ -31,7 +31,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dbPort = Number(process.env.LOCAL_DB_PORT ?? 54329);
 const livePort = Number(process.env.LIVE_PORT ?? 3001);
 const webPort = Number(process.env.PORT ?? 3000);
-const dbUrl = `http://127.0.0.1:${dbPort}`;
+const controlUrl = `http://127.0.0.1:${dbPort}/__local-db`;
 const pgPort = Number(process.env.LOCAL_DB_PG_PORT ?? 54330);
 const directUrl = `postgres://postgres@127.0.0.1:${pgPort}/postgres`;
 const CONTAINER = "gtnh-local-db";
@@ -39,8 +39,6 @@ const CONTAINER = "gtnh-local-db";
 let startedContainer = false;
 
 const shared = {
-  LOCAL_DB: "1",
-  LOCAL_DB_URL: dbUrl,
   // Development only: tokens signed with it are worthless anywhere else.
   COMMUNITY_HASH_SALT: "local-development-salt-not-a-secret",
   LIVE_INTERNAL_TOKEN: "local-development-internal-token",
@@ -193,7 +191,7 @@ async function stop(code = 0) {
     headers: { authorization: `Bearer ${shared.LIVE_INTERNAL_TOKEN}` },
   }).catch(() => undefined);
   await new Promise((resolve) => setTimeout(resolve, 1500));
-  await fetch(`${dbUrl}/__local-db/shutdown`, { method: "POST" }).catch(() => undefined);
+  await fetch(`${controlUrl}/shutdown`, { method: "POST" }).catch(() => undefined);
   const exited = children.map(
     (child) =>
       new Promise((resolve) => (child.exitCode !== null ? resolve() : child.once("exit", resolve))),
@@ -241,11 +239,7 @@ try {
   }
 
   start("local-db", [bin.tsx, "tools/local-db/serve.ts"], dbEnv);
-  await waitFor(
-    `${dbUrl}/rest/v1/community_users?select=id&limit=1`,
-    "The local database",
-    120_000,
-  );
+  await waitFor(`${controlUrl}/ready`, "The local database", 120_000);
 
   if (existsSync(path.join(root, "src", "live", "main.ts"))) {
     start("live", [bin.tsx, "src/live/main.ts"], {
@@ -265,7 +259,7 @@ try {
     NEXT_PUBLIC_SITE_URL: `http://localhost:${webPort}`,
   });
 
-  console.log(`[dev-local] http://localhost:${webPort} with the local database at ${dbUrl}`);
+  console.log(`[dev-local] http://localhost:${webPort} with the local database at ${directUrl}`);
 } catch (error) {
   console.error(`[dev-local] could not start: ${error instanceof Error ? error.message : error}`);
   await stop(1);

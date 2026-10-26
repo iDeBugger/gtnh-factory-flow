@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTestDb } from "@/test-support/test-db";
-import { getCommunityDb } from "@/lib/server/db";
 import {
   forgetImageCapWarnings,
   IMAGES_PER_DAY,
@@ -45,11 +44,12 @@ function upload(address: string, body: Uint8Array = PNG, deviceId?: string): Pro
 }
 
 async function uploadsRecorded(): Promise<number> {
-  const { count } = await getCommunityDb()
-    .from("community_events")
-    .select("id", { count: "exact", head: true })
-    .eq("action", "image_upload");
-  return count ?? 0;
+  const { count } = await testDb()
+    .db.selectFrom("community_events")
+    .select((eb) => eb.fn.countAll<number>().as("count"))
+    .where("action", "=", "image_upload")
+    .executeTakeFirstOrThrow();
+  return Number(count);
 }
 
 beforeAll(async () => {
@@ -135,11 +135,11 @@ describe("board image uploads", () => {
     // An hour passes: every count so far is two hours old, the day's still counts.
     const hourPasses = async () => {
       const twoHoursBack = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-      const { error } = await getCommunityDb()
-        .from("community_events")
-        .update({ created_at: twoHoursBack })
-        .eq("action", "image_upload");
-      expect(error).toBeNull();
+      await testDb()
+        .db.updateTable("community_events")
+        .set({ created_at: twoHoursBack })
+        .where("action", "=", "image_upload")
+        .execute();
     };
     for (let i = 0; i < IMAGES_PER_HOUR; i++) {
       expect((await upload("203.0.113.20")).status).toBe(200);

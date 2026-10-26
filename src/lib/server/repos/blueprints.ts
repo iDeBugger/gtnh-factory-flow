@@ -69,7 +69,7 @@ const SHELF_ORDER: Record<PublicBlueprintSort, ReadonlyArray<"score" | "download
   newest: ["published_at"],
 };
 
-/** An icon as the column takes it: SQL null when there is none, as PostgREST wrote it. */
+/** An icon as the column takes it: SQL null when there is none, never a jsonb null. */
 const iconParam = (icon: EntryIcon | null) => (icon === null ? null : json(icon));
 
 /** The content columns as the table takes them, the payload and the stat arrays as jsonb. */

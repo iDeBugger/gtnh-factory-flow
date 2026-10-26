@@ -8,8 +8,6 @@
  * - COMMUNITY_HASH_SALT: the session secret, the same as the website's.
  * - DATABASE_URL: the database, as the `gtnh_live` role (designs, members and
  *   accounts are read and written there).
- * - POSTGREST_URL, POSTGREST_SERVICE_TOKEN: the PostgREST client the shared
- *   code still loads (or LOCAL_DB=1 and LOCAL_DB_URL for the local one).
  * - LIVE_PORT (3001), LIVE_HOST (127.0.0.1).
  * - LIVE_JOURNAL_DIR: where unflushed batches are kept (required in production).
  * - LIVE_INTERNAL_TOKEN: shared with the website for /internal/*.
@@ -24,8 +22,7 @@
  *   memory limit and the heap from it.
  */
 import path from "node:path";
-import { closeDb, configureDb, isCommunityConfigured, isDatabaseConfigured } from "@/lib/server/db";
-import { assertLocalDbAllowed } from "@/lib/server/local-db/client";
+import { closeDb, configureDb, isDatabaseConfigured } from "@/lib/server/db";
 import { sessionSecret } from "@/lib/server/auth/session";
 import { LiveService } from "./service";
 import { databasePlanStore } from "./store";
@@ -45,16 +42,12 @@ async function main() {
   try {
     // The website's rule: in production a blank or development value refuses every token.
     sessionSecret();
-    assertLocalDbAllowed();
     trustedProxies = parseTrustedProxies(process.env.LIVE_TRUSTED_PROXIES);
   } catch (error) {
     fatal((error as Error).message);
   }
-  if (!isCommunityConfigured()) {
-    fatal("No database: set POSTGREST_URL and POSTGREST_SERVICE_TOKEN (or LOCAL_DB=1).");
-  }
   if (!isDatabaseConfigured()) {
-    fatal("DATABASE_URL is not set: the live service reads and writes plans in the database.");
+    fatal("No database: set DATABASE_URL.");
   }
   // The direct client's pool is sized and named for this process.
   configureDb({ service: "live" });

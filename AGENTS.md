@@ -18,7 +18,7 @@ before changing that area; it names the tests that pin its behaviour.
 | Domain model: resources, cells vs fluids, oredict context, sections, boards | `src/lib/model/CLAUDE.md` |
 | Power generation | `src/lib/power/CLAUDE.md` |
 | Designs, tabs, saving, account sync, plan import/export, public view | `src/store/CLAUDE.md` |
-| Server, recipe API, database (PostgREST), file store, cloud plans, local database | `src/lib/server/CLAUDE.md` |
+| Server, recipe API, database (Postgres), file store, cloud plans, local database | `src/lib/server/CLAUDE.md` |
 | Live service: live plan editing over WebSockets | `src/live/CLAUDE.md`, `docs/live.md` |
 | Dataset pipeline: export, normalize, rebuild, publish | `tools/dataset-pipeline/CLAUDE.md` |
 | Deploy: Docker images, compose stack, deploy and dataset publish scripts | `docs/deploy.md` |
@@ -46,8 +46,8 @@ Longer references, read on demand: `docs/solver-equations.md` (solver doctrine),
    at run time) never reaches `src/lib/server` or a Node built-in.
 7. The stores never import the UI.
 8. Non-UI `src/lib` never imports the UI or the stores.
-9. Only the data layer (`lib/server/{db,repos}`) in `src/` loads `kysely`, `pg`,
-   `@supabase/postgrest-js`, `db/client.ts` or `db/rest.ts`.
+9. Only the data layer (`lib/server/{db,repos}`) in `src/` loads `kysely`, `pg` or
+   `db/client.ts`.
 
 Services (`lib/server/services`) never import `next/*`, with no exceptions, and the live service
 never loads `auth/passwords.ts`. The data layer alone holds queries and SQL; the rules that keep it

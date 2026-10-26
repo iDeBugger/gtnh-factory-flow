@@ -17,14 +17,8 @@ function start(env: Record<string, string>) {
 
 describe("the live service's start", () => {
   it("refuses to start without DATABASE_URL, saying so in one line", () => {
-    const run = start({
-      COMMUNITY_HASH_SALT: "main-test-salt",
-      POSTGREST_URL: "http://127.0.0.1:9",
-      POSTGREST_SERVICE_TOKEN: "token",
-    });
+    const run = start({ COMMUNITY_HASH_SALT: "main-test-salt", LOCAL_DB: "1" });
     expect(run.status).toBe(1);
-    expect(run.stderr.trim()).toBe(
-      "[live] DATABASE_URL is not set: the live service reads and writes plans in the database.",
-    );
+    expect(run.stderr.trim()).toBe("[live] No database: set DATABASE_URL.");
   }, 30_000);
 });

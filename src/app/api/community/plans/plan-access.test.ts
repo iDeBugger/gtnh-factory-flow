@@ -8,9 +8,8 @@ import { takeLpCount } from "@/lib/solver/plan/lp";
 import { APP_VERSION } from "@/lib/version";
 import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
 import { setDbFaultForTests } from "@/lib/server/db/guard";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
-import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
+import { json, resetDbBreaker } from "@/lib/server/db";
 import { planWithAdditions } from "@/lib/model/__fixtures__/plan-additions";
 import { withModAndCommunityOn } from "@/test-support/mod-and-community";
 import { pngHeader } from "@/test-support/png";
@@ -61,13 +60,11 @@ let addresses = 0;
 const nextAddress = () => `10.2.${Math.floor(addresses / 250)}.${(addresses++ % 250) + 1}`;
 
 async function makeUser(username: string) {
-  const { data, error } = await getCommunityDb()
-    .from("community_users")
-    .insert({ username, password_hash: "x:y" })
-    .select("id")
-    .single();
-  expect(error).toBeNull();
-  const id = (data as { id: string }).id;
+  const { id } = await testDb()
+    .db.insertInto("community_users")
+    .values({ username, password_hash: "x:y" })
+    .returning("id")
+    .executeTakeFirstOrThrow();
   users[username] = { id, cookie: `gtnh_session=${makeSessionToken(id)}` };
 }
 
@@ -124,29 +121,27 @@ function postBody(deviceId: string) {
 
 /** A post of the owner's, public or not, with a plan nothing here reads. */
 async function makePlan(name: string, isPublic: boolean): Promise<string> {
-  const { data, error } = await getCommunityDb()
-    .from("community_plans")
-    .insert({
+  const { id } = await testDb()
+    .db.insertInto("community_plans")
+    .values({
       user_id: users.owner!.id,
       author_name: "owner",
       name,
-      plan: { nodes: [] },
+      plan: json({ nodes: [] }),
       is_public: isPublic,
       uploader_key: "test",
     })
-    .select("id")
-    .single();
-  expect(error).toBeNull();
-  return (data as { id: string }).id;
+    .returning("id")
+    .executeTakeFirstOrThrow();
+  return id;
 }
 
 async function planRow(planId: string): Promise<{ upvotes: number; downvotes: number; views: number }> {
-  const { data } = await getCommunityDb()
-    .from("community_plans")
-    .select("upvotes,downvotes,views")
-    .eq("id", planId)
-    .single();
-  return data as { upvotes: number; downvotes: number; views: number };
+  return testDb()
+    .db.selectFrom("community_plans")
+    .select(["upvotes", "downvotes", "views"])
+    .where("id", "=", planId)
+    .executeTakeFirstOrThrow();
 }
 
 beforeAll(async () => {
@@ -226,7 +221,7 @@ describe("voting on a post", () => {
     expect(owner.status).toBe(200);
     expect(await owner.json()).toMatchObject({ upvotes: 1, downvotes: 0, myVote: 1 });
 
-    await getCommunityDb().from("community_plans").update({ is_public: true }).eq("id", planId);
+    await testDb().db.updateTable("community_plans").set({ is_public: true }).where("id", "=", planId).execute();
     const anyone = await castVote(planId, { deviceId: "device-2", value: -1 });
     expect(anyone.status).toBe(200);
     expect(await anyone.json()).toMatchObject({ upvotes: 1, downvotes: 1, score: 0, myVote: -1 });
@@ -390,19 +385,18 @@ describe("a post's board photograph", () => {
 
   it("gives an account thirty preview uploads an hour, and stores nothing for the next", async () => {
     await makeUser("photographer");
-    const { data } = await getCommunityDb()
-      .from("community_plans")
-      .insert({
+    const { id: planId } = await testDb()
+      .db.insertInto("community_plans")
+      .values({
         user_id: users.photographer!.id,
         author_name: "photographer",
         name: "Reshared",
-        plan: { nodes: [] },
+        plan: json({ nodes: [] }),
         is_public: true,
         uploader_key: "test",
       })
-      .select("id")
-      .single();
-    const planId = (data as { id: string }).id;
+      .returning("id")
+      .executeTakeFirstOrThrow();
     for (let i = 0; i < 30; i++) {
       const stored = await postPreview(planId, pngHeader(10 + i, 10), "photographer");
       expect(stored.status, `upload ${i + 1}`).toBe(200);
@@ -692,20 +686,20 @@ describe("listing posts", () => {
 
   /** Posts straight into the table, out of every other case's way by their game version. */
   async function seed(rows: Array<{ name: string; version: string; isPublic: boolean }>) {
-    const { error } = await getCommunityDb()
-      .from("community_plans")
-      .insert(
+    await testDb()
+      .db.insertInto("community_plans")
+      .values(
         rows.map((row) => ({
           user_id: users.owner!.id,
           author_name: "owner",
           name: row.name,
           game_version: row.version,
-          plan: { nodes: [] },
+          plan: json({ nodes: [] }),
           is_public: row.isPublic,
           uploader_key: "test",
         })),
-      );
-    expect(error).toBeNull();
+      )
+      .execute();
     invalidatePlanListCache();
   }
 
@@ -1195,11 +1189,11 @@ describe("posting to the community", () => {
       expect(response.status).toBe(201);
       expect(takeLpCount()).toBe(0);
       const { id } = (await response.json()) as { id: string };
-      const { data } = await getCommunityDb()
-        .from("community_plans")
-        .select("node_count,stats_version")
-        .eq("id", id)
-        .single();
+      const data = await testDb()
+        .db.selectFrom("community_plans")
+        .select(["node_count", "stats_version"])
+        .where("id", "=", id)
+        .executeTakeFirst();
       expect(data).toEqual({ node_count: plan.nodes.length, stats_version: APP_VERSION });
     } finally {
       statsBudget.ms = 5_000;
@@ -1222,19 +1216,19 @@ describe("posting to the community", () => {
     expect(posted.status).toBe(201);
     const { id: planId } = (await posted.json()) as { id: string };
     const row = () =>
-      getCommunityDb()
-        .from("community_plans")
-        .select("machine_count,stats_version")
-        .eq("id", planId)
-        .single<{ machine_count: number; stats_version: string }>();
-    const solvedCount = (await row()).data!.machine_count;
+      testDb()
+        .db.selectFrom("community_plans")
+        .select(["machine_count", "stats_version"])
+        .where("id", "=", planId)
+        .executeTakeFirstOrThrow();
+    const solvedCount = (await row()).machine_count;
     // A card from an older release, marked so an overwrite shows.
-    const marked = await getCommunityDb()
-      .from("community_plans")
-      .update({ machine_count: 999, stats_version: "0.0.0" })
-      .eq("id", planId);
-    expect(marked.error).toBeNull();
-    expect((await row()).data).toEqual({ machine_count: 999, stats_version: "0.0.0" });
+    await testDb()
+      .db.updateTable("community_plans")
+      .set({ machine_count: 999, stats_version: "0.0.0" })
+      .where("id", "=", planId)
+      .execute();
+    expect(await row()).toEqual({ machine_count: 999, stats_version: "0.0.0" });
     const open = () =>
       plan.GET(request("GET", `/api/community/plans/${planId}`, { who: "owner" }), params({ planId }));
 
@@ -1243,12 +1237,12 @@ describe("posting to the community", () => {
     statsBudget.ms = 0;
     try {
       expect((await open()).status).toBe(200);
-      expect((await row()).data).toEqual({ machine_count: 999, stats_version: "0.0.0" });
+      expect(await row()).toEqual({ machine_count: 999, stats_version: "0.0.0" });
     } finally {
       statsBudget.ms = 5_000;
     }
     expect((await open()).status).toBe(200);
-    expect((await row()).data).toEqual({ machine_count: solvedCount, stats_version: APP_VERSION });
+    expect(await row()).toEqual({ machine_count: solvedCount, stats_version: APP_VERSION });
   });
 
   it("holds one account to ten posts an hour whatever device id it sends", async () => {

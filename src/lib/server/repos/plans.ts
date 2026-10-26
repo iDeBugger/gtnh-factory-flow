@@ -240,7 +240,7 @@ export type PlanPatch = Partial<
   > & { is_public: boolean; updated_at: string; last_activity_at: string }
 >;
 
-/** An icon as the column takes it: SQL null when there is none, as PostgREST wrote it. */
+/** An icon as the column takes it: SQL null when there is none, never a jsonb null. */
 const iconParam = (icon: EntryIcon | null) => (icon === null ? null : json(icon));
 
 /** The stat columns as the table takes them, the arrays as jsonb. */

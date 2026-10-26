@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
 import { setDbFaultForTests } from "@/lib/server/db/guard";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
-import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
+import { json, resetDbBreaker } from "@/lib/server/db";
 import * as blueprintsRepo from "@/lib/server/repos/blueprints";
 import * as votesRepo from "@/lib/server/repos/votes";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
@@ -22,13 +22,11 @@ const testDb = useTestDb();
 const users: Record<string, { id: string; cookie: string }> = {};
 
 async function makeUser(username: string) {
-  const { data, error } = await getCommunityDb()
-    .from("community_users")
-    .insert({ username, password_hash: "x:y" })
-    .select("id")
-    .single();
-  expect(error).toBeNull();
-  const id = (data as { id: string }).id;
+  const { id } = await testDb()
+    .db.insertInto("community_users")
+    .values({ username, password_hash: "x:y" })
+    .returning("id")
+    .executeTakeFirstOrThrow();
   users[username] = { id, cookie: `gtnh_session=${makeSessionToken(id)}` };
 }
 
@@ -36,13 +34,12 @@ let privateId: string;
 let publicId: string;
 
 async function makeBlueprint(name: string, isPublic: boolean): Promise<string> {
-  const { data, error } = await getCommunityDb()
-    .from("blueprints")
-    .insert({ user_id: users.author!.id, name, payload: { nodes: [] }, is_public: isPublic })
-    .select("id")
-    .single();
-  expect(error).toBeNull();
-  return (data as { id: string }).id;
+  const { id } = await testDb()
+    .db.insertInto("blueprints")
+    .values({ user_id: users.author!.id, name, payload: json({ nodes: [] }), is_public: isPublic })
+    .returning("id")
+    .executeTakeFirstOrThrow();
+  return id;
 }
 
 function call(method: string, url: string, options: { who?: string; body?: unknown } = {}) {
@@ -103,13 +100,16 @@ describe("voting on a blueprint", () => {
   withModAndCommunityOn();
 
   it("gives one address three anonymous votes a day on one blueprint, whatever device ids it sends", async () => {
-    const { data, error } = await getCommunityDb()
-      .from("blueprints")
-      .insert({ user_id: users.author!.id, name: "Coke ovens", payload: { nodes: [] }, is_public: true })
-      .select("id")
-      .single();
-    expect(error).toBeNull();
-    const blueprintId = (data as { id: string }).id;
+    const { id: blueprintId } = await testDb()
+      .db.insertInto("blueprints")
+      .values({
+        user_id: users.author!.id,
+        name: "Coke ovens",
+        payload: json({ nodes: [] }),
+        is_public: true,
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
     const address = "203.0.113.90";
     for (let i = 0; i < 3; i++) {
       const cast = await castVote(blueprintId, { deviceId: `made-up-${i}`, value: 1 }, { address });

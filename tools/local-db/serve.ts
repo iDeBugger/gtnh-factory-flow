@@ -1,10 +1,11 @@
 /**
  * The local development database, served so the Next.js dev server and the
- * live service (two processes) share one copy, through both clients:
- * - the PostgREST stand-in over HTTP on 127.0.0.1:54329 (LOCAL_DB_PORT), for
- *   `getCommunityDb`;
- * - Postgres's wire protocol on 127.0.0.1:54330 (LOCAL_DB_PG_PORT), for the
- *   direct client (`getDb`, `DATABASE_URL`).
+ * live service (two processes) share one copy over Postgres's wire protocol
+ * on 127.0.0.1:54330 (LOCAL_DB_PG_PORT), their `DATABASE_URL`. A small
+ * control listener on 127.0.0.1:54329 (LOCAL_DB_PORT) answers
+ * `GET /__local-db/ready` once the migrations are applied and stops this
+ * process on `POST /__local-db/shutdown` (how dev-local stops it on Windows,
+ * where a child gets no signal).
  *
  *   npx tsx tools/local-db/serve.ts
  *
@@ -24,48 +25,32 @@
  * a database two processes can share, so:
  * - with LOCAL_DB_POSTGRES_URL set (dev-local sets it when Docker answers and
  *   it has started the compose file's pinned `postgres` image on 54330), both
- *   clients use that real Postgres: the stand-in runs over a `pg` pool to it
- *   and this process opens no PGlite;
- * - without it, PGlite as before, data in scratch/local-db/pgdata (or
- *   LOCAL_DB_DIR), and its socket on 54330 through the multiplexer, which
- *   serves light single-player use only. dev-local says so when it starts
- *   this way.
+ *   processes use that real Postgres directly: this process applies the
+ *   migrations to it and opens no PGlite;
+ * - without it, PGlite, data in scratch/local-db/pgdata (or LOCAL_DB_DIR),
+ *   and its socket on 54330 through the multiplexer, which serves light
+ *   single-player use only. dev-local says so when it starts this way.
  */
 import { createServer } from "node:http";
+import { mkdirSync } from "node:fs";
 import path from "node:path";
+import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import pg from "pg";
 import { hearConnectionErrors } from "../../src/lib/server/db/client";
 import { applyMigrations } from "../../src/lib/server/db/migrations";
 import { DB_TYPE_PARSERS } from "../../src/lib/server/db/parsers";
-import { openLocalDatabase } from "../../src/lib/server/local-db/database";
-import {
-  createPostgrestHandler,
-  type PostgrestHandler,
-} from "../../src/lib/server/local-db/postgrest";
-import { BodyTooLargeError, sendWebResponse, toWebRequest } from "@/lib/server/http/node-http";
 
 interface Served {
-  handle: PostgrestHandler;
   describe: string;
   close(): Promise<void>;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** The stand-in over a real Postgres, once it takes connections (a fresh container initialises first). */
+/** A real Postgres: the migrations, once it takes connections (a fresh container initialises first). */
 async function servePostgres(url: string): Promise<Served> {
-  const pool = new pg.Pool({
-    connectionString: url,
-    max: 4,
-    application_name: "gtnh-local-db",
-    options: "-c TimeZone=UTC",
-    types: {
-      getTypeParser: ((oid: number, format?: "text" | "binary") =>
-        (format !== "binary" && DB_TYPE_PARSERS[oid]) ||
-        pg.types.getTypeParser(oid, format)) as pg.CustomTypesConfig["getTypeParser"],
-    },
-  });
+  const pool = new pg.Pool({ connectionString: url, max: 1, application_name: "gtnh-local-db" });
   hearConnectionErrors(pool, "local-db");
   const until = Date.now() + 90_000;
   for (;;) {
@@ -80,32 +65,24 @@ async function servePostgres(url: string): Promise<Served> {
     }
   }
   await applyMigrations({ exec: (text) => pool.query(text) });
-  const handle = createPostgrestHandler({
-    query: async (text, params) => ({
-      rows: (await pool.query(text, params)).rows as Record<string, unknown>[],
-    }),
-    exec: (text) => pool.query(text),
-  });
-  await handle.reloadSchema();
-  return { handle, describe: `Postgres at ${url}`, close: () => pool.end() };
+  await pool.end();
+  return { describe: `Postgres at ${url}`, close: async () => undefined };
 }
 
-/** PGlite on disk, with its wire-protocol socket for the direct client. */
+/** PGlite on disk, with its wire-protocol socket. */
 async function servePglite(dir: string, pgPort: number): Promise<Served> {
-  const local = await openLocalDatabase({ dir });
-  const socket = new PGLiteSocketServer({
-    db: local.db,
-    host: "127.0.0.1",
-    port: pgPort,
-    maxConnections: 4,
-  });
+  mkdirSync(dir, { recursive: true });
+  const db = new PGlite({ dataDir: dir, parsers: DB_TYPE_PARSERS });
+  // The timestamp parser reads UTC only, as every pool session runs.
+  await db.exec("set time zone 'UTC'");
+  await applyMigrations(db);
+  const socket = new PGLiteSocketServer({ db, host: "127.0.0.1", port: pgPort, maxConnections: 4 });
   await socket.start();
   return {
-    handle: local.handle,
     describe: `Postgres (PGlite) at ${dir}, its socket on 127.0.0.1:${pgPort}`,
     close: async () => {
       await socket.stop();
-      await local.close();
+      await db.close();
     },
   };
 }
@@ -131,30 +108,20 @@ async function main() {
   };
 
   const server = createServer((req, res) => {
-    void (async () => {
-      // How dev-local stops it on Windows, where a child gets no signal.
-      if (req.method === "POST" && req.url === "/__local-db/shutdown") {
-        res.writeHead(200).end();
-        await shutdown();
-        return;
-      }
-      try {
-        await sendWebResponse(res, await served.handle(await toWebRequest(req, 64 * 1024 * 1024)));
-      } catch (error) {
-        const status = error instanceof BodyTooLargeError ? 413 : 500;
-        res.writeHead(status, { "content-type": "application/json" });
-        res.end(
-          JSON.stringify({
-            code: "PGRST000",
-            message: error instanceof Error ? error.message : "error",
-          }),
-        );
-      }
-    })();
+    if (req.method === "POST" && req.url === "/__local-db/shutdown") {
+      res.writeHead(200).end();
+      void shutdown();
+      return;
+    }
+    if (req.method === "GET" && req.url === "/__local-db/ready") {
+      res.writeHead(200, { "content-type": "text/plain" }).end("ready");
+      return;
+    }
+    res.writeHead(404).end();
   });
 
   server.listen(port, "127.0.0.1", () => {
-    console.log(`${served.describe}, serving http://127.0.0.1:${port}`);
+    console.log(`${served.describe}, control on http://127.0.0.1:${port}`);
   });
 
   process.on("SIGINT", () => void shutdown());

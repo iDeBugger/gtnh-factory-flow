@@ -250,12 +250,12 @@ Import rules, held by `src/architecture.test.ts` (AGENTS.md "Layers" has rules 1
 - 13. `src/` never imports `tools/`.
 
 Checks with no exceptions at all:
-- Outside the data layer (and the PostgREST stand-in in `local-db/`) no file sends a query (`.from("`, a Kysely
-  builder) or takes `getDb` or `getCommunityDb` from `db/index.ts`, statically, by `import()` or by `require`.
+- Outside the data layer no file sends a query (`.from("`, a Kysely builder) or takes `getDb` from
+  `db/index.ts`, statically, by `import()` or by `require`.
 - Services take from `db/index.ts` only `withTransaction`, `Tx` and the failure types and sentences;
   `services/config.ts` also takes the configured check.
-- No data-layer module but `db/index.ts`, `db/client.ts` and `db/rest.ts` exports a handle (`getDb`,
-  `getCommunityDb`, `createDbClient`, `sql`, `CompiledQuery`) or uses `export *`.
+- No data-layer module but `db/index.ts` and `db/client.ts` exports a handle (`getDb`, `createDbClient`, `sql`,
+  `CompiledQuery`) or uses `export *`.
 - What the test reads as SQL writing, from the syntax tree: a `sql` template only in the data layer. Only in
   `db/migrations.ts`: `sql.raw`, `sql.ref`, `sql.id`, `sql.lit`, `sql.table`; Kysely's `sql` other than as a tag or
   a call's object (assigned, destructured, indexed) or under another name; `dynamic` by any path;
@@ -265,8 +265,11 @@ Checks with no exceptions at all:
 Every repository goes to Postgres directly (`getDb` at `DATABASE_URL`, see Local database below): accounts, the event
 log, the library (designs with the live lease, members, folders), community posts, their comments, blueprints, the
 votes on posts and blueprints, and the reads of the public posts by the popularity sweep, the sitemap and
-llms.txt. The live service's queries are all among these, and it refuses to start without `DATABASE_URL`;
-`services/config.ts` answers "configured" only with both clients set. Community posts (`repos/plans.ts`,
+llms.txt. The live service's queries are all among these, and it refuses to start without `DATABASE_URL`
+("No database: set DATABASE_URL."); `services/config.ts` answers "configured" exactly when `DATABASE_URL` is set.
+No other database client exists: `db/no-postgrest.test.ts` fails on any file under `src/` or `tools/` that names
+the PostgREST client, its stand-in or their settings, except the startup checks and the deploy files the stack's
+cutover removes. Community posts (`repos/plans.ts`,
 `repos/comments.ts`; exam `plan-access.test.ts`, the Postgres cases in `services/community-plans-postgres.test.ts`):
 - The list's page and its `total` are two statements over one condition, run on one read-only `repeatable read`
   snapshot (`withTransaction(work, { readSnapshot: true })`): the total never disagrees with the rows, and a page
@@ -291,17 +294,13 @@ llms.txt. The live service's queries are all among these, and it refuses to star
 - A blueprint download (`repos/blueprints.takeDownload`) is one `update ... returning` with the public rule in
   its `where`; its author's own download adds nothing (a `case` on `user_id`), so concurrent downloads all land
   and an author never inflates the count. Exam `blueprints/vote.test.ts`, `services/blueprints-postgres.test.ts`.
-No repository reads PostgREST any more; its client stays configured until it goes with the stand-in. It reaches
-PostgREST at `POSTGREST_URL` through `@supabase/postgrest-js` (`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
-which bypasses row security. No anon role exists, so a request without the token is 401. `SUPABASE_URL` and
-`SUPABASE_SERVICE_ROLE_KEY` are not read; the startup checks warn when either is set. Rules:
-- Every request goes through `fetchWithDbTimeout` (20 s). A timeout answers 504 rather than
-  rejecting (postgrest-js retries a rejected GET three more times), and any 5xx that is not
-  JSON (a proxy's error page, often text/plain) becomes the same plain JSON error, so no
-  route shows a player that page; so do PostgREST's own connection errors (PGRST000-003).
-  Exam: `community-db-fetch.test.ts`.
-- After 5 failures in a row the client's breaker answers at once for 15 s without sending (`fetchFromDb`, `db/breaker.ts`): a
-  stalled database recovers only once demand drops, and every tab keeps asking.
+Rules:
+- Every query has the pool's limits (`db/settings.ts`: 5 s to get a connection, 15 s statement timeout on the
+  server, 20 s on the client), so a stalled database fails as down instead of holding a request open.
+- After 5 down failures in a row the breaker fails every query at once for 15 s without sending
+  (`db/guard.ts`, `db/breaker.ts`): a stalled database recovers only once demand drops, and every tab keeps asking.
+  `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `POSTGREST_URL`, `POSTGREST_SERVICE_TOKEN` and `LOCAL_DB` are not read;
+  the startup checks warn when one is set, and in production when `DATABASE_URL` is not.
 - A failed account lookup throws, never reads as signed out (`loadSessionUser`); accounts are
   cached a minute, as the lookup's promise from before it answers, so forgetting an account mid-read
   (Sign out everywhere) drops the read too and the old row is never written back. A library answer fails whole when a sharing read fails: the client
@@ -443,31 +442,23 @@ which bypasses row security. No anon role exists, so a request without the token
 - Exam: `file-store.test.ts`, `app/api/community/images/[month]/[name]/route.test.ts` ("serves only board images by
   their exact name"), `plan-access.test.ts` ("keeps previews out of every public route").
 
-## Local database (local-db/, `npm run dev:local`)
+## Local database (`npm run dev:local`, tests)
 
-- `LOCAL_DB=1` points the server's PostgREST client at a real Postgres on this machine (PGlite, loaded from
-  `supabase/schema.sql` and `supabase/migrations/*.sql` on every open) through a PostgREST stand-in
-  (`local-db/postgrest.ts`). Unset, nothing changes. Never copy `.env.local` into a worktree: local work needs no
-  database credentials.
-- Next.js never loads PGlite: it reaches the database over HTTP at `LOCAL_DB_URL` (`tools/local-db/serve.ts`, data in
-  `scratch/local-db/pgdata`). Tests open it in memory and register it in-process (`useInProcessLocalDb`).
-- The direct client (`getDb`, Kysely over `pg`, `db/client.ts`) sits beside the PostgREST one while repositories move
-  across, behind the same breaker (`db/guard.ts`); the repositories named under Database query through it, every
-  other repository still through PostgREST. It reads `DATABASE_URL`; pool sizes and
-  timeouts are `db/settings.ts`. Values parse the same on `pg` and PGlite (`DB_TYPE_PARSERS`: timestamptz as PostgREST's
-  JSON text, bigint as a number); a jsonb column takes only `json(value)`. Row types are generated (`npm run db:types`,
-  `db/schema.test.ts` fails while `db/schema.ts` is stale). Tests reach one PGlite through both clients with
-  `useTestDb()` (`src/test-support/test-db.ts`) and fail queries with `withDbFault`.
-- `npm run dev:local` gives both processes `DATABASE_URL=postgres://postgres@127.0.0.1:54330/postgres`: the compose
-  file's pinned `postgres` image in the container `gtnh-local-db` when Docker answers (the stand-in then runs over it),
-  else PGlite's socket, whose multiplexer is not isolated under concurrent queries (`tools/local-db/serve.ts` has the
-  probe). `LOCAL_DB_PGLITE=1` forces PGlite. The container's volume and `scratch/local-db/pgdata` are two separate
-  databases, so switching between them shows different accounts and designs.
-- The stand-in covers the query shapes this code sends (filters, or-trees, counts, single, upserts). Files are not in
-  the database: `npm run dev:local` keeps them in `scratch/local-db/files` (the file store below).
-  A new shape (an embed, an rpc) needs it added there and a case in `postgrest-cases.ts`, which `postgrest.test.ts`
-  runs against the stand-in and `postgrest-real.local.test.ts` against a real PostgREST (`REAL_POSTGREST_URL`,
-  `REAL_POSTGREST_TOKEN`; the Docker rehearsal).
+- Never copy `.env.local` into a worktree: local work needs no database credentials.
+- The client (`getDb`, Kysely over `pg`, `db/client.ts`) reads `DATABASE_URL`; pool sizes and timeouts are
+  `db/settings.ts`. Values parse the same on `pg` and PGlite (`DB_TYPE_PARSERS`: timestamptz as Postgres's JSON
+  text, bigint as a number); a jsonb column takes only `json(value)`. Row types are generated (`npm run db:types`,
+  `db/schema.test.ts` fails while `db/schema.ts` is stale).
+- Tests open an in-memory PGlite per file, built by `applyMigrations` from `supabase/`, with `useTestDb()`
+  (`src/test-support/test-db.ts`), and fail queries with `withDbFault`.
+- `npm run dev:local` gives Next and the live service `DATABASE_URL=postgres://postgres@127.0.0.1:54330/postgres`,
+  served by `tools/local-db/serve.ts`: the compose file's pinned `postgres` image in the container `gtnh-local-db`
+  when Docker answers (serve.ts applies the migrations to it), else PGlite on disk (`scratch/local-db/pgdata`) behind
+  its socket, whose multiplexer is not isolated under concurrent queries (serve.ts has the probe).
+  `LOCAL_DB_PGLITE=1` forces PGlite. The container's volume and `scratch/local-db/pgdata` are two separate
+  databases, so switching between them shows different accounts and designs. serve.ts's control listener on
+  127.0.0.1:54329 answers `/__local-db/ready` and `/__local-db/shutdown` only. Files are not in the database:
+  `npm run dev:local` keeps them in `scratch/local-db/files` (the file store below).
 
 ## Cloud plans (services/library.ts, repos/designs.ts, app/api/library, app/api/accounts)
 

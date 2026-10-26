@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { DB_TYPE_PARSERS, toJsonTimestamp } from "./parsers";
 
 /**
- * Values read the way PostgREST answered them, so a route's JSON keeps its
- * spelling when its query moves to the direct client.
+ * Values read the way the routes have always answered them, so a route's
+ * JSON keeps its spelling.
  */
 describe("the value parsers", () => {
   it("spell a timestamptz as JSON does", () => {

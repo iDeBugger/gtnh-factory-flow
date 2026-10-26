@@ -13,8 +13,7 @@ import { dbBreakerOpen, recordDbOutcome } from "./breaker";
 import { DatabaseDownError, isDatabaseDown } from "./errors";
 
 /**
- * The direct client behind the same breaker as the PostgREST one
- * (`db/breaker.ts`): while it is open a query fails at once with
+ * The client behind the breaker (`db/breaker.ts`): while it is open a query fails at once with
  * `DatabaseDownError` and never takes a connection; every query that comes
  * back counts, a down error toward opening it and any answer (rows or a
  * refusal such as a constraint error) as closing the count. A down error is

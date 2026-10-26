@@ -6,7 +6,6 @@ import {
   PRUNE_BATCH_ROWS,
   recordEvents,
 } from "./limits/rate-limit";
-import { getCommunityDb } from "./db";
 
 /**
  * The rate-limit events table against the local database: a record prunes
@@ -16,15 +15,15 @@ import { getCommunityDb } from "./db";
 const testDb = useTestDb();
 
 async function insertAgedEvent(actorKey: string, daysBack: number): Promise<void> {
-  const { error } = await getCommunityDb()
-    .from("community_events")
-    .insert({ actor_key: actorKey, action: "probe", created_at: new Date(Date.now() - daysBack * 86_400_000).toISOString() });
-  expect(error).toBeNull();
+  await testDb()
+    .db.insertInto("community_events")
+    .values({ actor_key: actorKey, action: "probe", created_at: new Date(Date.now() - daysBack * 86_400_000).toISOString() })
+    .execute();
 }
 
 async function actorsRecorded(): Promise<string[]> {
-  const { data } = await getCommunityDb().from("community_events").select("actor_key").order("actor_key");
-  return ((data ?? []) as Array<{ actor_key: string }>).map((row) => row.actor_key);
+  const rows = await testDb().db.selectFrom("community_events").select("actor_key").orderBy("actor_key").execute();
+  return rows.map((row) => row.actor_key);
 }
 
 beforeAll(() => {
@@ -51,16 +50,16 @@ describe("recording events", () => {
 
   async function insertBacklog(backlog: number): Promise<void> {
     await testDb().pglite.exec("delete from community_events");
-    const { error } = await getCommunityDb()
-      .from("community_events")
-      .insert(
+    await testDb()
+      .db.insertInto("community_events")
+      .values(
         Array.from({ length: backlog }, (_, i) => ({
           actor_key: `stale-${String(i).padStart(5, "0")}`,
           action: "probe",
           created_at: new Date(Date.now() - (60 + backlog - i) * 86_400_000).toISOString(),
         })),
-      );
-    expect(error).toBeNull();
+      )
+      .execute();
   }
 
   it("drains a backlog of many batches in one prune while its time lasts", async () => {

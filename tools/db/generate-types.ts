@@ -41,7 +41,7 @@ const SCALAR_TYPES: Record<string, string> = {
   bool: "boolean",
   int2: "number",
   int4: "number",
-  // `DB_TYPE_PARSERS` reads bigint as a number, as PostgREST answered it.
+  // `DB_TYPE_PARSERS` reads bigint as a number, as the routes answer it.
   int8: "number",
   float4: "number",
   float8: "number",

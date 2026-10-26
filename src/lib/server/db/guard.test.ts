@@ -14,7 +14,6 @@ import { useTestDb, withDbFault } from "@/test-support/test-db";
 import { dbBreakerOpen, DB_BREAKER_FAILURES, DB_BREAKER_OPEN_MS, resetDbBreaker } from "./breaker";
 import { DatabaseDownError, isDatabaseDown } from "./errors";
 import { GuardedDialect, setDbFaultForTests } from "./guard";
-import { getCommunityDb } from "./rest";
 import type { Database } from "./schema";
 
 const testDb = useTestDb();
@@ -206,27 +205,23 @@ describe("the direct client's guard", () => {
     expect(dbBreakerOpen()).toBe(false);
   });
 
-  it("the PostgREST client and Kysely share one breaker", async () => {
+  it("opens on one table's failures and then fails every query at once", async () => {
     const { db } = testDb();
     withDbFault(/community_users/);
-    // POSTs: postgrest-js never retries one, so each is one down answer.
     for (let i = 0; i < DB_BREAKER_FAILURES - 1; i += 1) {
-      const { error } = await getCommunityDb()
-        .from("community_users")
-        .insert({ username: `u${i}`, password_hash: "x" });
-      expect(error?.message).toMatch(/not responding/);
+      await expect(
+        db.insertInto("community_users").values({ username: `u${i}`, password_hash: "x" }).execute(),
+      ).rejects.toBeInstanceOf(DatabaseDownError);
     }
     expect(dbBreakerOpen()).toBe(false);
     await expect(db.selectFrom("community_users").select("id").execute()).rejects.toBeInstanceOf(
       DatabaseDownError,
     );
     expect(dbBreakerOpen()).toBe(true);
-    // Open: an unfaulted table fails at once on both clients.
+    // Open: an unfaulted table fails at once.
     await expect(db.selectFrom("community_events").select("id").execute()).rejects.toBeInstanceOf(
       DatabaseDownError,
     );
-    const { error } = await getCommunityDb().from("community_events").select("id");
-    expect(error?.message).toMatch(/not responding/);
     await expect(
       db.transaction().execute((tx) => tx.selectFrom("community_events").select("id").execute()),
     ).rejects.toBeInstanceOf(DatabaseDownError);

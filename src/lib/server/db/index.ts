@@ -1,23 +1,13 @@
 /**
- * The database entry: both clients and what their failures say. Repositories
- * and the live service import the database through here.
- *
- * Two clients reach one database while repositories move across: the
- * PostgREST one (`getCommunityDb`, `rest.ts`) and the direct one (`getDb`,
- * Kysely over `pg`). One breaker (`breaker.ts`) serves both.
+ * The database entry: the client (`getDb`, Kysely over `pg`) and what its
+ * failures say. Repositories and the live service import the database
+ * through here. The breaker (`breaker.ts`) guards every query.
  */
 import { sql, type Kysely, type Transaction } from "kysely";
 import { createDbClient, type DirectDbClient } from "./client";
 import type { Database } from "./schema";
 import type { DbService } from "./settings";
 
-export {
-  COMMUNITY_DB_TIMEOUT_MS,
-  fetchWithDbTimeout,
-  getCommunityDb,
-  isCommunityConfigured,
-  type DbClient,
-} from "./rest";
 export { DB_BREAKER_FAILURES, DB_BREAKER_OPEN_MS, resetDbBreaker } from "./breaker";
 export {
   COMMUNITY_DB_DOWN_MESSAGE,
@@ -61,12 +51,12 @@ export function configureDb(options: { service: DbService }): void {
   current.service = options.service;
 }
 
-/** Whether the direct client can be used: `DATABASE_URL` is set, or a test installed its database. */
+/** Whether there is a database: `DATABASE_URL` is set, or a test installed its database. */
 export function isDatabaseConfigured(): boolean {
   return Boolean(state().testDb || process.env.DATABASE_URL);
 }
 
-/** The direct client; the pool opens on first use. Throws when no database is configured. */
+/** The client; the pool opens on first use. Throws when no database is configured. */
 export function getDb(): Kysely<Database> {
   const current = state();
   if (current.testDb) {

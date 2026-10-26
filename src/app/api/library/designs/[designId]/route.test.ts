@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { planWithAdditions } from "@/lib/model/__fixtures__/plan-additions";
 import type { FactoryProject } from "@/lib/model/types";
 import { useTestDb } from "@/test-support/test-db";
-import { getCommunityDb } from "@/lib/server/db";
 import { makeSessionToken } from "@/lib/server/auth/sessions";
 import { oversizeRequest } from "@/test-support/request-bodies";
 import { GET, PUT } from "./route";
@@ -14,17 +13,17 @@ import { GET, PUT } from "./route";
  * jsonb in between).
  */
 
-useTestDb();
+const testDb = useTestDb();
 let cookie = "";
 
 beforeAll(async () => {
   vi.stubEnv("COMMUNITY_HASH_SALT", "library-put-test-salt");
-  const { data } = await getCommunityDb()
-    .from("community_users")
-    .insert({ username: "ann", password_hash: "x:y" })
-    .select("id")
-    .single();
-  cookie = `gtnh_session=${makeSessionToken((data as { id: string }).id)}`;
+  const { id } = await testDb()
+    .db.insertInto("community_users")
+    .values({ username: "ann", password_hash: "x:y" })
+    .returning("id")
+    .executeTakeFirstOrThrow();
+  cookie = `gtnh_session=${makeSessionToken(id)}`;
 }, 60_000);
 
 afterAll(async () => {

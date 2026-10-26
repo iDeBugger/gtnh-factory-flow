@@ -1,6 +1,5 @@
 import { docKey } from "@/lib/live/protocol";
 import type { PlanMember } from "@/lib/library/sync-types";
-import { fetchWithDbTimeout } from "./db";
 
 /**
  * The site's notices to the live service over its internal API: sharing
@@ -42,6 +41,9 @@ function noticeBody(notice: LiveNotice): unknown {
   return { doc };
 }
 
+/** How long one notice may take before it counts as not taken. */
+const NOTICE_TIMEOUT_MS = 3000;
+
 /** Waits before each retry of a notice the live service did not take (down, or restarting). */
 export const LIVE_NOTICE_RETRY_MS = [1000, 4000, 15_000] as const;
 
@@ -67,15 +69,14 @@ export async function notifyLive(
   const body = JSON.stringify(noticeBody(notice));
   const send = async (): Promise<"taken" | "refused" | "again"> => {
     try {
-      const response = await fetchWithDbTimeout(
-        `${base}/internal/${notice.kind}`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-          body,
-        },
-        3000,
-      );
+      // A service that never answers costs 3 s, then counts as not taken.
+      const response = await fetch(`${base}/internal/${notice.kind}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body,
+        signal: AbortSignal.timeout(NOTICE_TIMEOUT_MS),
+      });
+      await response.body?.cancel().catch(() => undefined);
       return response.ok ? "taken" : response.status >= 500 ? "again" : "refused";
     } catch {
       return "again";

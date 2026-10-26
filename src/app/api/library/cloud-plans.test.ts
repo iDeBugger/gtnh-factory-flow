@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
 import { setDbFaultForTests } from "@/lib/server/db/guard";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
-import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
+import { resetDbBreaker } from "@/lib/server/db";
 import { resetMemoryTokens } from "@/lib/server/limits/memory-rate";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
 import { LIBRARY_MAX_DESIGNS } from "@/lib/library/sync-types";
@@ -69,13 +69,11 @@ let noticeServer: Server;
 const users: Record<string, { id: string; cookie: string }> = {};
 
 async function makeUser(username: string) {
-  const { data, error } = await getCommunityDb()
-    .from("community_users")
-    .insert({ username, password_hash: "x:y" })
-    .select("id")
-    .single();
-  expect(error).toBeNull();
-  const id = (data as { id: string }).id;
+  const { id } = await testDb()
+    .db.insertInto("community_users")
+    .values({ username, password_hash: "x:y" })
+    .returning("id")
+    .executeTakeFirstOrThrow();
   users[username] = { id, cookie: `gtnh_session=${makeSessionToken(id)}` };
 }
 
@@ -261,19 +259,19 @@ describe("cloud plans over REST", () => {
       params({ designId }),
     );
     expect(saved.status).toBe(200);
-    const { data } = await getCommunityDb()
-      .from("library_designs")
-      .select("name,folder_id,favorite,sort_order,plan")
-      .eq("user_id", users.ann!.id)
-      .eq("id", designId)
-      .single();
+    const data = await testDb()
+      .db.selectFrom("library_designs")
+      .select(["name", "folder_id", "favorite", "sort_order", "plan"])
+      .where("user_id", "=", users.ann!.id)
+      .where("id", "=", designId)
+      .executeTakeFirst();
     expect(data).toMatchObject({
       name: "Steel by Bob",
       folder_id: "folder-mine",
       favorite: true,
       sort_order: 3,
     });
-    expect((data as { plan: { name: string } }).plan.name).toBe("Steel by Bob");
+    expect((data as unknown as { plan: { name: string } }).plan.name).toBe("Steel by Bob");
 
     const stranger = await design.PUT(
       request(
@@ -297,12 +295,12 @@ describe("cloud plans over REST", () => {
     );
     expect(farAhead.status).toBe(400);
     expect(await farAhead.json()).toEqual(clockAhead);
-    const { data } = await getCommunityDb()
-      .from("library_designs")
+    const data = await testDb()
+      .db.selectFrom("library_designs")
       .select("name")
-      .eq("user_id", users.ann!.id)
-      .eq("id", designId)
-      .single();
+      .where("user_id", "=", users.ann!.id)
+      .where("id", "=", designId)
+      .executeTakeFirst();
     expect(data).toEqual({ name: "Steel by Bob" });
 
     // A clock a couple of minutes ahead is ordinary skew; ten minutes is a wrong clock.
@@ -345,11 +343,12 @@ describe("cloud plans over REST", () => {
 
   it("refuses a plan body while the live service holds the lease, and still takes metadata", async () => {
     const until = new Date(Date.now() + 90_000).toISOString();
-    await getCommunityDb()
-      .from("library_designs")
-      .update({ live_lease_until: until })
-      .eq("user_id", users.ann!.id)
-      .eq("id", designId);
+    await testDb()
+      .db.updateTable("library_designs")
+      .set({ live_lease_until: until })
+      .where("user_id", "=", users.ann!.id)
+      .where("id", "=", designId)
+      .execute();
     const withPlan = await design.PUT(
       request(
         "PUT",
@@ -377,11 +376,12 @@ describe("cloud plans over REST", () => {
       params({ designId }),
     );
     expect((await read.json()).live).toBe(true);
-    await getCommunityDb()
-      .from("library_designs")
-      .update({ live_lease_until: null })
-      .eq("user_id", users.ann!.id)
-      .eq("id", designId);
+    await testDb()
+      .db.updateTable("library_designs")
+      .set({ live_lease_until: null })
+      .where("user_id", "=", users.ann!.id)
+      .where("id", "=", designId)
+      .execute();
   });
 
   it("lets only the owner share, and a member leave", async () => {

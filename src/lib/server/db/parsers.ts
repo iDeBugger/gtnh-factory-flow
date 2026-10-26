@@ -5,9 +5,9 @@ import { sql, type RawBuilder } from "kysely";
  * on PGlite: both hand these parsers Postgres's text form, so one table serves
  * the pool, the tests' PGlite and the local database.
  *
- * The answers keep the spelling PostgREST gave (its `to_json` form), so a
- * route's JSON does not change when its query moves off PostgREST
- * (`app/api/wire-format.test.ts`).
+ * The answers keep Postgres's `to_json` spelling, which the routes' JSON has
+ * always carried (`app/api/wire-format.test.ts`), so players' clients and
+ * saved answers read the same.
  */
 
 const UTC_TIMESTAMP = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)\+00$/;
@@ -15,7 +15,7 @@ const UTC_TIMESTAMP = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)\+0
 /**
  * A `timestamptz` as JSON spells it: `2026-10-25 17:33:50.431+00` becomes
  * `2026-10-25T17:33:50.431+00:00`, fraction digits as Postgres printed them.
- * Every session runs in UTC (`dbSettings`, `openLocalDatabase`), so any other
+ * Every session runs in UTC (`dbSettings`; each PGlite sets it when it opens), so any other
  * offset means a session that skipped that setting: it throws rather than
  * answer a time a client would read in the wrong zone.
  */
@@ -29,7 +29,7 @@ export function toJsonTimestamp(text: string): string {
 
 /**
  * OID to parser: `timestamptz` (1184) as JSON text, `bigint` (20) as a number,
- * as PostgREST answered both. Scalars only: an array of either (`timestamptz[]`
+ * as the routes' JSON has always carried both. Scalars only: an array of either (`timestamptz[]`
  * 1185, `bigint[]` 1016, as `array_agg` returns) reads differently on the two
  * drivers until its own OID is added here.
  */

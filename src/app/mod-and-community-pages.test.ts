@@ -16,7 +16,6 @@ vi.mock("@/lib/server/db", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/server/db")>();
   return {
     ...actual,
-    isCommunityConfigured: () => true,
     isDatabaseConfigured: () => true,
   };
 });

@@ -12,7 +12,6 @@ import {
   PasswordCheckBusyError,
   passwordChecksInFlight,
 } from "@/lib/server/auth/passwords";
-import { getCommunityDb } from "@/lib/server/db";
 import * as login from "./login/route";
 import * as logout from "./logout/route";
 import * as me from "./me/route";
@@ -42,7 +41,7 @@ vi.mock("@/lib/server/repos/accounts", async (importOriginal) => {
   };
 });
 
-useTestDb();
+const testDb = useTestDb();
 
 /** A fresh client address per call: the per-address limits never meet across cases. */
 const nextAddress = () => `10.1.${Math.floor(addresses / 250)}.${(addresses++ % 250) + 1}`;
@@ -242,12 +241,11 @@ describe("signing out everywhere", () => {
       username: "ann_old",
       password: "ann-password",
     });
-    const { data } = await getCommunityDb()
-      .from("community_users")
+    const { id } = await testDb()
+      .db.selectFrom("community_users")
       .select("id")
-      .eq("username", "ann_old")
-      .single();
-    const { id } = data as { id: string };
+      .where("username", "=", "ann_old")
+      .executeTakeFirstOrThrow();
     const payload = `${id}.${Date.now() + 60_000}`;
     const legacy = `gtnh_session=${payload}.${createHmac("sha256", "auth-test-salt").update(payload).digest("hex")}`;
     expect(await whoAmI(legacy)).toEqual({ username: "ann_old", isAdmin: false });
@@ -261,11 +259,11 @@ describe("signing out everywhere", () => {
       password: "ann-password",
     });
     const cookie = cookieOf(made);
-    const { data } = await getCommunityDb()
-      .from("community_users")
+    const data = await testDb()
+      .db.selectFrom("community_users")
       .select("id")
-      .eq("username", "ann_race")
-      .single();
+      .where("username", "=", "ann_race")
+      .executeTakeFirstOrThrow();
     forgetSessionUsers();
     // A request with the token starts its row read and stalls in the database.
     let release!: () => void;

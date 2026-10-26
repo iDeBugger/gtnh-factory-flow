@@ -7,8 +7,8 @@ export type DbEnv = Readonly<Record<string, string | undefined>>;
 export type DbService = "site" | "live";
 
 /**
- * Connections per process. The site matches the pool PostgREST ran for the
- * same load; the live service flushes 4 plans at a time plus joins and
+ * Connections per process. The site keeps 10 for the load it serves (the
+ * size its earlier database API ran with); the live service flushes 4 plans at a time plus joins and
  * renewals. Both together stay far under Postgres's 100 connections.
  */
 const POOL_MAX: Record<DbService, number> = { site: 10, live: 6 };
@@ -17,7 +17,7 @@ const POOL_MAX: Record<DbService, number> = { site: 10, live: 6 };
 const CONNECT_TIMEOUT_MS = 5_000;
 /** The server stops a runaway statement before the client gives up on it. */
 const STATEMENT_TIMEOUT_MS = 15_000;
-/** The client's cap per query: today's per-request cap (`COMMUNITY_DB_TIMEOUT_MS`). */
+/** The client's cap per query: a stall fails as down rather than holding a request open for minutes. */
 const QUERY_TIMEOUT_MS = 20_000;
 /** A transaction left open frees its locks. */
 const IDLE_IN_TRANSACTION_MS = 10_000;
