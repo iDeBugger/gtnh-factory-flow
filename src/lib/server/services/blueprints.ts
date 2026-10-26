@@ -24,7 +24,7 @@ import { blueprintStorageErrorMessage, DbQueryError } from "../db";
 import type { SignedIn, Viewer } from "../http/viewer";
 import { checkRateLimit } from "../limits/rate-limit";
 import * as blueprints from "../repos/blueprints";
-import { canReadBlueprint } from "./access";
+import { canReadBlueprint, isUuid } from "./access";
 import { fail, ok, type ServiceResult } from "./result";
 
 /**
@@ -33,7 +33,8 @@ import { fail, ok, type ServiceResult } from "./result";
  * to read once it is public and the community switch is on
  * (`canReadBlueprint`). Only the owner edits, publishes or deletes one;
  * ownership is always the session's account, never a client-supplied
- * owner.
+ * owner. An id that is no uuid is a missing blueprint, answered before any
+ * query.
  *
  * The routes gate (the community switch, configured, signed in) and read
  * the body; these take the viewer.
@@ -158,7 +159,7 @@ export async function readBlueprint(
   communityOn: boolean,
 ): Promise<ServiceResult<{ blueprint: BlueprintWithPayload }>> {
   // With the switch off an anonymous viewer may read no blueprint at all.
-  if (!viewer.userId && !communityOn) {
+  if (!isUuid(blueprintId) || (!viewer.userId && !communityOn)) {
     return fail("not-found", BLUEPRINT_NOT_FOUND);
   }
   let row;
@@ -292,6 +293,9 @@ export async function updateBlueprint(
   if (Object.keys(patch).length === 0) {
     return fail("bad-request", "Nothing to change.");
   }
+  if (!isUuid(blueprintId)) {
+    return fail("not-found", BLUEPRINT_NOT_FOUND);
+  }
 
   let row;
   try {
@@ -324,6 +328,9 @@ export async function publishBlueprint(
 ): Promise<ServiceResult<{ blueprint: BlueprintSummary }>> {
   if (typeof body.publish !== "boolean") {
     return fail("bad-request", "Invalid publish request.");
+  }
+  if (!isUuid(blueprintId)) {
+    return fail("not-found", BLUEPRINT_NOT_FOUND);
   }
   const description =
     typeof body.description === "string"
@@ -359,6 +366,9 @@ export async function deleteBlueprint(
   viewer: SignedIn,
   blueprintId: string,
 ): Promise<ServiceResult<{ ok: true }>> {
+  if (!isUuid(blueprintId)) {
+    return ok({ ok: true });
+  }
   try {
     await blueprints.deleteOwn(blueprintId, viewer.userId);
   } catch (error) {
@@ -377,6 +387,9 @@ export async function downloadBlueprint(
   viewer: Viewer,
   blueprintId: string,
 ): Promise<ServiceResult<{ blueprint: BlueprintWithPayload }>> {
+  if (!isUuid(blueprintId)) {
+    return fail("not-found", BLUEPRINT_NOT_FOUND);
+  }
   let row;
   try {
     row = await blueprints.readDownload(blueprintId);
