@@ -16,7 +16,8 @@ this file is the website's side of it.
 | Batch checks | `src/lib/live/validate.ts`, `src/live/batch.ts` | each thing a batch puts or patches must pass its collection's schema, plan fields their field's; what is stored is the schema's output |
 | REST | `src/app/api/library/...`, `src/app/api/accounts/search` | members, `?owner=`, the lease refusal, notices to the live service (`src/lib/server/live-notify.ts`) |
 | Live service | `src/live/` | the WebSocket server: rooms (`room.ts`, the plan held in `doc.ts`), journal, the flush queue, leases |
-| Local database | `src/lib/server/local-db/`, `tools/local-db/serve.ts` | Postgres in-process (PGlite) behind a PostgREST stand-in |
+| Database | `src/lib/server/repos/designs.ts`, `design-members.ts`, `src/live/store.ts` | every lease and plan write in one repository, which the REST routes and the live service's store both call; the service logs in as `gtnh_live` |
+| Local database | `tools/local-db/serve.ts`, `src/test-support/test-db.ts` | Postgres for `npm run dev:local` (Docker, else PGlite behind its wire-protocol socket); in-memory PGlite for tests |
 | Test client | `tools/live/test-client.mjs` | a headless client for all of the above |
 | The editor | `src/store/live-session.ts`, `src/lib/live/live-*.ts`, `src/components/live/`, `src/components/tasks/` | the open design live: edits, undo, offline, presence, sharing, task boards (below) |
 
@@ -251,13 +252,17 @@ at every lease renewal, so a lost notice is late by at most 30 s.
 npm run dev:local
 ```
 
-starts the local database on 127.0.0.1:54329 (data in `scratch/local-db/pgdata`), the live service on :3001 (journal
-in `scratch/local-db/live-journal`) and `next dev` on :3000, with `LOCAL_DB=1`, a development-only
-`COMMUNITY_HASH_SALT` and `NEXT_PUBLIC_LIVE_URL=ws://localhost:3001/live`. No Supabase credentials anywhere. Accounts
-made there exist only there. Ctrl+C stops all three; the live service stores its open plans first.
+starts the local database on 127.0.0.1:54330 (the compose file's `postgres` image in the container `gtnh-local-db`
+when Docker answers, else PGlite with data in `scratch/local-db/pgdata`; `src/lib/server/CLAUDE.md`, Local
+database), the live service on :3001 (journal in `scratch/local-db/live-journal`) and `next dev` on :3000, with
+`DATABASE_URL=postgres://postgres@127.0.0.1:54330/postgres`, a development-only `COMMUNITY_HASH_SALT` and
+`NEXT_PUBLIC_LIVE_URL=ws://localhost:3001/live`. No database credentials anywhere. Accounts made there exist only
+there. Ctrl+C stops all three; the live service stores its open plans first.
 
-The pieces alone: `npm run local-db`, `npm run live` (with `LOCAL_DB=1`, `COMMUNITY_HASH_SALT` and friends set),
-`npm run dev`. Delete `scratch/local-db/` for a fresh database.
+The pieces alone: `npm run local-db`, `npm run live` (with that `DATABASE_URL`, `COMMUNITY_HASH_SALT` and friends
+set), `npm run dev`. For a fresh database, `docker rm -f gtnh-local-db; docker volume rm gtnh-local-db` (Docker) or
+delete `scratch/local-db/pgdata` (PGlite); a database made before the migration runner must be reset this way
+once.
 
 Two people: two browser profiles, a browser and the dev game (`call 'library?url=http://localhost:3000'`), or the
 test client:
@@ -276,9 +281,9 @@ $C --user ann --password annpass1 send <doc> '[{"o":"meta","f":{"primaryView":"t
 
 `npm run build:live` bundles the service to `dist-live/live.mjs` (esbuild; packages stay in `node_modules`, and the
 image ships only the ones the bundle loads), run with `node dist-live/live.mjs` in the `live` container
-(`docs/deploy.md`), published on 127.0.0.1:3301. The site runs Next's standalone `server.js` in its own container. Environment: `COMMUNITY_HASH_SALT`, `DATABASE_URL` (as `gtnh_live`; the service will not start without it), `POSTGREST_URL`, `POSTGREST_SERVICE_TOKEN`, `LIVE_PORT`,
+(`docs/deploy.md`), published on 127.0.0.1:3301. The site runs Next's standalone `server.js` in its own container. Environment: `COMMUNITY_HASH_SALT`, `DATABASE_URL` (as `gtnh_live`, built by compose from `GTNH_LIVE_DB_PASSWORD`; the service will not start without it), `LIVE_PORT`,
 `LIVE_HOST`, `LIVE_JOURNAL_DIR`, `LIVE_INTERNAL_TOKEN`, `LIVE_ALLOWED_ORIGINS`, `LIVE_TRUSTED_PROXIES` (optional, loopback is always trusted), `LIVE_MAX_ROOMS` (optional, default 500),
-`LIVE_MAX_PLAN_BYTES` (optional, default 64 MB of plan JSON in open rooms), `NODE_ENV=production`. `LOCAL_DB=1` with `NODE_ENV=production` stops both the website and the service at startup. The website
+`LIVE_MAX_PLAN_BYTES` (optional, default 64 MB of plan JSON in open rooms), `NODE_ENV=production`. The website
 needs `LIVE_INTERNAL_URL` and `LIVE_INTERNAL_TOKEN` at run time and `NEXT_PUBLIC_LIVE_URL` at build time (unset:
 no live features). The deploy and every variable's value are in `docs/deploy.md`.
 
@@ -295,7 +300,8 @@ no live features). The deploy and every variable's value are in `docs/deploy.md`
   sessions in `scratch/probes/.session-*.json`.
 
 - `src/lib/live/ops.test.ts` (the vectors), `validate.test.ts`.
-- `src/lib/server/local-db/postgrest.test.ts`: every query shape against real Postgres.
+- `src/lib/server/db/db-roles.test.ts`: every repository function under the role of the process that calls it;
+  `src/lib/server/db/pg-real.local.test.ts`: the same cases and the races against the rehearsal's real Postgres.
 - `src/app/api/library/cloud-plans.test.ts`: sharing, members, the lease refusal, deletes, search, the notices, saves, creations and deletes arriving at once.
 - `src/live/store-grants.test.ts`: every store call under the live role's grants, and the lease outcomes.
 - `src/live/service.test.ts`: the service in-process with real sockets: two editors converging, reconnects, the

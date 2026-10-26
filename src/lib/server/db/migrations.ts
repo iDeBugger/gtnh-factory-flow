@@ -225,7 +225,9 @@ const LEXING_SETTINGS = /\b(standard_conforming_strings|backslash_quote)\b/i;
  * reads each with Postgres's default string rules, so a file must not change
  * those rules for the files after it: one that names
  * standard_conforming_strings or backslash_quote (a `set`, a `set_config`,
- * an `alter ... set`) is refused too.
+ * an `alter ... set`) is refused too. It reads the names in the file's text
+ * only: SQL built at run time (an `execute` of a concatenated string) is not
+ * read, so the check stops accidents, not a file written to get past it.
  */
 export function checkMigrationText(name: string, text: string): void {
   const lexing = LEXING_SETTINGS.exec(text);

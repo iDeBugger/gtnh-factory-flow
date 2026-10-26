@@ -49,8 +49,19 @@ the game is `docs/design/cloud-live.md` in the game's repository: frames and ops
 - `/internal/*` (Bearer `LIVE_INTERNAL_TOKEN`) is for the Next.js routes; Caddy routes only `/live` and `/live/*` here.
 - Production runs the bundle `npm run build:live` makes (`dist-live/live.mjs`, gitignored); development runs the
   sources with tsx (`npm run live`, `npm run dev:local`).
-- The store (`store.ts`) reaches Postgres directly as `gtnh_live`, which holds only the columns it uses
-  (`db/grants.sql`); a query it gains must work under those grants. `main.ts` refuses to start
-  without `DATABASE_URL`.
+- The store (`store.ts`, `PlanStore`) holds no SQL: it is an adapter over the site's repositories
+  (`src/lib/server/repos/designs.ts` for every lease and plan write, `design-members`, `accounts`) and
+  `services/design-role.ts`, so the REST save and the live service share one writer for the lease
+  (`src/lib/server/CLAUDE.md`, Database). Each lease take, renewal, flush and release is one statement.
+- The service logs in as `gtnh_live` (`DATABASE_URL`, built by compose), which holds only the columns the store
+  uses (`db/grants.sql`): select `id, username, is_admin, session_epoch` on `community_users`; select on
+  `library_design_members`; select `user_id, id, plan, seq, plan_bytes, deleted_at, live_lease_until,
+  live_lease_token` and update `plan, seq, plan_updated_at, updated_at, live_lease_until, live_lease_token` on
+  `library_designs`. Nothing else, no password hashes. A query the store gains must work under those grants, or
+  `store-grants.test.ts` fails; a column it needs is a line in `db/grants.sql`.
+- `main.ts` refuses to start without `DATABASE_URL` ("No database: set DATABASE_URL."), opens the pool as the live
+  service (`configureDb({ service: "live" })`: 6 connections, `application_name` `gtnh-live`) and closes it after
+  the SIGTERM flush. A database restart fails the work in flight as down (`COMMUNITY_DB_DOWN_MESSAGE`, the breaker
+  in `db/breaker.ts`); the pool reconnects on its own and rooms reopen without a restart of the service.
 - Exam: `service.test.ts` (in-process, real sockets, the local database), `store-grants.test.ts` (every store call
   as `gtnh_live`), `main.test.ts`. Run them after any change here.

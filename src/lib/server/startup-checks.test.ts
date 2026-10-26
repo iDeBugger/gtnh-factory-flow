@@ -6,8 +6,6 @@ afterEach(() => {
 });
 
 const UNREAD = [
-  "POSTGREST_URL",
-  "POSTGREST_SERVICE_TOKEN",
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
   "LOCAL_DB",

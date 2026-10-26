@@ -15,11 +15,12 @@
  *   that still sets it does not believe it is in effect.
  * - DATABASE_URL missing in production: it warns. Accounts, the library and
  *   blueprints answer that they are off while the planner keeps serving.
- * - A variable of an earlier database client set (POSTGREST_URL,
- *   POSTGREST_SERVICE_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
- *   LOCAL_DB): it warns and names DATABASE_URL, the one variable the
- *   database client reads, so an old environment file does not leave the
- *   server without a database while looking configured.
+ * - A variable of an earlier database setup set (SUPABASE_URL,
+ *   SUPABASE_SERVICE_ROLE_KEY, LOCAL_DB): it warns and names DATABASE_URL,
+ *   the one variable the database client reads, so an old environment file
+ *   does not leave the server without a database while looking configured.
+ *   The deployed stack's env check refuses the REST client's variables by
+ *   name before anything starts (tools/deploy/check-env.mjs).
  */
 export const SHORT_SECRET_LENGTH = 16;
 
@@ -41,8 +42,6 @@ export function checkServerSetupOrExit(): void {
 
 /** Variables no database client reads any more. */
 const UNREAD_DB_VARIABLES = [
-  "POSTGREST_URL",
-  "POSTGREST_SERVICE_TOKEN",
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
   "LOCAL_DB",

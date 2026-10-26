@@ -18,7 +18,7 @@ before changing that area; it names the tests that pin its behaviour.
 | Domain model: resources, cells vs fluids, oredict context, sections, boards | `src/lib/model/CLAUDE.md` |
 | Power generation | `src/lib/power/CLAUDE.md` |
 | Designs, tabs, saving, account sync, plan import/export, public view | `src/store/CLAUDE.md` |
-| Server, recipe API, database (Postgres), file store, cloud plans, local database | `src/lib/server/CLAUDE.md` |
+| Server, recipe API, database (`src/lib/server/{db,repos,services}`: Postgres direct, the layers, migrations and roles in `db/`), file store, cloud plans, local database | `src/lib/server/CLAUDE.md` |
 | Live service: live plan editing over WebSockets | `src/live/CLAUDE.md`, `docs/live.md` |
 | Dataset pipeline: export, normalize, rebuild, publish | `tools/dataset-pipeline/CLAUDE.md` |
 | Deploy: Docker images, compose stack, deploy and dataset publish scripts | `docs/deploy.md` |
