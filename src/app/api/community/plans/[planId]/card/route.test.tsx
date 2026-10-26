@@ -11,7 +11,7 @@ vi.mock("next/og", () => ({
     }
   },
 }));
-vi.mock("@/lib/server/plan-preview", () => ({
+vi.mock("@/lib/server/services/plan-preview", () => ({
   getPublicPlanRow: async () => ({ id: "p1", name: "Steel line", game_version: "2.9" }),
   getPlanPreviewPng: async () => undefined,
   sizePlanPreview: () => undefined,

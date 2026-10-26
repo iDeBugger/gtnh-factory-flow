@@ -54,7 +54,7 @@ describe("the live image's packages", () => {
   it("names the package of a bare import, never a builtin or a path", () => {
     expect(packageName("pg")).toBe("pg");
     expect(packageName("pg/lib/client.js")).toBe("pg");
-    expect(packageName("@supabase/postgrest-js")).toBe("@supabase/postgrest-js");
+    expect(packageName("@electric-sql/pglite")).toBe("@electric-sql/pglite");
     expect(packageName("@scope/pkg/sub")).toBe("@scope/pkg");
     expect(packageName("node:fs")).toBeNull();
     expect(packageName("./x.mjs")).toBeNull();
@@ -168,11 +168,24 @@ describe("the live image's packages", () => {
 
   it("covers today's live bundle from the repo's lockfile", () => {
     const lock = JSON.parse(readFileSync(new URL("../../package-lock.json", import.meta.url), "utf8"));
-    const keys = runtimeClosure(lock, ["@supabase/postgrest-js", "ws", "zod"]);
+    const keys = runtimeClosure(lock, ["kysely", "pg", "ws", "zod"]);
     expect(keys).toEqual([
-      "node_modules/@supabase/postgrest-js",
-      "node_modules/tslib",
+      "node_modules/kysely",
+      "node_modules/pg",
+      "node_modules/pg-cloudflare",
+      "node_modules/pg-connection-string",
+      "node_modules/pg-int8",
+      "node_modules/pg-pool",
+      "node_modules/pg-protocol",
+      "node_modules/pg-types",
+      "node_modules/pgpass",
+      "node_modules/postgres-array",
+      "node_modules/postgres-bytea",
+      "node_modules/postgres-date",
+      "node_modules/postgres-interval",
+      "node_modules/split2",
       "node_modules/ws",
+      "node_modules/xtend",
       "node_modules/zod",
     ]);
   });

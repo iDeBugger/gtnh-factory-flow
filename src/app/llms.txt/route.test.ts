@@ -10,19 +10,9 @@ const rows = [
   },
 ];
 
-vi.mock("@/lib/server/community", () => ({
-  isCommunityConfigured: () => true,
-  PLAN_SUMMARY_COLUMNS: "*",
-  getCommunityDb: () => {
-    const query = {
-      select: () => query,
-      or: () => query,
-      order: () => query,
-      limit: () => query,
-      returns: async () => ({ data: rows, error: null }),
-    };
-    return { from: () => query };
-  },
+vi.mock("@/lib/server/services/config", () => ({ isDatabaseConfigured: () => true }));
+vi.mock("@/lib/server/services/community-plans", () => ({
+  publicPlansByScore: async () => rows,
 }));
 
 import { GET } from "./route";

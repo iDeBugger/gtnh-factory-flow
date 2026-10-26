@@ -1,11 +1,13 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { forgetSessionUsers, getCommunityDb, makeSessionToken, resetDbBreaker } from "@/lib/server/community";
-import { resetMemoryTokens } from "@/lib/server/memory-rate";
+import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
+import { setDbFaultForTests } from "@/lib/server/db/guard";
+import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
+import { resetDbBreaker } from "@/lib/server/db";
+import { resetMemoryTokens } from "@/lib/server/limits/memory-rate";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
+import { LIBRARY_MAX_DESIGNS } from "@/lib/library/sync-types";
 import * as library from "./route";
 import * as design from "./designs/[designId]/route";
 import * as members from "./designs/[designId]/members/route";
@@ -13,6 +15,48 @@ import * as member from "./designs/[designId]/members/[userId]/route";
 import * as folder from "./folders/[folderId]/route";
 import * as search from "../accounts/search/route";
 import * as meRoute from "../community/auth/me/route";
+import * as blueprintList from "../blueprints/route";
+import * as blueprintOne from "../blueprints/[blueprintId]/route";
+
+/**
+ * Holds each answer of a wrapped repository read until `size` of them have
+ * come back, or `waitMs` has passed: two requests that both read before
+ * either writes meet here, so a check-then-write race shows. Reads made
+ * one after another (one transaction at a time) each wait out the timer.
+ */
+const gates = vi.hoisted(() => {
+  type Gate = { arrive(): Promise<void> };
+  const make = (size: number, waitMs = 150): Gate => {
+    let arrived = 0;
+    let open: () => void = () => undefined;
+    const opened = new Promise<void>((resolve) => (open = resolve));
+    return {
+      arrive() {
+        arrived += 1;
+        if (arrived >= size) open();
+        return Promise.race([opened, new Promise<void>((resolve) => setTimeout(resolve, waitMs))]);
+      },
+    };
+  };
+  return { make, read: undefined as Gate | undefined, count: undefined as Gate | undefined };
+});
+
+vi.mock("@/lib/server/repos/designs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/server/repos/designs")>();
+  return {
+    ...actual,
+    read: async (...args: Parameters<typeof actual.read>) => {
+      const answer = await actual.read(...args);
+      await gates.read?.arrive();
+      return answer;
+    },
+    countLive: async (...args: Parameters<typeof actual.countLive>) => {
+      const answer = await actual.countLive(...args);
+      await gates.count?.arrive();
+      return answer;
+    },
+  };
+});
 
 /**
  * Cloud plans over REST, against the local database: sharing a design with
@@ -21,19 +65,17 @@ import * as meRoute from "../community/auth/me/route";
  * notices the live service is sent.
  */
 
-let local: LocalDatabase;
+const testDb = useTestDb();
 let notices: Array<{ path: string; auth: string | undefined; body: unknown }> = [];
 let noticeServer: Server;
 const users: Record<string, { id: string; cookie: string }> = {};
 
 async function makeUser(username: string) {
-  const { data, error } = await getCommunityDb()
-    .from("community_users")
-    .insert({ username, password_hash: "x:y" })
-    .select("id")
-    .single();
-  expect(error).toBeNull();
-  const id = (data as { id: string }).id;
+  const { id } = await testDb()
+    .db.insertInto("community_users")
+    .values({ username, password_hash: "x:y" })
+    .returning("id")
+    .executeTakeFirstOrThrow();
   users[username] = { id, cookie: `gtnh_session=${makeSessionToken(id)}` };
 }
 
@@ -81,10 +123,7 @@ function upsertBody(name: string, stamp: string, withPlan = true) {
 }
 
 beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "cloud-plans-test-salt");
-  local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
   noticeServer = createServer((req, res) => {
     let text = "";
     req.on("data", (chunk) => (text += chunk));
@@ -109,9 +148,7 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  useInProcessLocalDb(undefined);
   noticeServer?.close();
-  await local?.close();
   vi.unstubAllEnvs();
 });
 
@@ -224,19 +261,19 @@ describe("cloud plans over REST", () => {
       params({ designId }),
     );
     expect(saved.status).toBe(200);
-    const { data } = await getCommunityDb()
-      .from("library_designs")
-      .select("name,folder_id,favorite,sort_order,plan")
-      .eq("user_id", users.ann!.id)
-      .eq("id", designId)
-      .single();
+    const data = await testDb()
+      .db.selectFrom("library_designs")
+      .select(["name", "folder_id", "favorite", "sort_order", "plan"])
+      .where("user_id", "=", users.ann!.id)
+      .where("id", "=", designId)
+      .executeTakeFirst();
     expect(data).toMatchObject({
       name: "Steel by Bob",
       folder_id: "folder-mine",
       favorite: true,
       sort_order: 3,
     });
-    expect((data as { plan: { name: string } }).plan.name).toBe("Steel by Bob");
+    expect((data as unknown as { plan: { name: string } }).plan.name).toBe("Steel by Bob");
 
     const stranger = await design.PUT(
       request(
@@ -260,12 +297,12 @@ describe("cloud plans over REST", () => {
     );
     expect(farAhead.status).toBe(400);
     expect(await farAhead.json()).toEqual(clockAhead);
-    const { data } = await getCommunityDb()
-      .from("library_designs")
+    const data = await testDb()
+      .db.selectFrom("library_designs")
       .select("name")
-      .eq("user_id", users.ann!.id)
-      .eq("id", designId)
-      .single();
+      .where("user_id", "=", users.ann!.id)
+      .where("id", "=", designId)
+      .executeTakeFirst();
     expect(data).toEqual({ name: "Steel by Bob" });
 
     // A clock a couple of minutes ahead is ordinary skew; ten minutes is a wrong clock.
@@ -308,11 +345,12 @@ describe("cloud plans over REST", () => {
 
   it("refuses a plan body while the live service holds the lease, and still takes metadata", async () => {
     const until = new Date(Date.now() + 90_000).toISOString();
-    await getCommunityDb()
-      .from("library_designs")
-      .update({ live_lease_until: until })
-      .eq("user_id", users.ann!.id)
-      .eq("id", designId);
+    await testDb()
+      .db.updateTable("library_designs")
+      .set({ live_lease_until: until })
+      .where("user_id", "=", users.ann!.id)
+      .where("id", "=", designId)
+      .execute();
     const withPlan = await design.PUT(
       request(
         "PUT",
@@ -340,11 +378,12 @@ describe("cloud plans over REST", () => {
       params({ designId }),
     );
     expect((await read.json()).live).toBe(true);
-    await getCommunityDb()
-      .from("library_designs")
-      .update({ live_lease_until: null })
-      .eq("user_id", users.ann!.id)
-      .eq("id", designId);
+    await testDb()
+      .db.updateTable("library_designs")
+      .set({ live_lease_until: null })
+      .where("user_id", "=", users.ann!.id)
+      .where("id", "=", designId)
+      .execute();
   });
 
   it("lets only the owner share, and a member leave", async () => {
@@ -453,6 +492,37 @@ describe("cloud plans over REST", () => {
     expect(last).toBe(429);
   });
 
+  it("lists a member only the design shared with them, not another owner's design with the same id", async () => {
+    await makeUser("twin_ann");
+    await makeUser("twin_bob");
+    await makeUser("twin_mem");
+    const designId = "design-twin-1";
+    for (const owner of ["twin_ann", "twin_bob"]) {
+      const saved = await design.PUT(
+        request("PUT", `/api/library/designs/${designId}`, owner, upsertBody(owner, "2026-10-20T11:00:00.000Z")),
+        params({ designId }),
+      );
+      expect(saved.status).toBe(200);
+    }
+    const shared = await member.PUT(
+      request("PUT", `/api/library/designs/${designId}/members/${users.twin_mem!.id}`, "twin_ann"),
+      params({ designId, userId: users.twin_mem!.id }),
+    );
+    expect(shared.status).toBe(200);
+
+    const listed = await (await library.GET(request("GET", "/api/library", "twin_mem"))).json();
+    expect(listed.shared).toEqual([
+      expect.objectContaining({
+        ownerId: users.twin_ann!.id,
+        id: designId,
+        name: "twin_ann",
+        members: [{ id: users.twin_mem!.id, username: "twin_mem" }],
+      }),
+    ]);
+    const bobs = await (await library.GET(request("GET", "/api/library", "twin_bob"))).json();
+    expect(bobs.designs).toEqual([expect.objectContaining({ id: designId, members: [] })]);
+  });
+
   it("holds an owner to 30 new shares an hour, however often they unshare", async () => {
     await makeUser("erin");
     const designId = "design-share-spam";
@@ -487,20 +557,249 @@ describe("cloud plans over REST", () => {
   });
 });
 
+describe("saves, creations and deletes arriving at once", () => {
+  afterEach(() => {
+    gates.read = undefined;
+    gates.count = undefined;
+    clearDbFault();
+    resetDbBreaker();
+  });
+
+  // The newer save (the owner's: it asks no membership first, so its
+  // transaction starts first) lands first, which is the order where "exactly
+  // one behind" is the right outcome; older first, both land and the newer wins.
+  it("two saves racing with newer stamps, the newer landing first: it lands, the older is behind", async () => {
+    await makeUser("race_own");
+    await makeUser("race_mem");
+    const designId = "design-race-1";
+    const made = await design.PUT(
+      request("PUT", `/api/library/designs/${designId}`, "race_own", upsertBody("Start", "2026-10-21T10:00:00.000Z")),
+      params({ designId }),
+    );
+    expect(made.status).toBe(200);
+    const shared = await member.PUT(
+      request("PUT", `/api/library/designs/${designId}/members/${users.race_mem!.id}`, "race_own"),
+      params({ designId, userId: users.race_mem!.id }),
+    );
+    expect(shared.status).toBe(200);
+
+    gates.read = gates.make(2);
+    const [byOwner, byMember] = await Promise.all([
+      design.PUT(
+        request("PUT", `/api/library/designs/${designId}`, "race_own", upsertBody("Owner's", "2026-10-21T10:00:02.000Z")),
+        params({ designId }),
+      ),
+      design.PUT(
+        request(
+          "PUT",
+          `/api/library/designs/${designId}?owner=${users.race_own!.id}`,
+          "race_mem",
+          upsertBody("Member's", "2026-10-21T10:00:01.000Z"),
+        ),
+        params({ designId }),
+      ),
+    ]);
+    expect([byOwner.status, byMember.status]).toEqual([200, 200]);
+    const behind = [(await byOwner.json()).behind, (await byMember.json()).behind];
+    expect(behind.filter((value) => value === false)).toHaveLength(1);
+    const { rows } = await testDb().pglite.query<{ name: string }>(
+      "select name from library_designs where user_id = $1 and id = $2",
+      [users.race_own!.id, designId],
+    );
+    expect(rows).toEqual([{ name: "Owner's" }]);
+  });
+
+  it("the cap holds when creations arrive at once", async () => {
+    await makeUser("cap_own");
+    const owner = users.cap_own!.id;
+    await testDb().pglite.query(
+      `insert into library_designs (user_id, id, name, plan)
+       select $1, 'seeded-' || n, 'Seeded', '{}' from generate_series(1, $2::int) as n`,
+      [owner, LIBRARY_MAX_DESIGNS - 4],
+    );
+    gates.count = gates.make(5);
+    const answers = await Promise.all(
+      [1, 2, 3, 4, 5].map((n) =>
+        design.PUT(
+          request("PUT", `/api/library/designs/design-cap-${n}`, "cap_own", upsertBody(`Cap ${n}`, "2026-10-21T11:00:00.000Z")),
+          params({ designId: `design-cap-${n}` }),
+        ),
+      ),
+    );
+    const statuses = answers.map((answer) => answer.status).sort();
+    expect(statuses).toEqual([200, 200, 200, 200, 409]);
+    const refused = answers.find((answer) => answer.status === 409)!;
+    expect(await refused.json()).toEqual({
+      error: `Your plans are full (${LIBRARY_MAX_DESIGNS} designs). Delete some first.`,
+    });
+    const { rows } = await testDb().pglite.query<{ count: number }>(
+      "select count(*)::int as count from library_designs where user_id = $1 and deleted_at is null",
+      [owner],
+    );
+    expect(rows).toEqual([{ count: LIBRARY_MAX_DESIGNS }]);
+  });
+
+  it("a tombstone takes its members in the same write", async () => {
+    await makeUser("tomb_own");
+    await makeUser("tomb_mem");
+    const designId = "design-tomb-1";
+    await design.PUT(
+      request("PUT", `/api/library/designs/${designId}`, "tomb_own", upsertBody("Kept", "2026-10-21T12:00:00.000Z")),
+      params({ designId }),
+    );
+    await member.PUT(
+      request("PUT", `/api/library/designs/${designId}/members/${users.tomb_mem!.id}`, "tomb_own"),
+      params({ designId, userId: users.tomb_mem!.id }),
+    );
+
+    withDbFault(/delete from "library_design_members"/);
+    const deleted = await design.DELETE(
+      request("DELETE", `/api/library/designs/${designId}`, "tomb_own"),
+      params({ designId }),
+    );
+    expect(deleted.status).toBe(500);
+    clearDbFault();
+
+    const { rows } = await testDb().pglite.query<{ deleted_at: string | null }>(
+      "select deleted_at from library_designs where user_id = $1 and id = $2",
+      [users.tomb_own!.id, designId],
+    );
+    expect(rows).toEqual([{ deleted_at: null }]);
+    const memberLibrary = await (await library.GET(request("GET", "/api/library", "tomb_mem"))).json();
+    expect(memberLibrary.shared).toEqual([expect.objectContaining({ id: designId })]);
+  });
+});
+
+/**
+ * The statements each write sends, in order, as the direct client compiled
+ * them. On PGlite transactions never overlap, so the race cases above pass
+ * with or without row locks; these pin the locks that make them hold on
+ * Postgres, where requests run on connections of their own.
+ */
+describe("the locks each write takes", () => {
+  function recordSql(): string[] {
+    const sent: string[] = [];
+    setDbFaultForTests((text) => {
+      sent.push(text);
+      return undefined;
+    });
+    return sent;
+  }
+  const at = (sent: string[], pattern: RegExp, from = 0) => {
+    const index = sent.findIndex((text, i) => i >= from && pattern.test(text));
+    expect(index, `${pattern} in\n${sent.join("\n")}`).toBeGreaterThanOrEqual(0);
+    return index;
+  };
+  const DESIGN_READ = /^select .*"live_lease_until" from "library_designs" where \("library_designs"\."user_id" = \$\d+ and "library_designs"\."id" = \$\d+\)/;
+  const ACCOUNT_LOCK = /^select "id" from "community_users" where "id" = \$1 for no key update$/;
+
+  it("a save reads its design for update, the owner's and a member's alike", async () => {
+    await makeUser("lock_own");
+    await makeUser("lock_mem");
+    const designId = "design-lock-1";
+    await design.PUT(
+      request("PUT", `/api/library/designs/${designId}`, "lock_own", upsertBody("Lock", "2026-10-22T10:00:00.000Z")),
+      params({ designId }),
+    );
+    await member.PUT(
+      request("PUT", `/api/library/designs/${designId}/members/${users.lock_mem!.id}`, "lock_own"),
+      params({ designId, userId: users.lock_mem!.id }),
+    );
+    for (const [who, query, stamp] of [
+      ["lock_own", "", "2026-10-22T10:01:00.000Z"],
+      ["lock_mem", `?owner=${users.lock_own!.id}`, "2026-10-22T10:02:00.000Z"],
+    ] as const) {
+      const sent = recordSql();
+      const saved = await design.PUT(
+        request("PUT", `/api/library/designs/${designId}${query}`, who, upsertBody("Lock", stamp)),
+        params({ designId }),
+      );
+      expect(saved.status).toBe(200);
+      const read = at(sent, DESIGN_READ);
+      expect(sent[read], who).toMatch(/ for update$/);
+      at(sent, /^update "library_designs"/, read);
+      clearDbFault();
+    }
+  });
+
+  it("a new design locks its account, reads again, then counts and inserts", async () => {
+    await makeUser("lock_new");
+    const sent = recordSql();
+    const saved = await design.PUT(
+      request("PUT", "/api/library/designs/design-lock-new", "lock_new", upsertBody("New", "2026-10-22T11:00:00.000Z")),
+      params({ designId: "design-lock-new" }),
+    );
+    expect(saved.status).toBe(200);
+    const first = at(sent, DESIGN_READ);
+    expect(sent[first]).toMatch(/ for update$/);
+    const lock = at(sent, ACCOUNT_LOCK, first + 1);
+    const again = at(sent, DESIGN_READ, lock + 1);
+    expect(sent[again]).toMatch(/ for update$/);
+    const count = at(sent, /^select count\(\*\) as "count" from "library_designs"/, again + 1);
+    at(sent, /^insert into "library_designs"/, count + 1);
+  });
+
+  it("a new folder locks its account before it counts, and a folder save reads for update", async () => {
+    await makeUser("lock_fold");
+    const sent = recordSql();
+    const saved = await folder.PUT(
+      request("PUT", "/api/library/folders/folder-lock", "lock_fold", {
+        name: "Locked",
+        createdAt: "2026-10-22T12:00:00.000Z",
+        updatedAt: "2026-10-22T12:00:00.000Z",
+      }),
+      params({ folderId: "folder-lock" }),
+    );
+    expect(saved.status).toBe(200);
+    const read = at(sent, /^select .* from "library_folders" where .* for update$/);
+    const lock = at(sent, ACCOUNT_LOCK, read + 1);
+    at(sent, /^select .* from "library_folders" where .* for update$/, lock + 1);
+    const count = at(sent, /^select count\(\*\) as "count" from "library_folders"/, lock + 1);
+    at(sent, /^insert into "library_folders"/, count + 1);
+  });
+
+  it("a share locks the design before it counts members and inserts", async () => {
+    await makeUser("lock_share");
+    await makeUser("lock_guest");
+    const designId = "design-lock-share";
+    await design.PUT(
+      request("PUT", `/api/library/designs/${designId}`, "lock_share", upsertBody("Share", "2026-10-22T13:00:00.000Z")),
+      params({ designId }),
+    );
+    const sent = recordSql();
+    const shared = await member.PUT(
+      request("PUT", `/api/library/designs/${designId}/members/${users.lock_guest!.id}`, "lock_share"),
+      params({ designId, userId: users.lock_guest!.id }),
+    );
+    expect(shared.status).toBe(200);
+    const lock = at(sent, /^select "id" from "library_designs" where .* for update$/);
+    const list = at(sent, /^select .* from "library_design_members" inner join "community_users"/, lock + 1);
+    at(sent, /^insert into "library_design_members"/, list + 1);
+  });
+});
+
+const DOWN = { error: "The community database is not responding. Try again in a few minutes." };
+
+/** Every answer is the down line, a 500 no cache keeps. */
+async function expectDown(answers: Array<[string, Promise<Response>]>) {
+  for (const [name, pending] of answers) {
+    const answer = await pending;
+    expect(answer.status, name).toBe(500);
+    expect(answer.headers.get("cache-control"), name).toBe("no-store");
+    expect(await answer.json(), name).toEqual(DOWN);
+  }
+}
+
 describe("when the database fails a read", () => {
-  /** The local database, failing every request whose URL names `table` as a stalled Supabase does. */
+  /** The test database, failing every query or request that names `table` as a stalled database does. */
   function failing(table: string) {
     forgetSessionUsers();
     resetDbBreaker();
-    useInProcessLocalDb((req) =>
-      req.url.includes(`/rest/v1/${table}`)
-        ? Promise.resolve(new Response("<!DOCTYPE html>522", { status: 522, headers: { "content-type": "text/plain" } }))
-        : local.handle(req),
-    );
+    withDbFault(new RegExp(`/rest/v1/${table}|"${table}"`));
   }
 
   afterEach(() => {
-    useInProcessLocalDb(local.handle);
+    clearDbFault();
     resetDbBreaker();
   });
 
@@ -526,16 +825,16 @@ describe("when the database fails a read", () => {
 
   it("says it cannot tell who is signed in, never that nobody is", async () => {
     failing("community_users");
-    await expect(library.GET(request("GET", "/api/library", "dan"))).rejects.toThrow(
-      "The community database is not responding",
-    );
+    const answer = await library.GET(request("GET", "/api/library", "dan"));
+    expect(answer.status).toBe(500);
+    expect(await answer.json()).toEqual(DOWN);
     const me = await meRoute.GET(request("GET", "/api/community/auth/me", "dan"));
     expect(me.status).toBe(503);
     expect(await me.json()).toEqual({
       error: "The community database is not responding. Try again in a few minutes.",
     });
 
-    useInProcessLocalDb(local.handle);
+    clearDbFault();
     const back = await meRoute.GET(request("GET", "/api/community/auth/me", "dan"));
     expect(await back.json()).toEqual({ user: { username: "dan", isAdmin: false } });
     const gone = await meRoute.GET(
@@ -544,5 +843,227 @@ describe("when the database fails a read", () => {
       }),
     );
     expect(await gone.json()).toEqual({ user: null });
+  });
+
+  it("never stores a share or an unshare and answers it as a failure", async () => {
+    const designId = "design-outage-4";
+    await design.PUT(
+      request(
+        "PUT",
+        `/api/library/designs/${designId}`,
+        "carol",
+        upsertBody("Zinc", "2026-10-19T11:00:00.000Z"),
+      ),
+      params({ designId }),
+    );
+    const stored = async () =>
+      (
+        await testDb()
+          .db.selectFrom("library_design_members")
+          .select("member_id")
+          .where("owner_id", "=", users.carol!.id)
+          .where("design_id", "=", designId)
+          .execute()
+      ).map((row) => row.member_id);
+    /** Fails the first member list read after `write`, as a connection lost then would. */
+    const failListAfter = (write: RegExp) => {
+      let written = false;
+      let failed = false;
+      setDbFaultForTests((sql) => {
+        if (write.test(sql)) {
+          written = true;
+        } else if (
+          written &&
+          !failed &&
+          /from "library_design_members" inner join "community_users"/.test(sql)
+        ) {
+          failed = true;
+          return Object.assign(new Error("connection reset"), { code: "ECONNRESET" });
+        }
+        return undefined;
+      });
+    };
+    const dan = users.dan!.id;
+    const path = `/api/library/designs/${designId}/members/${dan}`;
+
+    failListAfter(/^insert into "library_design_members"/);
+    const share = await member.PUT(
+      request("PUT", path, "carol"),
+      params({ designId, userId: dan }),
+    );
+    clearDbFault();
+    resetDbBreaker();
+    expect(share.status === 200, `share ${share.status}`).toBe((await stored()).includes(dan));
+
+    await member.PUT(request("PUT", path, "carol"), params({ designId, userId: dan }));
+    expect(await stored()).toEqual([dan]);
+    failListAfter(/^delete from "library_design_members"/);
+    const unshare = await member.DELETE(
+      request("DELETE", path, "carol"),
+      params({ designId, userId: dan }),
+    );
+    clearDbFault();
+    resetDbBreaker();
+    expect(unshare.status === 200, `unshare ${unshare.status}`).toBe(
+      !(await stored()).includes(dan),
+    );
+  });
+
+  it("answers the down line on every library, blueprint and search route once the account cache expired", async () => {
+    const designId = "design-outage-2";
+    const folderId = "folder-outage-2";
+    const blueprintId = "0b6f7c1e-3d2a-4e5f-8a9b-1c2d3e4f5a6b";
+    const shareTo = users.dan!.id;
+    failing("community_users");
+    await expectDown([
+      ["library", library.GET(request("GET", "/api/library", "carol"))],
+      [
+        "design GET",
+        design.GET(
+          request("GET", `/api/library/designs/${designId}`, "carol"),
+          params({ designId }),
+        ),
+      ],
+      [
+        "design PUT",
+        design.PUT(
+          request(
+            "PUT",
+            `/api/library/designs/${designId}`,
+            "carol",
+            upsertBody("Tin", "2026-10-19T11:00:00.000Z"),
+          ),
+          params({ designId }),
+        ),
+      ],
+      [
+        "design DELETE",
+        design.DELETE(
+          request("DELETE", `/api/library/designs/${designId}`, "carol"),
+          params({ designId }),
+        ),
+      ],
+      [
+        "members",
+        members.GET(
+          request("GET", `/api/library/designs/${designId}/members`, "carol"),
+          params({ designId }),
+        ),
+      ],
+      [
+        "share",
+        member.PUT(
+          request("PUT", `/api/library/designs/${designId}/members/${shareTo}`, "carol"),
+          params({ designId, userId: shareTo }),
+        ),
+      ],
+      [
+        "unshare",
+        member.DELETE(
+          request("DELETE", `/api/library/designs/${designId}/members/${shareTo}`, "carol"),
+          params({ designId, userId: shareTo }),
+        ),
+      ],
+      [
+        "folder PUT",
+        folder.PUT(
+          request("PUT", `/api/library/folders/${folderId}`, "carol", {
+            name: "F",
+            createdAt: "2026-10-19T11:00:00.000Z",
+            updatedAt: "2026-10-19T11:00:00.000Z",
+          }),
+          params({ folderId }),
+        ),
+      ],
+      [
+        "folder DELETE",
+        folder.DELETE(
+          request("DELETE", `/api/library/folders/${folderId}`, "carol"),
+          params({ folderId }),
+        ),
+      ],
+    ]);
+    await expectDown([
+      ["blueprints", blueprintList.GET(request("GET", "/api/blueprints", "carol"))],
+      [
+        "blueprint POST",
+        blueprintList.POST(request("POST", "/api/blueprints", "carol", { name: "B" })),
+      ],
+      [
+        "blueprint GET",
+        blueprintOne.GET(
+          request("GET", `/api/blueprints/${blueprintId}`, "carol"),
+          params({ blueprintId }),
+        ),
+      ],
+      [
+        "blueprint PUT",
+        blueprintOne.PUT(
+          request("PUT", `/api/blueprints/${blueprintId}`, "carol", { name: "B" }),
+          params({ blueprintId }),
+        ),
+      ],
+      [
+        "blueprint DELETE",
+        blueprintOne.DELETE(
+          request("DELETE", `/api/blueprints/${blueprintId}`, "carol"),
+          params({ blueprintId }),
+        ),
+      ],
+    ]);
+    await expectDown([
+      ["search", search.GET(request("GET", "/api/accounts/search?q=da", "carol"))],
+    ]);
+  });
+
+  it("answers the down line when the rate limit cannot be read or recorded", async () => {
+    const designId = "design-outage-3";
+    const folderId = "folder-outage-3";
+    const blueprintId = "0b6f7c1e-3d2a-4e5f-8a9b-1c2d3e4f5a6c";
+    const shareTo = users.dan!.id;
+    failing("community_events");
+    await expectDown([
+      [
+        "design PUT",
+        design.PUT(
+          request(
+            "PUT",
+            `/api/library/designs/${designId}`,
+            "carol",
+            upsertBody("Tin", "2026-10-19T11:00:00.000Z"),
+          ),
+          params({ designId }),
+        ),
+      ],
+      [
+        "share",
+        member.PUT(
+          request("PUT", `/api/library/designs/${designId}/members/${shareTo}`, "carol"),
+          params({ designId, userId: shareTo }),
+        ),
+      ],
+      [
+        "folder PUT",
+        folder.PUT(
+          request("PUT", `/api/library/folders/${folderId}`, "carol", {
+            name: "F",
+            createdAt: "2026-10-19T11:00:00.000Z",
+            updatedAt: "2026-10-19T11:00:00.000Z",
+          }),
+          params({ folderId }),
+        ),
+      ],
+      [
+        "blueprint POST",
+        blueprintList.POST(request("POST", "/api/blueprints", "carol", { name: "B" })),
+      ],
+      [
+        "blueprint PUT",
+        blueprintOne.PUT(
+          request("PUT", `/api/blueprints/${blueprintId}`, "carol", { name: "B" }),
+          params({ blueprintId }),
+        ),
+      ],
+    ]);
   });
 });

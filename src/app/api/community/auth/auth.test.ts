@@ -1,21 +1,17 @@
 import { createHmac } from "node:crypto";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
+import { bumpSessionEpoch, forgetSessionUsers } from "@/lib/server/auth/sessions";
 import {
-  bumpSessionEpoch,
   checkPassword,
-  forgetSessionUsers,
-  getCommunityDb,
   hashPassword,
   KDF_CONCURRENCY,
   KDF_QUEUE_MAX,
   PasswordCheckBusyError,
   passwordChecksInFlight,
-  resetDbBreaker,
-} from "@/lib/server/community";
+} from "@/lib/server/auth/passwords";
 import * as login from "./login/route";
 import * as logout from "./logout/route";
 import * as me from "./me/route";
@@ -26,13 +22,26 @@ import * as register from "./register/route";
  * the session cookie, and signing out.
  */
 
-let local: LocalDatabase;
 let addresses = 0;
-/** When set, the answer of every account row read waits on it (a slow database); the read itself happens at once. */
-let holdAccountReads: Promise<void> | undefined;
-let heldAccountReads = 0;
-/** When set, every write to the accounts table fails as a database that does not answer. */
-let failAccountWrites = false;
+/** When `reads` is set, the answer of every session account read waits on it (a slow database); the read itself happens at once. */
+const hold = vi.hoisted(() => ({ reads: undefined as Promise<void> | undefined, held: 0 }));
+
+vi.mock("@/lib/server/repos/accounts", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/server/repos/accounts")>();
+  return {
+    ...real,
+    readSessionAccount: async (...args: Parameters<typeof real.readSessionAccount>) => {
+      const row = await real.readSessionAccount(...args);
+      if (hold.reads) {
+        hold.held += 1;
+        await hold.reads;
+      }
+      return row;
+    },
+  };
+});
+
+const testDb = useTestDb();
 
 /** A fresh client address per call: the per-address limits never meet across cases. */
 const nextAddress = () => `10.1.${Math.floor(addresses / 250)}.${(addresses++ % 250) + 1}`;
@@ -61,41 +70,18 @@ function cookieOf(response: Response): string {
 }
 
 async function whoAmI(cookie: string): Promise<unknown> {
-  const response = await me.GET(new Request("http://localhost/api/community/auth/me", { headers: { cookie } }));
+  const response = await me.GET(
+    new Request("http://localhost/api/community/auth/me", { headers: { cookie } }),
+  );
   expect(response.status).toBe(200);
   return ((await response.json()) as { user: unknown }).user;
 }
 
-beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
+beforeAll(() => {
   vi.stubEnv("COMMUNITY_HASH_SALT", "auth-test-salt");
-  local = await openLocalDatabase();
-  useInProcessLocalDb(async (request) => {
-    if (failAccountWrites && request.method === "PATCH" && request.url.includes("community_users")) {
-      return Response.json({ message: "down", code: "PGRST000", details: "", hint: "" }, { status: 503 });
-    }
-    const response = await local.handle(request);
-    if (
-      holdAccountReads &&
-      request.method === "GET" &&
-      request.url.includes("community_users") &&
-      request.url.includes("session_epoch")
-    ) {
-      heldAccountReads += 1;
-      await holdAccountReads;
-    }
-    return response;
-  });
-}, 60_000);
-
-afterEach(() => {
-  resetDbBreaker();
-  forgetSessionUsers();
 });
 
-afterAll(async () => {
-  useInProcessLocalDb(undefined);
-  await local?.close();
+afterAll(() => {
   vi.unstubAllEnvs();
 });
 
@@ -121,11 +107,36 @@ describe("signing in", () => {
     expect(right.status).toBe(200);
     expect(await whoAmI(cookieOf(right))).toEqual({ username: "ann_in", isAdmin: false });
   });
+
+  it("answers a failed account lookup with the down line, never a wrong password, and spends no failure", async () => {
+    await post(register, "register", { username: "ann_lookup", password: "ann-password" });
+    const failures = async () =>
+      (
+        await testDb()
+          .db.selectFrom("community_events")
+          .select((eb) => eb.fn.countAll<string>().as("n"))
+          .where("action", "=", "login-fail")
+          .executeTakeFirstOrThrow()
+      ).n;
+    const before = await failures();
+    withDbFault(/from "community_users" where "username"/);
+    const down = await post(login, "login", { username: "ann_lookup", password: "ann-password" });
+    expect(down.status).toBe(500);
+    expect(await down.json()).toEqual({
+      error: "The community database is not responding. Try again in a few minutes.",
+    });
+    expect(down.headers.get("set-cookie")).toBeNull();
+    clearDbFault();
+    expect(await failures()).toBe(before);
+  });
 });
 
 describe("signing out", () => {
   it("clears the cookie and, without more, changes nothing server-side", async () => {
-    const made = await post(register, "register", { username: "ann_out", password: "ann-password" });
+    const made = await post(register, "register", {
+      username: "ann_out",
+      password: "ann-password",
+    });
     const cookie = cookieOf(made);
     const out = await post(logout, "logout", undefined, { cookie });
     expect(out.status).toBe(200);
@@ -197,7 +208,9 @@ describe("password checks", () => {
     const refused = answers.filter((answer) => answer.status === "rejected");
     expect(refused).toHaveLength(1);
     expect((refused[0] as PromiseRejectedResult).reason).toBeInstanceOf(PasswordCheckBusyError);
-    expect(answers.filter((answer) => answer.status === "fulfilled")).toHaveLength(KDF_CONCURRENCY + KDF_QUEUE_MAX);
+    expect(answers.filter((answer) => answer.status === "fulfilled")).toHaveLength(
+      KDF_CONCURRENCY + KDF_QUEUE_MAX,
+    );
   }, 30_000);
 
   it("past the queue, sign-in and sign-up say the server is busy", async () => {
@@ -210,7 +223,10 @@ describe("password checks", () => {
       const signIn = await post(login, "login", { username: "ann_busy", password: "ann-password" });
       expect(signIn.status).toBe(429);
       expect(await signIn.json()).toEqual({ error: "Sign-in is busy. Try again in a moment." });
-      const signUp = await post(register, "register", { username: "bob_busy", password: "bob-password" });
+      const signUp = await post(register, "register", {
+        username: "bob_busy",
+        password: "bob-password",
+      });
       expect(signUp.status).toBe(429);
       expect(await signUp.json()).toEqual({ error: "Sign-in is busy. Try again in a moment." });
     } finally {
@@ -221,24 +237,37 @@ describe("password checks", () => {
 
 describe("signing out everywhere", () => {
   it("ends every session of the account, and a fresh sign-in works again", async () => {
-    const made = await post(register, "register", { username: "ann_all", password: "ann-password" });
+    const made = await post(register, "register", {
+      username: "ann_all",
+      password: "ann-password",
+    });
     const a = cookieOf(made);
-    const b = cookieOf(await post(login, "login", { username: "ann_all", password: "ann-password" }));
+    const b = cookieOf(
+      await post(login, "login", { username: "ann_all", password: "ann-password" }),
+    );
     const out = await post(logout, "logout", { everywhere: true }, { cookie: a });
     expect(out.status).toBe(200);
     expect(await out.json()).toEqual({ ok: true });
     expect(out.headers.get("set-cookie")).toMatch(/^gtnh_session=; .*Max-Age=0/);
     expect(await whoAmI(a)).toBeNull();
     expect(await whoAmI(b)).toBeNull();
-    const c = cookieOf(await post(login, "login", { username: "ann_all", password: "ann-password" }));
+    const c = cookieOf(
+      await post(login, "login", { username: "ann_all", password: "ann-password" }),
+    );
     expect(await whoAmI(c)).toEqual({ username: "ann_all", isAdmin: false });
     expect(await whoAmI(a)).toBeNull();
   });
 
   it("stops a token minted before epochs existed, which works until then", async () => {
-    const made = await post(register, "register", { username: "ann_old", password: "ann-password" });
-    const { data } = await getCommunityDb().from("community_users").select("id").eq("username", "ann_old").single();
-    const { id } = data as { id: string };
+    const made = await post(register, "register", {
+      username: "ann_old",
+      password: "ann-password",
+    });
+    const { id } = await testDb()
+      .db.selectFrom("community_users")
+      .select("id")
+      .where("username", "=", "ann_old")
+      .executeTakeFirstOrThrow();
     const payload = `${id}.${Date.now() + 60_000}`;
     const legacy = `gtnh_session=${payload}.${createHmac("sha256", "auth-test-salt").update(payload).digest("hex")}`;
     expect(await whoAmI(legacy)).toEqual({ username: "ann_old", isAdmin: false });
@@ -247,16 +276,23 @@ describe("signing out everywhere", () => {
   });
 
   it("stops a token whose account read was in flight when the sign-out landed", async () => {
-    const made = await post(register, "register", { username: "ann_race", password: "ann-password" });
+    const made = await post(register, "register", {
+      username: "ann_race",
+      password: "ann-password",
+    });
     const cookie = cookieOf(made);
-    const { data } = await getCommunityDb().from("community_users").select("id").eq("username", "ann_race").single();
+    const data = await testDb()
+      .db.selectFrom("community_users")
+      .select("id")
+      .where("username", "=", "ann_race")
+      .executeTakeFirstOrThrow();
     forgetSessionUsers();
     // A request with the token starts its row read and stalls in the database.
     let release!: () => void;
-    holdAccountReads = new Promise<void>((resolve) => (release = resolve));
+    hold.reads = new Promise<void>((resolve) => (release = resolve));
     const inFlight = whoAmI(cookie);
-    await vi.waitFor(() => expect(heldAccountReads).toBe(1));
-    holdAccountReads = undefined;
+    await vi.waitFor(() => expect(hold.held).toBe(1));
+    hold.reads = undefined;
     // Sign out everywhere lands meanwhile: the row's epoch moves, the cache forgets the account.
     expect(await bumpSessionEpoch((data as { id: string }).id)).toBeGreaterThan(0);
     // The stalled read answers with the pre-bump row: fine for the request that started before.
@@ -267,18 +303,37 @@ describe("signing out everywhere", () => {
   });
 
   it("keeps this browser signed in when the database could not end the others, and says so", async () => {
-    const made = await post(register, "register", { username: "ann_down", password: "ann-password" });
+    const made = await post(register, "register", {
+      username: "ann_down",
+      password: "ann-password",
+    });
     const cookie = cookieOf(made);
-    failAccountWrites = true;
-    try {
-      const out = await post(logout, "logout", { everywhere: true }, { cookie });
-      expect(out.status).toBe(503);
-      expect(await out.json()).toEqual({ error: "Could not sign out everywhere. Try again." });
-      expect(out.headers.get("set-cookie")).toBeNull();
-    } finally {
-      failAccountWrites = false;
-    }
+    withDbFault(/update "community_users"/, Object.assign(new Error("boom"), { code: "XX000" }));
+    const out = await post(logout, "logout", { everywhere: true }, { cookie });
+    expect(out.status).toBe(503);
+    expect(await out.json()).toEqual({ error: "Could not sign out everywhere. Try again." });
+    expect(out.headers.get("set-cookie")).toBeNull();
     expect(await whoAmI(cookie)).toEqual({ username: "ann_down", isAdmin: false });
+  });
+
+  it("answers the down line when the database is down, and keeps this browser signed in", async () => {
+    const made = await post(register, "register", {
+      username: "ann_outage",
+      password: "ann-password",
+    });
+    const cookie = cookieOf(made);
+    for (const table of [/update "community_users"/, /from "community_users"/]) {
+      forgetSessionUsers();
+      withDbFault(table);
+      const out = await post(logout, "logout", { everywhere: true }, { cookie });
+      clearDbFault();
+      expect(out.status, String(table)).toBe(503);
+      expect(await out.json(), String(table)).toEqual({
+        error: "The community database is not responding. Try again in a few minutes.",
+      });
+      expect(out.headers.get("set-cookie"), String(table)).toBeNull();
+    }
+    expect(await whoAmI(cookie)).toEqual({ username: "ann_outage", isAdmin: false });
   });
 
   it("with no valid session has nothing to revoke, and still clears the cookie", async () => {
@@ -302,7 +357,10 @@ describe("signing out everywhere", () => {
     vi.stubEnv("LIVE_INTERNAL_URL", `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
     vi.stubEnv("LIVE_INTERNAL_TOKEN", "internal-secret");
     try {
-      const made = await post(register, "register", { username: "ann_live", password: "ann-password" });
+      const made = await post(register, "register", {
+        username: "ann_live",
+        password: "ann-password",
+      });
       await post(logout, "logout", { everywhere: true }, { cookie: cookieOf(made) });
       await expect.poll(() => heard.length).toBe(1);
       expect(heard[0]).toEqual({

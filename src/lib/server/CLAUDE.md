@@ -33,11 +33,11 @@
   year-immutable answer URLs, and browsers keep the older build's answers. `next.config.ts`
   imports nothing from `src/` (it reads `version.ts` as text): `next start` and the test suite load it outside a
   build. Its own modules sit beside it and import nothing (`security-headers.config.ts`, `body-limits.config.ts`,
-  which `request-body.ts` re-exports; `next-config.test.ts` pins it). The site image runs the standalone
+  which `http/request-body.ts` re-exports; `next-config.test.ts` pins it). The site image runs the standalone
   `server.js`, which carries the config serialized at build and reads no config file. `datasetCacheHeaders` marks an answer immutable for a
   year only when both keys are there and the version is this build's; anything else is `no-store`, so no build that
   changes a ranking is served from another build's URL, even under one APP_VERSION. Exam:
-  `dataset-cache-headers.test.ts`, `browser-loader.test.ts`.
+  `http/dataset-cache-headers.test.ts`, `browser-loader.test.ts`.
 - A new catalog field must be added to `getDatasetCatalog`'s explicit field list (and
   `RecipeDataset` in types.ts) or it never reaches the client.
 - Dataset files other than textures may be replaced in place; textures are
@@ -114,15 +114,21 @@
   worker evaluates the HiGHS glue, and a worker's policy is its own script's response (a later rule overrides
   the same key). A third-party script, font, socket or frame needs a change there first, or the browser
   refuses it. Exam: `security-headers.test.ts`, `next-config.test.ts`, probe `scratch/probes/csp-headers.mjs`.
-- A route's `catch` answers through `error-response.ts`: `serverErrorResponse` gives the route's own fallback
+- A route's `catch` answers through `http/error-response.ts`: `serverErrorResponse` gives the route's own fallback
   sentence and logs the error (a database or file system message names tables or the release path); the one
   sentence passed on is `COMMUNITY_DB_DOWN_MESSAGE`. Dataset routes use `datasetErrorResponse`: an unserved id
-  (`DatasetNotFoundError`) is 404 `Dataset not found.`, never the id. `libraryStorageErrorMessage` (the owner's
-  own account) and fixed 4xx copy stay as they are. Exam: `error-response.test.ts`,
-  `datasets/[versionId]/catalog/route.test.ts`.
+  (`DatasetNotFoundError`) is 404 `Dataset not found.`, never the id. The library's and blueprints' failures answer
+  through `storageErrorMessage` the same way (the route's sentence, or the database-down line); fixed 4xx copy stays
+  as it is. The library, folder, member, blueprint and account-search handlers are wrapped in `answeringErrors`:
+  the account lookup (`readViewer`) and the rate limit run before any service's own catch, so a throw from
+  either answers the route's sentence or the down line with `no-store`, never an empty 500. Vote, view, sign-out
+  everywhere and the preview picture keep their own answer for any other failure (a fixed sentence, no picture)
+  but say the down line when it is down (`databaseDownResponse`; `plan-access.test.ts`, `auth.test.ts`).
+  Exam: `error-response.test.ts`, `datasets/[versionId]/catalog/route.test.ts`, `library/cloud-plans.test.ts`
+  ("when the database fails a read").
 - Every dataset route except `prewarm`, and `/api/resource-popularity` (the browser item search's popularity map,
   1 unit, outside `/api/datasets/` so an edge rule on that prefix does not cover it), spends an in-memory work
-  budget per client address (`dataset-rate.ts`):
+  budget per client address (`limits/dataset-rate.ts`):
   3000 units a minute. A base cost goes before any dataset work (1 unit; 25 for a heavy request: a text search
   with a word under three characters or more than three words, `recipe-ids`, `crops`, `resolve-recipes`), then
   one unit per 10 ms the answer took past a free 50 ms (`meteredDatasetWork`; wall time holds the wait behind
@@ -239,23 +245,198 @@
   Both hold: both versions are prewarmed in full. If one fails, 2.8.1 is prewarmed second with its catalog
   only. Measure again when a dataset grows or a third version is served.
 
-## Database (PostgREST: community.ts, resource-popularity.ts)
+## Database (db/, repos/, services/)
 
-The server and the live service talk to PostgREST at `POSTGREST_URL` through `@supabase/postgrest-js`
-(`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
-which bypasses row security. No anon role exists, so a request without the token is 401. `SUPABASE_URL` and
-`SUPABASE_SERVICE_ROLE_KEY` are not read; the startup checks warn when either is set. Rules:
-- Every request goes through `fetchWithDbTimeout` (20 s). A timeout answers 504 rather than
-  rejecting (postgrest-js retries a rejected GET three more times), and any 5xx that is not
-  JSON (a proxy's error page, often text/plain) becomes the same plain JSON error, so no
-  route shows a player that page; so do PostgREST's own connection errors (PGRST000-003).
-  Exam: `community-db-fetch.test.ts`.
-- After 5 failures in a row the client's breaker answers at once for 15 s without sending (`fetchFromDb`): a
-  stalled database recovers only once demand drops, and every tab keeps asking.
+The site and the live service talk to Postgres directly: Kysely over a `pg` pool at `DATABASE_URL`. There is no
+other database path, no REST layer and no row security; who may see which rows is decided by the services' rules
+and enforced by the two login roles' grants (`db/grants.sql`).
+
+### Layers
+
+Routes never query, services decide access, repositories hold SQL.
+
+| Folder | Holds |
+|---|---|
+| `db/` (import as `@/lib/server/db`) | the client (`getDb`, `withTransaction`, `Tx`, `configureDb`, `closeDb`, `isDatabaseConfigured`), pool settings (`settings.ts`), the breaker (`breaker.ts`, `guard.ts`), failure types and copy (`errors.ts`), value parsers and `json()` (`parsers.ts`), the generated row types (`schema.ts`), the migration runner (`migrations.ts`) |
+| `repos/` | every query, one file per table family: `accounts`, `events`, `designs` (with every lease write), `design-members`, `folders`, `plans`, `comments`, `votes` (posts), `blueprints`, `popularity` (the sweep's pages); `visibility.ts` holds the access rules as query filters, `like.ts` and `search.ts` the escaped search terms |
+| `services/` | the rules: `accounts`, `library`, `community-plans`, `comments`, `votes` (`castVote`), `blueprints`, `plan-preview`, `resource-popularity`, `design-role`; `access.ts` holds each access rule once as a pure function (`canSeePlan` is the one answer to "who may see an unpublished post"); every service returns `ServiceResult` (`result.ts`) and never imports `next/*` |
+| `auth/`, `limits/` | passwords, sessions, the admin header and salted keys; rate limits and the event log |
+| `http/` | route plumbing: request bodies, error answers, the client address, dataset cache headers, the mod and community gate, `readViewer`, `serviceResponse` |
+| `community-rows.ts` | plan row mapping |
+
+A route only gates, parses, calls the service and answers (`serviceResponse`). It asks whether there is a database
+through `services/config.ts`, never `db/`. Where a rule must run inside a statement (a list, a counter, a
+conditional write), the repository applies its SQL form from `repos/visibility.ts`, and `repos/visibility.test.ts`
+holds both forms to one truth table with `services/access.ts`. The live service's `PlanStore` (`src/live/store.ts`)
+is an adapter over the same repositories; it loads the repositories, `services/design-role.ts`,
+`auth/{session,secret,sessions}` and `db`, never password code.
+
+Import rules, held by `src/architecture.test.ts` (AGENTS.md "Layers" has rules 1 to 9) with no allowlist entries:
+- 10. Services import from `lib/server` only services, repositories, `auth/`, `limits/`, `db/index.ts`,
+  `http/{viewer,client-address}.ts`, `live-notify.ts` and the query-free helpers `isServiceTarget` names
+  (`community-rows`, `library`, `cloud-plans`, `blueprints`, `plan-list-cache`, `plan-engine`, `file-store`).
+- 11. The data layer (`db/`, `repos/`) never imports services, `auth/`, `limits/`, `http/` or `live-notify.ts`,
+  and `db/` never imports `repos/`.
+- 12. Only services, `auth/`, `limits/`, the data layer and `live/store.ts` import a repository at run time
+  (a type-only import of a row shape is fine outside `src/app`), so a route reaches queries through a
+  service. Under `src/app` even a type-only import of a repository is refused (rule 4 and the app query
+  check): routes take row types from services or contracts.
+- 13. `src/` never imports `tools/`.
+
+Checks with no exceptions at all:
+- Outside the data layer no file sends a query (`.from("`, a Kysely builder) or takes `getDb` from
+  `db/index.ts`, statically, by `import()` or by `require`.
+- Services take from `db/index.ts` only `withTransaction`, `Tx` and the failure types and sentences;
+  `services/config.ts` also takes the configured check.
+- No data-layer module but `db/index.ts` and `db/client.ts` exports a handle (`getDb`, `createDbClient`, `sql`,
+  `CompiledQuery`) or uses `export *`.
+- SQL is built only by parameters. What the test reads as SQL writing, from the syntax tree: a `sql` template only
+  in the data layer, where every `${}` is a bound parameter. Only in `db/migrations.ts`: `sql.raw`, `sql.ref`,
+  `sql.id`, `sql.lit`, `sql.table`; Kysely's `sql` other than as a tag or a call's object (assigned, destructured,
+  indexed) or under another name; `dynamic` by any path; `CompiledQuery` as a value (and outside `db/` at all); a
+  namespace or dynamic import of kysely. A sort column comes from a closed map and goes through the builder, never
+  through these.
+- `db/one-client.test.ts` fails on any file under `src/` or `tools/` that names the old REST client, its local
+  stand-in or their settings, except the deploy's env check, which refuses those variables by name.
+
+### The client, pools and timeouts
+
+`getDb()` opens the pool on first use and throws when no database is configured; `services/config.ts` answers
+"configured" exactly when `DATABASE_URL` is set. The pool is a `globalThis` singleton (`Symbol.for("gtnh.db")`):
+Next bundles `instrumentation.ts` apart from the routes, and a dev reload would otherwise open a pool per reload.
+The live service calls `configureDb({ service: "live" })` before its first query and `closeDb()` after its
+SIGTERM flush; it refuses to start without `DATABASE_URL` ("No database: set DATABASE_URL."). Every pooled
+connection has an `error` listener (`hearConnectionErrors`): a connection the server drops fails its work as down
+and is replaced, and never ends the process as an uncaught error.
+
+| Setting (`db/settings.ts`) | Site | Live | Why |
+|---|---|---|---|
+| `max` | 10 | 6 | the site's request load; live flushes 4 plans at a time plus joins and renewals. Far under Postgres's 100 |
+| `connectionTimeoutMillis` | 5,000 | 5,000 | a full pool fails fast as down instead of queueing a request |
+| `statement_timeout` (startup option) | 15,000 | 15,000 | the server stops a runaway statement |
+| `query_timeout` (client) | 20,000 | 20,000 | a stall fails as down rather than holding a request open |
+| `idle_in_transaction_session_timeout` | 10,000 | 10,000 | a stuck transaction frees its locks |
+| `lock_timeout` | 5,000 | 5,000 | a `for update` read never waits long |
+| `idleTimeoutMillis` | 30,000 | 30,000 | |
+| `application_name` | `gtnh-site` | `gtnh-live` | `pg_stat_activity` |
+| `TimeZone` | UTC | UTC | the timestamp parser reads that form only |
+
+`DATABASE_POOL_MAX` and `DATABASE_POOL_IDLE_MS` override size and idle time (`npm run dev:local` sets them).
+
+### The breaker
+
+Every query goes through `GuardedDialect` (`db/guard.ts`) and the breaker (`db/breaker.ts`). After 5 down
+failures in a row (`DB_BREAKER_FAILURES`) every query fails at once for 15 s (`DB_BREAKER_OPEN_MS`) without taking
+a connection; then one goes through to try. A stalled database recovers only once demand drops, and every tab
+keeps asking. Down (`isDatabaseDown`) means a socket error (`ECONNREFUSED`, `ECONNRESET`, `ETIMEDOUT`,
+`EHOSTUNREACH`, `ENETUNREACH`, `ENOTFOUND` and `EAI_AGAIN` for a stopped compose service, `EPIPE`,
+`ECONNABORTED`), the pool's connect timeout, the client's query timeout, a dropped connection, SQLSTATE `57014`,
+`55P03` (a lock not had within `lock_timeout`), `57P01`..`57P03`, `53300` or class `08`. A constraint or syntax
+error is an answer and closes the count. A deadlock (`40P01`) or a serialization failure (`40001`) is an answer too,
+and retryable: `withTransaction` runs the transaction again, 3 runs in all, before the route's sentence
+(`isRetryableTransactionError`; `guard.test.ts`). A down
+error is rethrown as `DatabaseDownError`, whose message is `COMMUNITY_DB_DOWN_MESSAGE` ("The community database
+is not responding. Try again in a few minutes."); `storageErrorMessage(error, fallback)` gives that line for a down
+error and the route's own sentence otherwise, so table and column names stay in the log. Exam: `guard.test.ts`,
+`errors.test.ts`, `connection-drop.test.ts`; `docs/deploy.md` (Rehearsal) restarts Postgres under the smoke test.
+
+### Transactions and locks
+
+A service opens a transaction with `withTransaction(work)` (`{ readSnapshot: true }` makes it read-only
+`repeatable read`). Inside, use only the `tx` handle and await nothing else (no session read, no rate limit, no
+fetch): on PGlite an outside query waits for the exclusive transaction forever (a hung test), on Postgres it takes
+a second pool slot. Repositories take `tx` as their last argument. PGlite never overlaps transactions, so a race
+is pinned twice: by recorded statements (the lock comes first) in the route suites, and by a real race in the
+`services/*-postgres.test.ts` files (with `GTNH_TEST_POSTGRES_URL`) and `db/pg-real.local.test.ts`.
+
+| Path | One transaction | Locks |
+|---|---|---|
+| Design save (`services/library.saveDesign`) | read, compare stamps, write | the design row `for update`, so an owner's and a member's save cannot both pass the "behind" check |
+| New design, new folder, blueprint save | count, then insert | the account row first (`accounts.lockAccount`, `for no key update`, which foreign-key checks never wait for), so creations at once meet the cap one at a time |
+| Folder save | read, compare, write | the folder row `for update` |
+| Share (member add) | design exists, count members, insert, the answer's member list | the design row `for update` (`designMembers.lockDesign`) |
+| Unshare (member remove or leave) | delete, the answer's member list | |
+| Design delete | tombstone and members delete | |
+| Comment add or delete | the comment write and one recount `update ... from (select count(*), max(created_at))` | the post `for no key update` (`plans.lockPost`) |
+| Vote | read the voter's vote, toggle, then `update ... set upvotes = (select count(*) ...), downvotes = (...) returning` (two identical clicks at once cast then retract) | the post `for no key update` (`votes.lockParent`) |
+| Plan list page | the rows and `count(*)` | none: read-only `repeatable read` snapshot |
+
+Single statements, no transaction: a view or download count (`update ... + 1 ... returning`, with
+`planVisibleTo(viewer)` in its `where`); each lease take, renewal, flush and release (`repos/designs`, one
+statement each: a CTE locks the row, applies the conditional write and reads the row's state, so a miss says
+"gone" or "lost" from its newest version).
+
+### Values and types
+
+- One parser table (`DB_TYPE_PARSERS`, `db/parsers.ts`) for `pg` and PGlite: timestamptz as Postgres's JSON text
+  (`2026-10-25T17:33:50.431+00:00`), bigint as a number. `src/app/api/wire-format.test.ts` pins the answers' JSON.
+- A jsonb column takes only `json(value)` (its JSON text as one bound parameter, cast to jsonb): `pg` sends a JS
+  array as a Postgres array, so a raw `needs: [...]` would fail or store the wrong value, and the column type
+  (`JsonParam`) makes it a compile error.
+- Row types are generated, never hand-kept: `npm run db:types` (`tools/db/generate-types.ts`) applies the
+  migrations to an in-memory PGlite and writes `db/schema.ts`; `db/schema.test.ts` fails while it is stale.
+  `generated always` columns (`community_plans.score`, `blueprints.score`, `library_designs.plan_bytes`,
+  `community_events.id`) are `GeneratedAlways<T>`, so writing one is a type error.
+
+### Migrations and roles
+
+The schema is `db/migrations/NNNN-words.sql` (numbered from 0001, no gaps; `0001-baseline.sql` is the whole
+schema of a fresh database), applied by the runner (`db/migrations.ts`; the CLI `tools/db/migrate.ts`, bundled by
+`npm run build:db`; `docs/deploy.md`, Migrations). Its rules:
+- Each file is applied once, in its own transaction, and recorded with its sha256 in the ledger
+  `schema_migrations`. A change is a new file, never an edit: an applied file whose text changed is refused by name.
+- The transaction is the runner's: a file holds no `begin`, `commit`, `rollback`, `abort`, `end`,
+  `start transaction`, `savepoint`, `release` or `prepare transaction`, and nothing `concurrently`.
+- A file does not name `standard_conforming_strings` or `backslash_quote`: every file shares the runner's one
+  session, and the check reads strings with Postgres's defaults. The check reads the file's text only (comments,
+  string literals, quoted names and dollar bodies are skipped first): SQL built at run time, such as an `execute`
+  of a concatenated string, is not read, so it stops accidents, not a file written to get past it.
+- Each of these is refused by name before anything is applied, as is a file in `db/migrations/` not named
+  `NNNN-words.sql`, a database whose `public` schema holds tables but no ledger ("this database was not set up by
+  the migration runner"), and one with Supabase's `anon` or `authenticated` role.
+- One run at a time (`pg_try_advisory_lock(7361)`, waited for up to 2 minutes).
+- Then, on every run, `ensureRoles` makes `gtnh_site` and `gtnh_live` (no superuser, no bypassrls) and applies
+  `db/grants.sql`, so a new table needs its grant line there in the same commit, and a grant the file drops is gone
+  after the next deploy. `gtnh_site` has select, insert, update and delete on every app table and nothing on the
+  ledger; `gtnh_live` has only the columns the live store uses (`src/live/CLAUDE.md`).
+- After a schema change, `npm run db:types`. Exam: `db/migrations.test.ts`, `db/db-roles.test.ts`,
+  `src/live/store-grants.test.ts`.
+
+### What the repositories enforce
+
+Community posts (`repos/plans.ts`, `repos/comments.ts`; exam `plan-access.test.ts`, the Postgres cases in
+`services/community-plans-postgres.test.ts`):
+- The list's page and its `total` are two statements over one condition on one read-only snapshot: the total
+  never disagrees with the rows, and a page past the end still counts every post. Tag and text terms are `ilike`
+  patterns with `\`, `%` and `_` escaped (`repos/like.ts`), bound like every other term (`repos/search.ts`, exam
+  `search.test.ts`); make and take are `@>` against `json([key])`.
+- A failed read of a post throws, so a detail, edit, delete, download or preview upload during an outage answers
+  the route's sentence or the database-down line, never "Plan not found."; only a stale stat card's refresh and
+  its write, and the list's version dropdown (logged, an empty set, not cached), are best effort.
+- A view and a download count nothing on a post the viewer may not see, and concurrent counts all land.
+- A comment on a post taken down since the access read finds no row to lock and answers the route's 404; so does a
+  vote. Without the post lock concurrent comments or votes leave stale counters on Postgres.
+
+Blueprints (`repos/blueprints.ts`, `services/blueprints.ts`; exam `blueprints/route.test.ts`,
+`blueprints/by-id.test.ts`, the Postgres cases in `services/blueprints-postgres.test.ts`):
+- A blueprint is its owner's alone: the list, a read by id, an edit and a delete all name the session's account in
+  their `where`; anyone else, signed in or not, finds "Blueprint not found." (an anonymous read sends no query),
+  whatever the community switch says. There is no public shelf: no list or search of other accounts' blueprints, no
+  publishing, no votes and no downloads (`?scope=public` answers 404 "There is no public blueprint list." and sends
+  no query). The table keeps `is_public`, `downloads` and `blueprint_votes` as they stand, and the summary keeps
+  their fields, so the own list's answer is unchanged.
+- A save meets the cap (`BLUEPRINT_MAX_PER_USER`) under the account lock; a failed count throws and answers the
+  save's sentence, never reads as none.
+
+Rules:
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `LOCAL_DB` are not read; the startup checks warn when one is set,
+  and in production when `DATABASE_URL` is not.
 - A failed account lookup throws, never reads as signed out (`loadSessionUser`); accounts are
   cached a minute, as the lookup's promise from before it answers, so forgetting an account mid-read
-  (Sign out everywhere) drops the read too and the old row is never written back. A library answer fails whole when a sharing read fails: the client
-  removes every shared copy the answer leaves out.
+  (Sign out everywhere) drops the read too and the old row is never written back. A sign-in's lookup throws too
+  (`readLoginAccount`): the route answers the down line, never "Wrong username or password.", and no failure is
+  counted against the account (`auth.test.ts`). A library answer fails whole
+  when a sharing read fails: the client removes every shared copy the answer leaves out.
 - Nothing a page needs to render may await a community sweep. `getResourcePopularity`
   answers at once with the last good map (sweep every 6 h, retry after 30 min on failure).
 - The design PUT refuses what it can without the database (size, JSON, name, stamps)
@@ -264,11 +445,10 @@ which bypasses row security. No anon role exists, so a request without the token
 - `community_events` keeps 31 days (`EVENTS_KEPT_DAYS`; the longest window read is 30): `recordEvents` deletes older
   rows once an hour per process, oldest first in batches of `PRUNE_BATCH_ROWS` until one comes back short or
   `PRUNE_BUDGET_MS` (2 s) has gone (so a backlog drains fast yet never holds a request past the statement timeout;
-  the rest waits an hour; 500 ids keep the delete's query string under 8 KB), over the `created_at` index (migration
-  `2026-10-25-community-events-created-at.sql`, mirrored in `schema.sql`), and a failed prune never fails a save. Exam:
-  `community-events.test.ts`.
+  the rest waits an hour), over the `created_at` index (`community_events_created_at_idx`), and a failed prune never
+  fails a save. Exam: `community-events.test.ts`.
 
-## Sessions and secrets (session.ts)
+## Sessions and secrets (auth/)
 
 - `sessionSecret()` is the one owner of `COMMUNITY_HASH_SALT`: the session HMAC, `saltedKey` (rate-limit and voter
   keys) and nothing else read it. In production a missing, blank or development value throws
@@ -281,9 +461,9 @@ which bypasses row security. No anon role exists, so a request without the token
   `getSessionUser` refuses a token whose epoch differs from the row's. "Sign out everywhere" (`POST
   /api/community/auth/logout` with `{ everywhere: true }`) sets the row's epoch to now (`bumpSessionEpoch`), forgets
   the cached account and tells the live service (`notifyLive` signed-out). A three-part token from before epochs
-  reads as epoch 0 and stays good until it expires or the account signs out everywhere. The migration
-  `supabase/migrations/2026-10-24-session-epoch.sql` must be applied before a build that reads the column is
-  deployed: the account lookup selects it, and without it every signed-in request answers 503. Exam:
+  reads as epoch 0 and stays good until it expires or the account signs out everywhere. The column is in
+  `db/migrations/0001-baseline.sql`; the account lookup selects it, so a database without it answers 503 to every
+  signed-in request. Exam:
   `session.test.ts`, `app/api/community/auth/auth.test.ts`.
 - Every database-backed limit counts then records, so `checkRateLimit` runs one at a time per key and action
   (`serially`); a burst for one key is counted one by one. The site is one process, which is what makes the
@@ -293,11 +473,11 @@ which bypasses row security. No anon role exists, so a request without the token
   `rate-limit.test.ts`, `app/api/community/auth/login/route.test.ts`.
 - A rate-limit key never holds a string the client chooses: `makeActorKey(request)` is the salted address alone, and a
   signed-in write is keyed `user:<id>` (the community plan POST: 10 an hour per account). A device id in a key is a
-  fresh count per made-up id. Board images (`image-upload-guard.ts`, open to anonymous players) are 30 an hour and 60
+  fresh count per made-up id. Board images (`limits/image-upload-guard.ts`, open to anonymous players) are 30 an hour and 60
   a day per address and 120 an hour and 400 a day for the whole site, counted after the size and magic-byte checks so
   junk spends no share. A vote lands only on a post that exists and is public (or the voter's own), with the same
   404 either way and a fixed 500 sentence, so the route is no oracle for ids; an anonymous address casts or switches
-  at most 3 votes a day on one post or blueprint (`VOTES_PER_ADDRESS_PER_PLAN_PER_DAY`; accounts are exempt). The
+  at most 3 votes a day on one post (`VOTES_PER_ADDRESS_PER_PLAN_PER_DAY`; accounts are exempt). The
   `plan-previews` bucket is private and its pictures are served only by `GET .../preview`, which answers an
   unpublished post's picture to its owner and the admin alone (`Cache-Control: private, no-store`) and 404 `No preview.`
   to everyone else.
@@ -315,7 +495,7 @@ which bypasses row security. No anon role exists, so a request without the token
   a moment." Accepted trade-off: a flood past the queue refuses sign-ins for as long as it lasts, and never stalls
   the site. Exam: the "password checks" block of `app/api/community/auth/auth.test.ts`.
 
-## Request bodies (request-body.ts)
+## Request bodies (http/request-body.ts)
 
 - Because `src/proxy.ts` runs on every path, Next copies every write body (up to `PROXY_BODY_MAX_BYTES`, 4.5 MiB,
   `experimental.proxyClientMaxBodySize`; the bytes past it are dropped) and waits for its end before any route runs.
@@ -323,7 +503,7 @@ which bypasses row security. No anon role exists, so a request without the token
   cap and answers 413, not a 400 for a truncated JSON or form. Next awaits the body's end even when the proxy answers
   itself, so a declared length that never arrives, or a slow sender, is held until it finishes or Node's
   `requestTimeout` (300 s); only the edge (Caddy's body read timeout) bounds that. Route handlers have no body limit,
-  so every route that reads a body reads it through `request-body.ts` (`readJsonCapped`, `readTextCapped`,
+  so every route that reads a body reads it through `http/request-body.ts` (`readJsonCapped`, `readTextCapped`,
   `readFormDataCapped`) with a cap sized to what the client sends: a declared `content-length` over the cap is refused
   without parsing, a chunked body stops at the cap, and the answer is 413 with the route's own sentence. The read
   happens where it happened before, so every gate, 503 and auth check that ran ahead of it still does. Caps: plan uploads and synced designs `COMMUNITY_UPLOAD_BODY_MAX_BYTES` (4 MiB of bytes,
@@ -354,8 +534,7 @@ which bypasses row security. No anon role exists, so a request without the token
 ## The mod and community switch (deployment-features.ts)
 
 - `isModAndCommunityOn()` is true only when `NEXT_PUBLIC_MOD_AND_COMMUNITY` is `on`; unset or anything else is off.
-  Off, every `/api/community/plans/**` route, the public blueprint shelf (`?scope=public`, `/publish`, `/vote`,
-  `/download`, and another account's blueprint by id) and `/community` answer 404 (`modAndCommunityOffResponse`);
+  Off, every `/api/community/plans/**` route and `/community` answer 404 (`modAndCommunityOffResponse`);
   sitemap, llms.txt, robots and the `?plan=` metadata say nothing of community plans. Accounts, board images, the
   library, account sync and an account's own blueprints stay. Read it at each call, never in a module constant.
 - The value must be the same at `next build` and in the site's and the live service's run-time environment; a change
@@ -368,12 +547,12 @@ which bypasses row security. No anon role exists, so a request without the token
 - Tests run with the default (off). A test of a gated feature calls `withModAndCommunityOn()`
   (`src/test-support/mod-and-community.ts`); a test of the off side calls `withModAndCommunityUnset()`.
 
-## Client address (client-address.ts)
+## Client address (http/client-address.ts)
 
 - The client address is Caddy's `X-Client-Ip` (its `client_ip`: the peer, or behind Cloudflare its
   CF-Connecting-IP, trusted only from Cloudflare's ranges), then CF-Connecting-IP, each only as an IP literal; nothing else is read (X-Forwarded-For names a
-  Cloudflare edge or the client's own chain, nothing sets X-Real-Ip). One module, `client-address.ts`
-  (`clientAddress`, re-exported by community.ts), used by every per-address rule on the site; an IPv6 literal is
+  Cloudflare edge or the client's own chain, nothing sets X-Real-Ip). One module, `http/client-address.ts`
+  (`clientAddress`), used by every per-address rule on the site; an IPv6 literal is
   keyed on its /64; a request with neither header is `"local"` (`NO_ADDRESS`), which the dataset budget never
   refuses. It is trustworthy only because Caddy and the stack's own containers are the site's only peers: compose
   publishes the site on `127.0.0.1:3300` only and the firewall drops outside traffic to it (`docs/deploy.md`). Exam: `client-address.test.ts`.
@@ -393,21 +572,34 @@ which bypasses row security. No anon role exists, so a request without the token
 - Exam: `file-store.test.ts`, `app/api/community/images/[month]/[name]/route.test.ts` ("serves only board images by
   their exact name"), `plan-access.test.ts` ("keeps previews out of every public route").
 
-## Local database (local-db/, `npm run dev:local`)
+## Local database (`npm run dev:local`, tests)
 
-- `LOCAL_DB=1` points the server's PostgREST client at a real Postgres on this machine (PGlite, loaded from
-  `supabase/schema.sql` and `supabase/migrations/*.sql` on every open) through a PostgREST stand-in
-  (`local-db/postgrest.ts`). Unset, nothing changes. Never copy `.env.local` into a worktree: local work needs no
-  database credentials.
-- Next.js never loads PGlite: it reaches the database over HTTP at `LOCAL_DB_URL` (`tools/local-db/serve.ts`, data in
-  `scratch/local-db/pgdata`). Tests open it in memory and register it in-process (`useInProcessLocalDb`).
-- The stand-in covers the query shapes this code sends (filters, or-trees, counts, single, upserts). Files are not in
-  the database: `npm run dev:local` keeps them in `scratch/local-db/files` (the file store below).
-  A new shape (an embed, an rpc) needs it added there and a case in `postgrest-cases.ts`, which `postgrest.test.ts`
-  runs against the stand-in and `postgrest-real.local.test.ts` against a real PostgREST (`REAL_POSTGREST_URL`,
-  `REAL_POSTGREST_TOKEN`; the Docker rehearsal).
+- Never copy `.env.local` into a worktree: local work needs no database credentials.
+- Tests open an in-memory PGlite per file with `useTestDb()` (`src/test-support/test-db.ts`): the same migrations
+  the deploy applies (`applyMigrations` over `db/`), the same parsers and the breaker (`GuardedDialect`), installed
+  with `useDbForTests`. `withDbFault` fails the queries whose SQL matches. PGlite runs one transaction at a time,
+  so races need a real Postgres: the `services/*-postgres.test.ts` files run with `GTNH_TEST_POSTGRES_URL` (a
+  server they may create a database on; CI's test job has a postgres service with the compose file's image and
+  digest, and under `CI` a missing URL fails them, `test-support/real-postgres.ts`), and `db/pg-real.local.test.ts` runs the repository cases against the
+  rehearsal stack's database under the real roles (`REAL_DATABASE_URL`, `REAL_LIVE_DATABASE_URL`;
+  `docs/deploy.md`, Rehearsal).
+- `npm run dev:local` gives Next and the live service `DATABASE_URL=postgres://postgres@127.0.0.1:54330/postgres`,
+  served by `tools/local-db/serve.ts`: the compose file's pinned `postgres` image in the container `gtnh-local-db`
+  (data in the volume of that name) when Docker answers, and serve.ts applies the migrations to it; else, or with
+  `LOCAL_DB_PGLITE=1`, PGlite on disk (`scratch/local-db/pgdata`) behind its socket, whose multiplexer is not
+  isolated under concurrent queries (serve.ts has the probe). The two are separate databases, so switching between
+  them shows different accounts and designs.
+- A local database with tables but no migration ledger is refused, and serve.ts names what to remove. A dev
+  database made before the migration runner is such a database: reset it once, with
+  `docker rm -f gtnh-local-db; docker volume rm gtnh-local-db` (Docker) or by deleting `scratch/local-db/pgdata`
+  (PGlite). Its accounts and designs are development data and are not carried over.
+- serve.ts's control listener on 127.0.0.1:54329 answers `/__local-db/ready` and `/__local-db/shutdown` only, and
+  the shutdown only with dev-local's `x-local-db` header, which a web page cannot send without a preflight the
+  listener never answers; a request whose Host is not 127.0.0.1 or localhost at its port (a rebound DNS name) is
+  refused (`tools/local-db/control.mjs`).
+- Files are not in the database: `npm run dev:local` keeps them in `scratch/local-db/files` (Uploaded files above).
 
-## Cloud plans (cloud-plans.ts, app/api/library, app/api/accounts)
+## Cloud plans (services/library.ts, repos/designs.ts, app/api/library, app/api/accounts)
 
 - A design id is unique per owner only: every route under `/api/library/designs/[id]` takes `?owner=<ownerId>`
   (absent: the caller's own). Owners and members read; members save the plan and its name, never the owner's folders,
@@ -420,11 +612,19 @@ which bypasses row security. No anon role exists, so a request without the token
   refuse the design for good, and only the owner's own shelf sorts on it, by their own stamp.
 - While `live_lease_until` is in the future the live service is the plan's only writer: the PUT refuses a plan body
   (409 `{ live: true }`) and its write is conditional on the lease. Metadata still goes through.
+- Each save, creation, share and delete is one transaction (`withTransaction`): a design or folder save reads its row
+  `for update`, so two saves cannot both pass the "behind" check; a new design or folder locks the account row first
+  (`accounts.lockAccount`, `for no key update`, which foreign-key checks never wait for), so creations at once meet the cap one at a time; a
+  share locks the design row before counting members; a delete tombstones the design and drops its members together. A
+  lease renewal or flush is one statement that also reads the row (locking), so a miss says "gone" or "lost" from the
+  row's newest version. `store-grants.test.ts` runs every `PlanStore` call as `gtnh_live`. PGlite runs one transaction
+  at a time, so `cloud-plans.test.ts` pins the lock statements themselves; `services/library-postgres.test.ts` races
+  creations on a real Postgres (with `GTNH_TEST_POSTGRES_URL`).
 - `GET /api/library` keeps listing tombstones (clients rely on it never to reuse a deleted id) and adds each design's
   `members` and the `shared` plans, in one extra read when nothing is shared.
 - Deleting a design deletes its member rows (designs are tombstoned, so the foreign key's cascade never fires) and
-  tells the live service; sharing changes tell it too (`notifyLive`, only with `LIVE_INTERNAL_URL` and
+  tells the live service; sharing changes tell it too (`notifyLive` in `live-notify.ts`, only with `LIVE_INTERNAL_URL` and
   `LIVE_INTERNAL_TOKEN`). A failed notice loses nothing: the service checks membership on every join.
-- Account search is limited in memory (`memory-rate.ts`): a share box asks on every keystroke. A prefix is two
+- Account search is limited in memory (`limits/memory-rate.ts`): a share box asks on every keystroke. A prefix is two
   characters at least (the box asks from the second), so one character does not list a thirtieth of every account.
 - Exam: `app/api/library/cloud-plans.test.ts` (against the local database).

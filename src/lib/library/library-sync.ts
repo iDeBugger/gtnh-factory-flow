@@ -16,8 +16,7 @@ import {
 import { parseFactoryProjectJson } from "@/lib/import-export";
 import { withoutRuntimeTables } from "@/lib/import-export/plan-code";
 import { useCommunityAuthStore } from "@/store/community-auth-store";
-import { useDesignStore } from "@/store/design-store";
-import { useFactoryStore } from "@/store/factory-store";
+import { currentProject, useDesignStore } from "@/store/design-store";
 import { isDesignOpenLive, markDesignFresh } from "@/store/live-edit-gate";
 import { isLiveConfigured } from "@/lib/live/live-config";
 import { moveDetachedBase, readDetachedBase } from "@/lib/live/live-pending-store";
@@ -667,7 +666,7 @@ async function editsMadeAwayFromRoom(
   // The canvas is ahead of the stored record by autosave's wait.
   const local =
     useDesignStore.getState().activeDesignId === designId
-      ? useFactoryStore.getState().project
+      ? currentProject()
       : stored;
   if (!local) {
     return {};

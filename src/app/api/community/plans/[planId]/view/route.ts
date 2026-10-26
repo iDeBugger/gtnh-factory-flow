@@ -1,20 +1,14 @@
 import { NextResponse } from "next/server";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
-import {
-  checkRateLimit,
-  getCommunityDb,
-  getSessionUser,
-  isAdminRequest,
-  isCommunityConfigured,
-  makeActorKey,
-} from "@/lib/server/community";
+import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
+import { isDatabaseConfigured } from "@/lib/server/services/config";
+import { countPlanView } from "@/lib/server/services/community-plans";
+import { readViewer } from "@/lib/server/http/viewer";
+import { databaseDownResponse } from "@/lib/server/http/error-response";
+import { serviceResponse } from "@/lib/server/http/service-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/** Views one address may count in a minute: a loop runs a counter up no faster than this. */
-const VIEWS_PER_MINUTE = 60;
 
 /**
  * Counts one view of a post. A write of its own, so no read of the post
@@ -27,43 +21,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
   if (!isModAndCommunityOn()) {
     return modAndCommunityOffResponse();
   }
-  if (!isCommunityConfigured()) {
+  if (!isDatabaseConfigured()) {
     return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
   }
 
   try {
     const { planId } = await params;
-    if (!(await checkRateLimit(makeActorKey(request), "view", VIEWS_PER_MINUTE, 60))) {
-      return NextResponse.json({ error: "Too many requests. Slow down." }, { status: 429 });
-    }
-
-    const db = getCommunityDb();
-    const { data, error } = await db
-      .from("community_plans")
-      .select("views,is_public,user_id")
-      .eq("id", planId)
-      .maybeSingle<{ views: number; is_public: boolean | null; user_id: string | null }>();
-    if (error) {
-      return NextResponse.json({ error: "Counting the view failed." }, { status: 500 });
-    }
-    // Unpublished posts exist only for their owner (and the site admin).
-    if (data?.is_public === false) {
-      const sessionUser = await getSessionUser(request);
-      if (data.user_id !== sessionUser?.id && !sessionUser?.is_admin && !isAdminRequest(request)) {
-        return NextResponse.json({ error: "Plan not found." }, { status: 404 });
-      }
-    }
-    if (!data) {
-      return NextResponse.json({ error: "Plan not found." }, { status: 404 });
-    }
-
-    const views = data.views + 1;
-    const { error: updateError } = await db.from("community_plans").update({ views }).eq("id", planId);
-    if (updateError) {
-      return NextResponse.json({ error: "Counting the view failed." }, { status: 500 });
-    }
-    return NextResponse.json({ views });
+    const viewer = await readViewer(request);
+    const result = await countPlanView(viewer, planId, request);
+    return serviceResponse(result, (value) => ({ views: value.views }));
   } catch (error) {
+    const down = databaseDownResponse(error, { headers: { "Cache-Control": "no-store" } });
+    if (down) {
+      return down;
+    }
     console.error("view count failed", error);
     return NextResponse.json({ error: "Counting the view failed." }, { status: 500 });
   }

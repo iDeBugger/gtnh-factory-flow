@@ -8,7 +8,6 @@ import {
 import type { EntryIcon } from "@/lib/community/types";
 import { getNodeMachineBuildCount } from "@/lib/model/passive-production";
 import type { FactoryNode, Recipe } from "@/lib/model/types";
-import { getCommunityDb } from "@/lib/server/community";
 
 /**
  * Client-computed stat lines (same trust model as community plan stats).
@@ -48,8 +47,32 @@ export function countBlueprintMachines(captured: {
   );
 }
 
-export const BLUEPRINT_SUMMARY_COLUMNS =
-  "id,user_id,name,node_count,storage_count,edge_count,pocket_count,machine_count,is_public,description,author_name,published_at,upvotes,downvotes,score,downloads,needs,outputs,tags,icon,highest_tier,highest_tier_index,created_at";
+/** The columns a listing reads: everything but the payload. */
+export const BLUEPRINT_SUMMARY_FIELDS = [
+  "id",
+  "user_id",
+  "name",
+  "node_count",
+  "storage_count",
+  "edge_count",
+  "pocket_count",
+  "machine_count",
+  "is_public",
+  "description",
+  "author_name",
+  "published_at",
+  "upvotes",
+  "downvotes",
+  "score",
+  "downloads",
+  "needs",
+  "outputs",
+  "tags",
+  "icon",
+  "highest_tier",
+  "highest_tier_index",
+  "created_at",
+] as const;
 
 export interface BlueprintRow {
   id: string;
@@ -120,50 +143,3 @@ export function rowToBlueprintSummary(
   };
 }
 
-/** Marks each summary with the actor's own vote, exactly like plan listings. */
-export async function attachMyBlueprintVotes(
-  blueprints: BlueprintSummary[],
-  actorKey: string,
-): Promise<void> {
-  if (blueprints.length === 0) {
-    return;
-  }
-
-  const db = getCommunityDb();
-  const { data, error } = await db
-    .from("blueprint_votes")
-    .select("blueprint_id,value")
-    .eq("voter_key", actorKey)
-    .in(
-      "blueprint_id",
-      blueprints.map((blueprint) => blueprint.id),
-    );
-  if (error || !data) {
-    return;
-  }
-
-  const votes = new Map(data.map((vote) => [vote.blueprint_id as string, vote.value as 1 | -1]));
-  for (const blueprint of blueprints) {
-    blueprint.myVote = votes.get(blueprint.id);
-  }
-}
-
-/**
- * Turns the two schema-drift Postgres errors into messages that say what to
- * actually do, instead of a generic 500: PGRST205 means the blueprints table
- * has never been created; PGRST204/42703 mean the table predates a column
- * this build reads or writes (schema.sql converges when re-run — its later
- * additions are idempotent ALTERs). Anything else keeps the caller's word.
- */
-export function blueprintStorageErrorMessage(
-  error: { code?: string } | null,
-  fallback: string,
-): string {
-  if (error?.code === "PGRST205") {
-    return "Blueprint storage is not set up yet: run supabase/schema.sql in the Supabase SQL editor.";
-  }
-  if (error?.code === "PGRST204" || error?.code === "42703") {
-    return "Blueprint storage is out of date: re-run the latest supabase/schema.sql in the Supabase SQL editor.";
-  }
-  return fallback;
-}

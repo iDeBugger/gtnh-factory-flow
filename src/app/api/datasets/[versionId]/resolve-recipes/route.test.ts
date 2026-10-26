@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveDatasetRecipeRefs } from "@/lib/server/dataset-query";
-import { resetDatasetBudget } from "@/lib/server/dataset-rate";
+import { resetDatasetBudget } from "@/lib/server/limits/dataset-rate";
 import { countedBody } from "@/test-support/request-bodies";
 import { POST } from "./route";
 

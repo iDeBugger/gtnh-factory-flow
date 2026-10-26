@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, LoaderCircle, Save, X } from "lucide-react";
+import { LoaderCircle, Save, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { computeBlueprintIo } from "@/lib/blueprints/io-stats";
 import { normalizeBlueprintTags } from "@/lib/blueprints/types";
@@ -13,7 +13,7 @@ import { EntryIconSlot, IconPicker, iconSuggestionsFromStats } from "./IconPicke
 /**
  * The confirmation for saving a blueprint, shown while the blueprint store
  * holds a `saveRequest`: prefilled name, needs and makes and machine count,
- * plus its icon, tags and whether it goes public at once.
+ * plus its icon and tags.
  */
 export function BlueprintSaveDialog() {
   const request = useBlueprintStore((state) => state.saveRequest);
@@ -29,12 +29,10 @@ function SaveDialogBody({ request }: { request: BlueprintSaveRequest }) {
   const setSaveRequest = useBlueprintStore((state) => state.setSaveRequest);
   const save = useBlueprintStore((state) => state.save);
   const update = useBlueprintStore((state) => state.update);
-  const publish = useBlueprintStore((state) => state.publish);
   const [name, setName] = useState(request.name);
   const [icon, setIcon] = useState<EntryIcon | undefined>(request.icon);
   const [tags, setTags] = useState<string[]>(request.tags ?? []);
   const [tagInput, setTagInput] = useState("");
-  const [makePublic, setMakePublic] = useState(request.isPublic ?? false);
   const [isPickingIcon, setPickingIcon] = useState(false);
   const [isSaving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
@@ -78,9 +76,6 @@ function SaveDialogBody({ request }: { request: BlueprintSaveRequest }) {
         icon: icon ?? null,
         tags: finalTags,
       });
-      if (ok && makePublic !== (request.isPublic ?? false)) {
-        await publish(request.blueprintId, makePublic);
-      }
       setSaving(false);
       if (ok) {
         close();
@@ -91,9 +86,6 @@ function SaveDialogBody({ request }: { request: BlueprintSaveRequest }) {
     }
 
     const created = await save(trimmed, request.payload, icon, finalTags);
-    if (created && makePublic) {
-      await publish(created.id, true);
-    }
     setSaving(false);
     if (created) {
       close();
@@ -122,8 +114,7 @@ function SaveDialogBody({ request }: { request: BlueprintSaveRequest }) {
 
         {isOverwrite ? (
           <p className="mb-3 text-xs leading-relaxed text-amber-300">
-            The picked pocket replaces this one&apos;s contents. Its votes, downloads and
-            standing stay.
+            The picked pocket replaces this one&apos;s contents.
           </p>
         ) : null}
 
@@ -198,23 +189,6 @@ function SaveDialogBody({ request }: { request: BlueprintSaveRequest }) {
             />
           </div>
         </div>
-
-        <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-[4px] border border-neutral-700 bg-[#17191d] px-2.5 py-2 text-sm">
-          <input
-            type="checkbox"
-            checked={makePublic}
-            onChange={(event) => setMakePublic(event.target.checked)}
-          />
-          <Globe className="h-4 w-4 text-emerald-400" />
-          <span className="min-w-0">
-            <span className="block leading-tight">Publish to everyone</span>
-            <span className="block text-[11px] leading-tight text-neutral-500">
-              {isOverwrite
-                ? "Off keeps it private. It stays on your shelf either way."
-                : "On the Public shelf the moment it saves. You can flip this any time."}
-            </span>
-          </span>
-        </label>
 
         {error ? <p className="mt-2 text-xs text-red-400">{error}</p> : null}
 

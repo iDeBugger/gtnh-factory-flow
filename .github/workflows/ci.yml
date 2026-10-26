@@ -31,6 +31,22 @@ jobs:
   test:
     name: Typecheck and test
     runs-on: ubuntu-latest
+    # The Postgres race tests (src/lib/server/services/*-postgres.test.ts) run
+    # here: on PGlite transactions never overlap, so only these show a cap or
+    # a counter holding under concurrent requests. The image is the compose
+    # file's, digest and all; under CI those files fail without the URL.
+    services:
+      postgres:
+        image: postgres:17.10-bookworm@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f
+        env:
+          POSTGRES_PASSWORD: race
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -h 127.0.0.1"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
@@ -44,6 +60,8 @@ jobs:
       - run: npm run typecheck
 
       - run: npm run test
+        env:
+          GTNH_TEST_POSTGRES_URL: postgres://postgres:race@127.0.0.1:5432/postgres
 
   icon-browsers:
     name: Icon sizing in Chromium and Firefox

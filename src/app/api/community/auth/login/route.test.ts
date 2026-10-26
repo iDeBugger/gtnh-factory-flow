@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { forgetSessionUsers, getCommunityDb, hashPassword, resetDbBreaker } from "@/lib/server/community";
+import { useTestDb } from "@/test-support/test-db";
+import { forgetSessionUsers } from "@/lib/server/auth/sessions";
+import { resetDbBreaker } from "@/lib/server/db";
+import { hashPassword } from "@/lib/server/auth/passwords";
 import { POST } from "./route";
 
 /**
@@ -11,16 +12,16 @@ import { POST } from "./route";
  * minutes, and a burst is counted one by one.
  */
 
-let local: LocalDatabase;
+const testDb = useTestDb();
 
 const LOCKED = { error: "Too many attempts for this account. Try again in 15 minutes." };
 const WRONG = { error: "Wrong username or password." };
 
 async function makeUser(username: string, password: string) {
-  const { error } = await getCommunityDb()
-    .from("community_users")
-    .insert({ username, password_hash: await hashPassword(password) });
-  expect(error).toBeNull();
+  await testDb()
+    .db.insertInto("community_users")
+    .values({ username, password_hash: await hashPassword(password) })
+    .execute();
 }
 
 function signIn(username: string, password: string, address: string): Promise<Response> {
@@ -39,10 +40,7 @@ async function expectAnswer(response: Response, status: number, body: unknown) {
 }
 
 beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "login-test-salt");
-  local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
   await Promise.all([
     makeUser("ann", "ann-password"),
     makeUser("bob", "bob-password"),
@@ -56,9 +54,7 @@ afterEach(() => {
   forgetSessionUsers();
 });
 
-afterAll(async () => {
-  useInProcessLocalDb(undefined);
-  await local?.close();
+afterAll(() => {
   vi.unstubAllEnvs();
 });
 

@@ -1,15 +1,12 @@
 "use client";
 
 import type { BoardClipboardPayload } from "@/store/factory-store";
-import { getDeviceId } from "@/lib/community/client";
 import type { EntryIcon } from "@/lib/community/types";
 import type {
   BlueprintDetail,
   BlueprintListResponse,
   BlueprintResourceStat,
   BlueprintSummary,
-  BlueprintVoteResponse,
-  PublicBlueprintListRequest,
 } from "./types";
 
 async function parseJsonOrThrow<T>(response: Response): Promise<T> {
@@ -67,7 +64,7 @@ export async function getBlueprint(blueprintId: string): Promise<BlueprintDetail
 
 /**
  * Edits a blueprint in place — rename, overwrite the payload from a board
- * pocket, or both. Identity (id, votes, downloads, publish state) survives.
+ * pocket, or both. The id survives.
  */
 export async function updateBlueprint(
   blueprintId: string,
@@ -107,51 +104,4 @@ export async function deleteBlueprint(blueprintId: string): Promise<void> {
     method: "DELETE",
   });
   await parseJsonOrThrow<{ ok: boolean }>(response);
-}
-
-export async function listPublicBlueprints(
-  params: PublicBlueprintListRequest,
-): Promise<BlueprintListResponse> {
-  const search = new URLSearchParams({ scope: "public", deviceId: getDeviceId() });
-  if (params.sort) search.set("sort", params.sort);
-  if (params.search) search.set("search", params.search);
-  if (params.page) search.set("page", String(params.page));
-
-  const response = await fetch(`/api/blueprints?${search.toString()}`);
-  return parseJsonOrThrow<BlueprintListResponse>(response);
-}
-
-export async function publishBlueprint(
-  blueprintId: string,
-  publish: boolean,
-  description?: string,
-): Promise<BlueprintSummary> {
-  const response = await fetch(`/api/blueprints/${encodeURIComponent(blueprintId)}/publish`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ publish, description }),
-  });
-  const body = await parseJsonOrThrow<{ blueprint: BlueprintSummary }>(response);
-  return body.blueprint;
-}
-
-export async function voteBlueprint(
-  blueprintId: string,
-  value: 1 | -1,
-): Promise<BlueprintVoteResponse> {
-  const response = await fetch(`/api/blueprints/${encodeURIComponent(blueprintId)}/vote`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ deviceId: getDeviceId(), value }),
-  });
-  return parseJsonOrThrow<BlueprintVoteResponse>(response);
-}
-
-/** Public payload fetch — counts a download unless the caller is the author. */
-export async function downloadBlueprint(blueprintId: string): Promise<BlueprintDetail> {
-  const response = await fetch(`/api/blueprints/${encodeURIComponent(blueprintId)}/download`, {
-    method: "POST",
-  });
-  const body = await parseJsonOrThrow<{ blueprint: BlueprintDetail }>(response);
-  return body.blueprint;
 }

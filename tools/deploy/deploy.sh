@@ -197,9 +197,8 @@ echo "GTNH_TAG=$TAG GTNH_PREVIOUS_TAG=${previous:-none}"
 
 # --- 6. Database -------------------------------------------------------------
 if [ -z "$rollback" ]; then
-  step "6. postgres, postgrest and the migrations"
+  step "6. postgres and the migrations"
   compose_cmd "" up -d --wait postgres || fail "postgres did not start healthy."
-  compose_cmd "" up -d postgrest || fail "postgrest did not start."
   compose_cmd "" run --rm migrate || fail "the migrations failed (the file is named above)."
 fi
 

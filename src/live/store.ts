@@ -1,13 +1,18 @@
-import type { LivePlan } from "@/lib/live/ops";
 import type { LiveMember } from "@/lib/live/protocol";
-import { designRole, listMembers, usernamesFor, type DesignRole } from "@/lib/server/cloud-plans";
-import { forgetSessionUser, getCommunityDb, loadSessionUser } from "@/lib/server/community";
+import { forgetSessionUser, loadSessionUser } from "@/lib/server/auth/sessions";
+import { usernamesFor } from "@/lib/server/repos/accounts";
+import * as designMembers from "@/lib/server/repos/design-members";
+import * as designs from "@/lib/server/repos/designs";
+import type { LeaseOutcome } from "@/lib/server/repos/designs";
+import { designRole, type DesignRole } from "@/lib/server/services/design-role";
+import type { LivePlan } from "@/lib/live/ops";
 
 /**
- * The live service's reads and writes, all through the server's PostgREST
- * client (fetchWithDbTimeout, or the local database with LOCAL_DB=1). Never a
- * write per edit: a room writes when it opens (the lease), every 30 s (the
- * lease again), and when it flushes (at most every 8 s while edited).
+ * The live service's reads and writes: an adapter over the site's
+ * repositories, so the lease has one writer (`repos/designs.ts`) for the
+ * live service and the REST save. Never a write per edit: a room writes when
+ * it opens (the lease), every 30 s (the lease again), and when it flushes (at
+ * most every 8 s while edited).
  *
  * A lease is a token as well as a time: taking one writes a fresh random
  * token, and every later renewal, flush and release is conditional on it. A
@@ -15,14 +20,7 @@ import { forgetSessionUser, getCommunityDb, loadSessionUser } from "@/lib/server
  * REST save cleared it) hears "lost" and stops writing.
  */
 
-/** How a write conditional on the lease went. */
-export type LeaseOutcome =
-  /** Written: the lease is still this room's. */
-  | "held"
-  /** The design is missing or deleted. */
-  | "gone"
-  /** The design is there, but its lease is no longer this room's. */
-  | "lost";
+export type { LeaseOutcome };
 
 export interface PlanStore {
   /**
@@ -71,117 +69,21 @@ export interface PlanStore {
   usernames(ids: string[]): Promise<Map<string, string>>;
 }
 
-function fail(what: string, error: { message?: string } | null): never {
-  throw new Error(`${what}: ${error?.message ?? "no answer"}`);
-}
-
 export function databasePlanStore(): PlanStore {
-  const db = () => getCommunityDb();
-
-  /** A conditional write matched nothing: the design went, or the lease is someone else's. */
-  async function missed(ownerId: string, designId: string): Promise<LeaseOutcome> {
-    const { data, error } = await db()
-      .from("library_designs")
-      .select("deleted_at")
-      .eq("user_id", ownerId)
-      .eq("id", designId)
-      .maybeSingle();
-    if (error) {
-      fail("Reading the lease failed", error);
-    }
-    const row = data as { deleted_at: string | null } | null;
-    return !row || row.deleted_at ? "gone" : "lost";
-  }
-
   return {
     async account(userId) {
       const user = await loadSessionUser(userId);
       return user ? { id: user.id, username: user.username, epoch: user.session_epoch } : undefined;
     },
     forgetAccount: forgetSessionUser,
-    role: (userId, ownerId, designId) => designRole(db(), userId, ownerId, designId),
-    async size(ownerId, designId) {
-      const { data, error } = await db()
-        .from("library_designs")
-        .select("plan_bytes")
-        .eq("user_id", ownerId)
-        .eq("id", designId)
-        .is("deleted_at", null)
-        .maybeSingle();
-      if (error) {
-        fail("Reading the plan size failed", error);
-      }
-      const row = data as { plan_bytes: number | string | null } | null;
-      return row ? Number(row.plan_bytes ?? 0) : undefined;
-    },
-    async lease(ownerId, designId, token, until) {
-      const { data, error } = await db()
-        .from("library_designs")
-        .update({ live_lease_until: until.toISOString(), live_lease_token: token })
-        .eq("user_id", ownerId)
-        .eq("id", designId)
-        .is("deleted_at", null)
-        .select("plan,seq")
-        .maybeSingle();
-      if (error) {
-        fail("Taking the lease failed", error);
-      }
-      if (!data) {
-        return undefined;
-      }
-      const row = data as { plan: LivePlan; seq: number | string | null };
-      return { plan: row.plan ?? {}, seq: Number(row.seq ?? 0) };
-    },
-    async renew(ownerId, designId, token, until) {
-      const { data, error } = await db()
-        .from("library_designs")
-        .update({ live_lease_until: until.toISOString() })
-        .eq("user_id", ownerId)
-        .eq("id", designId)
-        .eq("live_lease_token", token)
-        .is("deleted_at", null)
-        .select("id")
-        .maybeSingle();
-      if (error) {
-        fail("Renewing the lease failed", error);
-      }
-      return data ? "held" : missed(ownerId, designId);
-    },
-    async flush(ownerId, designId, token, plan, seq, until) {
-      const now = new Date().toISOString();
-      const { data, error } = await db()
-        .from("library_designs")
-        .update({
-          plan,
-          seq,
-          plan_updated_at: now,
-          updated_at: now,
-          live_lease_until: until ? until.toISOString() : null,
-          live_lease_token: until ? token : null,
-        })
-        .eq("user_id", ownerId)
-        .eq("id", designId)
-        .eq("live_lease_token", token)
-        .is("deleted_at", null)
-        .select("id")
-        .maybeSingle();
-      if (error) {
-        fail("Saving the plan failed", error);
-      }
-      return data ? "held" : missed(ownerId, designId);
-    },
-    async release(ownerId, designId, token) {
-      const { error } = await db()
-        .from("library_designs")
-        .update({ live_lease_until: null, live_lease_token: null })
-        .eq("user_id", ownerId)
-        .eq("id", designId)
-        .eq("live_lease_token", token);
-      if (error) {
-        fail("Releasing the lease failed", error);
-      }
-    },
-    members: (ownerId, designId) => listMembers(db(), ownerId, designId),
-    usernames: (ids) => usernamesFor(db(), ids),
+    role: (userId, ownerId, designId) => designRole(userId, ownerId, designId),
+    size: (ownerId, designId) => designs.planBytes(ownerId, designId),
+    lease: (ownerId, designId, token, until) => designs.takeLease(ownerId, designId, token, until),
+    renew: (ownerId, designId, token, until) => designs.renewLease(ownerId, designId, token, until),
+    flush: (ownerId, designId, token, plan, seq, until) =>
+      designs.flushPlan(ownerId, designId, token, plan, seq, until, new Date().toISOString()),
+    release: (ownerId, designId, token) => designs.releaseLease(ownerId, designId, token),
+    members: (ownerId, designId) => designMembers.list(ownerId, designId),
+    usernames: (ids) => usernamesFor(ids),
   };
 }

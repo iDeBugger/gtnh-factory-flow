@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { makeVoterKey, saltedKey } from "./community";
+import { makeVoterKey, saltedKey } from "./auth/keys";
 
 /**
  * The rate-limit and voter keys are salted with the session secret: one

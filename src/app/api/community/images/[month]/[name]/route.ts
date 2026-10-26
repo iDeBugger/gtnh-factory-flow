@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { BOARD_IMAGE_NAME, BOARD_IMAGE_MONTH, BOARD_IMAGE_TYPES } from "@/lib/server/board-images";
-import { datasetBudgetRefusal } from "@/lib/server/dataset-rate";
+import { datasetBudgetRefusal } from "@/lib/server/limits/dataset-rate";
 import { getFileStore, isFileStoreConfigured } from "@/lib/server/file-store";
 
 export const runtime = "nodejs";
@@ -34,7 +34,10 @@ export async function GET(
   if (!BOARD_IMAGE_MONTH.test(month) || !BOARD_IMAGE_NAME.test(name) || !isFileStoreConfigured()) {
     return notFound();
   }
-  const contentType = BOARD_IMAGE_TYPES[name.slice(name.lastIndexOf(".") + 1)];
+  const extension = name.slice(name.lastIndexOf(".") + 1);
+  const contentType = Object.hasOwn(BOARD_IMAGE_TYPES, extension)
+    ? BOARD_IMAGE_TYPES[extension]
+    : undefined;
   if (!contentType) {
     return notFound();
   }

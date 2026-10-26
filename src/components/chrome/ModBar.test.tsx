@@ -139,6 +139,24 @@ describe("the mod's top bar", () => {
     expect(useCommunityAuthStore.getState().user).toBeUndefined();
   });
 
+  it("a Sign out everywhere the server refused shows the server's sentence, the down line in an outage", async () => {
+    const { SignOutEverywhereError } = await import("@/lib/community/client");
+    const down = "The community database is not responding. Try again in a few minutes.";
+    useCommunityAuthStore.setState({ user: { username: "ann_smith" }, hasHydrated: true });
+    communityClient.logoutCommunityUser.mockRejectedValueOnce(new SignOutEverywhereError(down));
+    renderBar();
+    fireEvent.click(key("account"));
+    await act(async () => {
+      fireEvent.click(
+        [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')].find(
+          (element) => element.querySelector(".mm-label")?.textContent === "Sign out everywhere",
+        )!,
+      );
+    });
+    expect(notices.flashNotice).toHaveBeenCalledWith("warn", down);
+    expect(useCommunityAuthStore.getState().user?.username).toBe("ann_smith");
+  });
+
   const shareRows = () =>
     [...document.querySelectorAll('[role="menu"] [role="menuitem"] .mm-label')].map((element) => element.textContent);
   const shareRow = (label: string) =>

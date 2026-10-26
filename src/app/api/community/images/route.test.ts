@@ -2,15 +2,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { getCommunityDb } from "@/lib/server/community";
+import { useTestDb } from "@/test-support/test-db";
 import {
   forgetImageCapWarnings,
   IMAGES_PER_DAY,
   IMAGES_PER_HOUR,
   SITE_IMAGES_PER_HOUR,
-} from "@/lib/server/image-upload-guard";
+} from "@/lib/server/limits/image-upload-guard";
 import { withModAndCommunityUnset } from "@/test-support/mod-and-community";
 import { countedBody } from "@/test-support/request-bodies";
 import { POST } from "./route";
@@ -22,7 +20,7 @@ import { GET } from "./[month]/[name]/route";
  * capped for the whole site.
  */
 
-let local: LocalDatabase;
+const testDb = useTestDb();
 let files: string;
 
 const PNG = Buffer.from(
@@ -46,32 +44,28 @@ function upload(address: string, body: Uint8Array = PNG, deviceId?: string): Pro
 }
 
 async function uploadsRecorded(): Promise<number> {
-  const { count } = await getCommunityDb()
-    .from("community_events")
-    .select("id", { count: "exact", head: true })
-    .eq("action", "image_upload");
-  return count ?? 0;
+  const { count } = await testDb()
+    .db.selectFrom("community_events")
+    .select((eb) => eb.fn.countAll<number>().as("count"))
+    .where("action", "=", "image_upload")
+    .executeTakeFirstOrThrow();
+  return Number(count);
 }
 
 beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "images-test-salt");
   vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://stage.gtnhplanner.idebugger.net");
   files = mkdtempSync(path.join(tmpdir(), "images-route-"));
   vi.stubEnv("FILE_STORE_DIR", files);
-  local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
 }, 60_000);
 
 afterAll(async () => {
-  useInProcessLocalDb(undefined);
-  await local?.close();
   vi.unstubAllEnvs();
   rmSync(files, { recursive: true, force: true });
 });
 
 beforeEach(async () => {
-  await local.db.exec("delete from community_events");
+  await testDb().pglite.exec("delete from community_events");
   forgetImageCapWarnings();
 });
 
@@ -141,11 +135,11 @@ describe("board image uploads", () => {
     // An hour passes: every count so far is two hours old, the day's still counts.
     const hourPasses = async () => {
       const twoHoursBack = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-      const { error } = await getCommunityDb()
-        .from("community_events")
-        .update({ created_at: twoHoursBack })
-        .eq("action", "image_upload");
-      expect(error).toBeNull();
+      await testDb()
+        .db.updateTable("community_events")
+        .set({ created_at: twoHoursBack })
+        .where("action", "=", "image_upload")
+        .execute();
     };
     for (let i = 0; i < IMAGES_PER_HOUR; i++) {
       expect((await upload("203.0.113.20")).status).toBe(200);

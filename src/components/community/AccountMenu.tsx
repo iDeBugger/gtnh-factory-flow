@@ -5,7 +5,7 @@ import { useDropdownDismiss } from "@/lib/hooks/use-dropdown-dismiss";
 import { ChevronDown, Factory, LogOut, ShieldCheck, User } from "lucide-react";
 import { useRef, useState } from "react";
 import { openLibrary } from "@/lib/library/library-tab";
-import { SIGN_OUT_EVERYWHERE_FAILED } from "@/lib/community/types";
+import { signOutEverywhereMessage } from "@/lib/community/client";
 import { AuthForm, useCommunityUser } from "./auth";
 
 /**
@@ -106,7 +106,7 @@ export function AccountMenu() {
               setError(undefined);
               signOutEverywhere().then(
                 () => setMenuOpen(false),
-                () => setError(SIGN_OUT_EVERYWHERE_FAILED),
+                (error: unknown) => setError(signOutEverywhereMessage(error)),
               );
             }}
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-surface-raised"

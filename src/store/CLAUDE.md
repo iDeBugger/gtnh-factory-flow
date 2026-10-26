@@ -94,7 +94,7 @@ Every save goes through `persistCanvas` in design-store.ts:
   (`captureBoardSelection` stamps it; absent, as in a blueprint saved before, reads 2.9). Every path that pastes runs
   `preparePayloadForPlan` (`src/lib/datasets/convert-payload-version.ts`) first: Ctrl+V and board duplicates through
   `pastePayloadIntoPlan` (`components/flow/paste-payload.ts`, which pastes nothing if the plan changed meanwhile),
-  blueprints in `useBlueprintStore.load` / `downloadPublic` for the plan on the board at call time. Another
+  blueprints in `useBlueprintStore.load` for the plan on the board at call time. Another
   version's payload converts like a plan (matched bodies swapped, the rest marked `unconverted`); a plan whose
   version is not served gets every dataset card marked. `pasteBoardItems` refuses a payload of another version as a
   safety net and says "Those cards are from GTNH <v> and could not be pasted." Exam:
