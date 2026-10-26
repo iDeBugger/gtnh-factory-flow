@@ -61,37 +61,7 @@
       "rule": "2"
     },
     {
-      "from": "src/app/api/blueprints/[blueprintId]/download/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/blueprints/[blueprintId]/download/route.ts",
-      "to": "src/store/factory-store.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/blueprints/[blueprintId]/publish/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/blueprints/[blueprintId]/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/blueprints/[blueprintId]/route.ts",
-      "to": "src/store/factory-store.ts",
-      "rule": "4"
-    },
-    {
       "from": "src/app/api/blueprints/[blueprintId]/vote/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/api/blueprints/route.ts",
       "to": "src/lib/server/db/index.ts",
       "rule": "4"
     },
@@ -387,11 +357,7 @@
     }
   ],
   "queriesInApp": [
-    "src/app/api/blueprints/[blueprintId]/download/route.ts",
-    "src/app/api/blueprints/[blueprintId]/publish/route.ts",
-    "src/app/api/blueprints/[blueprintId]/route.ts",
     "src/app/api/blueprints/[blueprintId]/vote/route.ts",
-    "src/app/api/blueprints/route.ts",
     "src/app/api/community/plans/[planId]/vote/route.ts",
     "src/app/llms.txt/route.ts",
     "src/app/sitemap.ts"
