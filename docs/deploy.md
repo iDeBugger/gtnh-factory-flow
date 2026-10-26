@@ -239,10 +239,14 @@ on every open.
 ## Datasets
 
 ```bash
+node tools/dataset-pipeline/scripts/build-datasets.mjs all --export   # build both into public/datasets/gtnh
 tools/deploy/publish-datasets.sh stage local-2.9.0-rc-2 local-2.8.1
 ```
 
-From this checkout's `public/datasets/gtnh` (the pipeline's output) into `/srv/gtnh/datasets`, in the pipeline's
+The datasets are built only by `build-datasets.mjs` (`tools/dataset-pipeline/CLAUDE.md`, Build and publish): it
+exports in Docker, rebuilds, and installs a version only when the checks below would pass.
+
+Publishing copies from this checkout's `public/datasets/gtnh` into `/srv/gtnh/datasets`, in the pipeline's
 order (`tools/dataset-pipeline/CLAUDE.md`):
 
 1. Refuses a version without `recipe-lookup-index.json.gz`, or a manifest listing a version that is neither given

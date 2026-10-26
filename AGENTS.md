@@ -33,6 +33,7 @@ npm run dev          # http://localhost:3000
 npm run dev:local    # the same with a local database and the live service: no database credentials
 npm run typecheck
 npm run test         # full vitest suite, must be green
+node tools/dataset-pipeline/scripts/build-datasets.mjs all --export   # build the datasets (Docker)
 ```
 
 Scratch harnesses are `*.local.test.ts` (excluded from the suite); run one with

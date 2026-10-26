@@ -6,8 +6,8 @@ if (!outputPath) {
   throw new Error("Usage: download-gtnh-pack.mjs <output.zip>");
 }
 
-// Local pack source for offline/pre-downloaded runs (used by the WSL rebuild
-// flow): skips every network path and copies the zip into the pack cache.
+// Local pack source for offline or pre-downloaded runs: skips every network path
+// and copies the zip into the pack cache.
 const localZip = process.env.GTNH_PACK_LOCAL_ZIP;
 if (localZip) {
   const source = path.resolve(localZip);
