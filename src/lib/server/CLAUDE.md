@@ -54,7 +54,9 @@
   range on a file, a texture `immutable` for a year; `no-store` on 400 and 404; `recipes.json`, about 2 GB,
   refused), and lets everything else through to the public handler: the other textures, `oracle/`, stray copies,
   at `max-age=0` (a texture the handler misses reaches `datasets/gtnh/[versionId]/textures/[...assetPath]/route.ts`,
-  whose miss is `no-store` too). No cache policy is set by a `next.config.ts` header rule: Next applies the rule
+  whose miss is `no-store` too). A texture through the route costs about 1-2 ms more per icon than the public
+  handler (a `stat`, two `realpath`s, a stream); that is acceptable only because textures are immutable and kept by
+  the browser and Cloudflare, so profile before routing a hotter path this way. No cache policy is set by a `next.config.ts` header rule: Next applies the rule
   first and keeps it over the answer's own `Cache-Control` (`send-response.js` adds a header only when absent), so a
   texture asked for before its publish lands would be a 404 kept a year. With `GTNH_DATASET_BACKEND_URL` a
   beforeFiles rewrite sends the proxy's texture rewrite on to the backend. The gate is one process's view of a path: the raw `recipes.json` must still not exist on the
