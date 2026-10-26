@@ -9,6 +9,12 @@ modes keep it.
   `spare-model.ts` (leftovers with a choice, most upstream first, stored split first), `rail-layout.ts` (the list as
   items with tops and heights; the component draws only the slice in view), `notices.ts` (the catalogue of the UI spec
   11.2 from the solver's notes). `rail-data.ts` shares one computation per (project, solve).
+- Order (`src/lib/model/rate-order.ts`): INPUTS, OUTPUTS and INTERNAL go biggest first on the rate rounded to 9
+  significant digits, rows equal at that by name A to Z, then by resource key; a line held at 0 (open port, drawer)
+  sorts as 0, at the bottom. MACHINES keep `buildMachineList`'s order: tier, EU/t on the same key, name, card order.
+  The rounding is a sort key, not a tolerance test, so the sort stays transitive. Two resources taken at the same rate
+  from different cards differ only in the solver's last bits, and raw numbers flipped rows each new target
+  (`rail-model.test.ts`, "keeps every list in one order"; the boundary lists and the machine list have the same sweep).
 - Edits go through `rail-actions.ts`: the store's own actions (one undo step each), except a spare's split while its bar
   is in hand (`previewSpare`: re-solves, no history; `endSpareDrag`: one undo step made from the project as it was
   taken, or none if the split did not move). Wheel steps are held on screen and committed once the wheel is still

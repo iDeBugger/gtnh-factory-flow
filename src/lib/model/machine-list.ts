@@ -1,3 +1,4 @@
+import { orderNames, rateOrderKey } from "./rate-order";
 import type { FactoryProject, MachineTier, ThroughputResult } from "./types";
 import { getSelectedMachineHandler } from "./recipe-rules";
 import { applyRecipeInputOverrides } from "./recipe-input-overrides";
@@ -186,10 +187,21 @@ export function buildMachineList(
       state: report?.state ?? "ok",
     });
   }
-  return entries.sort(
-    (a, b) =>
-      a.tierIndex - b.tierIndex || (b.euT ?? 0) - (a.euT ?? 0) || a.label.localeCompare(b.label),
-  );
+  // Tier, then EU/t biggest first on the rate key (`rate-order.ts`), then name, then the board's card order: two
+  // cards whose draws match to nine digits keep their places when a re-solve moves the last bits. Entries are pushed in
+  // card order, so the index is the card order.
+  const keyed = entries.map((entry, index) => ({
+    entry,
+    euT: rateOrderKey(entry.euT ?? 0),
+    index,
+  }));
+  keyed.sort((a, b) => {
+    if (a.entry.tierIndex !== b.entry.tierIndex)
+      return a.entry.tierIndex < b.entry.tierIndex ? -1 : 1;
+    if (a.euT !== b.euT) return b.euT > a.euT ? 1 : -1;
+    return orderNames.compare(a.entry.label, b.entry.label) || a.index - b.index;
+  });
+  return keyed.map((k) => k.entry);
 }
 
 /** Keep fractional answers at large counts too; never round up to a build. */

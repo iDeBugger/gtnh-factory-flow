@@ -1,5 +1,6 @@
 import { isCustomRateRecipe } from "@/lib/model/custom-rate";
 import { pinRuleOf } from "@/lib/model/pin-rule";
+import { sortByRate } from "@/lib/model/rate-order";
 import { isFluidTankRecipe } from "@/lib/model/fluid-tank";
 import { buildMachineList } from "@/lib/model/machine-list";
 import type {
@@ -100,7 +101,7 @@ export function computeGroupSummaries(
 
     const net = new Map<
       string,
-      { kind: ResourceKind; resourceId: string; label?: string; value: number; order: number }
+      { kind: ResourceKind; resourceId: string; label?: string; value: number }
     >();
     if (answered) {
       for (const node of Object.values(result!.nodes)) {
@@ -125,7 +126,6 @@ export function computeGroupSummaries(
                 resourceId: flow.resourceId,
                 label: flow.displayName,
                 value: amount,
-                order: net.size,
               });
           }
         }
@@ -150,10 +150,15 @@ export function computeGroupSummaries(
       };
       (entry.value > 0 ? inputs : outputs).push(flow);
     }
-    // Busiest first; ties keep the order the members met them in (the sort is stable).
-    const busiest = (a: GroupFlow, b: GroupFlow) => b.perSecond - a.perSecond;
-    inputs.sort(busiest);
-    outputs.sort(busiest);
+    // Busiest first, rates equal within float noise by the name the card prints, then key (`rate-order.ts`), so a new
+    // target does not swap two rows that read the same.
+    const busiest = (f: GroupFlow) => ({
+      rate: f.perSecond,
+      name: f.resource.displayName ?? f.resourceId,
+      key: f.key,
+    });
+    sortByRate(inputs, busiest);
+    sortByRate(outputs, busiest);
     out.set(pocketId, { machines, euT, inputs, outputs });
   }
   return out;

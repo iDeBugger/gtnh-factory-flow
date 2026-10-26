@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  PHENOL_STEPS,
+  VINYL_RECIPE,
+  phenolCard,
+  phenolPlan,
+} from "@/lib/model/__fixtures__/phenol-281";
+import { rateOrderKey } from "@/lib/model/rate-order";
+import { calculateThroughput } from "@/lib/solver/throughput";
+import {
   mockForced,
   mockLeftovers,
   mockUnneeded,
@@ -30,12 +38,16 @@ describe("the rail's totals", () => {
     });
   });
 
-  it("lists biggest first and keeps equal amounts in the order the plan met them (not alphabetical)", () => {
+  it("lists biggest first, equal amounts A to Z, a line held at 0 at the bottom", () => {
     for (const mock of [mockUnneeded, mockForced, mockLeftovers]) {
       const rail = model(mock);
       for (const side of [rail.inputs, rail.outputs, rail.internal]) {
-        const amounts = side.map((l) => l.amount);
-        expect(amounts).toEqual([...amounts].sort((a, b) => b - a));
+        const sorted = [...side].sort(
+          (x, y) =>
+            rateOrderKey(y.amount) - rateOrderKey(x.amount) ||
+            x.label.localeCompare(y.label, "en", { sensitivity: "base", numeric: true }),
+        );
+        expect(side.map((l) => l.label)).toEqual(sorted.map((l) => l.label));
       }
     }
   });
@@ -286,5 +298,52 @@ describe("a plan with no answer", () => {
     expect(rail.outputs.filter((l) => l.amount > 0)).toEqual([]);
     expect(rail.internal).toEqual([]);
     expect(rail.inputs.filter((l) => l.amount > 0)).toEqual([]);
+  });
+});
+
+describe("a plan whose rates change", () => {
+  const railAt = (perSecond: number, options?: Parameters<typeof phenolPlan>[1]) => {
+    const project = phenolPlan(perSecond, options);
+    return buildRailModel(project, calculateThroughput(project, { generatedAt: "fixed" }));
+  };
+
+  it("keeps every list in one order while Phenol is raised a step at a time", () => {
+    const orders = new Set<string>();
+    for (const perSecond of PHENOL_STEPS) {
+      const rail = railAt(perSecond);
+      // The three come in at the same rate from two cards: equal within noise, so A to Z.
+      expect(rail.inputs.find((l) => l.label === "Benzene")!.amount).toBeCloseTo(perSecond, 9);
+      expect(rail.inputs.find((l) => l.label === "Oxygen")!.amount).toBeCloseTo(perSecond, 9);
+      orders.add(
+        JSON.stringify({
+          inputs: rail.inputs.map((l) => l.label),
+          outputs: rail.outputs.map((l) => l.label),
+          internal: rail.internal.map((l) => l.label),
+          machines: rail.machines.map((m) => m.nodeId),
+        }),
+      );
+    }
+    expect([...orders].map((o) => JSON.parse(o))).toEqual([
+      {
+        inputs: ["Chlorine", "Benzene", "Ethylene", "Oxygen"],
+        outputs: ["Diluted Hydrochloric Acid", "Phenol", "Vinyl Chloride"],
+        internal: ["Hydrochloric Acid", "Water"],
+        machines: ["phenol", "vinyl"],
+      },
+    ]);
+  });
+
+  it("still reorders when two rates truly cross", () => {
+    // A second Vinyl Chloride reactor set to Exactly 0.3 takes 37.5 L/s of Hydrochloric Acid from outside whatever the
+    // target and draws 9 EU/t; Benzene (the target's rate) passes the acid, and the Phenol reactor's draw (0.84 EU/t a
+    // Phenol a second) passes the spare's.
+    const spare = { ...phenolCard("spare", VINYL_RECIPE.id, 0, 600), solvePin: 0.3, solvePinExact: true };
+    const low = railAt(8, { extraNodes: [spare] as never });
+    const high = railAt(60, { extraNodes: [spare] as never });
+    const at = (rail: typeof low, label: string) => rail.inputs.findIndex((l) => l.label === label);
+    expect(at(low, "Hydrochloric Acid")).toBeLessThan(at(low, "Benzene"));
+    expect(at(high, "Benzene")).toBeLessThan(at(high, "Hydrochloric Acid"));
+    expect(low.machines.map((m) => m.nodeId)).toEqual(["spare", "phenol", "vinyl"]);
+    expect(high.machines.map((m) => m.nodeId)).toEqual(["phenol", "vinyl", "spare"]);
   });
 });

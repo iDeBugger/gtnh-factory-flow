@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { FactoryNode, FactoryProject, Recipe, ThroughputResult } from "@/lib/model/types";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
+import { phenolPlan } from "@/lib/model/__fixtures__/phenol-281";
+import { calculateThroughput } from "@/lib/solver/throughput";
 import { computeCommunityPlanStats } from "./plan-stats";
 
 function makeNode(overrides: Partial<FactoryNode>): FactoryNode {
@@ -156,5 +158,27 @@ describe("computeCommunityPlanStats", () => {
     expect(stats.needs.map((need) => need.resourceId)).toEqual(["copper", "iron"]);
     expect(stats.outputs).toHaveLength(1);
     expect(stats.outputs[0]).toMatchObject({ resourceId: "steel", ratePerSecond: 4 });
+  });
+});
+
+describe("the stats' resource lists", () => {
+  const needsAt = (perSecond: number, limit?: number) => {
+    const project = phenolPlan(perSecond, { supplies: true });
+    const result = calculateThroughput(project, { generatedAt: "fixed" });
+    return computeCommunityPlanStats(project, result, limit).needs.map((stat) => stat.displayName);
+  };
+
+  it("keeps one order and the same rows past the limit whatever the noise: equal rates A to Z", () => {
+    // Benzene, Ethylene and Oxygen come in at the same rate from two cards; at 9 /s and 10 /s the solver's last bits
+    // fall the other way.
+    for (const perSecond of [9, 10]) {
+      expect(needsAt(perSecond, Number.POSITIVE_INFINITY)).toEqual([
+        "Chlorine",
+        "Benzene",
+        "Ethylene",
+        "Oxygen",
+      ]);
+      expect(needsAt(perSecond, 2)).toEqual(["Chlorine", "Benzene"]);
+    }
   });
 });

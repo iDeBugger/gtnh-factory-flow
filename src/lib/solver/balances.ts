@@ -1,3 +1,4 @@
+import { sortByRate } from "../model/rate-order";
 import { makeResourceKey } from "../model/resources";
 import type {
   EdgeThroughput,
@@ -341,6 +342,21 @@ function applyTrashedOutputBalances(
 }
 
 /**
+ * Biggest first, equal within float noise by the name the lists print (`displayName ?? resourceId`), then key
+ * (`rate-order.ts`), so a new target does not swap rows that read the same.
+ */
+function sortBalances(
+  list: ResourceBalance[],
+  rate: (balance: ResourceBalance) => number,
+): ResourceBalance[] {
+  return sortByRate(list, (b) => ({
+    rate: rate(b),
+    name: b.displayName ?? b.resourceId,
+    key: b.key,
+  }));
+}
+
+/**
  * The two headline lists the books imply: what has to be imported, and what
  * nothing downstream drinks.
  */
@@ -350,12 +366,14 @@ export function splitBalances(balances: Iterable<ResourceBalance>): {
 } {
   const all = [...balances];
   return {
-    externalInputs: all
-      .filter((balance) => balance.deficitPerSecond > EPSILON)
-      .sort((a, b) => b.deficitPerSecond - a.deficitPerSecond),
-    unconsumedOutputs: all
-      .filter((balance) => balance.surplusPerSecond > EPSILON)
-      .sort((a, b) => b.surplusPerSecond - a.surplusPerSecond),
+    externalInputs: sortBalances(
+      all.filter((balance) => balance.deficitPerSecond > EPSILON),
+      (balance) => balance.deficitPerSecond,
+    ),
+    unconsumedOutputs: sortBalances(
+      all.filter((balance) => balance.surplusPerSecond > EPSILON),
+      (balance) => balance.surplusPerSecond,
+    ),
   };
 }
 

@@ -73,6 +73,13 @@ Types, Zod schemas, resource keys, recipe rules, and the load funnel
   `paperForBoardId`). `flattenBoards` surfaces members where their frames stood.
 - `machine-list.ts` (`buildMachineList`): one row per card. Build counts the card's
   `machineCount`; Solve / Pool sum its sections' required machines, fractions kept.
+  Order: tier, then EU/t biggest first on `rate-order.ts`'s key (rounded to 9 significant
+  digits, so float noise never swaps two cards), then name, then card order.
+- `rate-order.ts` (`sortByRate`, `compareByRate`, `rateOrderKey`): the order of every list of
+  rates the plan-mode board shows (overview, group summary card, machine list, boundary
+  lists, plan stats). Biggest first on the rate rounded to 9 significant digits (a sort key,
+  so the sort stays transitive), ties by the name the list prints A to Z, then key. The file
+  names the two rare edges no fixed key avoids.
 
 ## Game version (game-version.ts)
 
