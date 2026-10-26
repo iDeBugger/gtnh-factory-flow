@@ -1,9 +1,11 @@
 -- Community plan sharing schema.
--- Run this in the Supabase SQL editor (or `supabase db push`) once per project.
+-- Applied with every migration on every deploy (tools/deploy/db/migrate.sh).
 --
--- Access model: row level security is enabled with NO public policies.
--- Only the Next.js API routes talk to these tables, using the service-role
--- key, so all validation/rate limiting happens server-side in the app.
+-- Access model: only the server talks to these tables, so all validation
+-- and rate limiting happens in the app. Who may see and change which rows is
+-- the services' rules (src/lib/server/services/access.ts); what each
+-- process may touch at all is its role's grants (tools/deploy/db/app-roles.sql).
+-- Row security is off (supabase/migrations/2026-10-26-row-security-off.sql).
 
 create table if not exists community_users (
   id uuid primary key default gen_random_uuid(),
@@ -91,11 +93,6 @@ create table if not exists community_events (
 create index if not exists community_events_window_idx
   on community_events (actor_key, action, created_at desc);
 
-alter table community_users enable row level security;
-alter table community_plans enable row level security;
-alter table community_votes enable row level security;
-alter table community_events enable row level security;
-
 -- Blueprints: per-user saved sub-assemblies — a captured board selection
 -- (cards, wires, pockets, recipes) that can be stamped back into any design.
 -- The OWNER may edit in place (rename, overwrite the payload from a board
@@ -103,7 +100,7 @@ alter table community_events enable row level security;
 -- author can refresh a published build without losing its standing.
 -- Publishing flips is_public and stamps author/description/published_at.
 -- Votes and downloads mirror community_plans.
--- Same access model as everything above: RLS on, no policies, service-role only.
+-- Same access model as everything above.
 create table if not exists blueprints (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references community_users (id) on delete cascade,
@@ -140,8 +137,6 @@ create index if not exists blueprints_public_new_idx on blueprints (is_public, p
 create index if not exists blueprints_public_top_idx on blueprints (is_public, score desc);
 create index if not exists blueprints_public_downloads_idx on blueprints (is_public, downloads desc);
 
-alter table blueprints enable row level security;
-
 -- Columns added after the blueprints table first shipped. `create table if
 -- not exists` never alters an existing table, so re-running this file must
 -- converge through idempotent ALTERs — keep every later addition here.
@@ -164,8 +159,6 @@ create table if not exists blueprint_votes (
   primary key (blueprint_id, voter_key)
 );
 
-alter table blueprint_votes enable row level security;
-
 -- ---------------------------------------------------------------------------
 -- THE LIBRARY: an account's own designs and folders, synced across browsers.
 --
@@ -175,8 +168,8 @@ alter table blueprint_votes enable row level security;
 -- instead of being uploaded back by a browser that still holds the copy.
 -- Timestamps are the CLIENT's: last write wins by the writer's own clock,
 -- and the server stores what it is told so both sides agree on "synced".
--- Same access model as everything above: RLS on, no policies, service-role
--- only. Purely additive: nothing here touches existing tables or data.
+-- Same access model as everything above. Purely additive: nothing here
+-- touches existing tables or data.
 create table if not exists library_folders (
   user_id uuid not null references community_users (id) on delete cascade,
   id text not null,
@@ -211,9 +204,6 @@ create table if not exists library_designs (
 create index if not exists library_designs_user_updated_idx
   on library_designs (user_id, updated_at desc);
 
-alter table library_folders enable row level security;
-alter table library_designs enable row level security;
-
 -- ---------------------------------------------------------------------------
 -- COMMENTS on shared setups. One row per comment; deleting sets deleted_at
 -- so a thread never loses its shape. The author, the post's owner and an
@@ -230,8 +220,6 @@ create table if not exists community_comments (
 
 create index if not exists community_comments_plan_idx
   on community_comments (plan_id, created_at);
-
-alter table community_comments enable row level security;
 
 -- A starred design (the built-in Favorites collection). Added after the
 -- library tables first shipped, so it is an idempotent ALTER.
@@ -280,8 +268,6 @@ create table if not exists library_design_members (
 );
 
 create index if not exists library_design_members_member on library_design_members (member_id);
-
-alter table library_design_members enable row level security;
 
 -- ---------------------------------------------------------------------------
 -- SIGN OUT EVERYWHERE. The same SQL as

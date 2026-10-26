@@ -13,6 +13,8 @@ import { verifyServiceToken } from "./service-token.mjs";
 const REQUIRED = [
   "POSTGRES_PASSWORD",
   "POSTGREST_AUTHENTICATOR_PASSWORD",
+  "GTNH_SITE_DB_PASSWORD",
+  "GTNH_LIVE_DB_PASSWORD",
   "POSTGREST_JWT_SECRET",
   "POSTGREST_SERVICE_TOKEN",
   "COMMUNITY_HASH_SALT",
@@ -23,15 +25,27 @@ const REQUIRED = [
 ];
 
 /** Secrets a guess must not reach: at least this many characters. */
-const LONG_SECRETS = ["COMMUNITY_HASH_SALT", "LIVE_INTERNAL_TOKEN", "POSTGREST_JWT_SECRET"];
+const LONG_SECRETS = [
+  "COMMUNITY_HASH_SALT",
+  "LIVE_INTERNAL_TOKEN",
+  "POSTGREST_JWT_SECRET",
+  "GTNH_SITE_DB_PASSWORD",
+  "GTNH_LIVE_DB_PASSWORD",
+];
 const MIN_SECRET_LENGTH = 32;
 
 /**
- * Passwords spliced into a connection URI (PGRST_DB_URI) or a postgres
- * setting: only characters no URI treats specially, as `openssl rand -hex 32`
- * makes. A `/`, `@`, `:`, `?` or `#` would break the URI only at run time.
+ * Passwords spliced into a connection URI (PGRST_DB_URI, the site's and the
+ * live service's DATABASE_URL) or a postgres setting: only characters no URI
+ * treats specially, as `openssl rand -hex 32` makes. A `/`, `@`, `:`, `?` or
+ * `#` would break the URI only at run time.
  */
-const URI_SAFE_SECRETS = ["POSTGRES_PASSWORD", "POSTGREST_AUTHENTICATOR_PASSWORD"];
+const URI_SAFE_SECRETS = [
+  "POSTGRES_PASSWORD",
+  "POSTGREST_AUTHENTICATOR_PASSWORD",
+  "GTNH_SITE_DB_PASSWORD",
+  "GTNH_LIVE_DB_PASSWORD",
+];
 const URI_SAFE = /^[A-Za-z0-9_-]+$/;
 
 /** Development-only switches a deployed stack must never carry. */

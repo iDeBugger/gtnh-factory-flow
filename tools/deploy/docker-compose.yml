@@ -69,6 +69,9 @@ services:
       PGUSER: postgres
       PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set}
       POSTGREST_AUTHENTICATOR_PASSWORD: ${POSTGREST_AUTHENTICATOR_PASSWORD:?POSTGREST_AUTHENTICATOR_PASSWORD is not set}
+      # The site's and the live service's logins (tools/deploy/db/app-roles.sql).
+      GTNH_SITE_DB_PASSWORD: ${GTNH_SITE_DB_PASSWORD:?GTNH_SITE_DB_PASSWORD is not set}
+      GTNH_LIVE_DB_PASSWORD: ${GTNH_LIVE_DB_PASSWORD:?GTNH_LIVE_DB_PASSWORD is not set}
     networks:
       - backend
     read_only: true
@@ -114,6 +117,8 @@ services:
     environment:
       POSTGREST_URL: http://postgrest:3000
       POSTGREST_SERVICE_TOKEN: ${POSTGREST_SERVICE_TOKEN:?POSTGREST_SERVICE_TOKEN is not set}
+      # The direct client, as gtnh_site. Built here so the .env holds the password only.
+      DATABASE_URL: postgres://gtnh_site:${GTNH_SITE_DB_PASSWORD:?GTNH_SITE_DB_PASSWORD is not set}@postgres:5432/postgres
       COMMUNITY_HASH_SALT: ${COMMUNITY_HASH_SALT:?COMMUNITY_HASH_SALT is not set}
       COMMUNITY_ADMIN_TOKEN: ${COMMUNITY_ADMIN_TOKEN:-}
       LIVE_INTERNAL_URL: http://live:3001
@@ -146,6 +151,8 @@ services:
       retries: 3
       start_period: 180s
     depends_on:
+      postgres:
+        condition: service_healthy
       postgrest:
         condition: service_started
       live:
@@ -163,6 +170,8 @@ services:
     environment:
       POSTGREST_URL: http://postgrest:3000
       POSTGREST_SERVICE_TOKEN: ${POSTGREST_SERVICE_TOKEN:?POSTGREST_SERVICE_TOKEN is not set}
+      # The direct client, as gtnh_live: only the columns the live store uses.
+      DATABASE_URL: postgres://gtnh_live:${GTNH_LIVE_DB_PASSWORD:?GTNH_LIVE_DB_PASSWORD is not set}@postgres:5432/postgres
       COMMUNITY_HASH_SALT: ${COMMUNITY_HASH_SALT:?COMMUNITY_HASH_SALT is not set}
       LIVE_INTERNAL_URL: http://live:3001
       LIVE_INTERNAL_TOKEN: ${LIVE_INTERNAL_TOKEN:?LIVE_INTERNAL_TOKEN is not set}
@@ -193,6 +202,8 @@ services:
       retries: 3
       start_period: 30s
     depends_on:
+      postgres:
+        condition: service_healthy
       postgrest:
         condition: service_started
 

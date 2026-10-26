@@ -1,18 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Viewer } from "../http/viewer";
+import { OWNER, viewers } from "@/test-support/viewers";
 import { canReadBlueprint, canSeePlan, isUuid } from "./access";
-
-const OWNER = "11111111-1111-4111-8111-111111111111";
-const STRANGER = "22222222-2222-4222-8222-222222222222";
-
-const viewers: Record<string, Viewer> = {
-  anonymous: { isAdmin: false, adminToken: false },
-  owner: { userId: OWNER, username: "owner", isAdmin: false, adminToken: false },
-  stranger: { userId: STRANGER, username: "stranger", isAdmin: false, adminToken: false },
-  "admin account": { userId: STRANGER, username: "admin", isAdmin: true, adminToken: false },
-  "admin header": { isAdmin: false, adminToken: true },
-  "admin header, signed in": { userId: STRANGER, username: "stranger", isAdmin: false, adminToken: true },
-};
 
 describe("canSeePlan", () => {
   // Every row and viewer, with the answer written out: a published post is

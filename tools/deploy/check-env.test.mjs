@@ -6,6 +6,8 @@ const JWT_SECRET = "f".repeat(64);
 const complete = () => ({
   POSTGRES_PASSWORD: "postgres-password-value",
   POSTGREST_AUTHENTICATOR_PASSWORD: "authenticator-password-value",
+  GTNH_SITE_DB_PASSWORD: "a".repeat(64),
+  GTNH_LIVE_DB_PASSWORD: "b".repeat(64),
   POSTGREST_JWT_SECRET: JWT_SECRET,
   POSTGREST_SERVICE_TOKEN: signServiceToken(JWT_SECRET),
   COMMUNITY_HASH_SALT: "0123456789abcdef0123456789abcdef0123456789",
@@ -87,6 +89,28 @@ describe("the deploy's env check", () => {
       ).toEqual([expect.stringMatching(/^POSTGREST_AUTHENTICATOR_PASSWORD holds characters/)]);
     }
     expect(checkDeployEnv({ ...complete(), POSTGRES_PASSWORD: "a/b" }, stage)).toHaveLength(1);
+  });
+
+  it("refuses an app role password that is missing, short or not URI-safe, by name", () => {
+    for (const name of ["GTNH_SITE_DB_PASSWORD", "GTNH_LIVE_DB_PASSWORD"]) {
+      const missing = complete();
+      delete missing[name];
+      expect(checkDeployEnv(missing, stage)).toEqual([`${name} is not set.`]);
+      expect(checkDeployEnv({ ...complete(), [name]: "" }, stage)).toEqual([`${name} is not set.`]);
+      const short = "s3cr3t".repeat(5);
+      const shortProblems = checkDeployEnv({ ...complete(), [name]: short }, stage);
+      expect(shortProblems).toEqual([
+        `${name} is shorter than 32 characters: use openssl rand -hex 32.`,
+      ]);
+      const unsafe = `s3cr3t/${"c".repeat(40)}`;
+      const unsafeProblems = checkDeployEnv({ ...complete(), [name]: unsafe }, stage);
+      expect(unsafeProblems).toEqual([
+        `${name} holds characters a connection URI breaks on: use openssl rand -hex 32.`,
+      ]);
+      for (const problem of [...shortProblems, ...unsafeProblems]) {
+        expect(problem).not.toMatch(/s3cr3t/);
+      }
+    }
   });
 
   it("refuses an IPv4-mapped trusted proxy, which no peer would match", () => {
