@@ -8,8 +8,8 @@
 // raw export from the last good --export in the work dir is rebuilt. Then rebuild-dataset.sh, in
 // the image: normalize, icon hints, NEI order, indexes, faint fluids, gzips. A build the publish
 // checks would refuse (deploy-lib.mjs: unresolved icon hints, a lost NEI order) is not installed;
-// one that passes replaces <out>/<id>, keeping the rendered textures it lacks, and the manifest is
-// rebuilt.
+// one that passes replaces <out>/<id>, keeping the rendered textures it lacks, the power maps are
+// pointed at it (refresh-power-maps.mjs), and the manifest is rebuilt.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -419,6 +419,7 @@ async function buildPack(pack, options) {
   if (problems.length > 0) {
     return [...problems, `the build stays in ${path.join(workDir, pack.id, "dataset")}.`];
   }
+  await run("node", ["tools/dataset-pipeline/scripts/refresh-power-maps.mjs", path.join(outDir, pack.id)]);
   return undefined;
 }
 

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { gunzipSync } from "node:zlib";
 import { describe, expect, test } from "vitest";
 import rawResourceMap29 from "./data/resource-map.json";
 import rawMachineIcons29 from "./data/machine-icons.json";
@@ -130,6 +131,18 @@ describe("machine-icons.json 2.8.1", () => {
     if (existsSync(path.join(root, "datasets", "gtnh", "local-2.8.1", "textures", "rendered"))) {
       const missing = entries.filter(([, entry]) => !existsSync(path.join(root, entry.iconPath!))).map(([name]) => name);
       expect(missing).toEqual([]);
+    }
+    // A kept texture from an earlier install is still a file: the map must name the icon this build draws for its id.
+    const index = path.join(root, "datasets", "gtnh", "local-2.8.1", "resource-index.json.gz");
+    if (existsSync(index)) {
+      const catalog = JSON.parse(gunzipSync(readFileSync(index)).toString("utf8")) as {
+        resourceIndex: Array<{ kind: string; id: string; iconPath?: string }>;
+      };
+      const drawn = new Map(catalog.resourceIndex.map((record) => [`${record.kind}:${record.id}`, record.iconPath]));
+      const stale = entries
+        .filter(([, entry]) => drawn.get(`${(entry as { kind?: string }).kind ?? "item"}:${(entry as { id?: string }).id}`) !== entry.iconPath)
+        .map(([name]) => name);
+      expect(stale).toEqual([]);
     }
   });
 });

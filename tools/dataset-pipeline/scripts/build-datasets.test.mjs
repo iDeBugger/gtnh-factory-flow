@@ -224,6 +224,9 @@ describe("build-datasets main", () => {
     // The failed export left the last good one where it was.
     expect(rawMarker(path.join(raw29, "oracle-export.json"))).toBe("last good");
     expect(calls.filter((call) => call.includes("rebuild-manifest.mjs"))).toHaveLength(1);
+    expect(calls.filter((call) => call.includes("refresh-power-maps.mjs"))).toEqual([
+      `node tools/dataset-pipeline/scripts/refresh-power-maps.mjs ${path.join(out, "local-2.8.1")}`,
+    ]);
   });
 
   it("keeps the last good export as raw-export.previous after a good one", async () => {
