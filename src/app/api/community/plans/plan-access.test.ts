@@ -185,6 +185,24 @@ describe("voting on a post", () => {
     expect(await missing.json()).toEqual({ error: "Plan not found." });
   });
 
+  it("a vote on a post taken down after its access read is not found, and leaves no vote", async () => {
+    const planId = randomUUID();
+    // The access read still saw the post; it is gone by the time the vote locks it.
+    const seen = vi
+      .spyOn(plansRepo, "readAccess")
+      .mockResolvedValueOnce({ id: planId, user_id: users.owner!.id, is_public: true });
+    try {
+      const late = await castVote(planId, { deviceId: "device-late", value: 1 }, { who: "stranger" });
+      expect(late.status).toBe(404);
+      expect(await late.json()).toEqual({ error: "Plan not found." });
+      expect(seen).toHaveBeenCalledWith(planId);
+    } finally {
+      seen.mockRestore();
+    }
+    const rows = await testDb().db.selectFrom("community_votes").select("voter_key").where("plan_id", "=", planId).execute();
+    expect(rows).toEqual([]);
+  });
+
   it("lets the owner vote on their own unpublished post, and anyone once it is public", async () => {
     const planId = await makePlan("Mine", false);
     const owner = await castVote(planId, { deviceId: "device-owner", value: 1 }, { who: "owner" });

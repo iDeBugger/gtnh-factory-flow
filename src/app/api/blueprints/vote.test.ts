@@ -175,6 +175,28 @@ describe("voting on a blueprint", () => {
     expect(await tally(blueprintId)).toEqual({ upvotes: 1, downvotes: 0, rowsUp: 1, rowsDown: 0 });
   });
 
+  it("a vote on a blueprint taken down after its access read is not found, and leaves no vote", async () => {
+    const blueprintId = randomUUID();
+    // The access read still saw the blueprint; it is gone by the time the vote locks it.
+    const seen = vi
+      .spyOn(blueprintsRepo, "readAccess")
+      .mockResolvedValueOnce({ id: blueprintId, user_id: users.author!.id, is_public: true });
+    try {
+      const late = await castVote(blueprintId, { deviceId: "late", value: 1 }, { address: "198.51.100.80", who: "reader" });
+      expect(late.status).toBe(404);
+      expect(await late.json()).toEqual({ error: "Blueprint not found." });
+      expect(seen).toHaveBeenCalledWith(blueprintId);
+    } finally {
+      seen.mockRestore();
+    }
+    const rows = await testDb()
+      .db.selectFrom("blueprint_votes")
+      .select("voter_key")
+      .where("blueprint_id", "=", blueprintId)
+      .execute();
+    expect(rows).toEqual([]);
+  });
+
   it("writes a vote and its blueprint's counts under the blueprint's lock", async () => {
     const blueprintId = await makeBlueprint("Locked furnace", true);
     const LOCK = /^select "id" from "blueprints" where "id" = \$1 for no key update$/;
