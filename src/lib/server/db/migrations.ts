@@ -109,12 +109,55 @@ function dollarTagAt(text: string, at: number): string | undefined {
 }
 
 /**
+ * Where a string that closed at `at` continues, if it does: Postgres joins
+ * `'a'` and `'b'` into one string when only whitespace holding a line break
+ * (and `--` comments) lies between them, and the continued part keeps the
+ * first part's escapes. Returns the index of the next opening quote.
+ */
+function continuedStringAt(text: string, at: number): number | undefined {
+  let i = at;
+  let newline = false;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === "\n" || c === "\r") {
+      newline = true;
+      i += 1;
+    } else if (c === " " || c === "\t" || c === "\f" || c === "\v") {
+      i += 1;
+    } else if (c === "-" && text[i + 1] === "-") {
+      while (i < text.length && text[i] !== "\n" && text[i] !== "\r") i += 1;
+    } else {
+      break;
+    }
+  }
+  return newline && text[i] === "'" ? i : undefined;
+}
+
+/** The index just past the string whose body starts at `at`, continuations included. */
+function stringEnd(text: string, at: number, backslashEscapes: boolean): number {
+  let i = at;
+  for (;;) {
+    while (i < text.length) {
+      if (backslashEscapes && text[i] === "\\") i += 2;
+      else if (text[i] === "'" && text[i + 1] === "'") i += 2;
+      else if (text[i] === "'") break;
+      else i += 1;
+    }
+    if (i >= text.length) return text.length;
+    const next = continuedStringAt(text, i + 1);
+    if (next === undefined) return i + 1;
+    i = next + 1;
+  }
+}
+
+/**
  * The file's text with every comment, string literal, quoted name and
  * dollar-quoted body blanked, read left to right in one pass as Postgres's
  * lexer does: what opens first wins, so an apostrophe inside a `--` comment
  * opens no string and a `--` inside a string starts no comment. Plain strings
- * double `''`; `E'...'` strings also escape with a backslash; block comments
- * nest. An unterminated literal runs to the end, as Postgres would refuse it.
+ * double `''`; `E'...'` strings also escape with a backslash, and so does a
+ * part continued from one; block comments nest. An unterminated literal runs
+ * to the end, as Postgres would refuse it.
  */
 export function blankLiterals(text: string): string {
   let out = "";
@@ -144,16 +187,12 @@ export function blankLiterals(text: string): string {
       }
       out += " ";
     } else if ((c === "E" || c === "e") && next === "'" && !identBefore()) {
-      i += 2;
-      while (i < n) {
-        if (text[i] === "\\") i += 2;
-        else if (text[i] === "'" && text[i + 1] === "'") i += 2;
-        else if (text[i] === "'") break;
-        else i += 1;
-      }
-      i += 1;
+      i = stringEnd(text, i + 2, true);
       out += " ";
-    } else if (c === "'" || c === '"') {
+    } else if (c === "'") {
+      i = stringEnd(text, i + 1, false);
+      out += " ";
+    } else if (c === '"') {
       i += 1;
       while (i < n) {
         if (text[i] === c && text[i + 1] === c) i += 2;

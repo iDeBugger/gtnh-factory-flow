@@ -261,6 +261,20 @@ describe("the migration runner", () => {
     expect(blankLiterals("select 'a\\'; commit")).toBe("select  ; commit");
   });
 
+  it("reads a string continued over a line break in the first part's mode", () => {
+    const transaction = /holds no begin, commit, rollback or savepoint/;
+    // The continued part of an E-string keeps its backslash escapes.
+    expect(() =>
+      checkMigrationText("0002-bad.sql", "insert into t values (E'a'\n'\\''); commit; select 'x';"),
+    ).toThrow(transaction);
+    expect(blankLiterals("select E'a'\n'\\''; x")).toBe("select  ; x");
+    // A -- comment may sit in the gap; the continued part of a plain string stays plain.
+    expect(blankLiterals("select 'a' -- note\n  'b\\'; x")).toBe("select  ; x");
+    expect(blankLiterals("select e'a'\r\n\t'b\\''; x")).toBe("select  ; x");
+    // Without a line break the next quote opens a string of its own.
+    expect(blankLiterals("select E'a' '\\'; x")).toBe("select    ; x");
+  });
+
   it("passes the repository's own migrations", () => {
     const dir = path.join(dbDir(), "migrations");
     for (const name of readdirSync(dir).filter((entry) => MIGRATION_NAME.test(entry))) {
