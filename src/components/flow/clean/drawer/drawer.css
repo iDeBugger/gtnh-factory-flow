@@ -144,7 +144,20 @@
   box-sizing: border-box;
   background: var(--cd-bar);
   border-bottom: 1px solid var(--cd-frame);
-  pointer-events: auto;
+}
+/* The bar's hit area, unpainted: the bar and 6 px of the row under it, edge to edge, so a press near the top moves the
+   drawer instead of starting a wire. Over the row's wiring handle (z 30), under the keys (z 41). Never past the
+   drawer: a card can sit right against it (a straight wire across a gap under a cell), and a drawer drawn after the
+   card would take that card's presses. A pseudo-element of the drawer, not of the bar: .cd-fill's clip would cut it
+   to the bar, and an element would cost one of the drawer's DOM budget. */
+.cd::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 13px;
+  z-index: 35;
   cursor: grab;
 }
 .cd:hover .cd-bar,
