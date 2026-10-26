@@ -628,7 +628,7 @@ const inTypeOrImport = (node: ts.Node): boolean =>
  * - `dynamic` (`db.dynamic.ref`, `const { dynamic } = db`), whose `ref` and
  *   `table` take any string as an identifier;
  * - `CompiledQuery` as a value (`CompiledQuery.raw` runs a string as SQL),
- *   and outside db/ any mention of it;
+ *   and outside db/ any mention of it, and either imported under another name;
  * - `fn(name, ...)` or `fn.agg(name, ...)` with a name that is not a string
  *   literal: Kysely writes a function's name into the SQL text unescaped;
  * - a namespace or dynamic import of kysely, which would reach all of these
@@ -648,7 +648,11 @@ function sqlWriting(file: SourceFile): { template: boolean; splicing: string[] }
     if (bindings && ts.isNamespaceImport(bindings)) splicing.add("kysely namespace import");
     if (bindings && ts.isNamedImports(bindings)) {
       for (const element of bindings.elements) {
-        if ((element.propertyName ?? element.name).text !== "sql") continue;
+        const imported = (element.propertyName ?? element.name).text;
+        if (imported === "CompiledQuery" && element.name.text !== imported) {
+          splicing.add(`CompiledQuery as ${element.name.text}`);
+        }
+        if (imported !== "sql") continue;
         sqlNames.add(element.name.text);
         if (element.name.text !== "sql") splicing.add(`sql as ${element.name.text}`);
       }
@@ -1038,6 +1042,10 @@ describe("the layers", () => {
         '    .selectFrom("t")',
         '    .select(({ fn }) => [fn("lower", ["a"]).as("x"), fn.agg("sum", ["b"]).as("y"), fn.count("c").as("z")]);',
       ].join("\n"),
+      "src/lib/server/db/compiled-alias.ts": [
+        'import { CompiledQuery as CQ } from "kysely";',
+        "export const run = (c: string) => CQ.raw(c);",
+      ].join("\n"),
       "src/lib/server/db/compiled-as-type.ts": [
         'import type { CompiledQuery } from "kysely";',
         "export const size = (query: CompiledQuery) => query.sql.length;",
@@ -1047,6 +1055,7 @@ describe("the layers", () => {
       Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
     );
     expect(sqlOutOfPlace(bad)).toEqual([
+      "src/lib/server/db/compiled-alias.ts: CompiledQuery as CQ",
       `${repo("compiled")}: CompiledQuery`,
       `${repo("dynamic-destructured")}: dynamic`,
       `${repo("dynamic-ref")}: dynamic`,
