@@ -947,7 +947,7 @@ describe("a database outage reading a post", () => {
     const down = { status: 500, body: DOWN };
 
     invalidatePlanListCache();
-    expect(await whileDown(/^select distinct "game_version"/, () => list.GET(request("GET", "/api/community/plans")))).toEqual(down);
+    expect(await whileDown(/from "community_plans"/, () => list.GET(request("GET", "/api/community/plans")))).toEqual(down);
     expect(await whileDown(/from "community_plans"/, () => plan.GET(request("GET", base), params(ownersPost)))).toEqual(down);
     expect(
       await whileDown(/from "community_plans"/, () =>
@@ -981,6 +981,27 @@ describe("a database outage reading a post", () => {
     const back = await plan.GET(request("GET", base), params(ownersPost));
     expect(back.status).toBe(200);
     expect(((await back.json()) as { plan: { name: string } }).plan.name).toBe("Unreachable");
+  });
+
+  it("lists the posts without versions when only the version list fails, and keeps none of that answer", async () => {
+    const planId = await makePlan("Versioned", true);
+    await testDb().db.updateTable("community_plans").set({ game_version: "2.9.0-versioned" }).where("id", "=", planId).execute();
+    invalidatePlanListCache();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    let answer;
+    try {
+      answer = await whileDown(/^select distinct "game_version"/, () => list.GET(request("GET", "/api/community/plans")));
+      expect(errors).toHaveBeenCalledWith("Listing the game versions failed.", expect.anything());
+    } finally {
+      errors.mockRestore();
+    }
+    expect(answer.status).toBe(200);
+    const body = answer.body as { plans: Array<{ id: string }>; gameVersions: string[] };
+    expect(body.plans.map((post) => post.id)).toContain(planId);
+    expect(body.gameVersions).toEqual([]);
+    // Nothing of the failed answer was kept: the next list asks again and has the versions.
+    const again = await list.GET(request("GET", "/api/community/plans"));
+    expect(((await again.json()) as { gameVersions: string[] }).gameVersions).toContain("2.9.0-versioned");
   });
 
   it("keeps the saved stat card when the database fails while a stale one is refreshed", async () => {

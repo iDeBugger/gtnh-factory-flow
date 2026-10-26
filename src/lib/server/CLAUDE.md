@@ -275,7 +275,7 @@ llms.txt. The live service's queries are all among these, and it refuses to star
   blueprint shelf reads the same search through the same conditions (`repos/search.ts`, exam `search.test.ts`).
 - A failed read of a post throws, so a detail, edit, delete, download or preview upload during an outage answers
   the route's sentence or the database-down line, never "Plan not found."; only a stale stat card's refresh and
-  its write are best effort.
+  its write, and the list's version dropdown (logged, an empty set, not cached), are best effort.
 - A view and a download are one `update ... + 1 ... returning` each, with `planVisibleTo(viewer)` in its `where`:
   concurrent counts all land, and a post the viewer may not see counts nothing.
 - A comment's insert or delete and its post's recount (one `update ... from (select count(*), max(created_at))`)

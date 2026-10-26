@@ -200,13 +200,22 @@ export async function listPlans(
   };
 
   // Distinct versions across the hub feed the filter dropdown; the set moves
-  // once a release, so it is cached the same way.
+  // once a release, so it is cached the same way. The dropdown is best
+  // effort: a failed read lists the posts with no versions and caches
+  // nothing, so the next list asks again. The repository still throws, so no
+  // other reader takes an outage for an empty set.
   const loadVersions = async (): Promise<string[]> => {
     const cached = readPlanListCache<string[]>("versions");
     if (cached) {
       return cached;
     }
-    const versions = await plans.distinctGameVersions();
+    let versions: string[];
+    try {
+      versions = await plans.distinctGameVersions();
+    } catch (error) {
+      console.error("Listing the game versions failed.", error);
+      return [];
+    }
     writePlanListCache("versions", versions);
     return versions;
   };
