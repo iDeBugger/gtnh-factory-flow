@@ -1,8 +1,24 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { contrastInk, mixHex } from "./colors";
 import { CC, drawerMixes, tierChipColors } from "./tokens";
 
 describe("clean colours", () => {
+  it("clean.css's tokens are the same colours as tokens.ts", () => {
+    const css = readFileSync(path.join(__dirname, "clean.css"), "utf8");
+    const mirrored: string[] = [];
+    for (const [key, hex] of Object.entries(CC)) {
+      const name = key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+      const match = css.match(new RegExp(`--cc-${name}:\\s*(#[0-9a-fA-F]{6})`));
+      if (!match) continue;
+      mirrored.push(key);
+      expect(match[1]!.toUpperCase(), key).toBe(hex.toUpperCase());
+    }
+    expect(mirrored).toContain("flash");
+    expect(mirrored).toContain("select");
+  });
+
   it("mixes the way the mod's Hyb.mix does (per channel, rounded)", () => {
     // spec section 1: source edge = mix(tint, edge, .55), computed from the mod's code
     expect(mixHex(CC.source, CC.edge, 0.55)).toBe("#597CA1");

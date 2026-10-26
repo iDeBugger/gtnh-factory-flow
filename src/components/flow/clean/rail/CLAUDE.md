@@ -37,3 +37,8 @@ modes keep it.
 - Every memoised row that prints a rate or a draw (`ItemView`, `LineRow`, `MachineRow`) calls `useRateDisplayUnits()`:
   a unit switch repaints them and never re-solves. Exam: `OverviewRail.test.tsx` ("repaints its rates").
 - The notices ride the TOP of the board (`PlanTopNotices`, under the toolbars). A failed solve (nothing set) counts no flows. Only resource rows and spare places light the board on hover; the mod's machine lines light nothing (OverviewRail.java drawRail).
+- A machine line or group click frames the card and outlines it for a second (`goToMachineCard`,
+  `flow/card-flash.ts`: an attribute on the one React Flow wrapper; the colour fades in clean.css and the attribute goes
+  when the fade ends, as a far card starts it only once shown; plain for a second under reduced motion; a second click
+  restarts it). Resource rows and spares frame without it. Exam:
+  `card-flash.test.ts`, the machine-line case in `OverviewRail.test.tsx`.

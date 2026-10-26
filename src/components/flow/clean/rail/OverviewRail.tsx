@@ -57,8 +57,8 @@ import {
   stepDrawerRule,
   stepPinRule,
   walkCards,
+  goToMachineCard,
   walkResource,
-  frameCards,
 } from "./rail-actions";
 import { RailKey, RateBox, RuleKey, wheelHandlerFor } from "./rail-controls";
 import {
@@ -1143,7 +1143,7 @@ const MachineRow = memo(function MachineRow({
   else if (used !== undefined)
     eu = withUnit(formatCompact(powerDisplayFromEuT(used)), powerDisplaySuffix());
   const togglePin = () => stepPinRule(entry.nodeId, base);
-  const go = () => frameCards([entry.nodeId]);
+  const go = () => goToMachineCard(entry.nodeId);
   const wheelCount = (direction: 1 | -1) => {
     const now = wheeled ?? (entry.pinned ? entry.pin! : base);
     const next = entry.pinned || wheeled !== undefined ? now + direction : base + direction;
