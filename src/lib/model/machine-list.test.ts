@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PHENOL_STEPS, VINYL_RECIPE, phenolPlan } from "./__fixtures__/phenol-281";
 import { buildMachineList, formatMachineListCount } from "./machine-list";
 import { PROJECT_SCHEMA_VERSION, type FactoryProject, type Recipe } from "./types";
 import { calculateThroughput } from "@/lib/solver/throughput";
@@ -181,5 +182,41 @@ describe("power card tiers in the machine list", () => {
     const lines = buildMachineList(p, calculateThroughput(p));
     expect(lines.find((line) => line.nodeId === "lhe")?.tier).toBeUndefined();
     expect(lines.find((line) => line.nodeId === "turbine")?.tier).toBe("EV");
+  });
+});
+
+describe("the machine list's order", () => {
+  // A Vinyl Chloride variant at 30 s and 28 EU/t: it runs 0.03 machines a Phenol a second where the Phenol reactor
+  // runs 0.028 at 30 EU/t, so both draw 0.84 EU/t a Phenol a second, one number reached by two paths that differs
+  // only in the last bits, the larger side changing from step to step.
+  const slowVinyl: Recipe = {
+    ...VINYL_RECIPE,
+    id: `${VINYL_RECIPE.id}:slow`,
+    durationTicks: 600,
+    eut: 28,
+  };
+  const listAt = (perSecond: number) => {
+    const project = phenolPlan(perSecond, { vinyl: slowVinyl });
+    return buildMachineList(project, calculateThroughput(project, { generatedAt: "fixed" }));
+  };
+
+  it("keeps two cards of one tier whose draws match in place while Phenol is raised", () => {
+    const orders = new Set<string>();
+    for (const perSecond of PHENOL_STEPS) {
+      const list = listAt(perSecond);
+      expect(list[0]!.euT).toBeCloseTo(list[1]!.euT!, 9);
+      orders.add(list.map((entry) => entry.nodeId).join(","));
+    }
+    // Same tier, same draw, same name: the board's card order.
+    expect([...orders]).toEqual(["phenol,vinyl"]);
+  });
+
+  it("still puts the bigger draw first when the draws differ", () => {
+    const project = phenolPlan(10);
+    const list = buildMachineList(project, calculateThroughput(project, { generatedAt: "fixed" }));
+    expect(list.map((entry) => [entry.nodeId, Math.round(entry.euT!)])).toEqual([
+      ["phenol", 8],
+      ["vinyl", 2],
+    ]);
   });
 });

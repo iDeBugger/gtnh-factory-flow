@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { PROJECT_SCHEMA_VERSION, type FactoryProject, type Recipe } from "@/lib/model/types";
+import {
+  PHENOL_STEPS,
+  VINYL_RECIPE,
+  phenolCard,
+  phenolPlan,
+} from "@/lib/model/__fixtures__/phenol-281";
+import { rateOrderKey } from "@/lib/model/rate-order";
 import { calculateThroughput } from "@/lib/solver/throughput";
 import {
   mockForced,
@@ -32,14 +38,16 @@ describe("the rail's totals", () => {
     });
   });
 
-  it("lists each section A to Z by name, a line at zero in its place", () => {
+  it("lists biggest first, equal amounts A to Z, a line held at 0 at the bottom", () => {
     for (const mock of [mockUnneeded, mockForced, mockLeftovers]) {
       const rail = model(mock);
       for (const side of [rail.inputs, rail.outputs, rail.internal]) {
-        const labels = side.map((l) => l.label);
-        expect(labels).toEqual(
-          [...labels].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base", numeric: true })),
+        const sorted = [...side].sort(
+          (x, y) =>
+            rateOrderKey(y.amount) - rateOrderKey(x.amount) ||
+            x.label.localeCompare(y.label, "en", { sensitivity: "base", numeric: true }),
         );
+        expect(side.map((l) => l.label)).toEqual(sorted.map((l) => l.label));
       }
     }
   });
@@ -299,108 +307,16 @@ describe("a plan with no answer", () => {
 });
 
 describe("a plan whose rates change", () => {
-  // GTNH 2.8.1: Phenol from Benzene, Chlorine and Water; the Hydrochloric Acid it makes goes to a Vinyl Chloride
-  // reactor that takes Ethylene and Oxygen and gives the Water back. Benzene, Ethylene and Oxygen come in at the same
-  // rate from two cards, so their solved rates differ only in the last bits and that noise changes with the target.
-  const circuit = (n: number) => ({
-    kind: "item" as const,
-    id: `gregtech:gt.integrated_circuit@${n}`,
-    amount: 1,
-    displayName: "Programmed Circuit",
-    consumed: false,
-  });
-  const fluid = (id: string, amount: number, displayName: string) => ({
-    kind: "fluid" as const,
-    id,
-    amount,
-    displayName,
-  });
-  const phenol: Recipe = {
-    id: "oracle:gregtech:gt-recipe-largechemicalreactor:a2cac8d24af199dd",
-    name: "Large Chemical Reactor: Phenol",
-    machineType: "Large Chemical Reactor",
-    minimumTier: "LV",
-    durationTicks: 560,
-    eut: 30,
-    inputs: [
-      circuit(24),
-      fluid("benzene", 1000, "Benzene"),
-      fluid("chlorine", 2000, "Chlorine"),
-      fluid("water", 1000, "Water"),
-    ],
-    outputs: [
-      fluid("phenol", 1000, "Phenol"),
-      fluid("hydrochloricacid_gt5u", 1000, "Hydrochloric Acid"),
-      fluid("dilutedhydrochloricacid_gt5u", 1000, "Diluted Hydrochloric Acid"),
-    ],
+  const railAt = (perSecond: number, options?: Parameters<typeof phenolPlan>[1]) => {
+    const project = phenolPlan(perSecond, options);
+    return buildRailModel(project, calculateThroughput(project, { generatedAt: "fixed" }));
   };
-  const vinyl: Recipe = {
-    id: "oracle:gregtech:gt-recipe-largechemicalreactor:9f4ac3a11094fd85",
-    name: "Large Chemical Reactor: Vinyl Chloride",
-    machineType: "Large Chemical Reactor",
-    minimumTier: "LV",
-    durationTicks: 160,
-    eut: 30,
-    inputs: [
-      circuit(2),
-      fluid("hydrochloricacid_gt5u", 1000, "Hydrochloric Acid"),
-      fluid("ethylene", 1000, "Ethylene"),
-      fluid("oxygen", 1000, "Oxygen"),
-    ],
-    outputs: [fluid("vinylchloride", 1000, "Vinyl Chloride"), fluid("water", 1000, "Water")],
-  };
-  const card = (id: string, recipeId: string, x: number) => ({
-    id,
-    recipeId,
-    machineCount: 1,
-    parallel: 1,
-    overclockTier: "LV",
-    enabled: true,
-    position: { x, y: 0 },
-  });
-  const wire = (id: string, source: string, target: string, resourceId: string) => ({
-    id,
-    source,
-    target,
-    sourceHandle: `output:fluid:${resourceId}`,
-    ...(target === "out" ? {} : { targetHandle: `input:fluid:${resourceId}` }),
-    resourceKind: "fluid" as const,
-    resourceId,
-  });
-  const plan = (perSecond: number, extra: Partial<FactoryProject> = {}) =>
-    ({
-      schemaVersion: PROJECT_SCHEMA_VERSION,
-      id: "phenol",
-      name: "Phenol",
-      solveMode: true,
-      planMode: true,
-      recipes: [phenol, vinyl],
-      nodes: [card("phenol", phenol.id, 0), card("vinyl", vinyl.id, 400)],
-      storages: [
-        {
-          id: "out",
-          kind: "fluid",
-          resourceId: "phenol",
-          displayName: "Phenol",
-          position: { x: 800, y: 0 },
-          targetPerSecond: perSecond,
-          targetMode: "exact",
-        },
-      ],
-      edges: [
-        wire("water", "vinyl", "phenol", "water"),
-        wire("acid", "phenol", "vinyl", "hydrochloricacid_gt5u"),
-        wire("made", "phenol", "out", "phenol"),
-      ],
-      fuelProfiles: [],
-      ...extra,
-    }) as unknown as FactoryProject;
 
   it("keeps every list in one order while Phenol is raised a step at a time", () => {
     const orders = new Set<string>();
-    for (let perSecond = 8; perSecond <= 20; perSecond += 1) {
-      const project = plan(perSecond);
-      const rail = buildRailModel(project, calculateThroughput(project, { generatedAt: "fixed" }));
+    for (const perSecond of PHENOL_STEPS) {
+      const rail = railAt(perSecond);
+      // The three come in at the same rate from two cards: equal within noise, so A to Z.
       expect(rail.inputs.find((l) => l.label === "Benzene")!.amount).toBeCloseTo(perSecond, 9);
       expect(rail.inputs.find((l) => l.label === "Oxygen")!.amount).toBeCloseTo(perSecond, 9);
       orders.add(
@@ -414,7 +330,7 @@ describe("a plan whose rates change", () => {
     }
     expect([...orders].map((o) => JSON.parse(o))).toEqual([
       {
-        inputs: ["Benzene", "Chlorine", "Ethylene", "Oxygen"],
+        inputs: ["Chlorine", "Benzene", "Ethylene", "Oxygen"],
         outputs: ["Diluted Hydrochloric Acid", "Phenol", "Vinyl Chloride"],
         internal: ["Hydrochloric Acid", "Water"],
         machines: ["phenol", "vinyl"],
@@ -422,21 +338,17 @@ describe("a plan whose rates change", () => {
     ]);
   });
 
-  it("keeps two machines of one tier in place when their draws cross", () => {
-    // A second Vinyl Chloride reactor set to Exactly 0.3 draws 9 EU/t at every step; the Phenol reactor passes it on
-    // the way from 6.7 to 16.8 EU/t.
-    const orders = new Set<string>();
-    for (let perSecond = 8; perSecond <= 20; perSecond += 1) {
-      const base = plan(perSecond);
-      const project = plan(perSecond, {
-        nodes: [
-          ...base.nodes,
-          { ...card("spare", vinyl.id, 0), position: { x: 0, y: 600 }, solvePin: 0.3, solvePinExact: true },
-        ],
-      } as Partial<FactoryProject>);
-      const rail = buildRailModel(project, calculateThroughput(project, { generatedAt: "fixed" }));
-      orders.add(rail.machines.map((m) => `${m.nodeId}`).join(","));
-    }
-    expect([...orders]).toEqual(["phenol,vinyl,spare"]);
+  it("still reorders when two rates truly cross", () => {
+    // A second Vinyl Chloride reactor set to Exactly 0.3 takes 37.5 L/s of Hydrochloric Acid from outside whatever the
+    // target and draws 9 EU/t; Benzene (the target's rate) passes the acid, and the Phenol reactor's draw (0.84 EU/t a
+    // Phenol a second) passes the spare's.
+    const spare = { ...phenolCard("spare", VINYL_RECIPE.id, 0, 600), solvePin: 0.3, solvePinExact: true };
+    const low = railAt(8, { extraNodes: [spare] as never });
+    const high = railAt(60, { extraNodes: [spare] as never });
+    const at = (rail: typeof low, label: string) => rail.inputs.findIndex((l) => l.label === label);
+    expect(at(low, "Hydrochloric Acid")).toBeLessThan(at(low, "Benzene"));
+    expect(at(high, "Benzene")).toBeLessThan(at(high, "Hydrochloric Acid"));
+    expect(low.machines.map((m) => m.nodeId)).toEqual(["spare", "phenol", "vinyl"]);
+    expect(high.machines.map((m) => m.nodeId)).toEqual(["phenol", "vinyl", "spare"]);
   });
 });

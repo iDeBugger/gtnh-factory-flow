@@ -2,6 +2,7 @@ import { isCustomRateRecipe } from "@/lib/model/custom-rate";
 import { isFluidTankRecipe } from "@/lib/model/fluid-tank";
 import { buildMachineList, type MachineListEntry } from "@/lib/model/machine-list";
 import { pinRuleOf, shownPinRule, type PinRule } from "@/lib/model/pin-rule";
+import { compareByRate } from "@/lib/model/rate-order";
 import type { PlanUpTo } from "@/lib/solver/plan/types";
 import { makeResourceKey } from "@/lib/model/resources";
 import { getStorageRoles, type StorageRole } from "@/lib/model/storage-role";
@@ -210,16 +211,15 @@ function addTo<T>(map: Map<string, T[]>, key: string, value: T): void {
   else map.set(key, [value]);
 }
 
-const names = new Intl.Collator("en", { sensitivity: "base", numeric: true });
-
 /**
- * A section's lines go A to Z by name, the key breaking a tie, and a line at zero sits in its place too. Never by
- * amount: two resources a plan takes at the same rate from different cards differ only in the solver's last bits, and
- * that noise flips with every new target, so a row the player is setting would jump. A changed number never moves a
- * row.
+ * A section's lines: biggest first, lines equal within float noise by name, then key (`rate-order.ts`). Lines held at
+ * 0 (an open port, a drawer) sort as 0, so they sit at the bottom, A to Z.
  */
-function byName(a: RailLine, b: RailLine): number {
-  return names.compare(a.label, b.label) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+function byAmount(a: RailLine, b: RailLine): number {
+  return compareByRate(
+    { rate: a.amount, name: a.label, key: a.key },
+    { rate: b.amount, name: b.label, key: b.key },
+  );
 }
 
 interface Look {
@@ -263,14 +263,6 @@ export function buildRailModel(
         ...(upTo ? { upTo } : {}),
       };
     });
-  // By tier, then name, then the board's order of cards: never by a solved number (see `byName`).
-  const cardOrder = new Map(project.nodes.map((node, index) => [node.id, index]));
-  machines.sort(
-    (a, b) =>
-      a.tierIndex - b.tierIndex ||
-      names.compare(a.label, b.label) ||
-      (cardOrder.get(a.nodeId) ?? 0) - (cardOrder.get(b.nodeId) ?? 0),
-  );
   const machineName = new Map(machineEntries.map((entry) => [entry.nodeId, entry.label]));
   const nameOf = (cardId: string): string => {
     const known = machineName.get(cardId);
@@ -436,9 +428,10 @@ export function buildRailModel(
   for (const key of productDrawers.keys()) {
     if (!outputs.some((l) => l.key === key)) outputs.push(line(key, 0, "o"));
   }
-  inputs.sort(byName);
-  outputs.sort(byName);
-  internal.sort(byName);
+  // Machines keep the machine list's order (tier, EU/t, name, card order).
+  inputs.sort(byAmount);
+  outputs.sort(byAmount);
+  internal.sort(byAmount);
 
   const sum = (pick: (entry: MachineListEntry) => number | undefined) =>
     machineEntries.reduce((total, entry) => total + (pick(entry) ?? 0), 0);

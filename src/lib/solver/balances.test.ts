@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PHENOL_STEPS, phenolPlan } from "@/lib/model/__fixtures__/phenol-281";
 import { gtnhFuelProfiles } from "@/lib/model/fuels";
 import {
   PROJECT_SCHEMA_VERSION,
@@ -266,5 +267,29 @@ describe("buffer spillover is a boundary positive", () => {
 
     expect(result.resources["item:z"].bufferFillPerSecond).toBe(0);
     expect(result.nodes["m"].clogOutputKey).toBe("item:z");
+  });
+});
+
+describe("the boundary lists' order", () => {
+  // A plan-mode board lists what its drawers bring in and send out; the board's text dump reads these lists.
+  it("keeps one order while Phenol is raised a step at a time: biggest first, equal rates A to Z", () => {
+    const orders = new Set<string>();
+    for (const perSecond of PHENOL_STEPS) {
+      const result = calculateThroughput(phenolPlan(perSecond, { supplies: true }), {
+        generatedAt: "fixed",
+      });
+      orders.add(
+        JSON.stringify({
+          inputs: result.externalInputs.map((b) => b.displayName),
+          outputs: result.unconsumedOutputs.map((b) => b.displayName),
+        }),
+      );
+    }
+    expect([...orders].map((o) => JSON.parse(o))).toEqual([
+      {
+        inputs: ["Chlorine", "Benzene", "Ethylene", "Oxygen"],
+        outputs: ["Phenol"],
+      },
+    ]);
   });
 });
