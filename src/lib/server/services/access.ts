@@ -31,11 +31,3 @@ export function canSeePlan(
   return row.is_public !== false || ownsPlan(viewer, row) || viewer.isAdmin || viewer.adminToken;
 }
 
-/** A blueprint is its owner's, or anyone's to read once it is public and the community switch is on. */
-export function canReadBlueprint(
-  viewer: Viewer,
-  row: { is_public: boolean; user_id: string },
-  communityOn: boolean,
-): boolean {
-  return (viewer.userId !== undefined && row.user_id === viewer.userId) || (row.is_public && communityOn);
-}

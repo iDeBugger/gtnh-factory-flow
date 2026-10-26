@@ -12,6 +12,8 @@ others built, vote, and open any shared plan directly in the editor.
   service-role token from the API routes. Row level security is enabled with
   no public policies and there is no anon role, so a request without the
   token reads nothing.
+- **Blueprints** are not part of the hub: each is its owner's alone, with no
+  public shelf, publishing, votes or downloads.
 - **Identity**: anonymous. Votes and rate limits key on
   `sha256(salt + client IP + device id)`; raw IPs are never stored.
 - **Trust model**: the server re-validates every uploaded plan against

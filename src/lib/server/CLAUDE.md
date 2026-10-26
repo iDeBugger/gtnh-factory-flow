@@ -226,9 +226,9 @@ Layout: the database client, its breaker and its error copy in `db/` (import it 
 passwords, sessions, the admin header and salted keys in `auth/`; rate limits and the event log in `limits/`;
 plan row mapping in `community-rows.ts`; route plumbing in `http/` (request bodies, error answers, the client
 address, dataset cache headers, the mod and community gate, `readViewer`, `serviceResponse`). Queries live in `repos/` (one file per table family:
-`accounts`, `events`, `designs` with every lease write, `design-members`, `folders`, `plans`, `comments`, `votes` (posts and blueprints alike), `blueprints`, `popularity` (the sweep's pages),
+`accounts`, `events`, `designs` with every lease write, `design-members`, `folders`, `plans`, `comments`, `votes` (posts), `blueprints`, `popularity` (the sweep's pages),
 plus `visibility.ts`, the access rules as query filters), the rules in `services/` (`accounts`, `library`,
-`community-plans`, `comments`, `votes` (one vote algorithm for posts and blueprints, `castVote`), `blueprints`; `access.ts` holds each access rule once, as a pure function: `canSeePlan` is the one
+`community-plans`, `comments`, `votes` (the vote algorithm for posts, `castVote`), `blueprints`; `access.ts` holds each access rule once, as a pure function: `canSeePlan` is the one
 answer to "who may see an unpublished post"; the live service's `PlanStore` is an adapter over the same
 repositories), which return `ServiceResult`
 (`services/result.ts`) and never import `next/*`; a route only gates, parses, calls the service and answers
@@ -264,7 +264,7 @@ Checks with no exceptions at all:
 
 Every repository goes to Postgres directly (`getDb` at `DATABASE_URL`, see Local database below): accounts, the event
 log, the library (designs with the live lease, members, folders), community posts, their comments, blueprints, the
-votes on posts and blueprints, and the reads of the public posts by the popularity sweep, the sitemap and
+votes on posts, and the reads of the public posts by the popularity sweep, the sitemap and
 llms.txt. The live service's queries are all among these, and it refuses to start without `DATABASE_URL`
 ("No database: set DATABASE_URL."); `services/config.ts` answers "configured" exactly when `DATABASE_URL` is set.
 No other database client exists: `db/no-postgrest.test.ts` fails on any file under `src/` or `tools/` that names
@@ -274,8 +274,8 @@ cutover removes. Community posts (`repos/plans.ts`,
 - The list's page and its `total` are two statements over one condition, run on one read-only `repeatable read`
   snapshot (`withTransaction(work, { readSnapshot: true })`): the total never disagrees with the rows, and a page
   past the end still counts every post. Tag and text terms are `ilike` patterns with `\`, `%` and `_` escaped
-  (`repos/like.ts`), bound like every other term; make and take are `@>` against `json([key])`. The public
-  blueprint shelf reads the same search through the same conditions (`repos/search.ts`, exam `search.test.ts`).
+  (`repos/like.ts`), bound like every other term (`repos/search.ts`, exam `search.test.ts`); make and take are
+  `@>` against `json([key])`.
 - A failed read of a post throws, so a detail, edit, delete, download or preview upload during an outage answers
   the route's sentence or the database-down line, never "Plan not found."; only a stale stat card's refresh and
   its write, and the list's version dropdown (logged, an empty set, not cached), are best effort.
@@ -286,21 +286,22 @@ cutover removes. Community posts (`repos/plans.ts`,
   before it (the Postgres case of ten comments at once fails without the lock). A comment on a post taken down
   since the access read finds no row to lock and answers the route's 404.
 - A vote (`repos/votes.ts`, `services/votes.ts`) is one transaction: `votes.lockParent` (`for no key update` on the
-  post or blueprint, first, as a comment takes the post), the vote row's upsert or delete, then one recount
+  post, first, as a comment takes it), the vote row's upsert or delete, then one recount
   `update ... set upvotes = (select count(*) ...), downvotes = (...) returning`. Without the lock concurrent votes
   leave stale counters on Postgres; PGlite never overlaps transactions, so the race is pinned by
-  `services/votes-postgres.test.ts` and the lock order by recorded statements in `plan-access.test.ts` and
-  `blueprints/vote.test.ts`. A row taken down since the access read answers the route's 404.
+  `services/votes-postgres.test.ts` and the lock order by recorded statements in `plan-access.test.ts`. A row taken down since the access read answers the route's 404.
 Blueprints (`repos/blueprints.ts`, `services/blueprints.ts`; exam `blueprints/route.test.ts`,
-`blueprints/vote.test.ts`, the Postgres cases in `services/blueprints-postgres.test.ts`):
+`blueprints/by-id.test.ts`, the Postgres cases in `services/blueprints-postgres.test.ts`):
+- A blueprint is its owner's alone: the list, a read by id, an edit and a delete all name the session's account in
+  their `where`; anyone else, signed in or not, finds "Blueprint not found." (an anonymous read sends no query),
+  whatever the community switch says. There is no public shelf: no list or search of other accounts' blueprints, no
+  publishing, no votes and no downloads (`?scope=public` is not read). The table keeps `is_public`, `downloads` and
+  `blueprint_votes` as they stand, and the summary keeps their fields, so the own list's answer is unchanged.
 - A save is one transaction: the account row's lock (`accounts.lockAccount`, `for no key update`, as a new design
   takes it), the count, then the insert, so saves at once meet the cap (`BLUEPRINT_MAX_PER_USER`) one at a time; a
   failed count throws and answers the save's sentence, never reads as none. PGlite never overlaps transactions, so
   `blueprints/route.test.ts` pins the statement order and `services/blueprints-postgres.test.ts` races 20 saves for
   the last place on Postgres.
-- A download (`repos/blueprints.takeDownload`) is one `update ... returning` with the public rule in its `where`;
-  its author's own download adds nothing (a `case` on `user_id`), so concurrent downloads all land and an author
-  never inflates the count.
 Rules:
 - Every query has the pool's limits (`db/settings.ts`: 5 s to get a connection, 15 s statement timeout on the
   server, 20 s on the client), so a stalled database fails as down instead of holding a request open.
@@ -353,7 +354,7 @@ Rules:
   a day per address and 120 an hour and 400 a day for the whole site, counted after the size and magic-byte checks so
   junk spends no share. A vote lands only on a post that exists and is public (or the voter's own), with the same
   404 either way and a fixed 500 sentence, so the route is no oracle for ids; an anonymous address casts or switches
-  at most 3 votes a day on one post or blueprint (`VOTES_PER_ADDRESS_PER_PLAN_PER_DAY`; accounts are exempt). The
+  at most 3 votes a day on one post (`VOTES_PER_ADDRESS_PER_PLAN_PER_DAY`; accounts are exempt). The
   `plan-previews` bucket is private and its pictures are served only by `GET .../preview`, which answers an
   unpublished post's picture to its owner and the admin alone (`Cache-Control: private, no-store`) and 404 `No preview.`
   to everyone else.
@@ -410,8 +411,7 @@ Rules:
 ## The mod and community switch (deployment-features.ts)
 
 - `isModAndCommunityOn()` is true only when `NEXT_PUBLIC_MOD_AND_COMMUNITY` is `on`; unset or anything else is off.
-  Off, every `/api/community/plans/**` route, the public blueprint shelf (`?scope=public`, `/publish`, `/vote`,
-  `/download`, and another account's blueprint by id) and `/community` answer 404 (`modAndCommunityOffResponse`);
+  Off, every `/api/community/plans/**` route and `/community` answer 404 (`modAndCommunityOffResponse`);
   sitemap, llms.txt, robots and the `?plan=` metadata say nothing of community plans. Accounts, board images, the
   library, account sync and an account's own blueprints stay. Read it at each call, never in a module constant.
 - The value must be the same at `next build` and in the site's and the live service's run-time environment; a change

@@ -42,26 +42,6 @@ export const sqlRules = {
         : eb.or([published, eb("community_plans.user_id", "=", viewer.userId)]);
     },
 
-  /** The published blueprints: the public shelf. */
-  publicBlueprints: (): Rule<"blueprints"> => (eb) => eb("blueprints.is_public", "=", true),
-
-  /**
-   * `canReadBlueprint`: the viewer's own, and the public ones while the
-   * community switch is on. With neither, no row.
-   */
-  blueprintReadableBy:
-    (viewer: VisibilityViewer, communityOn: boolean): Rule<"blueprints"> =>
-    (eb) => {
-      const readable: Expression<SqlBool>[] = [];
-      if (communityOn) {
-        readable.push(eb("blueprints.is_public", "=", true));
-      }
-      if (viewer.userId !== undefined) {
-        readable.push(eb("blueprints.user_id", "=", viewer.userId));
-      }
-      return readable.length > 0 ? eb.or(readable) : eb.lit(false);
-    },
-
   /** The designs `userId` was added to: a member row for this owner's design of this id. */
   memberOf:
     (userId: string): Rule<"library_designs"> =>

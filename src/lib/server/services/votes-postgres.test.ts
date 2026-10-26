@@ -9,7 +9,7 @@ import { castVote, type VoteTarget } from "./votes";
 /**
  * Votes on a real Postgres, where each request runs on a connection of its
  * own and transactions overlap (on PGlite they never do, so the cases in
- * `plan-access.test.ts` and `blueprints/vote.test.ts` cannot show a race).
+ * `plan-access.test.ts` cannot show a race).
  * Runs only with GTNH_TEST_POSTGRES_URL naming a server this test may make
  * and drop a database on, for example a throwaway container:
  *
@@ -36,21 +36,20 @@ const fromAddress = (address: string) =>
 
 async function makeTarget(target: VoteTarget, name: string): Promise<string> {
   const { rows } = await client!.pool.query<{ id: string }>(
-    target === "plan"
-      ? `insert into community_plans (user_id, author_name, name, game_version, plan, uploader_key)
-         values ($1, 'racer', $2, 'race', '{"nodes":[]}', 'test') returning id`
-      : `insert into blueprints (user_id, name, payload, is_public) values ($1, $2, '{"nodes":[]}', true) returning id`,
+    `insert into community_plans (user_id, author_name, name, game_version, plan, uploader_key)
+     values ($1, 'racer', $2, 'race', '{"nodes":[]}', 'test') returning id`,
     [authorId, name],
   );
   return rows[0]!.id;
 }
 
+const TALLIED: Record<VoteTarget, [string, string, string]> = {
+  plan: ["community_plans", "community_votes", "plan_id"],
+};
+
 /** The row's counters beside a count of its vote rows. */
 async function tally(target: VoteTarget, id: string) {
-  const [parent, votes, key] =
-    target === "plan"
-      ? ["community_plans", "community_votes", "plan_id"]
-      : ["blueprints", "blueprint_votes", "blueprint_id"];
+  const [parent, votes, key] = TALLIED[target];
   const { rows } = await client!.pool.query<{ upvotes: number; downvotes: number; up: number; down: number }>(
     `select p.upvotes, p.downvotes,
        (select count(*)::int from ${votes} v where v.${key} = p.id and v.value = 1) as up,
@@ -89,7 +88,7 @@ describe.skipIf(!serverUrl)("votes on Postgres", () => {
     await admin?.end();
   });
 
-  for (const target of ["plan", "blueprint"] as const) {
+  for (const target of ["plan"] as const) {
     it(`lands ten votes at once from ten addresses on one ${target} as ten`, async () => {
       const id = await makeTarget(target, "Rushed");
       const answers = await Promise.all(

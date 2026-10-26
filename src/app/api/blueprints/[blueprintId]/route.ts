@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { BLUEPRINT_BODY_MAX_BYTES } from "@/lib/blueprints/types";
 import { readJsonCapped } from "@/lib/server/http/request-body";
 import { serviceResponse } from "@/lib/server/http/service-response";
@@ -21,20 +20,14 @@ type RouteContext = { params: Promise<{ blueprintId: string }> };
 const unconfigured = () =>
   NextResponse.json({ error: "Cloud storage is not configured." }, { status: 503 });
 
-/**
- * The full payload, fetched only when a blueprint is placed (`readBlueprint`).
- * This GET counts nothing; the counted download is POST [id]/download.
- */
+/** The owner's blueprint with its payload, fetched only when it is placed (`readBlueprint`). */
 export async function GET(request: Request, context: RouteContext) {
   if (!isDatabaseConfigured()) {
     return unconfigured();
   }
   const viewer = await readViewer(request);
   const { blueprintId } = await context.params;
-  return serviceResponse(
-    await readBlueprint(viewer, blueprintId, isModAndCommunityOn()),
-    (value) => value,
-  );
+  return serviceResponse(await readBlueprint(viewer, blueprintId), (value) => value);
 }
 
 /** Edits the owner's blueprint in place (`updateBlueprint`). */

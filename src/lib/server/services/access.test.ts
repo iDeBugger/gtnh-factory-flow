@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { OWNER, viewers } from "@/test-support/viewers";
-import { canReadBlueprint, canSeePlan, isUuid } from "./access";
+import { canSeePlan, isUuid } from "./access";
 
 describe("canSeePlan", () => {
   // Every row and viewer, with the answer written out: a published post is
@@ -64,18 +64,6 @@ describe("canSeePlan", () => {
         expect(canSeePlan(viewer, row), `${rowName} for ${viewerName}`).toBe(expected[viewerName]);
       }
     }
-  });
-});
-
-describe("canReadBlueprint", () => {
-  it("is the owner's, or anyone's once public with the community switch on", () => {
-    const own = { is_public: false, user_id: OWNER };
-    const shared = { is_public: true, user_id: OWNER };
-    expect(canReadBlueprint(viewers.owner!, own, false)).toBe(true);
-    expect(canReadBlueprint(viewers.stranger!, own, true)).toBe(false);
-    expect(canReadBlueprint(viewers.anonymous!, shared, true)).toBe(true);
-    expect(canReadBlueprint(viewers.anonymous!, shared, false)).toBe(false);
-    expect(canReadBlueprint(viewers["admin header"]!, own, true)).toBe(false);
   });
 });
 

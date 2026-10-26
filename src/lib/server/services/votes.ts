@@ -5,7 +5,6 @@ import { clientAddress } from "../http/client-address";
 import type { Viewer } from "../http/viewer";
 import { checkRateLimit } from "../limits/rate-limit";
 import { invalidatePlanListCache } from "../plan-list-cache";
-import * as blueprints from "../repos/blueprints";
 import * as plans from "../repos/plans";
 import * as votes from "../repos/votes";
 import type { VoteTarget } from "../repos/votes";
@@ -15,8 +14,7 @@ import { fail, ok, type ServiceResult } from "./result";
 export type { VoteTarget } from "../repos/votes";
 
 /**
- * Anonymous votes one address may cast or switch on one post (or blueprint)
- * in a day. The anonymous voter key is the browser's device id, which a
+ * Anonymous votes one address may cast or switch on one post in a day. The anonymous voter key is the browser's device id, which a
  * script can make up freely, so without this one address casts a vote per
  * made-up id. Accounts are keyed by account and exempt: a household behind
  * one address can each vote signed in.
@@ -42,7 +40,7 @@ export function parseVoteInput(body: unknown): ServiceResult<VoteInput> {
   return ok({ deviceId, value });
 }
 
-/** What differs between voting on a post and on a blueprint; the algorithm is the same. */
+/** What a vote's target decides; the algorithm is the same for every target. */
 interface TargetRules {
   /** The action the address's pace (60 votes in 10 minutes) is counted under. */
   paceAction: string;
@@ -70,21 +68,11 @@ const RULES: Record<VoteTarget, TargetRules> = {
     // The list's cached pages and the voter's cached votes are stale now.
     afterVote: invalidatePlanListCache,
   },
-  // Only a public blueprint is on the shelf, so only a public one is scored, its owner's included.
-  blueprint: {
-    paceAction: "blueprint-vote",
-    notFound: "Blueprint not found.",
-    async mayVote(_viewer, id) {
-      const row = await blueprints.readAccess(id);
-      return Boolean(row?.is_public);
-    },
-    afterVote: () => undefined,
-  },
 };
 
 /**
  * Casts, switches, or (when the voter sends the vote they already hold)
- * retracts a vote on a post or a blueprint. Votes are keyed by account or
+ * retracts a vote on a post. Votes are keyed by account or
  * device id (`makeVoterKey`); the address only feeds the limits. In order:
  * a malformed id is a missing row, answered with no query; then the
  * address's pace; then the row, which must exist and be one the viewer may

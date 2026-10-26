@@ -1,17 +1,12 @@
 import {
-  BLUEPRINT_DESCRIPTION_MAX_LENGTH,
   BLUEPRINT_MAX_PER_USER,
   BLUEPRINT_NAME_MAX_LENGTH,
   BLUEPRINT_PAYLOAD_MAX_BYTES,
   normalizeBlueprintTags,
-  PUBLIC_BLUEPRINT_PAGE_SIZE,
   type BlueprintListResponse,
   type BlueprintSummary,
-  type PublicBlueprintSort,
 } from "@/lib/blueprints/types";
-import { parsePlanSearch } from "@/lib/community/search-query";
 import { boardSelectionPayloadSchema } from "@/lib/model/schemas";
-import { makeVoterKey } from "../auth/keys";
 import {
   countBlueprintMachines,
   parseHighestTier,
@@ -24,21 +19,18 @@ import type { SignedIn, Viewer } from "../http/viewer";
 import { checkRateLimit } from "../limits/rate-limit";
 import * as accounts from "../repos/accounts";
 import * as blueprints from "../repos/blueprints";
-import { canReadBlueprint, isUuid } from "./access";
+import { isUuid } from "./access";
 import { fail, ok, type ServiceResult } from "./result";
-import { attachMyVotes } from "./votes";
 
 /**
- * Blueprints: an account's saved board selections, and the public shelf
- * once their owners publish them. A blueprint is its owner's, or anyone's
- * to read once it is public and the community switch is on
- * (`canReadBlueprint`). Only the owner edits, publishes or deletes one;
- * ownership is always the session's account, never a client-supplied
- * owner. An id that is no uuid is a missing blueprint, answered before any
- * query.
+ * Blueprints: an account's saved board selections, its own alone. Only the
+ * owner reads, edits or deletes one; ownership is always the session's
+ * account, never a client-supplied owner, and anyone else's blueprint reads
+ * as missing. An id that is no uuid is a missing blueprint, answered before
+ * any query.
  *
- * The routes gate (the community switch, configured, signed in) and read
- * the body; these take the viewer.
+ * The routes gate (configured, signed in) and read the body; these take the
+ * viewer.
  */
 
 const BLUEPRINT_NOT_FOUND = "Blueprint not found.";
@@ -84,29 +76,8 @@ export function blueprintEditAllowed(viewer: SignedIn): Promise<ServiceResult<vo
   return paced(viewer, "blueprint-update", 60, "Editing too fast. Try again later.");
 }
 
-/** Whether the account may publish or pull back a blueprint now: 30 an hour. */
-export function blueprintPublishAllowed(viewer: SignedIn): Promise<ServiceResult<void>> {
-  return paced(viewer, "blueprint-publish", 30, "Publishing too fast. Try again later.");
-}
-
-/** A shelf request as the route read it from the URL. */
-export type BlueprintListInput =
-  | { shelf: "mine" }
-  | { shelf: "public"; sort: string | null; search: string; page: string | null; deviceId: string };
-
-/**
- * The account's own blueprints, newest first; or the public shelf, which
- * anyone may browse, signed in or not, each row carrying the browser's own
- * vote so the arrows render already lit.
- */
-export async function listBlueprints(
-  viewer: Viewer,
-  input: BlueprintListInput,
-  request: Request,
-): Promise<ServiceResult<BlueprintListResponse>> {
-  if (input.shelf === "public") {
-    return listPublic(viewer, input, request);
-  }
+/** The account's own blueprints, newest first. */
+export async function listBlueprints(viewer: Viewer): Promise<ServiceResult<BlueprintListResponse>> {
   if (!viewer.userId) {
     return fail("unauthorized", "Sign in to use blueprints.");
   }
@@ -119,65 +90,27 @@ export async function listBlueprints(
   return ok({ blueprints: rows.map((row) => rowToBlueprintSummary(row, viewer.userId)) });
 }
 
-async function listPublic(
-  viewer: Viewer,
-  input: Extract<BlueprintListInput, { shelf: "public" }>,
-  request: Request,
-): Promise<ServiceResult<BlueprintListResponse>> {
-  const sort: PublicBlueprintSort =
-    input.sort === "newest" || input.sort === "downloads" ? input.sort : "top";
-  // The community search language (search-query.ts), read as the community
-  // list reads it: the same terms, matched by the same conditions.
-  const search = parsePlanSearch(input.search);
-  const page = Math.max(0, Number.parseInt(input.page ?? "0", 10) || 0);
-  const deviceId = input.deviceId.slice(0, 64);
-
-  // One row past the page answers "is there more" without a second count query.
-  let rows;
-  try {
-    rows = await blueprints.listPublic({
-      search,
-      sort,
-      offset: page * PUBLIC_BLUEPRINT_PAGE_SIZE,
-      limit: PUBLIC_BLUEPRINT_PAGE_SIZE + 1,
-    });
-  } catch (error) {
-    return storageFailure(error, "Public blueprints could not be loaded.");
-  }
-
-  const hasMore = rows.length > PUBLIC_BLUEPRINT_PAGE_SIZE;
-  const summaries = rows
-    .slice(0, PUBLIC_BLUEPRINT_PAGE_SIZE)
-    .map((row) => rowToBlueprintSummary(row, viewer.userId));
-  if (deviceId) {
-    await attachMyVotes("blueprint", summaries, await makeVoterKey(request, deviceId));
-  }
-  return ok({ blueprints: summaries, hasMore });
-}
-
 export type BlueprintWithPayload = BlueprintSummary & { payload: unknown };
 
 /**
- * The full payload, fetched only when a blueprint is actually placed: by its
- * owner, or by anyone once it is public and the community switch is on.
- * Counts nothing (the counted path is `downloadBlueprint`).
+ * The full payload, fetched only when a blueprint is actually placed, by its
+ * owner. Anyone else, signed in or not, finds no such blueprint, with no
+ * query sent for a viewer with no account.
  */
 export async function readBlueprint(
   viewer: Viewer,
   blueprintId: string,
-  communityOn: boolean,
 ): Promise<ServiceResult<{ blueprint: BlueprintWithPayload }>> {
-  // With the switch off an anonymous viewer may read no blueprint at all.
-  if (!isUuid(blueprintId) || (!viewer.userId && !communityOn)) {
+  if (!isUuid(blueprintId) || !viewer.userId) {
     return fail("not-found", BLUEPRINT_NOT_FOUND);
   }
   let row;
   try {
-    row = await blueprints.readReadable(blueprintId, viewer, communityOn);
+    row = await blueprints.readOwn(blueprintId, viewer.userId);
   } catch (error) {
     return storageFailure(error, "Blueprint could not be loaded.");
   }
-  if (!row || !canReadBlueprint(viewer, row, communityOn)) {
+  if (!row) {
     return fail("not-found", BLUEPRINT_NOT_FOUND);
   }
   return ok({
@@ -276,10 +209,8 @@ export async function saveBlueprint(
 }
 
 /**
- * Edits a blueprint in place: the row keeps its id, votes, downloads and
- * publish state, so an author refreshes a published build without losing
- * the standing it earned. `name` renames; `payload` (with its stat card)
- * overwrites the content. Owner only: anyone else's blueprint matches
+ * Edits a blueprint in place: the row keeps its id. `name` renames;
+ * `payload` (with its stat card) overwrites the content. Owner only: anyone else's blueprint matches
  * nothing and reads as missing.
  */
 export async function updateBlueprint(
@@ -330,54 +261,6 @@ export async function updateBlueprint(
   return ok({ blueprint: rowToBlueprintSummary(row, viewer.userId) });
 }
 
-/** A publish body as sent. */
-export interface BlueprintPublishBody {
-  publish?: unknown;
-  description?: unknown;
-}
-
-/**
- * Publishes a blueprint to the network, or pulls it back. Owner only. The
- * payload never changes: publishing stamps visibility, the author's name,
- * an optional description and the publish time. Votes survive an
- * unpublish and republish; a deleted blueprint takes them with it.
- */
-export async function publishBlueprint(
-  viewer: SignedIn,
-  blueprintId: string,
-  body: BlueprintPublishBody,
-): Promise<ServiceResult<{ blueprint: BlueprintSummary }>> {
-  if (typeof body.publish !== "boolean") {
-    return fail("bad-request", "Invalid publish request.");
-  }
-  if (!isUuid(blueprintId)) {
-    return fail("not-found", BLUEPRINT_NOT_FOUND);
-  }
-  const description =
-    typeof body.description === "string"
-      ? body.description.trim().slice(0, BLUEPRINT_DESCRIPTION_MAX_LENGTH)
-      : undefined;
-  const patch: blueprints.BlueprintPatch = body.publish
-    ? {
-        is_public: true,
-        author_name: viewer.username,
-        published_at: new Date().toISOString(),
-        ...(description !== undefined ? { description } : undefined),
-      }
-    : { is_public: false };
-
-  let row;
-  try {
-    row = await blueprints.updateOwn(blueprintId, viewer.userId, patch);
-  } catch (error) {
-    return storageFailure(error, "Publishing failed.");
-  }
-  if (!row) {
-    return fail("not-found", BLUEPRINT_NOT_FOUND);
-  }
-  return ok({ blueprint: rowToBlueprintSummary(row, viewer.userId) });
-}
-
 /**
  * Deletes the owner's blueprint. Deleting one that is not there, or not the
  * viewer's, changes nothing and answers the same, as does an id that could
@@ -396,31 +279,4 @@ export async function deleteBlueprint(
     return storageFailure(error, "Blueprint could not be deleted.");
   }
   return ok({ ok: true });
-}
-
-/**
- * A public blueprint's payload for placing, counting the download in the
- * same statement. Authors placing their own published work do not inflate
- * their own counter: the mine shelf places through `readBlueprint`, and an
- * owner here is not counted either.
- */
-export async function downloadBlueprint(
-  viewer: Viewer,
-  blueprintId: string,
-): Promise<ServiceResult<{ blueprint: BlueprintWithPayload }>> {
-  if (!isUuid(blueprintId)) {
-    return fail("not-found", BLUEPRINT_NOT_FOUND);
-  }
-  let row;
-  try {
-    row = await blueprints.takeDownload(blueprintId, viewer);
-  } catch (error) {
-    return storageFailure(error, "Blueprint could not be loaded.");
-  }
-  if (!row) {
-    return fail("not-found", BLUEPRINT_NOT_FOUND);
-  }
-  return ok({
-    blueprint: { ...rowToBlueprintSummary(row, viewer.userId), payload: row.payload },
-  });
 }

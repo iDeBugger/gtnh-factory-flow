@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { json } from "@/lib/server/db/parsers";
-import { canReadBlueprint, canSeePlan } from "@/lib/server/services/access";
+import { canSeePlan } from "@/lib/server/services/access";
 import { useTestDb } from "@/test-support/test-db";
 import { OWNER, STRANGER, viewers } from "@/test-support/viewers";
 import { sqlRules } from "./visibility";
@@ -37,21 +37,6 @@ function seed(): Promise<void> {
         plan("unpublished", false, OWNER),
         plan("unpublished, account gone", false, null),
         plan("unpublished, stranger's", false, STRANGER),
-      ])
-      .execute();
-    const blueprint = (name: string, is_public: boolean, user_id: string) => ({
-      name,
-      is_public,
-      user_id,
-      payload: json({}),
-    });
-    await db
-      .insertInto("blueprints")
-      .values([
-        blueprint("own private", false, OWNER),
-        blueprint("own public", true, OWNER),
-        blueprint("stranger's private", false, STRANGER),
-        blueprint("stranger's public", true, STRANGER),
       ])
       .execute();
     const design = (user_id: string, id: string, lease: string | null, deleted = false) => ({
@@ -111,53 +96,6 @@ describe("the SQL rules agree with the service rules", () => {
       .where(sqlRules.publicPlans())
       .execute();
     expect(shelf.map((row) => row.name).sort()).toEqual(["published", "published, account gone"]);
-  });
-
-  it("blueprintReadableBy selects exactly the blueprints canReadBlueprint accepts, switch on and off", async () => {
-    await seed();
-    const { db } = testDb();
-    const rows = await db
-      .selectFrom("blueprints")
-      .select(["name", "is_public", "user_id"])
-      .execute();
-    expect(rows).toHaveLength(4);
-    for (const communityOn of [true, false]) {
-      for (const [viewerName, viewer] of Object.entries(viewers)) {
-        const readable = await db
-          .selectFrom("blueprints")
-          .select("name")
-          .where(sqlRules.blueprintReadableBy(viewer, communityOn))
-          .execute();
-        const expected = rows
-          .filter((row) => canReadBlueprint(viewer, row, communityOn))
-          .map((row) => row.name);
-        expect(
-          readable.map((row) => row.name).sort(),
-          `${viewerName}, switch ${communityOn}`,
-        ).toEqual(expected.sort());
-      }
-    }
-  });
-
-  it("publicBlueprints is the published blueprints: what anyone reads with the switch on", async () => {
-    await seed();
-    const { db } = testDb();
-    const rows = await db
-      .selectFrom("blueprints")
-      .select(["name", "is_public", "user_id"])
-      .execute();
-    const shelf = await db
-      .selectFrom("blueprints")
-      .select("name")
-      .where(sqlRules.publicBlueprints())
-      .execute();
-    expect(shelf.map((row) => row.name).sort()).toEqual(["own public", "stranger's public"]);
-    expect(shelf.map((row) => row.name).sort()).toEqual(
-      rows
-        .filter((row) => canReadBlueprint(viewers.anonymous!, row, true))
-        .map((row) => row.name)
-        .sort(),
-    );
   });
 
   it("memberOf finds the member's design and not the other owner's design of the same id", async () => {

@@ -38,20 +38,19 @@ function compiled(table: SearchedTable, raw: string) {
 }
 
 describe("searchConditions", () => {
-  it("narrows by every tag, then the creator, then the text, the same for posts and blueprints", () => {
+  it("narrows by every tag, then the creator, then the text", () => {
     const expected = {
       where:
         '("tags_text" ilike $1 and "tags_text" ilike $2 and "author_name" = $3 and ("name" ilike $4 or "description" ilike $5 or "tags_text" ilike $6))',
       parameters: ["%oil%", "%diesel%", "brkge", "%fuel%", "%fuel%", "%fuel%"],
     };
     expect(compiled("community_plans", "#oil #diesel @brkge fuel")).toEqual(expected);
-    expect(compiled("blueprints", "#oil #diesel @brkge fuel")).toEqual(expected);
   });
 
   it("keeps the text in its parameters whatever it holds", () => {
-    const plain = compiled("blueprints", "steel")!;
-    for (const raw of ["x,y)z,is_public.eq.false", "x' or '1'='1", 'a"b{c}', "$1; drop table blueprints"]) {
-      const search = compiled("blueprints", raw)!;
+    const plain = compiled("community_plans", "steel")!;
+    for (const raw of ["x,y)z,is_public.eq.false", "x' or '1'='1", 'a"b{c}', "$1; drop table community_plans"]) {
+      const search = compiled("community_plans", raw)!;
       expect(search.where, raw).toBe(plain.where);
       expect(new Set(search.parameters).size, raw).toBe(1);
     }
@@ -59,7 +58,7 @@ describe("searchConditions", () => {
 
   it("escapes LIKE's own characters in a term that reaches it", () => {
     const query = db
-      .selectFrom("blueprints")
+      .selectFrom("community_plans")
       .select("id")
       .where((eb) =>
         eb.and(searchConditions(eb, { tags: ["a_b"], author: "", bareAuthor: false, text: "50%\\" })),
@@ -69,7 +68,7 @@ describe("searchConditions", () => {
   });
 
   it("adds nothing for an empty search and narrows a bare @ to nobody", () => {
-    expect(compiled("blueprints", "   ")).toBeUndefined();
-    expect(compiled("blueprints", "@")).toEqual({ where: '"author_name" = $1', parameters: [""] });
+    expect(compiled("community_plans", "   ")).toBeUndefined();
+    expect(compiled("community_plans", "@")).toEqual({ where: '"author_name" = $1', parameters: [""] });
   });
 });

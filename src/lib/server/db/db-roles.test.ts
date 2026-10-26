@@ -473,14 +473,10 @@ describe("the database roles", () => {
        values ($1, 'owner', 'Voted', '{"nodes":[]}', 'test') returning id`,
       [OWNER],
     );
-    const blueprint = await pglite.query<{ id: string }>(
-      `insert into blueprints (user_id, name, payload, is_public) values ($1, 'Voted', '{"nodes":[]}', true) returning id`,
-      [OWNER],
-    );
-    const ids = { plan: plan.rows[0]!.id, blueprint: blueprint.rows[0]!.id };
+    const ids = { plan: plan.rows[0]!.id };
     try {
       await as("gtnh_site", async () => {
-        for (const target of ["plan", "blueprint"] as const) {
+        for (const target of ["plan"] as const) {
           const id = ids[target];
           const counts = await withTransaction(async (tx) => {
             expect(await votes.lockParent(target, id, tx)).toBe(true);
@@ -507,15 +503,12 @@ describe("the database roles", () => {
     } finally {
       useDbForTests(undefined);
       await pglite.query("delete from community_plans where id = $1", [ids.plan]);
-      await pglite.query("delete from blueprints where id = $1", [ids.blueprint]);
     }
   });
 
   it("runs every blueprint repository function as the site role", async () => {
     const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) });
     useDbForTests(db);
-    const owner = { userId: OWNER, isAdmin: false, adminToken: false };
-    const stranger = { userId: MEMBER, isAdmin: false, adminToken: false };
     const stat = { kind: "item" as const, resourceId: "steel", displayName: "Steel", ratePerSecond: 1 };
     let blueprintId: string | undefined;
     try {
@@ -542,31 +535,19 @@ describe("the database roles", () => {
         expect(saved).toMatchObject({ name: "Roles", outputs: [stat], tags: ["oil"], is_public: false, score: 0 });
         expect(await blueprints.countOwn(OWNER)).toBe(1);
         expect(await blueprints.listOwn(OWNER, 10)).toMatchObject([{ id }]);
-        expect(await blueprints.readAccess(id)).toEqual({ id, user_id: OWNER, is_public: false });
-        expect(await blueprints.readReadable(id, owner, true)).toMatchObject({ id, payload: { nodes: [] } });
-        expect(await blueprints.readReadable(id, stranger, true)).toBeUndefined();
-        expect(await blueprints.takeDownload(id, stranger)).toBeUndefined();
+        expect(await blueprints.readOwn(id, OWNER)).toMatchObject({ id, payload: { nodes: [] } });
+        expect(await blueprints.readOwn(id, MEMBER)).toBeUndefined();
         expect(
-          await blueprints.updateOwn(id, OWNER, {
-            is_public: true,
-            author_name: "owner",
-            published_at: "2026-10-26T00:00:00.000Z",
-            tags: ["oil", "gas"],
-            tags_text: "oil gas",
-            outputs: [],
-          }),
-        ).toMatchObject({ is_public: true, tags: ["oil", "gas"], outputs: [] });
-        const search = { tags: ["gas"], author: "owner", bareAuthor: false, text: "rol" };
-        for (const sort of ["top", "downloads", "newest"] as const) {
-          expect(await blueprints.listPublic({ search, sort, offset: 0, limit: 10 }), sort).toMatchObject([{ id }]);
-        }
-        expect(await blueprints.takeDownload(id, stranger)).toMatchObject({ id, downloads: 1, payload: { nodes: [] } });
-        expect(await blueprints.takeDownload(id, owner)).toMatchObject({ downloads: 1 });
-        expect(await blueprints.takeDownload(id, {})).toMatchObject({ downloads: 2 });
+          await blueprints.updateOwn(id, OWNER, { tags: ["oil", "gas"], tags_text: "oil gas", outputs: [] }),
+        ).toMatchObject({ tags: ["oil", "gas"], outputs: [] });
+        await withTransaction(async (tx) => {
+          await accounts.lockAccount(OWNER, tx);
+          expect(await blueprints.countOwn(OWNER, tx)).toBe(1);
+        });
         expect(await blueprints.updateOwn(id, MEMBER, { name: "Taken" })).toBeUndefined();
         expect(await blueprints.deleteOwn(id, MEMBER)).toBe(false);
         expect(await blueprints.deleteOwn(id, OWNER)).toBe(true);
-        expect(await blueprints.readAccess(id)).toBeUndefined();
+        expect(await blueprints.readOwn(id, OWNER)).toBeUndefined();
       });
     } finally {
       useDbForTests(undefined);

@@ -4,16 +4,15 @@ import type { Database } from "../db";
 import { escapeLike } from "./like";
 
 /**
- * The search box's terms (`parsePlanSearch`) as conditions, for the two
- * shelves that take them: community posts and public blueprints, whose
- * searched columns share names and types. Every term is a bound parameter,
- * so the text never becomes a condition of its own whatever it holds.
+ * The search box's terms (`parsePlanSearch`) as conditions on community
+ * posts. Every term is a bound parameter, so the text never becomes a
+ * condition of its own whatever it holds.
  */
 
 /** The tables the search language reads. */
-export type SearchedTable = "community_plans" | "blueprints";
+export type SearchedTable = "community_plans";
 
-/** The searched columns, which both tables carry alike. */
+/** The searched columns. */
 type SearchColumns = {
   searched: { name: string; description: string; tags_text: string; author_name: string };
 };
@@ -30,8 +29,7 @@ export function searchConditions<T extends SearchedTable>(
   eb: ExpressionBuilder<Database, T>,
   search: PlanSearch,
 ): Expression<SqlBool>[] {
-  // The columns are unqualified and named alike in both tables, so one
-  // builder over their shared shape writes the same SQL for either.
+  // The columns are unqualified, so the SQL names them alone.
   const on = eb as unknown as ExpressionBuilder<SearchColumns, "searched">;
   const where: Expression<SqlBool>[] = [];
   for (const tag of search.tags) {

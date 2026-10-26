@@ -1,21 +1,19 @@
 import { getDb, type Tx } from "../db";
 
 /**
- * Votes on posts (`community_votes`) and on blueprints (`blueprint_votes`),
- * one module for both: a target names its vote table, the column that holds
- * the voted row's id, and the parent table whose counters the recount
- * writes. The map is closed, so no table or column name comes from a
- * request. Whether a vote may land is the services' rule
+ * Votes on posts (`community_votes`): a target names its vote table, the
+ * column that holds the voted row's id, and the parent table whose counters
+ * the recount writes. The map is closed, so no table or column name comes
+ * from a request. Whether a vote may land is the services' rule
  * (`services/votes.ts`); these only read and write rows. Repositories take
  * an optional transaction last; a failure throws (a down database as
  * `DatabaseDownError`).
  */
 
-export type VoteTarget = "plan" | "blueprint";
+export type VoteTarget = "plan";
 
 const TABLES = {
   plan: { votes: "community_votes", key: "plan_id", parent: "community_plans" },
-  blueprint: { votes: "blueprint_votes", key: "blueprint_id", parent: "blueprints" },
 } as const satisfies Record<VoteTarget, { votes: string; key: string; parent: string }>;
 
 /** The voter's vote on one row, or undefined when there is none. */
@@ -36,7 +34,7 @@ export async function read(
 }
 
 /**
- * Locks the voted row (the post or blueprint) until the transaction ends and
+ * Locks the voted row (the post) until the transaction ends and
  * answers whether it is there. A vote takes it before writing its vote row,
  * so the casts on one row run one at a time and each recount sees every vote
  * committed before it; the post comes first, as a comment's does
@@ -57,20 +55,12 @@ export async function upsert(
   value: 1 | -1,
   tx?: Tx,
 ): Promise<void> {
-  const db = tx ?? getDb();
-  if (target === "plan") {
-    await db
-      .insertInto("community_votes")
-      .values({ plan_id: id, voter_key: voterKey, value })
-      .onConflict((oc) => oc.columns(["plan_id", "voter_key"]).doUpdateSet({ value }))
-      .execute();
-  } else {
-    await db
-      .insertInto("blueprint_votes")
-      .values({ blueprint_id: id, voter_key: voterKey, value })
-      .onConflict((oc) => oc.columns(["blueprint_id", "voter_key"]).doUpdateSet({ value }))
-      .execute();
-  }
+  const { votes, key } = TABLES[target];
+  await (tx ?? getDb())
+    .insertInto(votes)
+    .values({ [key]: id, voter_key: voterKey, value })
+    .onConflict((oc) => oc.columns([key, "voter_key"]).doUpdateSet({ value }))
+    .execute();
 }
 
 /** Retracts the voter's vote. */
