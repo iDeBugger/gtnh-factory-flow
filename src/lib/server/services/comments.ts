@@ -70,7 +70,7 @@ export async function listComments(
 /**
  * Whether the viewer may comment on the post: signed in, within the
  * account's pace, and the post public or the viewer's own. Answers the
- * post's owner for the comment that follows.
+ * post's owner for the comment that follows. A failed read of the post throws.
  */
 export async function commentAccess(
   viewer: Viewer,
@@ -86,7 +86,8 @@ export async function commentAccess(
   if (!(await checkRateLimit(`user:${viewer.userId}`, "comment", 40, 60 * 60))) {
     return fail("rate-limited", "Commenting too fast. Try again later.");
   }
-  const plan = await plans.readAccess(planId).catch(() => undefined);
+  // A failed read throws, as in `listComments`: an error, never a missing post.
+  const plan = await plans.readAccess(planId);
   if (!plan || (plan.is_public === false && !ownsPlan(viewer, plan))) {
     return fail("not-found", PLAN_NOT_FOUND);
   }

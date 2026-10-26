@@ -388,6 +388,31 @@ describe("a post's comments", () => {
     }
     expect((await readComments(planId)).status).toBe(200);
   });
+
+  it("a database error reading the post a comment goes on answers 500, not 404", async () => {
+    const planId = await makePlan("Unreachable post", true);
+    const postComment = () =>
+      comments.POST(
+        request("POST", `/api/community/plans/${planId}/comments`, { who: "poster", body: { body: "Hello" } }),
+        params({ planId }),
+      );
+    useInProcessLocalDb(async (request) => {
+      const url = new URL(request.url);
+      if (request.method === "GET" && url.pathname.endsWith("/community_plans")) {
+        return Response.json({ message: "boom", code: "XX000", details: "", hint: "" }, { status: 500 });
+      }
+      return local.handle(request);
+    });
+    try {
+      const failed = await postComment();
+      expect(failed.status).toBe(500);
+      expect(await failed.json()).toEqual({ error: "The comment could not be posted." });
+    } finally {
+      useInProcessLocalDb(local.handle);
+      resetDbBreaker();
+    }
+    expect((await postComment()).status).toBe(200);
+  });
 });
 
 describe("listing posts", () => {
