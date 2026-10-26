@@ -18,7 +18,7 @@ import {
   rowToPlanSummary,
   type PlanRow,
 } from "../community-rows";
-import { withTransaction } from "../db";
+import { COMMUNITY_DB_DOWN_MESSAGE, isDatabaseDown, withTransaction } from "../db";
 import { getFileStore } from "../file-store";
 import type { Viewer } from "../http/viewer";
 import { checkRateLimit } from "../limits/rate-limit";
@@ -586,7 +586,16 @@ export async function previewAccess(
   if (!isUuid(planId)) {
     return fail("not-found", NO_PREVIEW);
   }
-  const row = await plans.readAccess(planId).catch(() => undefined);
+  let row;
+  try {
+    row = await plans.readAccess(planId);
+  } catch (error) {
+    // Down is said as everywhere; any other failure is no picture (fails closed).
+    if (isDatabaseDown(error)) {
+      return fail("unavailable", COMMUNITY_DB_DOWN_MESSAGE, { status: 500 });
+    }
+    return fail("not-found", NO_PREVIEW);
+  }
   if (!row || !canSeePlan(viewer, row)) {
     return fail("not-found", NO_PREVIEW);
   }

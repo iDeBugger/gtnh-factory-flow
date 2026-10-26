@@ -16,14 +16,30 @@ export function serverErrorResponse(
   init: { status?: number; headers?: Record<string, string> } = {},
 ): NextResponse {
   const status = init.status ?? 500;
-  if (error instanceof Error && error.message.includes(COMMUNITY_DB_DOWN_MESSAGE)) {
-    return NextResponse.json(
-      { error: COMMUNITY_DB_DOWN_MESSAGE },
-      { status, headers: init.headers },
-    );
+  const down = databaseDownResponse(error, init);
+  if (down) {
+    return down;
   }
   console.error(fallback, error);
   return NextResponse.json({ error: fallback }, { status, headers: init.headers });
+}
+
+/**
+ * The database-down line at `init.status` (500 by default) when `error`
+ * carries it, else undefined: for a route whose other failures keep an
+ * answer of their own (a fixed sentence, or no picture).
+ */
+export function databaseDownResponse(
+  error: unknown,
+  init: { status?: number; headers?: Record<string, string> } = {},
+): NextResponse | undefined {
+  if (error instanceof Error && error.message.includes(COMMUNITY_DB_DOWN_MESSAGE)) {
+    return NextResponse.json(
+      { error: COMMUNITY_DB_DOWN_MESSAGE },
+      { status: init.status ?? 500, headers: init.headers },
+    );
+  }
+  return undefined;
 }
 
 /**

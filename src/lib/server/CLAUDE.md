@@ -121,7 +121,9 @@
   through `storageErrorMessage` the same way (the route's sentence, or the database-down line); fixed 4xx copy stays
   as it is. The library, folder, member, blueprint and account-search handlers are wrapped in `answeringErrors`:
   the account lookup (`readViewer`) and the rate limit run before any service's own catch, so a throw from
-  either answers the route's sentence or the down line with `no-store`, never an empty 500.
+  either answers the route's sentence or the down line with `no-store`, never an empty 500. Vote, view, sign-out
+  everywhere and the preview picture keep their own answer for any other failure (a fixed sentence, no picture)
+  but say the down line when it is down (`databaseDownResponse`; `plan-access.test.ts`, `auth.test.ts`).
   Exam: `error-response.test.ts`, `datasets/[versionId]/catalog/route.test.ts`, `library/cloud-plans.test.ts`
   ("when the database fails a read").
 - Every dataset route except `prewarm`, and `/api/resource-popularity` (the browser item search's popularity map,

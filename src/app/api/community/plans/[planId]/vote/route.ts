@@ -4,6 +4,7 @@ import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-
 import { isDatabaseConfigured } from "@/lib/server/services/config";
 import { castVote, parseVoteInput } from "@/lib/server/services/votes";
 import { readViewer } from "@/lib/server/http/viewer";
+import { databaseDownResponse } from "@/lib/server/http/error-response";
 import { serviceResponse } from "@/lib/server/http/service-response";
 import {
   readJsonCapped,
@@ -44,6 +45,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
     const result = await castVote("plan", planId, viewer, input.value, request);
     return serviceResponse(result, (value) => value);
   } catch (error) {
+    const down = databaseDownResponse(error, { headers: { "Cache-Control": "no-store" } });
+    if (down) {
+      return down;
+    }
     // A fixed sentence: the database's own words would say whether the id exists.
     console.error("vote failed", error);
     return NextResponse.json(

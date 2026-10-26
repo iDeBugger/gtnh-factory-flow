@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { serverErrorResponse } from "@/lib/server/http/error-response";
+import { databaseDownResponse, serverErrorResponse } from "@/lib/server/http/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
@@ -99,13 +99,16 @@ export async function GET(request: Request, context: { params: Promise<{ planId:
   const { planId } = await context.params;
   // A failed account lookup answers as every other failure here does: a
   // picture's request has no use for an error body, and none reveals nothing.
-  const viewer = await readViewer(request).catch(() => undefined);
-  if (!viewer) {
-    return none;
+  // A database that is down says so, as on every route.
+  let viewer;
+  try {
+    viewer = await readViewer(request);
+  } catch (error) {
+    return databaseDownResponse(error, { headers: { "Cache-Control": "no-store" } }) ?? none;
   }
   const access = await previewAccess(viewer, planId);
   if (!access.ok) {
-    return none;
+    return access.error.kind === "unavailable" ? serviceResponse(access, () => undefined) : none;
   }
   const unpublished = access.value.unpublished;
   const png = await getPlanPreviewPng(planId);

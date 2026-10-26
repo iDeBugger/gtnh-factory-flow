@@ -308,15 +308,32 @@ describe("signing out everywhere", () => {
       password: "ann-password",
     });
     const cookie = cookieOf(made);
-    withDbFault(
-      /update "community_users"/,
-      Object.assign(new Error("terminating connection"), { code: "57P01" }),
-    );
+    withDbFault(/update "community_users"/, Object.assign(new Error("boom"), { code: "XX000" }));
     const out = await post(logout, "logout", { everywhere: true }, { cookie });
     expect(out.status).toBe(503);
     expect(await out.json()).toEqual({ error: "Could not sign out everywhere. Try again." });
     expect(out.headers.get("set-cookie")).toBeNull();
     expect(await whoAmI(cookie)).toEqual({ username: "ann_down", isAdmin: false });
+  });
+
+  it("answers the down line when the database is down, and keeps this browser signed in", async () => {
+    const made = await post(register, "register", {
+      username: "ann_outage",
+      password: "ann-password",
+    });
+    const cookie = cookieOf(made);
+    for (const table of [/update "community_users"/, /from "community_users"/]) {
+      forgetSessionUsers();
+      withDbFault(table);
+      const out = await post(logout, "logout", { everywhere: true }, { cookie });
+      clearDbFault();
+      expect(out.status, String(table)).toBe(503);
+      expect(await out.json(), String(table)).toEqual({
+        error: "The community database is not responding. Try again in a few minutes.",
+      });
+      expect(out.headers.get("set-cookie"), String(table)).toBeNull();
+    }
+    expect(await whoAmI(cookie)).toEqual({ username: "ann_outage", isAdmin: false });
   });
 
   it("with no valid session has nothing to revoke, and still clears the cookie", async () => {

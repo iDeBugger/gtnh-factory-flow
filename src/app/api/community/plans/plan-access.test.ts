@@ -1076,6 +1076,36 @@ describe("a database outage reading a post", () => {
     expect(((await back.json()) as { plan: { name: string } }).plan.name).toBe("Unreachable");
   });
 
+  it("answers a vote, a view and a preview with the down line too", async () => {
+    const planId = await makePlan("Unreachable counters", true);
+    const base = `/api/community/plans/${planId}`;
+    const down = { status: 500, body: DOWN };
+    expect(
+      await whileDown(/from "community_plans"/, () =>
+        vote.POST(
+          request("POST", `${base}/vote`, { body: { deviceId: "d", value: 1 } }),
+          params({ planId }),
+        ),
+      ),
+    ).toEqual(down);
+    expect(
+      await whileDown(/"community_plans"/, () =>
+        view.POST(request("POST", `${base}/view`), params({ planId })),
+      ),
+    ).toEqual(down);
+    expect(
+      await whileDown(/from "community_plans"/, () =>
+        preview.GET(request("GET", `${base}/preview`), params({ planId })),
+      ),
+    ).toEqual(down);
+    forgetSessionUsers();
+    expect(
+      await whileDown(/from "community_users"/, () =>
+        preview.GET(request("GET", `${base}/preview`, { who: "stranger" }), params({ planId })),
+      ),
+    ).toEqual(down);
+  });
+
   it("lists the posts without versions when only the version list fails, and keeps none of that answer", async () => {
     const planId = await makePlan("Versioned", true);
     await testDb().db.updateTable("community_plans").set({ game_version: "2.9.0-versioned" }).where("id", "=", planId).execute();

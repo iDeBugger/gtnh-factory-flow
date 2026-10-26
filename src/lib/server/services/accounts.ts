@@ -140,8 +140,8 @@ export async function signOutEverywhere(viewer: Viewer): Promise<ServiceResult<v
   }
   try {
     await bumpSessionEpoch(viewer.userId);
-  } catch {
-    return fail("unavailable", SIGN_OUT_EVERYWHERE_FAILED);
+  } catch (error) {
+    return fail("unavailable", storageErrorMessage(error, SIGN_OUT_EVERYWHERE_FAILED));
   }
   void notifyLive({ kind: "signed-out", userId: viewer.userId });
   return ok(undefined);

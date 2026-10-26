@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sessionCookieHeader } from "@/lib/server/auth/sessions";
 import { SIGN_OUT_EVERYWHERE_FAILED } from "@/lib/community/types";
+import { databaseDownResponse } from "@/lib/server/http/error-response";
 import { readJsonCapped, SMALL_JSON_MAX_BYTES } from "@/lib/server/http/request-body";
 import { serviceResponse } from "@/lib/server/http/service-response";
 import { readViewer } from "@/lib/server/http/viewer";
@@ -29,8 +30,11 @@ export async function POST(request: Request) {
   let viewer;
   try {
     viewer = await readViewer(request);
-  } catch {
-    return NextResponse.json({ error: SIGN_OUT_EVERYWHERE_FAILED }, { status: 503 });
+  } catch (error) {
+    return (
+      databaseDownResponse(error, { status: 503 }) ??
+      NextResponse.json({ error: SIGN_OUT_EVERYWHERE_FAILED }, { status: 503 })
+    );
   }
   return serviceResponse(await signOutEverywhere(viewer), () => ({ ok: true }), {
     headers: clearing,

@@ -4,6 +4,7 @@ import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-
 import { isDatabaseConfigured } from "@/lib/server/services/config";
 import { countPlanView } from "@/lib/server/services/community-plans";
 import { readViewer } from "@/lib/server/http/viewer";
+import { databaseDownResponse } from "@/lib/server/http/error-response";
 import { serviceResponse } from "@/lib/server/http/service-response";
 
 export const runtime = "nodejs";
@@ -30,6 +31,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
     const result = await countPlanView(viewer, planId, request);
     return serviceResponse(result, (value) => ({ views: value.views }));
   } catch (error) {
+    const down = databaseDownResponse(error, { headers: { "Cache-Control": "no-store" } });
+    if (down) {
+      return down;
+    }
     console.error("view count failed", error);
     return NextResponse.json({ error: "Counting the view failed." }, { status: 500 });
   }
