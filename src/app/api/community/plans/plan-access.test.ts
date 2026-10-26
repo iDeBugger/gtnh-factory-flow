@@ -20,6 +20,13 @@ import * as plan from "./[planId]/route";
 import * as preview from "./[planId]/preview/route";
 import * as view from "./[planId]/view/route";
 import * as vote from "./[planId]/vote/route";
+import * as comments from "./[planId]/comments/route";
+import * as download from "./[planId]/download/route";
+import * as plansRepo from "@/lib/server/repos/plans";
+import * as commentsRepo from "@/lib/server/repos/comments";
+import * as eventsRepo from "@/lib/server/repos/events";
+import * as comment from "./[planId]/comments/[commentId]/route";
+import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
 import * as images from "../images/[month]/[name]/route";
 
 /** The server's time budget for an uploaded plan's stats solve, set per case. */
@@ -306,6 +313,28 @@ describe("a post's board photograph", () => {
     }
     expect((await getPreview(planId)).status).toBe(404);
   });
+
+  it("answers a failed account lookup as no preview, not an unhandled error", async () => {
+    const planId = await makePlan("Looked up", true);
+    expect((await postPreview(planId, PNG, "owner")).status).toBe(200);
+    forgetSessionUsers();
+    useInProcessLocalDb(async (request) => {
+      const url = new URL(request.url);
+      if (request.method === "GET" && url.pathname.endsWith("/community_users")) {
+        return Response.json({ message: "boom", code: "XX000", details: "", hint: "" }, { status: 500 });
+      }
+      return local.handle(request);
+    });
+    try {
+      const failed = await getPreview(planId, "stranger");
+      expect(failed.status).toBe(404);
+      expect(await failed.json()).toEqual({ error: "No preview." });
+    } finally {
+      useInProcessLocalDb(local.handle);
+      resetDbBreaker();
+    }
+    expect((await getPreview(planId, "stranger")).status).toBe(200);
+  });
 });
 
 describe("counting views", () => {
@@ -336,6 +365,243 @@ describe("counting views", () => {
     const gone = await view.POST(request("POST", `/api/community/plans/${missing}/view`), params({ planId: missing }));
     expect(gone.status).toBe(404);
     expect(await gone.json()).toEqual({ error: "Plan not found." });
+  });
+});
+
+describe("a post's comments", () => {
+  withModAndCommunityOn();
+
+  const readComments = (planId: string, options: { who?: string; headers?: Record<string, string> } = {}) =>
+    comments.GET(request("GET", `/api/community/plans/${planId}/comments`, options), params({ planId }));
+
+  it("an admin-token request reads an unpublished post's comments", async () => {
+    vi.stubEnv("COMMUNITY_ADMIN_TOKEN", "plan-access-admin-token");
+    const planId = await makePlan("Private thread", false);
+    const posted = await comments.POST(
+      request("POST", `/api/community/plans/${planId}/comments`, { who: "owner", body: { body: "Notes" } }),
+      params({ planId }),
+    );
+    expect(posted.status).toBe(200);
+
+    const stranger = await readComments(planId);
+    expect(stranger.status).toBe(404);
+    expect(await stranger.json()).toEqual({ error: "Plan not found." });
+    const admin = await readComments(planId, { headers: { "x-admin-token": "plan-access-admin-token" } });
+    expect(admin.status).toBe(200);
+    const thread = (await admin.json()) as { comments: Array<{ body: string; canDelete: boolean }> };
+    expect(thread.comments.map((comment) => comment.body)).toEqual(["Notes"]);
+    expect(thread.comments[0]!.canDelete).toBe(false);
+  });
+
+  it("a database error reading a post's comments answers 500, not 404", async () => {
+    const planId = await makePlan("Unreachable thread", true);
+    useInProcessLocalDb(async (request) => {
+      const url = new URL(request.url);
+      if (request.method === "GET" && url.pathname.endsWith("/community_plans")) {
+        return Response.json({ message: "boom", code: "XX000", details: "", hint: "" }, { status: 500 });
+      }
+      return local.handle(request);
+    });
+    try {
+      const failed = await readComments(planId);
+      expect(failed.status).toBe(500);
+      expect(await failed.json()).toEqual({ error: "Comments could not be loaded." });
+    } finally {
+      useInProcessLocalDb(local.handle);
+      resetDbBreaker();
+    }
+    expect((await readComments(planId)).status).toBe(200);
+  });
+
+  it("a database error reading the post a comment goes on answers 500, not 404", async () => {
+    const planId = await makePlan("Unreachable post", true);
+    const postComment = () =>
+      comments.POST(
+        request("POST", `/api/community/plans/${planId}/comments`, { who: "poster", body: { body: "Hello" } }),
+        params({ planId }),
+      );
+    useInProcessLocalDb(async (request) => {
+      const url = new URL(request.url);
+      if (request.method === "GET" && url.pathname.endsWith("/community_plans")) {
+        return Response.json({ message: "boom", code: "XX000", details: "", hint: "" }, { status: 500 });
+      }
+      return local.handle(request);
+    });
+    try {
+      const failed = await postComment();
+      expect(failed.status).toBe(500);
+      expect(await failed.json()).toEqual({ error: "The comment could not be posted." });
+    } finally {
+      useInProcessLocalDb(local.handle);
+      resetDbBreaker();
+    }
+    expect((await postComment()).status).toBe(200);
+  });
+
+  it("deleting a comment under another post's id leaves it in its thread", async () => {
+    const planId = await makePlan("Kept thread", true);
+    const otherId = await makePlan("Other thread", true);
+    const posted = await comments.POST(
+      request("POST", `/api/community/plans/${planId}/comments`, { who: "poster", body: { body: "Stays" } }),
+      params({ planId }),
+    );
+    const { comment: written } = (await posted.json()) as { comment: { id: string } };
+    await commentsRepo.softDelete(otherId, written.id);
+    expect((await commentsRepo.list(planId, 10)).map((row) => row.id)).toEqual([written.id]);
+    await commentsRepo.softDelete(planId, written.id);
+    expect(await commentsRepo.list(planId, 10)).toEqual([]);
+  });
+});
+
+describe("listing posts", () => {
+  withModAndCommunityOn();
+
+  /** Posts straight into the table, out of every other case's way by their game version. */
+  async function seed(rows: Array<{ name: string; version: string; isPublic: boolean }>) {
+    const { error } = await getCommunityDb()
+      .from("community_plans")
+      .insert(
+        rows.map((row) => ({
+          user_id: users.owner!.id,
+          author_name: "owner",
+          name: row.name,
+          game_version: row.version,
+          plan: { nodes: [] },
+          is_public: row.isPublic,
+          uploader_key: "test",
+        })),
+      );
+    expect(error).toBeNull();
+    invalidatePlanListCache();
+  }
+
+  const listPage = async (query: string) => {
+    const response = await list.GET(request("GET", `/api/community/plans?${query}`));
+    expect(response.status).toBe(200);
+    return (await response.json()) as { plans: Array<{ name: string }>; total: number; gameVersions: string[] };
+  };
+
+  it("a page past the end still counts every post", async () => {
+    await seed([
+      { name: "Past one", version: "past-end", isPublic: true },
+      { name: "Past two", version: "past-end", isPublic: true },
+      { name: "Past three", version: "past-end", isPublic: true },
+      { name: "Past hidden", version: "past-end", isPublic: false },
+    ]);
+    const first = await listPage("gameVersion=past-end&pageSize=2");
+    expect(first.plans).toHaveLength(2);
+    expect(first.total).toBe(3);
+    const beyond = await listPage("gameVersion=past-end&pageSize=2&page=99");
+    expect(beyond.plans).toEqual([]);
+    expect(beyond.total).toBe(3);
+  });
+
+  it("the version filter lists only published posts' versions", async () => {
+    await seed([
+      { name: "Versioned", version: "7.8-published", isPublic: true },
+      { name: "Versioned draft", version: "7.7-unpublished", isPublic: false },
+    ]);
+    const page = await listPage("sort=new");
+    expect(page.gameVersions).toContain("7.8-published");
+    expect(page.gameVersions).not.toContain("7.7-unpublished");
+  });
+
+  it("a search's pattern characters match nothing wider", async () => {
+    await seed([
+      { name: "aXb", version: "literal", isPublic: true },
+      { name: "abc", version: "literal", isPublic: true },
+      { name: "x*y", version: "literal", isPublic: true },
+    ]);
+    const names = async (search: string) =>
+      (await listPage(`gameVersion=literal&search=${encodeURIComponent(search)}`)).plans
+        .map((plan) => plan.name)
+        .sort();
+    const everything = await names("");
+    expect(everything).toEqual(["aXb", "abc", "x*y"]);
+    // `*` and `_` are no wildcards, and `,` `)` never close the text's filter.
+    expect(await names("a*b")).toEqual([]);
+    expect(await names("a_c")).toEqual([]);
+    expect(await names("a,b)")).toEqual([]);
+    expect(await names("x,is_public.eq.false")).toEqual([]);
+    // Alone, they are no search at all: nothing past the unsearched list.
+    expect(await names("*")).toEqual(everything);
+    expect(await names("%")).toEqual(everything);
+  });
+});
+
+describe("a malformed post id", () => {
+  withModAndCommunityOn();
+
+  it("is not found, not an error, and sends no query", async () => {
+    vi.stubEnv("COMMUNITY_ADMIN_TOKEN", "plan-access-admin-token");
+    // The rate-limit reads too: view and comment check the id before their pace.
+    const spies = [plansRepo, commentsRepo, eventsRepo].flatMap((module) =>
+      Object.entries(module)
+        .filter(([, value]) => typeof value === "function")
+        .map(([name]) => vi.spyOn(module as Record<string, (...args: unknown[]) => unknown>, name)),
+    );
+    try {
+      const planId = "not-a-uuid";
+      const base = `/api/community/plans/${planId}`;
+      const form = new FormData();
+      form.set("image", new Blob([PNG as BlobPart], { type: "image/png" }), "board.png");
+      const planAnswers = await Promise.all([
+        plan.GET(request("GET", base), params({ planId })),
+        plan.PUT(request("PUT", base, { who: "owner", body: { isPublic: true } }), params({ planId })),
+        plan.DELETE(request("DELETE", base, { who: "owner" }), params({ planId })),
+        plan.DELETE(
+          request("DELETE", base, { headers: { "x-admin-token": "plan-access-admin-token" } }),
+          params({ planId }),
+        ),
+        view.POST(request("POST", `${base}/view`), params({ planId })),
+        download.POST(request("POST", `${base}/download`), params({ planId })),
+        preview.POST(
+          new Request(`http://localhost${base}/preview`, {
+            method: "POST",
+            headers: { "x-client-ip": nextAddress(), cookie: users.owner!.cookie },
+            body: form,
+          }),
+          params({ planId }),
+        ),
+        comments.GET(request("GET", `${base}/comments`), params({ planId })),
+        comments.POST(request("POST", `${base}/comments`, { who: "poster", body: { body: "Hi" } }), params({ planId })),
+      ]);
+      for (const answer of planAnswers) {
+        expect(answer.status).toBe(404);
+        expect(await answer.json()).toEqual({ error: "Plan not found." });
+      }
+      const pictures = await preview.GET(request("GET", `${base}/preview`), params({ planId }));
+      expect(pictures.status).toBe(404);
+      expect(await pictures.json()).toEqual({ error: "No preview." });
+      const commentId = randomUUID();
+      for (const ids of [
+        { planId, commentId },
+        { planId: randomUUID(), commentId: "not-a-uuid" },
+      ]) {
+        const gone = await comment.DELETE(
+          request("DELETE", `/api/community/plans/${ids.planId}/comments/${ids.commentId}`, { who: "poster" }),
+          params(ids),
+        );
+        expect(gone.status).toBe(404);
+        expect(await gone.json()).toEqual({ error: "Comment not found." });
+      }
+      for (const spy of spies) {
+        expect(spy, spy.getMockName()).not.toHaveBeenCalled();
+      }
+      // The spies see the service's reads: a well-formed id is looked up, and
+      // its view spends a share of the pace.
+      const missing = randomUUID();
+      const gone = await plan.GET(request("GET", `/api/community/plans/${missing}`), params({ planId: missing }));
+      expect(gone.status).toBe(404);
+      expect(vi.mocked(plansRepo.readSummary)).toHaveBeenCalledWith(missing);
+      const unseen = await view.POST(request("POST", `/api/community/plans/${missing}/view`), params({ planId: missing }));
+      expect(unseen.status).toBe(404);
+      expect(vi.mocked(eventsRepo.countSince)).toHaveBeenCalled();
+    } finally {
+      for (const spy of spies) {
+        spy.mockRestore();
+      }
+    }
   });
 });
 

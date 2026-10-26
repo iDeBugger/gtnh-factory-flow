@@ -3,18 +3,17 @@ import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
-import {
-  PLAN_PREVIEW_BUCKET,
-  PLAN_PREVIEW_MAX_SIDE,
-  getPlanPreviewPng,
-  readPngHeader,
-} from "@/lib/server/plan-preview";
+import { getPlanPreviewPng } from "@/lib/server/plan-preview";
 import { readFormDataCapped } from "@/lib/server/http/request-body";
-import { getFileStore, isFileStoreConfigured } from "@/lib/server/file-store";
-import { checkRateLimit } from "@/lib/server/limits/rate-limit";
-import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
-import { getSessionUser } from "@/lib/server/auth/sessions";
-import { isAdminRequest } from "@/lib/server/auth/admin";
+import { isFileStoreConfigured } from "@/lib/server/file-store";
+import { isDatabaseConfigured } from "@/lib/server/services/config";
+import {
+  previewAccess,
+  previewUploadAccess,
+  storePlanPreview,
+} from "@/lib/server/services/community-plans";
+import { readViewer } from "@/lib/server/http/viewer";
+import { serviceResponse } from "@/lib/server/http/service-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,8 +34,6 @@ export const dynamic = "force-dynamic";
  * after the checks so junk spends no share.
  */
 
-const PREVIEWS_PER_HOUR = 30;
-
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ planId: string }> },
@@ -44,29 +41,15 @@ export async function POST(
   if (!isModAndCommunityOn()) {
     return modAndCommunityOffResponse();
   }
-  if (!isCommunityConfigured() || !isFileStoreConfigured()) {
+  if (!isDatabaseConfigured() || !isFileStoreConfigured()) {
     return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
   }
 
   try {
     const { planId } = await params;
-    const sessionUser = await getSessionUser(request);
-    if (!sessionUser) {
-      return NextResponse.json({ error: "Sign in to update your post." }, { status: 401 });
-    }
-
-    const db = getCommunityDb();
-    const { data: existing } = await db
-      .from("community_plans")
-      .select("id,user_id")
-      .eq("id", planId)
-      .single<{ id: string; user_id: string | null }>();
-
-    if (!existing) {
-      return NextResponse.json({ error: "Plan not found." }, { status: 404 });
-    }
-    if (existing.user_id !== sessionUser.id && !sessionUser.is_admin) {
-      return NextResponse.json({ error: "You don't own this post." }, { status: 403 });
+    const access = await previewUploadAccess(await readViewer(request), planId);
+    if (!access.ok) {
+      return serviceResponse(access, () => undefined);
     }
 
     const form = await readFormDataCapped(
@@ -91,31 +74,8 @@ export async function POST(
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
-    if (!readPngHeader(bytes)) {
-      return NextResponse.json(
-        {
-          error: `The preview must be a PNG of at most ${PLAN_PREVIEW_MAX_SIDE} by ${PLAN_PREVIEW_MAX_SIDE} pixels.`,
-        },
-        { status: 415 },
-      );
-    }
-
-    if (!(await checkRateLimit(`user:${sessionUser.id}`, "plan-preview", PREVIEWS_PER_HOUR, 60 * 60))) {
-      return NextResponse.json(
-        { error: "Too many preview uploads: try again in a little while." },
-        { status: 429 },
-      );
-    }
-
-    // Re-sharing overwrites the one object in place.
-    try {
-      await getFileStore().put(PLAN_PREVIEW_BUCKET, `${existing.id}.png`, bytes, { overwrite: true });
-    } catch (error) {
-      console.error("Preview upload failed.", error);
-      return NextResponse.json({ error: "Preview upload failed." }, { status: 500 });
-    }
-
-    return NextResponse.json({ ok: true });
+    const stored = await storePlanPreview(access.value.userId, access.value.planId, bytes);
+    return serviceResponse(stored, (value) => value);
   } catch (error) {
     return serverErrorResponse(error, "Preview upload failed.");
   }
@@ -133,25 +93,21 @@ export async function GET(request: Request, context: { params: Promise<{ planId:
     return modAndCommunityOffResponse();
   }
   const none = NextResponse.json({ error: "No preview." }, { status: 404 });
-  if (!isCommunityConfigured()) {
+  if (!isDatabaseConfigured()) {
     return none;
   }
   const { planId } = await context.params;
-  const { data: row, error } = await getCommunityDb()
-    .from("community_plans")
-    .select("is_public,user_id")
-    .eq("id", planId)
-    .maybeSingle<{ is_public: boolean | null; user_id: string | null }>();
-  if (error || !row) {
+  // A failed account lookup answers as every other failure here does: a
+  // picture's request has no use for an error body, and none reveals nothing.
+  const viewer = await readViewer(request).catch(() => undefined);
+  if (!viewer) {
     return none;
   }
-  const unpublished = row.is_public === false;
-  if (unpublished) {
-    const sessionUser = await getSessionUser(request);
-    if (row.user_id !== sessionUser?.id && !sessionUser?.is_admin && !isAdminRequest(request)) {
-      return none;
-    }
+  const access = await previewAccess(viewer, planId);
+  if (!access.ok) {
+    return none;
   }
+  const unpublished = access.value.unpublished;
   const png = await getPlanPreviewPng(planId);
   if (!png) {
     return none;

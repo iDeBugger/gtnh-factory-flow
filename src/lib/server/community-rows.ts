@@ -107,43 +107,17 @@ export function rowToPlanSummary(row: PlanRow, sessionUserId?: string): Communit
 }
 
 /**
- * Restamps a post's comment figures after a comment lands or goes: the live
- * count, the latest comment's time, and the post's last activity (the later
- * of its last edit and that comment). Best effort: a failure here leaves a
- * sort slightly stale, never a comment unposted.
+ * Every vote one voter key has cast on posts, by post id; none when the read
+ * fails. The list reads them all at once and keeps them a minute, since a
+ * voter's votes change only when they vote, which empties the cache.
  */
-export async function recountPlanComments(planId: string): Promise<void> {
-  const db = getCommunityDb();
-  const { data: rows } = await db
-    .from("community_comments")
-    .select("created_at")
-    .eq("plan_id", planId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .returns<Array<{ created_at: string }>>();
-  const { count } = await db
-    .from("community_comments")
-    .select("id", { count: "exact", head: true })
-    .eq("plan_id", planId)
-    .is("deleted_at", null);
-  const { data: plan } = await db
-    .from("community_plans")
-    .select("created_at,updated_at")
-    .eq("id", planId)
-    .single<{ created_at: string; updated_at: string | null }>();
-  const lastCommentAt = rows?.[0]?.created_at ?? null;
-  const edited = plan?.updated_at ?? plan?.created_at ?? null;
-  const lastActivityAt =
-    lastCommentAt && edited ? (lastCommentAt > edited ? lastCommentAt : edited) : (lastCommentAt ?? edited);
-  await db
-    .from("community_plans")
-    .update({
-      comment_count: count ?? 0,
-      last_comment_at: lastCommentAt,
-      last_activity_at: lastActivityAt,
-    })
-    .eq("id", planId);
+export async function readPlanVotesByVoter(voterKey: string): Promise<Map<string, 1 | -1>> {
+  const { data } = await getCommunityDb()
+    .from("community_votes")
+    .select("plan_id,value")
+    .eq("voter_key", voterKey)
+    .returns<Array<{ plan_id: string; value: 1 | -1 }>>();
+  return new Map((data ?? []).map((vote) => [vote.plan_id, vote.value]));
 }
 
 export async function attachMyVotes(
