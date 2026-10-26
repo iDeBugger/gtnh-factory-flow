@@ -271,6 +271,9 @@ database below); the live service's queries are all among these, and it refuses 
   snapshot (`withTransaction(work, { readSnapshot: true })`): the total never disagrees with the rows, and a page
   past the end still counts every post. Tag and text terms are `ilike` patterns with `\`, `%` and `_` escaped
   (`repos/like.ts`), bound like every other term; make and take are `@>` against `json([key])`.
+- A failed read of a post throws, so a detail, edit, delete, download or preview upload during an outage answers
+  the route's sentence or the database-down line, never "Plan not found."; only a stale stat card's refresh and
+  its write are best effort.
 - A view and a download are one `update ... + 1 ... returning` each, with `planVisibleTo(viewer)` in its `where`:
   concurrent counts all land, and a post the viewer may not see counts nothing.
 - A comment's insert or delete and its post's recount (one `update ... from (select count(*), max(created_at))`)

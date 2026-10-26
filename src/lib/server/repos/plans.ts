@@ -11,7 +11,9 @@ import { sqlRules, type VisibilityViewer } from "./visibility";
  * services' rule (`services/access.ts`); these read and write rows, and
  * where the rule must hold inside one statement (a list, a counter) they
  * apply its SQL form (`repos/visibility.ts`). Repositories take an optional
- * transaction last.
+ * transaction last. A failed read throws (a down database as
+ * `DatabaseDownError`): an error, never a missing post. `writeStats` alone is
+ * best effort.
  */
 
 /** The columns a list may sort on: a closed set, so no request text names a column. */
@@ -143,44 +145,35 @@ export async function list(
 }
 
 /**
- * The game versions published posts carry, newest first, for the filter;
- * none when the read fails. An unpublished post's version is its owner's
+ * The game versions published posts carry, newest first, for the filter.
+ * An unpublished post's version is its owner's
  * business, so it never names a choice on the public shelf.
  */
 export async function distinctGameVersions(tx?: Tx): Promise<string[]> {
-  try {
-    const rows = await (tx ?? getDb())
-      .selectFrom("community_plans")
-      .select("game_version")
-      .distinct()
-      .where(sqlRules.publicPlans())
-      .where("game_version", "<>", "")
-      .limit(1000)
-      .execute();
-    return rows
-      .map((row) => row.game_version)
-      .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
-  } catch {
-    return [];
-  }
+  const rows = await (tx ?? getDb())
+    .selectFrom("community_plans")
+    .select("game_version")
+    .distinct()
+    .where(sqlRules.publicPlans())
+    .where("game_version", "<>", "")
+    .limit(1000)
+    .execute();
+  return rows
+    .map((row) => row.game_version)
+    .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
 }
 
 /**
  * A post's summary row, published or not (the caller decides who sees it),
- * or undefined when there is none. A failed read answers undefined too: every
- * caller answers it as a missing post.
+ * or undefined when there is none.
  */
 export async function readSummary(planId: string, tx?: Tx): Promise<PlanRow | undefined> {
-  try {
-    return await (tx ?? getDb())
-      .selectFrom("community_plans")
-      .select(PLAN_SUMMARY_FIELDS)
-      .where("id", "=", planId)
-      .$castTo<PlanRow>()
-      .executeTakeFirst();
-  } catch {
-    return undefined;
-  }
+  return (tx ?? getDb())
+    .selectFrom("community_plans")
+    .select(PLAN_SUMMARY_FIELDS)
+    .where("id", "=", planId)
+    .$castTo<PlanRow>()
+    .executeTakeFirst();
 }
 
 /** Who owns a post and whether it is published, for the access rule. Throws when the database does not answer. */
@@ -212,20 +205,16 @@ export async function lockPost(planId: string, tx: Tx): Promise<boolean> {
   return row !== undefined;
 }
 
-/** A post's owner, or undefined when there is none; a failed read answers undefined too, as a missing post. */
+/** A post's owner, or undefined when there is none. */
 export async function readOwner(
   planId: string,
   tx?: Tx,
 ): Promise<{ id: string; user_id: string | null } | undefined> {
-  try {
-    return await (tx ?? getDb())
-      .selectFrom("community_plans")
-      .select(["id", "user_id"])
-      .where("id", "=", planId)
-      .executeTakeFirst();
-  } catch {
-    return undefined;
-  }
+  return (tx ?? getDb())
+    .selectFrom("community_plans")
+    .select(["id", "user_id"])
+    .where("id", "=", planId)
+    .executeTakeFirst();
 }
 
 /** The stat columns a post stores, computed by the server from its plan. */
@@ -340,32 +329,24 @@ export async function remove(planId: string, tx?: Tx): Promise<void> {
   await (tx ?? getDb()).deleteFrom("community_plans").where("id", "=", planId).execute();
 }
 
-/** The release a post's stat card was computed by; undefined when the post is missing or the read fails. */
+/** The release a post's stat card was computed by; undefined when the post is missing. */
 export async function readStatsVersion(planId: string, tx?: Tx): Promise<string | undefined> {
-  try {
-    const row = await (tx ?? getDb())
-      .selectFrom("community_plans")
-      .select("stats_version")
-      .where("id", "=", planId)
-      .executeTakeFirst();
-    return row?.stats_version;
-  } catch {
-    return undefined;
-  }
+  const row = await (tx ?? getDb())
+    .selectFrom("community_plans")
+    .select("stats_version")
+    .where("id", "=", planId)
+    .executeTakeFirst();
+  return row?.stats_version;
 }
 
-/** A post's stored plan JSON; undefined when the read fails. */
+/** A post's stored plan JSON; undefined when the post is missing. */
 export async function readPlanJson(planId: string, tx?: Tx): Promise<unknown> {
-  try {
-    const row = await (tx ?? getDb())
-      .selectFrom("community_plans")
-      .select("plan")
-      .where("id", "=", planId)
-      .executeTakeFirst();
-    return row?.plan;
-  } catch {
-    return undefined;
-  }
+  const row = await (tx ?? getDb())
+    .selectFrom("community_plans")
+    .select("plan")
+    .where("id", "=", planId)
+    .executeTakeFirst();
+  return row?.plan;
 }
 
 /** Stores a recomputed stat card. Not an author edit: `updated_at` stays. Best effort: a failure is not reported. */
@@ -409,23 +390,19 @@ export async function countView(
 /**
  * Counts one download of a post the viewer may see and answers what it hands
  * out, in one statement like `countView`. Undefined when there is no such
- * post for them; a failed write answers undefined too, as a missing post.
+ * post for them.
  */
 export async function takeDownload(
   planId: string,
   viewer: VisibilityViewer,
   tx?: Tx,
 ): Promise<{ plan: unknown; name: string } | undefined> {
-  try {
-    return await (tx ?? getDb())
-      .updateTable("community_plans")
-      .set((eb) => ({ downloads: eb("downloads", "+", 1) }))
-      .where((eb) => eb.and([eb("id", "=", planId), sqlRules.planVisibleTo(viewer)(eb)]))
-      .returning(["plan", "name"])
-      .executeTakeFirst();
-  } catch {
-    return undefined;
-  }
+  return (tx ?? getDb())
+    .updateTable("community_plans")
+    .set((eb) => ({ downloads: eb("downloads", "+", 1) }))
+    .where((eb) => eb.and([eb("id", "=", planId), sqlRules.planVisibleTo(viewer)(eb)]))
+    .returning(["plan", "name"])
+    .executeTakeFirst();
 }
 
 /** The column sets a by-score read of the public posts can ask for. */

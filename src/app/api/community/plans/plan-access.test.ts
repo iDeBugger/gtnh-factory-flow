@@ -923,6 +923,99 @@ describe("counting views and downloads", () => {
   });
 });
 
+describe("a database outage reading a post", () => {
+  withModAndCommunityOn();
+
+  const DOWN = { error: "The community database is not responding. Try again in a few minutes." };
+
+  /** The answer while every statement matching `match` finds the database down. */
+  async function whileDown(match: RegExp, send: () => Promise<Response>) {
+    withDbFault(match);
+    try {
+      const answer = await send();
+      return { status: answer.status, body: await answer.json() };
+    } finally {
+      clearDbFault();
+      resetDbBreaker();
+    }
+  }
+
+  it("answers the database-down line, never Plan not found.", async () => {
+    const planId = await makePlan("Unreachable", true);
+    const base = `/api/community/plans/${planId}`;
+    const ownersPost = { planId };
+    const down = { status: 500, body: DOWN };
+
+    invalidatePlanListCache();
+    expect(await whileDown(/^select distinct "game_version"/, () => list.GET(request("GET", "/api/community/plans")))).toEqual(down);
+    expect(await whileDown(/from "community_plans"/, () => plan.GET(request("GET", base), params(ownersPost)))).toEqual(down);
+    expect(
+      await whileDown(/from "community_plans"/, () =>
+        plan.PUT(request("PUT", base, { who: "owner", body: { name: "Renamed" } }), params(ownersPost)),
+      ),
+    ).toEqual(down);
+    expect(
+      await whileDown(/from "community_plans"/, () => plan.DELETE(request("DELETE", base, { who: "owner" }), params(ownersPost))),
+    ).toEqual(down);
+    expect(
+      await whileDown(/^update "community_plans" set "downloads"/, () =>
+        download.POST(request("POST", `${base}/download`), params(ownersPost)),
+      ),
+    ).toEqual(down);
+    const form = new FormData();
+    form.set("image", new Blob([PNG as BlobPart], { type: "image/png" }), "board.png");
+    expect(
+      await whileDown(/from "community_plans"/, () =>
+        preview.POST(
+          new Request(`http://localhost${base}/preview`, {
+            method: "POST",
+            headers: { "x-client-ip": nextAddress(), cookie: users.owner!.cookie },
+            body: form,
+          }),
+          params(ownersPost),
+        ),
+      ),
+    ).toEqual(down);
+
+    // The post is untouched and answers again once the database does.
+    const back = await plan.GET(request("GET", base), params(ownersPost));
+    expect(back.status).toBe(200);
+    expect(((await back.json()) as { plan: { name: string } }).plan.name).toBe("Unreachable");
+  });
+
+  it("keeps the saved stat card when the database fails while a stale one is refreshed", async () => {
+    const planId = await makePlan("Stale card", true);
+    await testDb().db.updateTable("community_plans").set({ stats_version: "0" }).where("id", "=", planId).execute();
+    for (const match of [/^select "stats_version"/, /^select "plan" from "community_plans"/]) {
+      const answer = await whileDown(match, () => plan.GET(request("GET", `/api/community/plans/${planId}`), params({ planId })));
+      expect(answer.status, String(match)).toBe(200);
+      expect((answer.body as { plan: { name: string } }).plan.name).toBe("Stale card");
+    }
+  });
+
+  it("throws from each reader, so no caller can read an outage as a missing post", async () => {
+    const planId = await makePlan("Thrown", true);
+    const owner = { userId: users.owner!.id, isAdmin: false, adminToken: false };
+    const readers: Array<[string, () => Promise<unknown>]> = [
+      ["distinctGameVersions", () => plansRepo.distinctGameVersions()],
+      ["readSummary", () => plansRepo.readSummary(planId)],
+      ["readOwner", () => plansRepo.readOwner(planId)],
+      ["readStatsVersion", () => plansRepo.readStatsVersion(planId)],
+      ["readPlanJson", () => plansRepo.readPlanJson(planId)],
+      ["takeDownload", () => plansRepo.takeDownload(planId, owner)],
+    ];
+    for (const [name, read] of readers) {
+      withDbFault(/"community_plans"/);
+      try {
+        await expect(read(), name).rejects.toThrow(DOWN.error);
+      } finally {
+        clearDbFault();
+        resetDbBreaker();
+      }
+    }
+  });
+});
+
 describe("a malformed post id", () => {
   withModAndCommunityOn();
 
