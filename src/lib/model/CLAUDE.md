@@ -36,6 +36,21 @@ Types, Zod schemas, resource keys, recipe rules, and the load funnel
 - Unresolved oredict slots cycle their ART only; names stay "Any ...", and rates, wire
   colours, handles and solver identity stay fixed. Never store animation frames or invent a
   concrete source for an icon (`category-presentation.ts`).
+- A pick from "what makes X" never puts X in a slot of that recipe (`switchesSlotToOwnProduct`
+  in `buildRecipeInputOverrides`). The funnel never drops a saved pick or its wire: it has no
+  dataset, and a recipe that takes its own product can be a real loop (a Thaumcraft Crucible
+  turns any iron nugget into three).
+- A pick the stored body offered in a slot and the refreshed body does not is REVOKED
+  (`revoked-substitutes.ts`, found by `refreshProjectRecipes`, which stays quiet and changes
+  nothing). `settleRevokedSubstitutes` then moves a card onto its one same-map twin that takes
+  the pick in that slot (`swapMachineRecipe`: wires kept, one undo step, sent to a live room as
+  an edit, which every client makes the same way, so the plan never differs between them) and
+  leaves any other card as it is; the plan notice names each card. A move keeps the card's picks
+  on slots the twin shares and selects nothing. Until the lookup answers, a card holding a revoked
+  pick keeps its stored body and node (the only evidence); a failed lookup or a plan no longer on the
+  board forgets the check (`forgetRecipeChecks`), so the next landing finds it again. A plan file
+  import keeps the file's body for such a recipe for the same reason. A migrated id cannot wait and is
+  settled from that one refresh.
 
 ## Shared machines (shared-machine.ts)
 

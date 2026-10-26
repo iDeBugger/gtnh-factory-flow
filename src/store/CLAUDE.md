@@ -43,6 +43,14 @@ Every save goes through `persistCanvas` in design-store.ts:
 - Plans are slimmed by dropping GregTech `runtimeCalculation` tables
   (`withoutRuntimeTables`), but only for recipes this page has seen the dataset carry
   (`isRestorableRecipe`); the landing refresh re-fetches bare recipes (`recipesToRefresh`).
+  It asks each `version|id` once per page session (`landingRefreshMemory`, one per page): a second tab's
+  plan holding an id this page already checked for another plan gets no fresh body, so its revoked
+  picks (`settleRevokedSubstitutes`) and steam machine moves are settled in the next session. Only an
+  unsettled revoked pick and a plan file import forget a check (`forgetRecipeChecks`) to be asked again.
+  A recipe that waits this way on import runs on the FILE's body (perhaps without its runtime table, so on
+  fallback maths) until the landing refresh replaces it, and keeps it while that refresh cannot run (the
+  other version's dataset still loading or failed): the body is the evidence. Tests that land plans reset
+  the memory (`resetLandingRefreshMemory`) or pass their own.
   Account sync pushes the same slim plan.
 - Import/export preserves resource identity (`fluid.*` in the UI means fluid metadata was
   not resolved), recipe overrides, chosen handlers, tier/config and concrete oredict picks.

@@ -31,9 +31,30 @@ export function isControllerSlotInput(resource: InputRef): boolean {
   );
 }
 
+/**
+ * The bee a housing holds: kept, never used up, and like the crusher's spawner
+ * the only thing on a bee card that names its species, so the card draws it
+ * the same way (node-verdict's inert rows). It stays out of isFreeRecipeInput:
+ * the recipe already marks it not consumed.
+ */
+export function isBeeSpeciesInput(resource: InputRef): boolean {
+  return resource.id.startsWith("factoryflow:bee_species:");
+}
+
 export function isFreeRecipeInput(resource: InputRef): boolean {
   return (
     ((resource.kind === undefined || resource.kind === "item") && FREE_INPUT_ITEM_IDS.has(resource.id)) ||
     isControllerSlotInput(resource)
   );
+}
+
+/**
+ * What a free row prints in its number column: where the item sits, since none
+ * is ever supplied. The crusher's spawner is in its controller, a bee in its
+ * housing; anything else the game hands out for nothing.
+ */
+export function freeInputRowLabel(resource: InputRef): string {
+  if (isControllerSlotInput(resource)) return "in controller";
+  if (isBeeSpeciesInput(resource)) return "in housing";
+  return "free";
 }

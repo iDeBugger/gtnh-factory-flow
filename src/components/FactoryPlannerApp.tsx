@@ -1,10 +1,10 @@
 "use client";
 
-import { startLandingRefresh } from "@/lib/datasets/refresh-project-recipes";
+import { forgetRecipeChecks, landingRefreshMemory, startLandingRefresh } from "@/lib/datasets/refresh-project-recipes";
+import { findRevokedSubstituteTwins } from "@/lib/datasets/revoked-substitute-twins";
 import { datasetServesPlan } from "@/lib/datasets/dataset-cache";
 import { gameVersionOfDataset, planGameVersion } from "@/lib/model/game-version";
 import { bootWaitsForPlans, useOpenPlanVersionHint } from "@/lib/datasets/new-plan-version";
-import type { Recipe } from "@/lib/model/types";
 import { useDeviceSettings, writeDeviceSettings } from "@/lib/device-settings";
 import { memo, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
@@ -102,8 +102,7 @@ export function FactoryPlannerApp() {
   // a design opened after the dataset landed (tab switch, hydrated plan) gets
   // the boot load's refresh once, and again when a synced or copied plan
   // brings a recipe back without its runtime table (recipesToRefresh).
-  const checkedRecipesRef = useRef<Map<string, boolean>>(new Map());
-  const requestedRecipesRef = useRef<WeakSet<Recipe>>(new WeakSet());
+
   const dataset = useFactoryStore((state) => state.dataset);
   const datasetManifest = useFactoryStore((state) => state.datasetManifest);
   const datasetManifestUrl = useFactoryStore((state) => state.datasetManifestUrl);
@@ -118,13 +117,41 @@ export function FactoryPlannerApp() {
         manifest: datasetManifest,
         manifestUrl: datasetManifestUrl ?? DEFAULT_DATASET_MANIFEST_URL,
         project: { gameVersion: planVersion, recipes: project.recipes },
-        checked: checkedRecipesRef.current,
-        requested: requestedRecipesRef.current,
+        checked: landingRefreshMemory.checked,
+        requested: landingRefreshMemory.requested,
         stillServes: () => {
           const state = useFactoryStore.getState();
           return state.dataset === dataset && datasetServesPlan(dataset, state.project);
         },
-        apply: refreshProjectRecipes,
+        apply: (refreshed, migration) => {
+          const { revoked, deferred } = refreshProjectRecipes(refreshed, migration);
+          const version = datasetManifest?.versions.find((entry) => entry.id === dataset?.datasetVersionId);
+          if (revoked.length === 0 || !version) return;
+          // A pick the fresh body no longer offers moves to its twin recipe or is named in the notice. Its card
+          // keeps the stored body until then; whatever cannot be settled now is asked about at the next landing.
+          const refreshedPlan = useFactoryStore.getState().project;
+          void findRevokedSubstituteTwins(
+            datasetManifestUrl ?? DEFAULT_DATASET_MANIFEST_URL,
+            version,
+            refreshedPlan,
+            revoked,
+          ).then((settled) => {
+            const state = useFactoryStore.getState();
+            const onBoard =
+              state.project.id === refreshedPlan.id && state.dataset === dataset && datasetServesPlan(dataset, state.project);
+            const failed = new Set(onBoard ? settled.filter((entry) => entry.failed).map((entry) => entry.revoked.recipeId) : revoked.map((entry) => entry.recipeId));
+            if (onBoard) {
+              state.settleRevokedSubstitutes(
+                settled.filter((entry) => !failed.has(entry.revoked.recipeId)),
+                deferred.filter((recipe) => !failed.has(recipe.id)),
+              );
+            }
+            forgetRecipeChecks(
+              version.id,
+              refreshedPlan.recipes.filter((recipe) => failed.has(recipe.id)),
+            );
+          });
+        },
         retry: () => setRefreshRetry((count) => count + 1),
       }),
     // refreshRetry re-runs the refresh after an answer an edit dropped.

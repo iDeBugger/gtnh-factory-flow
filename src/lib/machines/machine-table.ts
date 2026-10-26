@@ -658,8 +658,10 @@ const MACHINES: Record<string, MachineBehaviour> = {
     speed: 2,
     parallels: (c) => 8 * c.voltageTier,
   },
-  "IsaMill Grinding Machine": { overclock: OVERCLOCK.perfect() },
-  "Flotation Cell Regulator": { overclock: OVERCLOCK.perfect() },
+  // Each is its map's only machine, so the dataset gives their recipes no
+  // handlers and names them after the map ("Milling", "Flotation Cell").
+  "IsaMill Grinding Machine": { overclock: OVERCLOCK.perfect(), aliases: ["Milling"] },
+  "Flotation Cell Regulator": { overclock: OVERCLOCK.perfect(), aliases: ["Flotation Cell"] },
 
   // -- Coil-driven, no heat mechanic ---------------------------------------
   "Chemical Plant": {
@@ -754,7 +756,8 @@ const MACHINES: Record<string, MachineBehaviour> = {
     power: 0.75,
     parallels: (c) => c.voltageTier * 8,
   },
-  "Bricked Blast Furnace": { overclock: OVERCLOCK.normal() },
+  // 2.8.1 names it Primitive Blast Furnace.
+  "Bricked Blast Furnace": { overclock: OVERCLOCK.normal(), aliases: ["Primitive Blast Furnace"] },
   "COMET - Compact Cyclotron": { overclock: OVERCLOCK.normal() },
   "Cryogenic Freezer": {
     // The rewritten MTECryogenicFreezer: 3x speed, 16 flat parallels, and
@@ -1312,8 +1315,11 @@ const MACHINES: Record<string, MachineBehaviour> = {
   },
   // MTEIndustrialChisel: setSpeedBonus(1F / 3F), setEuModifier(0.75F),
   // 16 * GTUtility.getTier.
+  // 2.9's Industrial Chisel map has this machine alone (RecipeMaps
+  // .industrialChiselRecipes), so its recipes carry the map's name.
   "Industrial 3D Copying Machine": {
     overclock: OVERCLOCK.normal(),
+    aliases: ["Industrial Chisel"],
     speed: 3,
     power: 0.75,
     parallels: (c) => c.voltageTier * 16,
@@ -1341,9 +1347,11 @@ const MACHINES: Record<string, MachineBehaviour> = {
   // MTELatex: setSpeedBonus(1F / 2F), setEuModifier(0.85F), 8 * GTUtility
   // .getTier doubled by an Elastic Singularity in the controller slot. The
   // item pipe casings' rubber cost discount changes INPUT amounts, which the
-  // table cannot express.
+  // table cannot express. It is the only machine on 2.9's Cable Coating map
+  // (RecipeMaps.cableRecipes), so its recipes carry the map's name.
   "L.A.T.E.X.": {
     overclock: OVERCLOCK.normal(),
+    aliases: ["Cable Coating"],
     speed: 2,
     power: 0.85,
     parallels: (c) => c.voltageTier * (c.tier(LATEX_SINGULARITY) === 1 ? 16 : 8),

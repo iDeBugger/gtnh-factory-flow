@@ -51,10 +51,13 @@ export function getRecipeMachineHandlers(
   }
   const handlersByFamily = new Map<string, MachineHandler>();
   const fusionMark = isFusionRecipe(recipe) ? getFusionRecipeMark(recipe) : undefined;
+  const takesFluidInputs = (recipe.inputs ?? []).some((input) => input.kind === "fluid");
+  const makesFluidOutputs = (recipe.outputs ?? []).some((output) => output.kind === "fluid");
   for (const handler of recipe.machineHandlers ?? []) {
     const normalized = normalizeFusionHandler(normalizeMachineHandler(handler), recipe);
     const fusion = getFusionMachine(normalized.machineType);
     if (fusion && fusionMark !== undefined && fusion.mark < fusionMark) continue;
+    if (steamMultiblockLacksFluidHatch(normalized, takesFluidInputs, makesFluidOutputs)) continue;
     const familyId = `${normalized.kind ?? "single"}:${slug(normalized.label)}`;
     if (!handlersByFamily.has(familyId)) {
       handlersByFamily.set(familyId, normalized);
@@ -81,6 +84,54 @@ export function getRecipeMachineHandlers(
     return [autoWorkbenchHandler(), fallback];
   }
   return [normalizeFusionHandler(fallback, recipe)];
+}
+
+/**
+ * Steam multiblocks whose structure has no fluid input hatch on any served
+ * version, so a recipe with a fluid input never starts in them although NEI
+ * lists them on the whole map. Their hatch elements are steam input and output
+ * buses (plus an output hatch on the Separator): MTESteamCentrifuge,
+ * MTESteamMacerator, MTESteamAlloySmelter and MTESteamFurnaceMulti in GT5U
+ * 5.09.54.205; 5.09.51.476's GT++ classes also require mInputHatches.isEmpty().
+ * The Squasher and Presser take an input hatch in 2.9 but not in 2.8.1, and the
+ * Purifier and Blender take one on both. The pipeline applies the whole rule per
+ * pack (`steam-fluid-hatches.mjs`, the 2.8.1 Squasher and Presser included);
+ * this set covers stored bodies from datasets built before it, on any version.
+ */
+const STEAM_MULTIBLOCKS_WITHOUT_FLUID_INPUT = new Set(["Steam Separator", "Steam Grinder", "Steam Fuser", "Steam Hearth"]);
+
+/**
+ * Steam multiblocks with no fluid output hatch on any served version: all but
+ * the Separator and the Blender. Void protection is on by default (VOID_NONE),
+ * so a recipe with a fluid output finds no room for it and never starts.
+ */
+const STEAM_MULTIBLOCKS_WITHOUT_FLUID_OUTPUT = new Set([
+  "Steam Grinder",
+  "Steam Squasher",
+  "Steam Purifier",
+  "Steam Presser",
+  "Steam Fuser",
+  "Steam Hearth",
+]);
+
+/** Which hatch a steam multiblock lacks for this recipe's fluids, if any. */
+export function steamMultiblockMissingHatch(
+  handler: Pick<MachineHandler, "machineType" | "kind">,
+  takesFluidInputs: boolean,
+  makesFluidOutputs: boolean,
+): "input" | "output" | undefined {
+  if (handler.kind !== "multiblock") return undefined;
+  if (takesFluidInputs && STEAM_MULTIBLOCKS_WITHOUT_FLUID_INPUT.has(handler.machineType)) return "input";
+  if (makesFluidOutputs && STEAM_MULTIBLOCKS_WITHOUT_FLUID_OUTPUT.has(handler.machineType)) return "output";
+  return undefined;
+}
+
+function steamMultiblockLacksFluidHatch(
+  handler: Pick<MachineHandler, "machineType" | "kind">,
+  takesFluidInputs: boolean,
+  makesFluidOutputs: boolean,
+): boolean {
+  return steamMultiblockMissingHatch(handler, takesFluidInputs, makesFluidOutputs) !== undefined;
 }
 
 /** Whether this recipe comes off the crafting-grid maps the oracle exports. */

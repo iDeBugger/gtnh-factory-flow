@@ -22,6 +22,7 @@ import {
 } from "@/lib/model";
 import { powerDisplayFromEuT, powerDisplaySuffix, rateSuffixForKind } from "@/lib/model/rate-unit";
 import { isCustomRateRecipe } from "@/lib/model/custom-rate";
+import { isBeeProductionRecipe, isCropProductionRecipe } from "@/lib/model/passive-production";
 import {
   getRecipeProgrammedCircuit,
   type RecipeProgrammedCircuit,
@@ -543,9 +544,12 @@ export function cardPicture(
   mapIcons: ReturnType<typeof useRecipeMapIcons>,
 ) {
   const pictureTier = (face.tierControl?.current ?? projectNode.overclockTier) as string;
-  const recipeMapIcon = mapIcons.get(recipe.source?.recipeMap ?? recipe.machineType) as
-    | MachineHandlerIcon
-    | undefined;
+  // A bee or crop map's icon is a specimen (the first species exported), never the machine, so those cards fall
+  // back to the housing or harvester's own face or name.
+  const recipeMapIcon =
+    isBeeProductionRecipe(recipe) || isCropProductionRecipe(recipe)
+      ? undefined
+      : (mapIcons.get(recipe.source?.recipeMap ?? recipe.machineType) as MachineHandlerIcon | undefined);
   const machineIcon =
     machineIconAtTier(machineIcons.get(face.selectedMachineHandler.id), pictureTier) ??
     recipeMapIcon;

@@ -267,3 +267,18 @@ describe("the landing refresh", () => {
     expect(isRestorableRecipe(recipe("shared", true))).toBe(false);
   });
 });
+
+describe("forgetting a recipe check", () => {
+  it("lets the next landing ask for that stored body again", async () => {
+    const { forgetRecipeChecks, recipesToRefresh, noteRecipesRequested } = await import("./refresh-project-recipes");
+    const recipe = { id: "r", name: "r", machineType: "m", minimumTier: "LV", durationTicks: 1, eut: 0, inputs: [], outputs: [] } as unknown as Recipe;
+    const checked = new Map<string, boolean>();
+    const requested = new WeakSet<Recipe>();
+    noteRecipesRequested([recipe], "v", checked, requested);
+    expect(recipesToRefresh([recipe], "v", checked, requested)).toEqual([]);
+
+    forgetRecipeChecks("v", [recipe], { checked, requested });
+
+    expect(recipesToRefresh([recipe], "v", checked, requested)).toEqual([recipe]);
+  });
+});

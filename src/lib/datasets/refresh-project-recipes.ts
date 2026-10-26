@@ -35,6 +35,39 @@ export function recipesToRefresh(
   });
 }
 
+/**
+ * The page's landing refresh memory: what was checked against which dataset
+ * version, and which recipe objects were sent. One per page, so a step outside
+ * the board (a plan file import) can ask for a recipe again.
+ */
+export const landingRefreshMemory: { checked: Map<string, boolean>; requested: WeakSet<Recipe> } = {
+  checked: new Map(),
+  requested: new WeakSet(),
+};
+
+/** Empties the page's landing refresh memory: a test that lands plans starts from a fresh page. */
+export function resetLandingRefreshMemory(): void {
+  landingRefreshMemory.checked = new Map();
+  landingRefreshMemory.requested = new WeakSet();
+}
+
+/**
+ * Forgets that these stored bodies were checked against `versionId`, so the next
+ * landing refresh asks for them again: a revoked pick whose settling could not
+ * finish (a failed twin lookup, a plan no longer on the board) keeps its stored
+ * body, and is found and settled at that next landing.
+ */
+export function forgetRecipeChecks(
+  versionId: string,
+  recipes: Recipe[],
+  memory: Pick<typeof landingRefreshMemory, "checked" | "requested"> = landingRefreshMemory,
+): void {
+  for (const recipe of recipes) {
+    memory.checked.delete(`${versionId}|${recipe.id}`);
+    memory.requested.delete(recipe);
+  }
+}
+
 /** Marks `recipes` as sent, then what the dataset answered for them. */
 export function noteRecipesRequested(
   recipes: Recipe[],
