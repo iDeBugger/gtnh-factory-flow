@@ -213,6 +213,73 @@ describe("voting on a post", () => {
     expect((await castVote(planId, { deviceId: "x", value: 1 }, { address, who: "stranger" })).status).toBe(200);
     expect((await planRow(planId)).upvotes).toBe(5);
   });
+
+  /** The post's counters beside a count of its vote rows. */
+  const tally = async (planId: string) => {
+    const db = testDb().db;
+    const row = await db
+      .selectFrom("community_plans")
+      .select(["upvotes", "downvotes"])
+      .where("id", "=", planId)
+      .executeTakeFirstOrThrow();
+    const rows = await db.selectFrom("community_votes").select("value").where("plan_id", "=", planId).execute();
+    return {
+      ...row,
+      rowsUp: rows.filter((vote) => vote.value === 1).length,
+      rowsDown: rows.filter((vote) => vote.value === -1).length,
+    };
+  };
+
+  it("ten votes at once from ten addresses land ten", async () => {
+    const planId = await makePlan("Rushed", true);
+    const answers = await Promise.all(
+      Array.from({ length: 10 }, (_, i) => castVote(planId, { deviceId: `rush-${i}`, value: 1 })),
+    );
+    expect(answers.map((answer) => answer.status)).toEqual(Array(10).fill(200));
+    expect(await tally(planId)).toEqual({ upvotes: 10, downvotes: 0, rowsUp: 10, rowsDown: 0 });
+  });
+
+  it("a vote and its count move together", async () => {
+    const planId = await makePlan("Counted votes", true);
+    expect((await castVote(planId, { deviceId: "kept", value: 1 })).status).toBe(200);
+    for (const value of [1, -1]) {
+      withDbFault(/update "community_plans"/, refused());
+      try {
+        const failed = await castVote(planId, { deviceId: value === 1 ? "kept" : "lost", value });
+        expect(failed.status).toBe(500);
+        expect(await failed.json()).toEqual({ error: "Voting failed." });
+      } finally {
+        clearDbFault();
+        resetDbBreaker();
+      }
+    }
+    // Neither the retraction nor the new vote stands without its count.
+    expect(await tally(planId)).toEqual({ upvotes: 1, downvotes: 0, rowsUp: 1, rowsDown: 0 });
+  });
+
+  it("writes a vote and its post's counts under the post's lock", async () => {
+    const planId = await makePlan("Locked votes", true);
+    const LOCK = /^select "id" from "community_plans" where "id" = \$1 for no key update$/;
+    const RECOUNT =
+      /^update "community_plans" set "upvotes" = \(select count\(\*\) as "n" from "community_votes" where "plan_id" = \$1 and "value" = \$2\), "downvotes" = \(select count\(\*\) as "n" from "community_votes" where "plan_id" = \$3 and "value" = \$4\) where "id" = \$5 returning "upvotes", "downvotes"$/;
+    for (const [step, write] of [
+      ["cast", /^insert into "community_votes" .* on conflict \("plan_id", "voter_key"\) do update set "value" = \$\d+$/],
+      ["retract", /^delete from "community_votes" where "plan_id" = \$1 and "voter_key" = \$2$/],
+    ] as const) {
+      const sent = recordSql();
+      try {
+        const answer = await castVote(planId, { deviceId: "locker", value: 1 }, { who: "stranger" });
+        expect(answer.status, step).toBe(200);
+      } finally {
+        clearDbFault();
+      }
+      const lock = at(sent, LOCK);
+      const written = at(sent, write, lock);
+      at(sent, RECOUNT, written);
+      expect(sent.filter((text) => LOCK.test(text)), step).toHaveLength(1);
+    }
+    expect(await tally(planId)).toEqual({ upvotes: 0, downvotes: 0, rowsUp: 0, rowsDown: 0 });
+  });
 });
 
 describe("a post's board photograph", () => {

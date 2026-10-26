@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { useTestDb } from "@/test-support/test-db";
+import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
+import { setDbFaultForTests } from "@/lib/server/db/guard";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
 import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
 import * as blueprintsRepo from "@/lib/server/repos/blueprints";
@@ -17,7 +18,7 @@ import * as vote from "./[blueprintId]/vote/route";
  * votes do; accounts and other addresses are not held by it.
  */
 
-useTestDb();
+const testDb = useTestDb();
 const users: Record<string, { id: string; cookie: string }> = {};
 
 async function makeUser(username: string) {
@@ -123,6 +124,84 @@ describe("voting on a blueprint", () => {
     const signedIn = await castVote(blueprintId, { deviceId: "x", value: 1 }, { address, who: "reader" });
     expect(signedIn.status).toBe(200);
     expect(await signedIn.json()).toMatchObject({ upvotes: 4 });
+  });
+
+  /** The blueprint's counters beside a count of its vote rows. */
+  const tally = async (blueprintId: string) => {
+    const db = testDb().db;
+    const row = await db
+      .selectFrom("blueprints")
+      .select(["upvotes", "downvotes"])
+      .where("id", "=", blueprintId)
+      .executeTakeFirstOrThrow();
+    const rows = await db
+      .selectFrom("blueprint_votes")
+      .select("value")
+      .where("blueprint_id", "=", blueprintId)
+      .execute();
+    return {
+      ...row,
+      rowsUp: rows.filter((vote) => vote.value === 1).length,
+      rowsDown: rows.filter((vote) => vote.value === -1).length,
+    };
+  };
+
+  it("ten votes at once from ten addresses land ten", async () => {
+    const blueprintId = await makeBlueprint("Rushed furnace", true);
+    const answers = await Promise.all(
+      Array.from({ length: 10 }, (_, i) =>
+        castVote(blueprintId, { deviceId: `rush-${i}`, value: 1 }, { address: `198.51.100.${i + 1}` }),
+      ),
+    );
+    expect(answers.map((answer) => answer.status)).toEqual(Array(10).fill(200));
+    expect(await tally(blueprintId)).toEqual({ upvotes: 10, downvotes: 0, rowsUp: 10, rowsDown: 0 });
+  });
+
+  it("a vote and its count move together", async () => {
+    const blueprintId = await makeBlueprint("Counted furnace", true);
+    const address = "198.51.100.50";
+    expect((await castVote(blueprintId, { deviceId: "kept", value: 1 }, { address })).status).toBe(200);
+    for (const value of [1, -1]) {
+      withDbFault(/update "blueprints"/, Object.assign(new Error("boom"), { code: "XX000", severity: "ERROR" }));
+      try {
+        const failed = await castVote(blueprintId, { deviceId: value === 1 ? "kept" : "lost", value }, { address });
+        expect(failed.status).toBe(500);
+        expect(await failed.json()).toEqual({ error: "Voting failed." });
+      } finally {
+        clearDbFault();
+        resetDbBreaker();
+      }
+    }
+    expect(await tally(blueprintId)).toEqual({ upvotes: 1, downvotes: 0, rowsUp: 1, rowsDown: 0 });
+  });
+
+  it("writes a vote and its blueprint's counts under the blueprint's lock", async () => {
+    const blueprintId = await makeBlueprint("Locked furnace", true);
+    const LOCK = /^select "id" from "blueprints" where "id" = \$1 for no key update$/;
+    const RECOUNT =
+      /^update "blueprints" set "upvotes" = \(select count\(\*\) as "n" from "blueprint_votes" where "blueprint_id" = \$1 and "value" = \$2\), "downvotes" = \(select count\(\*\) as "n" from "blueprint_votes" where "blueprint_id" = \$3 and "value" = \$4\) where "id" = \$5 returning "upvotes", "downvotes"$/;
+    for (const [step, write] of [
+      ["cast", /^insert into "blueprint_votes" .* on conflict \("blueprint_id", "voter_key"\) do update set "value" = \$\d+$/],
+      ["retract", /^delete from "blueprint_votes" where "blueprint_id" = \$1 and "voter_key" = \$2$/],
+    ] as const) {
+      const sent: string[] = [];
+      setDbFaultForTests((text) => {
+        sent.push(text);
+        return undefined;
+      });
+      try {
+        const answer = await castVote(blueprintId, { deviceId: "locker", value: 1 }, { address: "198.51.100.60", who: "reader" });
+        expect(answer.status, step).toBe(200);
+      } finally {
+        clearDbFault();
+      }
+      const lock = sent.findIndex((text) => LOCK.test(text));
+      const written = sent.findIndex((text, i) => i > lock && write.test(text));
+      const recount = sent.findIndex((text, i) => i > written && RECOUNT.test(text));
+      expect([lock, written, recount].every((index) => index >= 0), `${step}:\n${sent.join("\n")}`).toBe(true);
+      expect(sent.filter((text) => LOCK.test(text)), step).toHaveLength(1);
+    }
+    expect(await tally(blueprintId)).toEqual({ upvotes: 0, downvotes: 0, rowsUp: 0, rowsDown: 0 });
   });
 });
 

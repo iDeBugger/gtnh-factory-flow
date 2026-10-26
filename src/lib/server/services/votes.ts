@@ -1,6 +1,6 @@
 import type { CommunityVoteResponse } from "@/lib/community/types";
 import { makeActorKey, makeVoterKey, saltedKey } from "../auth/keys";
-import { blueprintStorageErrorMessage, DbQueryError } from "../db";
+import { blueprintStorageErrorMessage, DbQueryError, withTransaction } from "../db";
 import { clientAddress } from "../http/client-address";
 import type { Viewer } from "../http/viewer";
 import { checkRateLimit } from "../limits/rate-limit";
@@ -104,7 +104,8 @@ const RULES: Record<VoteTarget, TargetRules> = {
  * may vote on (a malformed id is a missing row, answered with no query),
  * with the same answer either way so the route is no oracle for ids; then an
  * anonymous cast or switch counts against the address's few a day on that
- * row (a retraction does not); then the write and a recount.
+ * row (a retraction does not); then the write and a recount. A failed read or
+ * write throws, for the route's fixed sentence.
  */
 export async function castVote(
   target: VoteTarget,
@@ -139,17 +140,27 @@ export async function castVote(
     }
   }
 
-  let myVote: 1 | -1 | undefined;
-  if (retracting) {
-    await votes.remove(target, id, voterKey);
-    myVote = undefined;
-  } else {
-    await votes.upsert(target, id, voterKey, input.value);
-    myVote = input.value;
+  // The row's lock, the vote and the recount are one transaction: the votes
+  // on one row land one at a time, each recount counting every vote before
+  // it, and a vote never stands without its count.
+  const counted = await withTransaction(async (tx) => {
+    if (!(await votes.lockParent(target, id, tx))) {
+      return undefined;
+    }
+    if (retracting) {
+      await votes.remove(target, id, voterKey, tx);
+    } else {
+      await votes.upsert(target, id, voterKey, input.value, tx);
+    }
+    return votes.recount(target, id, tx);
+  });
+  // Taken down since the access read.
+  if (!counted) {
+    return fail("not-found", rules.notFound);
   }
-  const { upvotes, downvotes } = await votes.recount(target, id);
   rules.afterVote();
-  return ok({ upvotes, downvotes, score: upvotes - downvotes, myVote });
+  const { upvotes, downvotes } = counted;
+  return ok({ upvotes, downvotes, score: upvotes - downvotes, myVote: retracting ? undefined : input.value });
 }
 
 /** The voter's votes on every row of the target, by id; none when the read fails. */

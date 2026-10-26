@@ -10,6 +10,7 @@ import * as designs from "../repos/designs";
 import * as events from "../repos/events";
 import * as folders from "../repos/folders";
 import * as plans from "../repos/plans";
+import * as votes from "../repos/votes";
 import { useDbForTests, withTransaction } from "./index";
 import { applyMigrations, schemaFiles } from "./migrations";
 import type { Database } from "./schema";
@@ -458,6 +459,52 @@ describe("the database roles", () => {
       if (planId) {
         await pglite.query("delete from community_plans where id = $1", [planId]);
       }
+    }
+  });
+
+  it("runs every direct vote repository function as the site role, on posts and blueprints, row locks included", async () => {
+    const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) });
+    useDbForTests(db);
+    const plan = await pglite.query<{ id: string }>(
+      `insert into community_plans (user_id, author_name, name, plan, uploader_key)
+       values ($1, 'owner', 'Voted', '{"nodes":[]}', 'test') returning id`,
+      [OWNER],
+    );
+    const blueprint = await pglite.query<{ id: string }>(
+      `insert into blueprints (user_id, name, payload, is_public) values ($1, 'Voted', '{"nodes":[]}', true) returning id`,
+      [OWNER],
+    );
+    const ids = { plan: plan.rows[0]!.id, blueprint: blueprint.rows[0]!.id };
+    try {
+      await as("gtnh_site", async () => {
+        for (const target of ["plan", "blueprint"] as const) {
+          const id = ids[target];
+          const counts = await withTransaction(async (tx) => {
+            expect(await votes.lockParent(target, id, tx)).toBe(true);
+            await votes.upsert(target, id, "voter-a", 1, tx);
+            await votes.upsert(target, id, "voter-b", 1, tx);
+            await votes.upsert(target, id, "voter-b", -1, tx);
+            return votes.recount(target, id, tx);
+          });
+          expect(counts, target).toEqual({ upvotes: 1, downvotes: 1 });
+          expect(await votes.read(target, id, "voter-b")).toBe(-1);
+          expect(await votes.byVoter(target, "voter-a")).toEqual(new Map([[id, 1]]));
+          expect(await votes.byVoter(target, "voter-a", [id])).toEqual(new Map([[id, 1]]));
+          await withTransaction(async (tx) => {
+            await votes.lockParent(target, id, tx);
+            await votes.remove(target, id, "voter-b", tx);
+            expect(await votes.recount(target, id, tx)).toEqual({ upvotes: 1, downvotes: 0 });
+          });
+          expect(await votes.read(target, id, "voter-b")).toBeUndefined();
+          expect(
+            await withTransaction((tx) => votes.lockParent(target, "00000000-0000-4000-8000-000000000000", tx)),
+          ).toBe(false);
+        }
+      });
+    } finally {
+      useDbForTests(undefined);
+      await pglite.query("delete from community_plans where id = $1", [ids.plan]);
+      await pglite.query("delete from blueprints where id = $1", [ids.blueprint]);
     }
   });
 

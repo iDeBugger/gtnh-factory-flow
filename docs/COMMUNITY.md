@@ -45,8 +45,9 @@ endpoints return 503 and the hub page shows an error banner.
 - Uploads: max 3 MB JSON, name ≤ 80 chars, description ≤ 2000 chars,
   10 uploads per hour per actor. Empty plans are rejected.
 - Votes: one per plan per actor; re-sending the same vote retracts it.
-  Counters are recomputed from the votes table on every vote, so they
-  self-heal under races.
+  Counters are recomputed from the votes table on every vote, in the
+  vote's transaction and under a lock on the voted row, so votes that
+  arrive at once all count.
 - Views: counted when a plan's preview/detail is opened, not per list render.
 - Downloads: counted via the download endpoint (JSON download and
   "Open in editor" both use it). Each count is one statement that adds one

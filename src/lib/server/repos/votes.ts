@@ -1,4 +1,4 @@
-import { DbQueryError, getCommunityDb, type Tx } from "../db";
+import { getDb, type Tx } from "../db";
 
 /**
  * Votes on posts (`community_votes`) and on blueprints (`blueprint_votes`),
@@ -7,8 +7,8 @@ import { DbQueryError, getCommunityDb, type Tx } from "../db";
  * writes. The map is closed, so no table or column name comes from a
  * request. Whether a vote may land is the services' rule
  * (`services/votes.ts`); these only read and write rows. Repositories take
- * an optional transaction last; until the direct client lands there is none
- * and `tx` is unused.
+ * an optional transaction last; a failure throws (a down database as
+ * `DatabaseDownError`).
  */
 
 export type VoteTarget = "plan" | "blueprint";
@@ -18,21 +18,35 @@ const TABLES = {
   blueprint: { votes: "blueprint_votes", key: "blueprint_id", parent: "blueprints" },
 } as const satisfies Record<VoteTarget, { votes: string; key: string; parent: string }>;
 
-/** The voter's vote on one row; none when there is none or the read fails, so a failed read never refuses a vote. */
+/** The voter's vote on one row, or undefined when there is none. */
 export async function read(
   target: VoteTarget,
   id: string,
   voterKey: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<1 | -1 | undefined> {
   const { votes, key } = TABLES[target];
-  const { data } = await getCommunityDb()
-    .from(votes)
+  const row = await (tx ?? getDb())
+    .selectFrom(votes)
     .select("value")
-    .eq(key, id)
-    .eq("voter_key", voterKey)
-    .maybeSingle<{ value: 1 | -1 }>();
-  return data?.value;
+    .where(key, "=", id)
+    .where("voter_key", "=", voterKey)
+    .executeTakeFirst();
+  return row ? (row.value as 1 | -1) : undefined;
+}
+
+/**
+ * Locks the voted row (the post or blueprint) until the transaction ends and
+ * answers whether it is there. A vote takes it before writing its vote row,
+ * so the casts on one row run one at a time and each recount sees every vote
+ * committed before it; the post comes first, as a comment's does
+ * (`plans.lockPost`), so the two never wait on each other in a circle.
+ * `for no key update`: a vote row's foreign-key check never waits for it.
+ */
+export async function lockParent(target: VoteTarget, id: string, tx: Tx): Promise<boolean> {
+  const { parent } = TABLES[target];
+  const row = await tx.selectFrom(parent).select("id").where("id", "=", id).forNoKeyUpdate().executeTakeFirst();
+  return row !== undefined;
 }
 
 /** Casts or switches the voter's vote. */
@@ -41,45 +55,55 @@ export async function upsert(
   id: string,
   voterKey: string,
   value: 1 | -1,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<void> {
-  const { votes, key } = TABLES[target];
-  const { error } = await getCommunityDb()
-    .from(votes)
-    .upsert({ [key]: id, voter_key: voterKey, value });
-  if (error) {
-    throw new DbQueryError(error);
+  const db = tx ?? getDb();
+  if (target === "plan") {
+    await db
+      .insertInto("community_votes")
+      .values({ plan_id: id, voter_key: voterKey, value })
+      .onConflict((oc) => oc.columns(["plan_id", "voter_key"]).doUpdateSet({ value }))
+      .execute();
+  } else {
+    await db
+      .insertInto("blueprint_votes")
+      .values({ blueprint_id: id, voter_key: voterKey, value })
+      .onConflict((oc) => oc.columns(["blueprint_id", "voter_key"]).doUpdateSet({ value }))
+      .execute();
   }
 }
 
-/** Retracts the voter's vote. A failed delete is not reported: the recount after it answers what stands. */
-export async function remove(target: VoteTarget, id: string, voterKey: string, _tx?: Tx): Promise<void> {
+/** Retracts the voter's vote. */
+export async function remove(target: VoteTarget, id: string, voterKey: string, tx?: Tx): Promise<void> {
   const { votes, key } = TABLES[target];
-  await getCommunityDb().from(votes).delete().eq(key, id).eq("voter_key", voterKey);
+  await (tx ?? getDb()).deleteFrom(votes).where(key, "=", id).where("voter_key", "=", voterKey).execute();
 }
 
 /**
- * Counts the row's up and down votes and writes them to its counters.
- * Recounted, never incremented: idempotent under races and self-healing.
- * A count that fails reads as none.
+ * Counts the row's up and down votes into its counters in one statement and
+ * answers them. Recounted, never incremented: idempotent and self-healing.
+ * Run it after `lockParent` in the vote's transaction, so it counts every
+ * vote committed before it. Throws when the row is gone.
  */
 export async function recount(
   target: VoteTarget,
   id: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<{ upvotes: number; downvotes: number }> {
   const { votes, key, parent } = TABLES[target];
-  const db = getCommunityDb();
-  const [{ count: up }, { count: down }] = await Promise.all([
-    db.from(votes).select(key, { count: "exact", head: true }).eq(key, id).eq("value", 1),
-    db.from(votes).select(key, { count: "exact", head: true }).eq(key, id).eq("value", -1),
-  ]);
-  const counts = { upvotes: up ?? 0, downvotes: down ?? 0 };
-  const { error } = await db.from(parent).update(counts).eq("id", id);
-  if (error) {
-    throw new DbQueryError(error);
-  }
-  return counts;
+  const db = tx ?? getDb();
+  const counted = (value: 1 | -1) =>
+    db
+      .selectFrom(votes)
+      .select((eb) => eb.fn.countAll<number>().as("n"))
+      .where(key, "=", id)
+      .where("value", "=", value);
+  return db
+    .updateTable(parent)
+    .set({ upvotes: counted(1), downvotes: counted(-1) })
+    .where("id", "=", id)
+    .returning(["upvotes", "downvotes"])
+    .executeTakeFirstOrThrow();
 }
 
 /**
@@ -90,16 +114,19 @@ export async function byVoter(
   target: VoteTarget,
   voterKey: string,
   ids?: readonly string[],
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<Map<string, 1 | -1>> {
+  if (ids && ids.length === 0) {
+    return new Map();
+  }
   const { votes, key } = TABLES[target];
-  let builder = getCommunityDb().from(votes).select(`${key},value`).eq("voter_key", voterKey);
+  let query = (tx ?? getDb())
+    .selectFrom(votes)
+    .select([`${key} as id`, "value"])
+    .where("voter_key", "=", voterKey);
   if (ids) {
-    builder = builder.in(key, [...ids]);
+    query = query.where(key, "in", [...ids]);
   }
-  const { data, error } = await builder.returns<Array<Record<string, unknown>>>();
-  if (error) {
-    throw new DbQueryError(error);
-  }
-  return new Map((data ?? []).map((vote) => [vote[key] as string, vote.value as 1 | -1]));
+  const rows = await query.execute();
+  return new Map(rows.map((vote) => [vote.id as string, vote.value as 1 | -1]));
 }
