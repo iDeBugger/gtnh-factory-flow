@@ -25,6 +25,7 @@ import * as download from "./[planId]/download/route";
 import * as plansRepo from "@/lib/server/repos/plans";
 import * as commentsRepo from "@/lib/server/repos/comments";
 import * as eventsRepo from "@/lib/server/repos/events";
+import * as votesRepo from "@/lib/server/repos/votes";
 import * as comment from "./[planId]/comments/[commentId]/route";
 import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
 import * as images from "../images/[month]/[name]/route";
@@ -534,12 +535,13 @@ describe("a malformed post id", () => {
 
   it("is not found, not an error, and sends no query", async () => {
     vi.stubEnv("COMMUNITY_ADMIN_TOKEN", "plan-access-admin-token");
-    // The rate-limit reads too: view and comment check the id before their pace.
-    const spies = [plansRepo, commentsRepo, eventsRepo].flatMap((module) =>
+    const spyOnAll = (module: object) =>
       Object.entries(module)
         .filter(([, value]) => typeof value === "function")
-        .map(([name]) => vi.spyOn(module as Record<string, (...args: unknown[]) => unknown>, name)),
-    );
+        .map(([name]) => vi.spyOn(module as Record<string, (...args: unknown[]) => unknown>, name));
+    const querySpies = [plansRepo, commentsRepo, votesRepo].flatMap(spyOnAll);
+    // The rate-limit reads too: view and comment check the id before their pace.
+    const spies = [...querySpies, ...spyOnAll(eventsRepo)];
     try {
       const planId = "not-a-uuid";
       const base = `/api/community/plans/${planId}`;
@@ -586,6 +588,18 @@ describe("a malformed post id", () => {
         expect(await gone.json()).toEqual({ error: "Comment not found." });
       }
       for (const spy of spies) {
+        expect(spy, spy.getMockName()).not.toHaveBeenCalled();
+      }
+      // A vote spends its share of the address's pace first, so probing ids
+      // stays limited, and then reads no post and no vote.
+      const voted = await vote.POST(
+        request("POST", `${base}/vote`, { body: { deviceId: "device-1", value: 1 } }),
+        params({ planId }),
+      );
+      expect(voted.status).toBe(404);
+      expect(await voted.json()).toEqual({ error: "Plan not found." });
+      expect(vi.mocked(eventsRepo.countSince)).toHaveBeenCalled();
+      for (const spy of querySpies) {
         expect(spy, spy.getMockName()).not.toHaveBeenCalled();
       }
       // The spies see the service's reads: a well-formed id is looked up, and

@@ -9,7 +9,7 @@ import * as blueprints from "../repos/blueprints";
 import * as plans from "../repos/plans";
 import * as votes from "../repos/votes";
 import type { VoteTarget } from "../repos/votes";
-import { canSeePlan } from "./access";
+import { canSeePlan, isUuid } from "./access";
 import { fail, ok, type ServiceResult } from "./result";
 
 export type { VoteTarget } from "../repos/votes";
@@ -101,7 +101,8 @@ const RULES: Record<VoteTarget, TargetRules> = {
  * retracts a vote on a post or a blueprint. Votes are keyed by account or
  * device id (`makeVoterKey`); the address only feeds the limits. In order:
  * the address's pace, then the row, which must exist and be one the viewer
- * may vote on, with the same answer either way so the route is no oracle for ids; then an
+ * may vote on (a malformed id is a missing row, answered with no query),
+ * with the same answer either way so the route is no oracle for ids; then an
  * anonymous cast or switch counts against the address's few a day on that
  * row (a retraction does not); then the write and a recount.
  */
@@ -116,6 +117,9 @@ export async function castVote(
   // The pace comes first, so probing ids stays limited.
   if (!(await checkRateLimit(makeActorKey(request), rules.paceAction, 60, 60 * 10))) {
     return fail("rate-limited", "Voting too fast. Slow down.");
+  }
+  if (!isUuid(id)) {
+    return fail("not-found", rules.notFound);
   }
   const allowed = await rules.mayVote(viewer, id);
   if (!allowed.ok) {

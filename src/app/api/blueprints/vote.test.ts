@@ -5,6 +5,7 @@ import { useInProcessLocalDb } from "@/lib/server/local-db/client";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
 import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
 import * as blueprintsRepo from "@/lib/server/repos/blueprints";
+import * as votesRepo from "@/lib/server/repos/votes";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 import * as one from "./[blueprintId]/route";
 import * as download from "./[blueprintId]/download/route";
@@ -173,10 +174,12 @@ describe("reading a blueprint by id", () => {
 describe("a malformed blueprint id", () => {
   withModAndCommunityOn();
 
-  it("is not found, not an error, and sends no blueprint query", async () => {
-    const spies = Object.entries(blueprintsRepo)
-      .filter(([, value]) => typeof value === "function")
-      .map(([name]) => vi.spyOn(blueprintsRepo as Record<string, (...args: unknown[]) => unknown>, name));
+  it("is not found, not an error, and sends no blueprint or vote query", async () => {
+    const spies = [blueprintsRepo, votesRepo].flatMap((module) =>
+      Object.entries(module)
+        .filter(([, value]) => typeof value === "function")
+        .map(([name]) => vi.spyOn(module as Record<string, (...args: unknown[]) => unknown>, name)),
+    );
     try {
       const id = "not-a-uuid";
       const base = `/api/blueprints/${id}`;
@@ -186,6 +189,8 @@ describe("a malformed blueprint id", () => {
         await one.PUT(call("PUT", base, { who: "author", body: { name: "Renamed" } }), params(id)),
         await publish.POST(call("POST", `${base}/publish`, { who: "author", body: { publish: true } }), params(id)),
         await download.POST(call("POST", `${base}/download`, { who: "reader" }), params(id)),
+        await castVote(id, { deviceId: "device-1", value: 1 }, { address: "203.0.113.92" }),
+        await castVote(id, { deviceId: "device-1", value: 1 }, { address: "203.0.113.92", who: "reader" }),
       ];
       for (const answer of answers) {
         expect(answer.status).toBe(404);
