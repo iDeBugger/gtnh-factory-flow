@@ -1,0 +1,70 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CARD_FLASH_ATTRIBUTE, CARD_FLASH_MS, flashCard } from "./card-flash";
+
+function board(...ids: string[]): HTMLElement {
+  const root = document.createElement("div");
+  root.className = "react-flow__nodes";
+  for (const id of ids) {
+    const node = document.createElement("div");
+    node.className = "react-flow__node";
+    node.dataset.id = id;
+    root.appendChild(node);
+  }
+  document.body.appendChild(root);
+  return root;
+}
+
+const flash = (root: HTMLElement, id: string) =>
+  root.querySelector(`[data-id="${id}"]`)!.getAttribute(CARD_FLASH_ATTRIBUTE);
+
+describe("flashCard", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.runAllTimers();
+    vi.useRealTimers();
+    document.body.innerHTML = "";
+  });
+
+  it("outlines the card for a second, then takes the outline off", () => {
+    const root = board("a", "b");
+    expect(flashCard("b")).toBe(true);
+    expect(flash(root, "b")).not.toBeNull();
+    expect(flash(root, "a")).toBeNull();
+    vi.advanceTimersByTime(CARD_FLASH_MS - 1);
+    expect(flash(root, "b")).not.toBeNull();
+    vi.advanceTimersByTime(1);
+    expect(flash(root, "b")).toBeNull();
+  });
+
+  it("restarts on a second click: a new animation name and a full second again", () => {
+    const root = board("a");
+    flashCard("a");
+    const first = flash(root, "a");
+    vi.advanceTimersByTime(600);
+    flashCard("a");
+    const second = flash(root, "a");
+    expect(second).not.toBeNull();
+    expect(second).not.toBe(first);
+    vi.advanceTimersByTime(CARD_FLASH_MS - 1);
+    expect(flash(root, "a")).toBe(second);
+    vi.advanceTimersByTime(1);
+    expect(flash(root, "a")).toBeNull();
+  });
+
+  it("moves the outline when another card is reached", () => {
+    const root = board("a", "b");
+    flashCard("a");
+    flashCard("b");
+    expect(flash(root, "a")).toBeNull();
+    expect(flash(root, "b")).not.toBeNull();
+  });
+
+  it("finds ids that need escaping and answers false for a card not on the board", () => {
+    const root = board('odd"id');
+    expect(flashCard('odd"id')).toBe(true);
+    expect(flash(root, 'odd\\"id')).not.toBeNull();
+    expect(flashCard("missing")).toBe(false);
+    expect(flash(root, 'odd\\"id')).toBeNull();
+  });
+});

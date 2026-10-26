@@ -5,6 +5,7 @@ import { checklistCursorStyle } from "./flow/ChecklistMode";
 import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { Cloud, Zap } from "lucide-react";
 import { MotionNumberText } from "./flow/board-motion";
+import { flashCard } from "./flow/card-flash";
 import { powerDisplayFromEuT, powerDisplaySuffix } from "@/lib/model/rate-unit";
 import { GT_TIER_COLORS } from "./flow/tier-colors";
 import { useMachineHandlerIcons, type MachineHandlerIcon } from "./flow/machine-icons";
@@ -63,6 +64,11 @@ export function MachineShoppingList() {
   // The power column follows the power dial (EU/t or amps of a tier).
   useRateDisplayUnits();
   const focusBoardNode = useFactoryStore((state) => state.focusBoardNode);
+  // The card reached is outlined a moment so it stands out among many (card-flash.ts).
+  const goToCard = (nodeId: string) => {
+    focusBoardNode(nodeId);
+    flashCard(nodeId);
+  };
   const machineIcons = useMachineHandlerIcons();
   const entries = useMemo(() => buildMachineList(project, lastResult), [project, lastResult]);
 
@@ -80,7 +86,7 @@ export function MachineShoppingList() {
   const focusGroup = (label: string, cards: MachineListEntry[]) => {
     const next = ((cycleRef.current.get(label) ?? -1) + 1) % cards.length;
     cycleRef.current.set(label, next);
-    focusBoardNode(cards[next]!.nodeId);
+    goToCard(cards[next]!.nodeId);
   };
 
   const totalMachines = entries.reduce((sum, group) => sum + group.count, 0);
@@ -226,7 +232,7 @@ export function MachineShoppingList() {
                 onClick={() =>
                   checklistMode
                     ? useFactoryStore.getState().toggleChecklist("cards", [entry.nodeId])
-                    : focusBoardNode(entry.nodeId)
+                    : goToCard(entry.nodeId)
                 }
               />
             ))}

@@ -7,6 +7,7 @@ import { useFactoryStore } from "@/store/factory-store";
 import { liveUndoHandler, quietly } from "@/store/live-edit-gate";
 import { solveBooks } from "@/store/solve-books";
 import { RULE_STEPS } from "../../rate-rule";
+import { flashCard } from "../../card-flash";
 import {
   canonicalOf,
   flowHandle,
@@ -269,12 +270,18 @@ export function walkResource(key: string): boolean {
   return true;
 }
 
-/** Frames the next of a list of cards, going round each time (`id` names the walk). */
+/** A machine line's card: framed, and outlined a moment so it stands out among many (card-flash.ts). */
+export function goToMachineCard(nodeId: string): void {
+  frameCards([nodeId]);
+  flashCard(nodeId);
+}
+
+/** Frames and outlines the next of a machine group's cards, going round each time (`id` names the walk). */
 export function walkCards(id: string, cards: string[]): boolean {
   if (cards.length === 0) return false;
   const at = ((walks.get(id) ?? -1) + 1) % cards.length;
   walks.set(id, at);
-  frameCards([cards[at]!]);
+  goToMachineCard(cards[at]!);
   return true;
 }
 

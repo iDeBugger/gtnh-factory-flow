@@ -392,6 +392,38 @@ it("pins a machine's count from its line and lets it go again", () => {
   expect(comp().solvePinExact).toBeUndefined();
 });
 
+it("goes to a machine line's card and outlines it a moment; a resource row frames without the outline", () => {
+  vi.useFakeTimers();
+  try {
+    load(mockUnneeded);
+    const frame = vi.fn();
+    useFactoryStore.setState({ frameBoardNodes: frame });
+    const wrappers = document.createElement("div");
+    for (const node of useFactoryStore.getState().project.nodes) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "react-flow__node";
+      wrapper.dataset.id = node.id;
+      wrappers.appendChild(wrapper);
+    }
+    document.body.appendChild(wrappers);
+    const { container } = render(<OverviewRail />);
+    const outlined = () =>
+      [...wrappers.querySelectorAll("[data-card-flash]")].map((e) => e.getAttribute("data-id"));
+    fireEvent.click(container.querySelector('[data-rail-machine="comp"]')!);
+    expect(frame).toHaveBeenCalledWith(["comp"], expect.anything());
+    expect(outlined()).toEqual(["comp"]);
+    vi.advanceTimersByTime(1000);
+    expect(outlined()).toEqual([]);
+    frame.mockClear();
+    fireEvent.click(container.querySelector('[data-resource-row="item:Iron Ingot"]')!);
+    expect(frame).toHaveBeenCalled();
+    expect(outlined()).toEqual([]);
+    wrappers.remove();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it("writes a typed machine count through the card's rule", () => {
   load(mockUnneeded);
   pinCount("comp", 9);
