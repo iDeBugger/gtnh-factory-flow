@@ -238,7 +238,8 @@ const CLIENT_MODULES = new Set(["src/lib/server/db/client.ts", "src/lib/server/d
  * auth, limits, the viewer type, the client address, the live notice, and
  * the query-free helpers the services share with routes and repositories
  * (row shapes and icons, library rows and stamps, the lease clock, blueprint
- * payloads, the plan list cache, the plan solver, the file store). Never the HTTP plumbing, the stand-in or the clients.
+ * payloads, the plan list cache, the plan solver, the file store). Never
+ * the HTTP plumbing, the stand-in or the clients.
  */
 const isServiceTarget = (file: string): boolean =>
   /^src\/lib\/server\/(services|repos|auth|limits)\//.test(file) ||
@@ -313,7 +314,7 @@ const RULES: Record<string, (edge: Edge) => boolean> = {
   },
   // 4. Route handlers never reach the database layer, the UI or the stores.
   "4": ({ from, to }) => isRouteHandler(from) && (isDatabaseLayer(to) || isUiOrStore(to)),
-  // 5. The live service uses the server's repositories, services, auth and db entry only.
+  // 5. The live service uses the repositories and the files `isLiveServerTarget` names only.
   "5": ({ from, to }) => {
     if (!from.startsWith("src/live/")) return false;
     if (/^src\/(app|components|store)\//.test(to)) return true;
@@ -339,7 +340,8 @@ const RULES: Record<string, (edge: Edge) => boolean> = {
     (isAboveDataLayer(to) ||
       (from.startsWith("src/lib/server/db/") && to.startsWith("src/lib/server/repos/"))),
   // 12. Only services, auth, limits, the data layer and the live store call repositories, so a
-  //     route reaches the queries through a service. A type-only import (a row shape) is no call.
+  //     route reaches the queries through a service. A type-only import (a row shape) is no
+  //     call; route handlers may not take even that (rule 4), only services' and contracts' types.
   "12": ({ from, to, typeOnly }) =>
     to.startsWith("src/lib/server/repos/") &&
     !typeOnly &&
@@ -709,7 +711,8 @@ function sqlWriting(file: SourceFile): { template: boolean; splicing: string[] }
       ) {
         splicing.add(`sql.${callee.name.text}`);
       }
-      // `eb.fn(...)`, `({ fn }) => fn(...)` in the data layer, and `.agg` on either; `vi.fn` is a mock.
+      // `eb.fn(...)`, `({ fn }) => fn(...)` in the data layer, and `.agg` on either.
+      // `vi.fn` is a mock.
       const isFn = (node: ts.Expression): boolean =>
         (ts.isPropertyAccessExpression(node) &&
           node.name.text === "fn" &&
@@ -765,7 +768,7 @@ function sqlWriting(file: SourceFile): { template: boolean; splicing: string[] }
   return { template, splicing: [...splicing] };
 }
 
-/** SQL written where it may not be: templates outside the data layer, splicing outside the migrations. */
+/** SQL out of place: a template outside the data layer, splicing outside the migrations. */
 function sqlOutOfPlace(graph: Map<string, SourceFile>): string[] {
   const out: string[] = [];
   for (const file of graph.values()) {
@@ -1092,7 +1095,11 @@ describe("the layers", () => {
         "export const total = () =>",
         "  getDb()",
         '    .selectFrom("t")',
-        '    .select(({ fn }) => [fn("lower", ["a"]).as("x"), fn.agg("sum", ["b"]).as("y"), fn.count("c").as("z")]);',
+        "    .select(({ fn }) => [",
+        '      fn("lower", ["a"]).as("x"),',
+        '      fn.agg("sum", ["b"]).as("y"),',
+        '      fn.count("c").as("z"),',
+        "    ]);",
       ].join("\n"),
       "src/lib/server/db/compiled-alias.ts": [
         'import { CompiledQuery as CQ } from "kysely";',

@@ -244,7 +244,9 @@ Import rules, held by `src/architecture.test.ts` (AGENTS.md "Layers" has rules 1
 - 11. The data layer (`db/`, `repos/`) never imports services, `auth/`, `limits/`, `http/` or `live-notify.ts`,
   and `db/` never imports `repos/`.
 - 12. Only services, `auth/`, `limits/`, the data layer and `live/store.ts` import a repository at run time
-  (a type-only import of a row shape is fine), so a route reaches queries through a service.
+  (a type-only import of a row shape is fine outside `src/app`), so a route reaches queries through a
+  service. Under `src/app` even a type-only import of a repository is refused (rule 4 and the app query
+  check): routes take row types from services or contracts.
 - 13. `src/` never imports `tools/`.
 
 Checks with no exceptions at all:
