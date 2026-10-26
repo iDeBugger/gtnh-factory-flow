@@ -151,4 +151,30 @@ describe("the live store under the live role", () => {
     await store.release(OWNER, "d1", "tok-new");
     expect(await row("d1")).toMatchObject({ live_lease_until: null, live_lease_token: null });
   });
+
+  it("clears a deleted design's lease on release, and writes nothing else", async () => {
+    await asOwner(() =>
+      pglite.query(
+        "insert into library_designs (user_id, id, name, plan, seq) values ($1, 'doomed', 'Doomed', '{}', 0)",
+        [OWNER],
+      ),
+    );
+    await store.lease(OWNER, "doomed", "tok-d", until());
+    await asOwner(() =>
+      pglite.query(
+        "update library_designs set deleted_at = now(), plan = '{}' where user_id = $1 and id = 'doomed'",
+        [OWNER],
+      ),
+    );
+    const before = await row("doomed");
+    expect(before!.live_lease_token).toBe("tok-d");
+    // A release writes no plan, and a lease left behind would refuse the
+    // plan body of a newer save reviving the design until it ran out.
+    await store.release(OWNER, "doomed", "tok-d");
+    expect(await row("doomed")).toEqual({
+      ...before,
+      live_lease_until: null,
+      live_lease_token: null,
+    });
+  });
 });
