@@ -1,4 +1,4 @@
-import { createServer } from "node:http";
+import { createServer, request } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { CONTROL_HEADER, CONTROL_HEADER_VALUE, controlHandler } from "./control.mjs";
 
@@ -62,5 +62,34 @@ describe("the local database's control listener", () => {
     expect(preflight.headers.get("access-control-allow-origin")).toBeNull();
     expect(preflight.headers.get("access-control-allow-headers")).toBeNull();
     expect(shutdowns).toBe(0);
+  });
+
+  it("refuses a request that names another host, as a rebound DNS name would", async () => {
+    const base = await listen();
+    const { port } = server.address();
+    const send = (host, method, path) =>
+      new Promise((resolve, reject) => {
+        const req = request(
+          {
+            host: "127.0.0.1",
+            port,
+            method,
+            path,
+            headers: { host, [CONTROL_HEADER]: CONTROL_HEADER_VALUE },
+          },
+          (res) => {
+            res.resume();
+            resolve(res.statusCode);
+          },
+        );
+        req.on("error", reject);
+        req.end();
+      });
+    expect(await send(`rebound.example:${port}`, "POST", "/__local-db/shutdown")).toBe(403);
+    expect(await send(`rebound.example:${port}`, "GET", "/__local-db/ready")).toBe(403);
+    expect(await send(`127.0.0.1:${port + 1}`, "POST", "/__local-db/shutdown")).toBe(403);
+    expect(shutdowns).toBe(0);
+    expect(await send(`localhost:${port}`, "GET", "/__local-db/ready")).toBe(200);
+    expect(base).toContain(`127.0.0.1:${port}`);
   });
 });

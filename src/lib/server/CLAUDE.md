@@ -491,8 +491,8 @@ Rules:
   databases, so switching between them shows different accounts and designs. A local database with tables but no
   migration ledger is refused, and serve.ts names what to remove to start it fresh. serve.ts's control listener on
   127.0.0.1:54329 answers `/__local-db/ready` and `/__local-db/shutdown` only, and the shutdown only with dev-local's
-  `x-local-db` header, which a web page cannot send without a preflight the listener never answers
-  (`tools/local-db/control.mjs`). Files are not in the database: `npm run dev:local` keeps them in
+  `x-local-db` header, which a web page cannot send without a preflight the listener never answers; a request
+  whose Host is not 127.0.0.1 or localhost at its port (a rebound DNS name) is refused (`tools/local-db/control.mjs`). Files are not in the database: `npm run dev:local` keeps them in
   `scratch/local-db/files` (the file store below).
 
 ## Cloud plans (services/library.ts, repos/designs.ts, app/api/library, app/api/accounts)
