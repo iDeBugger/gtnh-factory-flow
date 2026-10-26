@@ -1,6 +1,6 @@
 import {
   createResourceSearchEngine,
-  RESOURCE_SEARCH_FILE_SCHEMA,
+  READABLE_RESOURCE_SEARCH_FILE_SCHEMAS,
   type ResourceSearchFile,
 } from "./resource-search-engine";
 import type { ResourceSearchRequest } from "./resource-search";
@@ -120,7 +120,7 @@ self.onmessage = async (event: MessageEvent<ResourceSearchWorkerMessage>) => {
       const file = (await response.json()) as ResourceSearchFile;
       // A file of another format (a tab older or newer than the server's
       // build) would answer wrong; the page asks the API instead.
-      if (file?.schemaVersion !== RESOURCE_SEARCH_FILE_SCHEMA) {
+      if (!READABLE_RESOURCE_SEARCH_FILE_SCHEMAS.has(file?.schemaVersion)) {
         throw new Error(`Item search file has format ${String(file?.schemaVersion)}.`);
       }
       const started = performance.now();

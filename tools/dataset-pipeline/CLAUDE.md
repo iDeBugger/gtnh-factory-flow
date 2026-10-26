@@ -168,6 +168,13 @@ published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such 
   aspectrecipeindex (2.9) or the Thaumcraft NEI plugin (2.8.1) by the plugin's `getAspects` or Thaumcraft's
   `Aspects` NBT.
 - A failure is logged and leaves `status: "failed"`; the rest of the export is unchanged.
+- The pipeline (`scripts/nei-item-order.mjs`): the normalizer writes `neiItemOrder` (each key once, at its first
+  place, so a resource NEI lists as several NBT stacks takes the smallest index); `build-resource-index.mjs` writes
+  `resourceOrder`, one place per `resourceIndex` record or null where NEI does not list it, and
+  `build-recipe-index.mjs` copies it beside `resourceIndex` in `resource-index.json.gz`. A separate array, never a
+  field per record: a field changes every byte of every `/resources` answer. An export without the list writes
+  neither, and the files come out byte for byte as before. The app places nulls after every placed record and sorts
+  a dataset with no order by its approximation (`src/lib/search/nei-order.ts`). Exam: `nei-item-order.test.mjs`.
 
 ## Comparing two exports (scripts/oracle-diff.mjs)
 

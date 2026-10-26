@@ -4,6 +4,7 @@ import readline from "node:readline";
 import { gunzipSync } from "node:zlib";
 import { gzipDeterministic } from "./deterministic-gzip.mjs";
 import { writeDatasetJson } from "./dataset-json-writer.mjs";
+import { resourceOrderFor } from "./nei-item-order.mjs";
 
 const datasetPath = process.argv[2];
 
@@ -13,9 +14,21 @@ if (!datasetPath) {
 
 const dataset = await readDataset(datasetPath);
 dataset.resourceIndex = buildResourceIndex(dataset);
+// NEI's order of the records, beside them (nei-item-order.mjs); a rerun recomputes it.
+delete dataset.resourceOrder;
+const resourceOrder = resourceOrderFor(dataset.resourceIndex, dataset.neiItemOrder);
+if (resourceOrder) {
+  dataset.resourceOrder = resourceOrder;
+}
 await writeDataset(datasetPath, dataset);
 
-console.log(`Wrote resourceIndex with ${dataset.resourceIndex.length} resources.`);
+console.log(
+  `Wrote resourceIndex with ${dataset.resourceIndex.length} resources${
+    resourceOrder
+      ? `, ${resourceOrder.filter((place) => place !== null).length} of them in NEI's order`
+      : ", no NEI order in this export"
+  }.`,
+);
 
 async function readDataset(filePath) {
   if (!filePath.endsWith(".gz")) {
@@ -35,6 +48,7 @@ async function readLineDelimitedDataset(filePath) {
     "recipeMaps",
     "recipeMapIcons",
     "machineHandlerIcons",
+    "neiItemOrder",
   ]);
   let currentArrayKey;
   let skippingArray = false;

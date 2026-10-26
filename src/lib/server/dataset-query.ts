@@ -30,6 +30,7 @@ import {
 import { HIDDEN_DATASET_VERSION_IDS } from "@/lib/datasets/hidden-versions";
 import { MIN_INDEXABLE_LENGTH, type SearchTerm } from "@/lib/search/text-search";
 import { BoundedLru } from "./bounded-lru";
+import { usableResourceOrder } from "@/lib/search/nei-order";
 import { DATASET_ANSWER_VERSION } from "@/lib/datasets/answer-version";
 import {
   RESOURCE_SEARCH_FILE_SCHEMA,
@@ -87,6 +88,8 @@ interface LoadedRecipeIndex {
   version: DatasetVersion;
   resources: DatasetResource[];
   resourceIndex: DatasetResourceIndexEntry[];
+  /** NEI's place of each `resourceIndex` record, or null; absent in a dataset exported without it. */
+  resourceOrder?: unknown;
   /** Cached made-by/used-by recipe counts per `kind:id`, from the lookup index. */
   resourceDirectionCounts?: Map<string, { madeBy: number; usedBy: number }>;
   recipeMaps: string[];
@@ -678,7 +681,11 @@ export async function queryDatasetResources(
  * search never asks about any other).
  */
 export async function getDatasetResourceSearchFile(versionId: string): Promise<ResourceSearchFile> {
-  const catalog = await loadCatalog(versionId);
+  return resourceSearchFileOf(await loadCatalog(versionId));
+}
+
+/** `getDatasetResourceSearchFile` on a loaded catalog. */
+export async function resourceSearchFileOf(catalog: LoadedRecipeIndex): Promise<ResourceSearchFile> {
   const listed = new Set(
     catalog.resourceIndex.map((resource) => `${resource.kind}:${resource.id}`),
   );
@@ -692,9 +699,12 @@ export async function getDatasetResourceSearchFile(versionId: string): Promise<R
   }
   const sourceKeys = async (source: ResourceSourceFilter) =>
     [...(await getPassiveSourceResourceKeys(catalog, source))].filter((key) => listed.has(key));
+  // The order the route sorts by, so the worker sorts the same; one that does not fit the list is left out on both.
+  const resourceOrder = usableResourceOrder(catalog.resourceIndex, catalog.resourceOrder);
   return {
     schemaVersion: RESOURCE_SEARCH_FILE_SCHEMA,
     resourceIndex: catalog.resourceIndex,
+    ...(resourceOrder ? { resourceOrder } : {}),
     directionCounts,
     sources: { plants: await sourceKeys("plants"), bees: await sourceKeys("bees") },
   };
@@ -2997,7 +3007,7 @@ function ensureIndexes(catalog: LoadedRecipeIndex): QueryIndexes {
 }
 
 function ensureResourceIndexes(catalog: LoadedRecipeIndex): ResourceSearchIndexes {
-  catalog.resourceIndexes ??= buildResourceSearchIndexes(catalog.resourceIndex);
+  catalog.resourceIndexes ??= buildResourceSearchIndexes(catalog.resourceIndex, catalog.resourceOrder);
   return catalog.resourceIndexes;
 }
 

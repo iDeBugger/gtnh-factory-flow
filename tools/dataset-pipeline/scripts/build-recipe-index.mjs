@@ -74,6 +74,8 @@ const resourceCatalog = {
   sourceInfo: dataset.sourceInfo,
   resources: dataset.resources ?? [],
   resourceIndex: dataset.resourceIndex ?? [],
+  // NEI's place of each resourceIndex record (nei-item-order.mjs), only when the export had it.
+  ...(Array.isArray(dataset.resourceOrder) ? { resourceOrder: dataset.resourceOrder } : {}),
   recipeMaps: dataset.recipeMaps ?? [],
   recipeMapIcons: dataset.recipeMapIcons ?? [],
   machineHandlerIcons: dataset.machineHandlerIcons ?? [],
@@ -344,6 +346,7 @@ async function readLineDelimitedDataset(filePath) {
     "recipeMapIcons",
     "machineHandlerIcons",
     "resourceIndex",
+    "resourceOrder",
   ]);
   let currentArrayKey;
   let skippingArray = false;

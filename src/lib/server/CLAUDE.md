@@ -148,7 +148,8 @@
   catalog (`queryCatalogResources`, with its blank-list cache) and the browser runs it in a Web Worker
   (`resource-search.worker.ts` over `resource-search-engine.ts`) over the version's `items` client file
   (`getDatasetResourceSearchFile`: the catalog's `resourceIndex` exactly as the route returns its entries, the
-  made/used counts and the crop and bee keys of listed resources, `schemaVersion` 1, which a worker checks; 23 MB of
+  made/used counts, the crop and bee keys of listed resources and NEI's `resourceOrder` when the dataset has a usable
+  one, `schemaVersion` 2; a worker reads 1 and 2 (1 is 2 without an order) and refuses any other; 23 MB of
   JSON, about 2 MB brotli on 2.9). The worker answers with the route's JSON, so the page cannot tell which side
   answered. `browser-loader.ts` starts it on the first typed item query for a version, never on opening a plan or
   for the untyped list a pane shows on opening (one kept server answer), for one version at a time (another

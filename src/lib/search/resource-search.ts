@@ -17,6 +17,7 @@ import {
   type SearchEntryFields,
   type SearchQuery,
 } from "./text-search";
+import { neiOrderRanks, usableResourceOrder, type ResourceOrder } from "./nei-order";
 
 /**
  * The item (resource) search, over a dataset's resource list: one copy of the
@@ -98,6 +99,10 @@ export interface ResourceSearchIndexes {
   searchIndex: TextSearchIndex;
   /** The words items are actually called: what a typo gets corrected against. */
   vocabulary: SearchVocabulary;
+  /** NEI's place of each record (the dataset's `resourceOrder`), when the dataset has a usable one. */
+  resourceOrder?: ResourceOrder;
+  /** Each record's rank in NEI's order (`neiOrderRanks`), made on the first sort that needs it. */
+  neiRanks?: Int32Array;
 }
 
 export interface ResourceSearch {
@@ -117,6 +122,7 @@ export function getResourceModId(resource: { id: string; kind: string }): string
 
 export function buildResourceSearchIndexes(
   resourceIndex: readonly DatasetResourceIndexEntry[],
+  resourceOrder?: unknown,
 ): ResourceSearchIndexes {
   const fields: SearchEntryFields[] = [];
   const tokensByEntry: string[][] = [];
@@ -158,7 +164,17 @@ export function buildResourceSearchIndexes(
         .filter((resource) => resource && !isOreDictionaryResource(resource))
         .map((resource) => resource.displayName ?? ""),
     ),
+    resourceOrder: usableResourceOrder(resourceIndex, resourceOrder),
   };
+}
+
+/** Each record's rank in NEI's order, kept on the indexes after the first ask. */
+export function resourceNeiRanks(
+  resourceIndex: readonly DatasetResourceIndexEntry[],
+  indexes: ResourceSearchIndexes,
+): Int32Array {
+  indexes.neiRanks ??= neiOrderRanks(resourceIndex, indexes.resourceOrder);
+  return indexes.neiRanks;
 }
 
 function resourceSearchFields(
