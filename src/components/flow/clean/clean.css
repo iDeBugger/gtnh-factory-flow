@@ -179,16 +179,17 @@
 /*
  * The card reached from a machine list (card-flash.ts): a light outline round its React Flow wrapper, held a moment,
  * then faded out over the second the attribute stays. Two keyframe names so a second click starts it again. Only the
- * colour animates. Without motion it simply shows until the attribute goes.
+ * colour animates. Without motion it simply shows until the attribute goes. The board class and the doubled node class
+ * outrank React Flow's `.react-flow__node.selectable:focus { outline: none }`: a focused card is still outlined.
  */
-.react-flow__node[data-card-flash] {
+.factory-flow-board .react-flow__node.react-flow__node[data-card-flash] {
   outline: 3px solid transparent;
   outline-offset: 4px;
 }
-.react-flow__node[data-card-flash="a"] {
+.factory-flow-board .react-flow__node.react-flow__node[data-card-flash="a"] {
   animation: cc-card-flash-a 1000ms ease-in forwards;
 }
-.react-flow__node[data-card-flash="b"] {
+.factory-flow-board .react-flow__node.react-flow__node[data-card-flash="b"] {
   animation: cc-card-flash-b 1000ms ease-in forwards;
 }
 @keyframes cc-card-flash-a {
@@ -209,12 +210,12 @@
     outline-color: transparent;
   }
 }
-.factory-flow-board[data-detail-level="glance"] .react-flow__node[data-card-flash] {
+.factory-flow-board[data-detail-level="glance"] .react-flow__node.react-flow__node[data-card-flash] {
   outline-width: min(max(3px, calc(6px / var(--board-zoom, 1))), 24px);
   outline-offset: min(max(4px, calc(8px / var(--board-zoom, 1))), 32px);
 }
 @media (prefers-reduced-motion: reduce) {
-  .react-flow__node[data-card-flash] {
+  .factory-flow-board .react-flow__node.react-flow__node[data-card-flash] {
     animation: none !important;
     outline-color: var(--cc-flash);
   }
