@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CARD_FLASH_ATTRIBUTE, CARD_FLASH_MS, flashCard } from "./card-flash";
+import { CARD_FLASH_ATTRIBUTE, CARD_FLASH_FALLBACK_MS, CARD_FLASH_MS, flashCard } from "./card-flash";
 
 function board(...ids: string[]): HTMLElement {
   const root = document.createElement("div");
@@ -66,5 +66,60 @@ describe("flashCard", () => {
     expect(flash(root, 'odd\\"id')).not.toBeNull();
     expect(flashCard("missing")).toBe(false);
     expect(flash(root, 'odd\\"id')).toBeNull();
+  });
+
+  describe("where the outline fades", () => {
+    const realMatchMedia = window.matchMedia;
+    beforeEach(() => {
+      window.matchMedia = ((query: string) => ({ matches: false, media: query })) as unknown as typeof window.matchMedia;
+    });
+    afterEach(() => {
+      window.matchMedia = realMatchMedia;
+    });
+    const ended = (target: Element, animationName: string) => {
+      const event = new Event("animationend", { bubbles: true });
+      Object.defineProperty(event, "animationName", { value: animationName });
+      target.dispatchEvent(event);
+    };
+
+    it("ends when its fade ends, not a second after the click: a far card's fade starts only when it is shown", () => {
+      const root = board("a");
+      const wrapper = root.querySelector('[data-id="a"]')!;
+      flashCard("a");
+      const name = `cc-card-flash-${flash(root, "a")}`;
+      vi.advanceTimersByTime(CARD_FLASH_MS + 400);
+      expect(flash(root, "a")).not.toBeNull();
+      // The card's own animations bubble through the wrapper; another animation on it is not the fade.
+      const inner = document.createElement("div");
+      wrapper.appendChild(inner);
+      ended(inner, name);
+      ended(wrapper, "cc-glance-in");
+      expect(flash(root, "a")).not.toBeNull();
+      ended(wrapper, name);
+      expect(flash(root, "a")).toBeNull();
+    });
+
+    it("ends anyway when the fade never runs (a card never shown)", () => {
+      const root = board("a");
+      flashCard("a");
+      vi.advanceTimersByTime(CARD_FLASH_FALLBACK_MS - 1);
+      expect(flash(root, "a")).not.toBeNull();
+      vi.advanceTimersByTime(1);
+      expect(flash(root, "a")).toBeNull();
+    });
+
+    it("a restart is not ended by the fade it replaced", () => {
+      const root = board("a");
+      const wrapper = root.querySelector('[data-id="a"]')!;
+      flashCard("a");
+      const first = `cc-card-flash-${flash(root, "a")}`;
+      flashCard("a");
+      const wrapperListeners = flash(root, "a");
+      ended(wrapper, first);
+      // The first listener went with the first flash; the second fade is still to end.
+      expect(flash(root, "a")).toBe(wrapperListeners);
+      ended(wrapper, `cc-card-flash-${wrapperListeners}`);
+      expect(flash(root, "a")).toBeNull();
+    });
   });
 });
