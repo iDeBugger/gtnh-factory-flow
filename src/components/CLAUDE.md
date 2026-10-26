@@ -96,7 +96,8 @@ The board has its own notes in `flow/CLAUDE.md`, the Pool worksheet in `pool/CLA
   of art alone, a Minecraft tooltip at once (`nei/McTip`), R/U over a slot, filters and sort in one menu key. The
   column opens As in NEI (`defaultSort`), pickers on Best match; Most popular is offered only while the popularity
   map has entries (`resource-popularity-offer.ts`, `?count=1`), and a pick no longer offered gives way to the
-  default. From the first key typed until its answer lands the old slots stay, dimmed and `aria-busy` (`listStale`).
+  default. From the first key typed until its answer lands the old slots stay, `aria-busy` at once and dimmed only after
+  180 ms, so a quick or cached answer never blinks the grid (`listStale`, `nei/nei.css`).
   Exam: `ResourceIndexPane.test.tsx`. Its
   search field (`searchAt`) is a body portal at the bottom middle of the screen; on a phone, under Welcome or the
   library, and while the recipe search is open it sits at the column's foot instead. A query answers at most

@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatasetManifest, DatasetVersion, RecipeDataset } from "@/lib/datasets/types";
@@ -109,6 +111,18 @@ function Pane({ defaultSort }: { defaultSort?: "nei" }) {
     />
   );
 }
+
+describe("the stale list's dim", () => {
+  it("waits before it shows, so a quick or cached answer never blinks the grid, and goes at once", () => {
+    const css = readFileSync(path.join(process.cwd(), "src/components/nei/nei.css"), "utf8");
+    const stale = /\.nei-grid\[data-stale\]\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(stale).toMatch(/opacity:\s*0\.45/);
+    const delay = /transition:\s*opacity\s+\d+ms\s+[\w-]+\s+(\d+)ms/.exec(stale)?.[1];
+    expect(Number(delay)).toBeGreaterThanOrEqual(150);
+    const grid = /\.nei-grid\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(grid).not.toMatch(/transition/);
+  });
+});
 
 describe("ResourceIndexPane", () => {
   afterEach(() => {
