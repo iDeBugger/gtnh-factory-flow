@@ -260,6 +260,10 @@ export async function saveDesign(
   }
 
   const isOwner = ownerId === viewer.userId;
+  // The member check stays before the transaction: a stranger is refused
+  // without ever locking someone else's design row, and inside it would
+  // close no window, since a member's removal takes no design lock. A
+  // member removed meanwhile lands one last save, ordered before the removal.
   if (!isOwner && !(await designRole(viewer.userId, ownerId, designId))) {
     return fail("not-found", "Design not found.");
   }
