@@ -22,9 +22,6 @@ export interface ConversionTarget {
   version: DatasetVersion;
 }
 
-/** Plan names are capped at this many characters where a player types one. */
-const PLAN_NAME_LIMIT = 80;
-
 /**
  * Whether the target cannot run this recipe at all: a power source its version lacks (`ABSENT_POWER_SOURCES`), or a
  * Crop Farm crop on a dataset with no CropsNH crops (the dataset decides, as the picker does). Such cards are not
@@ -146,13 +143,6 @@ async function findMarkedRecipes(
     if (result.status === "fulfilled") found.set(asked[index]!, result.value);
   });
   return found;
-}
-
-/** `"<name> (GTNH <v>)"` within the name limit; a suffix from an earlier conversion is replaced, not stacked. */
-function convertedPlanName(name: string, version: GameVersion): string {
-  const suffix = ` (${gameVersionLabel(version)})`;
-  const base = name.replace(/ \(GTNH [^()]*\)$/, "").trimEnd();
-  return `${base.slice(0, Math.max(0, PLAN_NAME_LIMIT - suffix.length)).trimEnd()}${suffix}`;
 }
 
 /** The handlers a recipe lists: the exported list as written (every tier's own id), else the synthesized ones. */
@@ -362,7 +352,8 @@ export async function convertProjectToVersion(
     {
       ...source,
       gameVersion: toGameVersion,
-      name: convertedPlanName(source.name, toGameVersion),
+      // The name as it is: the tab's chip already says the version, so none is added (and an old suffix stays).
+      name: source.name,
       recipes,
       nodes: placed,
     },

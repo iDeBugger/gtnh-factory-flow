@@ -154,7 +154,7 @@ describe("convertProjectToVersion", () => {
     const before = structuredClone(plan281);
     const { project, unconverted } = await convertProjectToVersion(plan281, target29);
     expect(project.gameVersion).toBe("2.9");
-    expect(project.name).toBe("Silicon line (GTNH 2.9)");
+    expect(project.name).toBe("Silicon line");
     expect(unconverted).toEqual([
       {
         nodeId: "n2",
@@ -431,13 +431,11 @@ describe("convertProjectToVersion", () => {
     );
   });
 
-  test("the name is clipped to 80 characters and an earlier conversion's suffix is replaced", async () => {
+  test("the name is kept as it is: no version added, an earlier conversion's suffix left alone", async () => {
     const long = { ...plan281, name: "x".repeat(100) };
-    const { project } = await convertProjectToVersion(long, target29);
-    expect(project.name).toHaveLength(80);
-    expect(project.name.endsWith(" (GTNH 2.9)")).toBe(true);
-    const back = await convertProjectToVersion({ ...plan281, name: "Silicon line (GTNH 2.9)" }, target29);
-    expect(back.project.name).toBe("Silicon line (GTNH 2.9)");
+    expect((await convertProjectToVersion(long, target29)).project.name).toBe("x".repeat(100));
+    const back = await convertProjectToVersion({ ...plan281, name: "Silicon line (GTNH 2.8.1)" }, target29);
+    expect(back.project.name).toBe("Silicon line (GTNH 2.8.1)");
   });
 });
 

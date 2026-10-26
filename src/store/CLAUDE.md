@@ -73,7 +73,8 @@ Every save goes through `persistCanvas` in design-store.ts:
 - Convert (`src/lib/datasets/convert-action.ts`: the notice's key, and a tab menu's "Convert to" row, outside the
   community rows, whose submenu lists every served version, the plan's own shown as "this plan" and not pickable;
   `convertRows` in `ModTabs.tsx`, no row while there is nothing else to convert to) loads the target's dataset (`ensureDatasetFor`),
-  converts a clone (`convertProjectToVersion`) and opens it with `importProjectAsDesign`. The source tab is not
+  converts a clone (`convertProjectToVersion`) and opens it with `importProjectAsDesign` under the source plan's name as
+  it is (the tab's chip says the version; no suffix is added, and one from an earlier conversion stays). The source tab is not
   opened, switched or written: the open tab converts what is on the board, another tab its stored record. One
   conversion runs at a time: while it runs the source tab shows the working mark and the key and row read
   "Converting to GTNH <v>...". A failure flashes "Couldn't convert the plan. Try again.", opens nothing and leaves

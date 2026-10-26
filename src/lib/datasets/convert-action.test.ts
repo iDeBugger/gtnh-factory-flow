@@ -142,7 +142,7 @@ describe("convertOpenPlan", () => {
 
     const converted = useFactoryStore.getState().project;
     expect(converted.gameVersion).toBe("2.9");
-    expect(converted.name).toBe("Silicon (GTNH 2.9)");
+    expect(converted.name).toBe("Silicon");
     expect(converted.recipes.map((entry) => entry.source?.datasetVersionId)).toEqual([version29.id]);
     expect(converted.nodes.map((node) => Boolean(node.unconverted))).toEqual([false, true]);
   });
