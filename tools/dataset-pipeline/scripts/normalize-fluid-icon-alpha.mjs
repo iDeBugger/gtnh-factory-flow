@@ -25,7 +25,7 @@ import { gzipDeterministic } from "./deterministic-gzip.mjs";
  * - In-place (default), for a dataset BUILD. Nothing has shipped yet, and a
  *   new dataset version gets fresh texture URLs anyway, so the files can be
  *   rewritten under their own names. Use only for an unpublished version.
- *   generate-dataset.mjs uses --rename even during builds, because a version
+ *   rebuild-dataset.sh uses --rename even during builds, because a version
  *   may be rebuilt and its URLs may already be cached.
  *
  * - `--rename`, for a dataset that may ALREADY BE PUBLISHED. Textures are served

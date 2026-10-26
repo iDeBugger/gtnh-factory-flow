@@ -18,7 +18,7 @@ function fluid(id, displayName) {
 }
 
 /**
- * The export through the pipeline's own scripts, as generate-dataset runs them: normalize,
+ * The export through the pipeline's own scripts, as rebuild-dataset.sh runs them: normalize,
  * build-resource-index, build-recipe-index. Answers recipes.json and resource-index.json.gz.
  */
 function runPipeline(rawExport, { dir: keptDir, env: extraEnv = {} } = {}) {
@@ -157,7 +157,7 @@ describe("a rebuild whose export has no NEI list (the client phase skipped)", ()
     }
   });
 
-  it("carries it from the dataset generate-dataset reused icons from", () => {
+  it("carries it from the installed copy (GTNH_PREVIOUS_DATASET_DIR)", () => {
     const previous = tempDir();
     try {
       runPipeline(ordered, { dir: previous });

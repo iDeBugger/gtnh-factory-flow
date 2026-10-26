@@ -1,16 +1,13 @@
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { crc32 } from "node:zlib";
 import { PNG } from "pngjs";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeDatasetJson } from "./dataset-json-writer.mjs";
 import { hintFileName, parseIconHint, resolveIconHints } from "./resolve-icon-hints.mjs";
 
-const applyTextureIconsPath = fileURLToPath(new URL("./apply-texture-icons.mjs", import.meta.url));
 const dirs = [];
 
 afterEach(() => {
@@ -216,33 +213,5 @@ describe("resolveIconHints", () => {
       resolveIconHints({ modsRoot: instance, datasetPath, outDir, log: () => {} }),
     ).rejects.toThrow(/No mod jars under/);
     expect(fs.readFileSync(datasetPath, "utf8")).toBe(before);
-  });
-
-  it("keeps the first run's report when a re-run finds no hints", async () => {
-    const { instance, outDir, datasetPath } = await buildFixture();
-    await resolveIconHints({ modsRoot: instance, datasetPath, outDir, log: () => {} });
-    execFileSync("node", [applyTextureIconsPath, instance, datasetPath, outDir], {
-      env: { ...process.env, GTNH_TEXTURE_ICON_MAX_DATASET_BYTES: "1" },
-      stdio: "pipe",
-    });
-    const reportPath = path.join(outDir, "textures", "icon-report.json");
-    const before = fs.readFileSync(reportPath, "utf8");
-    const again = await resolveIconHints({ modsRoot: instance, datasetPath, outDir, log: () => {} });
-    expect(fs.readFileSync(reportPath, "utf8")).toBe(before);
-    expect(again.textureHints.resolved).toHaveLength(2);
-    expect(again.textureMatching.skipped).toBe(true);
-  });
-
-  it("keeps its report when apply-texture-icons skips a dataset over its size limit", async () => {
-    const { instance, outDir, datasetPath } = await buildFixture();
-    await resolveIconHints({ modsRoot: instance, datasetPath, outDir, log: () => {} });
-    execFileSync("node", [applyTextureIconsPath, instance, datasetPath, outDir], {
-      env: { ...process.env, GTNH_TEXTURE_ICON_MAX_DATASET_BYTES: "1" },
-      stdio: "pipe",
-    });
-    const report = JSON.parse(fs.readFileSync(path.join(outDir, "textures", "icon-report.json"), "utf8"));
-    expect(report.skipped).toBeUndefined();
-    expect(report.textureHints.slotsResolved).toBe(3);
-    expect(report.textureMatching.skipped).toBe(true);
   });
 });

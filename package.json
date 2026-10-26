@@ -16,7 +16,6 @@
     "test:watch": "vitest",
     "test:icons:browsers": "node tools/browser-tests/icon-sizing.mjs",
     "audit:gate": "node tools/audit-gate.mjs",
-    "datasets:detect": "node tools/dataset-pipeline/scripts/detect-gtnh-versions.mjs",
     "datasets:manifest": "node tools/dataset-pipeline/scripts/rebuild-manifest.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
