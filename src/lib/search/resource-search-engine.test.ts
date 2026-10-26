@@ -55,10 +55,11 @@ const popularity = new Map([
 ]);
 
 /**
- * NEI's places for the records above (the pipeline's resourceOrder): the steel plate before the
- * dust before the ingot, water first, and some records NEI does not list.
+ * NEI's places for the records above (the pipeline's resourceOrder), shaped like NEI's own list:
+ * GT's meta items in their sub-item order (dust 2305, ingot 11305, plate 17305), water first as
+ * 2.9 lists fluids, and some records NEI does not list.
  */
-const resourceOrder = [12, 10, 11, 20, 21, 30, 3, 4, null, 2, 5, 0, null, null, 13];
+const resourceOrder = [11, 12, 10, 20, 21, 30, 3, 4, null, 2, 5, 0, null, null, 13];
 
 function serverCatalog(order?: Array<number | null>) {
   return {
@@ -184,9 +185,9 @@ describe("the NEI sorts", () => {
       "item:minecraft:log",
       "item:minecraft:wheat",
       "item:ic2:itemCellEmpty",
-      "item:gregtech:gt.metaitem.01@17305",
       "item:gregtech:gt.metaitem.01@2305",
       "item:gregtech:gt.metaitem.01@11305",
+      "item:gregtech:gt.metaitem.01@17305",
       "item:gregtech:gt.metaitem.01@32610",
       "item:gregtech:gt.metaitem.01@32611",
       "item:gregtech:gt.blockmachines@1000",
@@ -225,11 +226,11 @@ describe("the NEI sorts", () => {
       "item:gregtech:gt.metaitem.01@17305",
       "item:gregtech:gt.metaitem.01@2305",
     ]);
-    // As in NEI settles them where NEI lists them: plate, dust, ingot.
+    // As in NEI settles them where the order puts them: dust, ingot, plate.
     expect(nei.slice(0, 3)).toEqual([
-      "item:gregtech:gt.metaitem.01@17305",
       "item:gregtech:gt.metaitem.01@2305",
       "item:gregtech:gt.metaitem.01@11305",
+      "item:gregtech:gt.metaitem.01@17305",
     ]);
     // A weaker match stays below them.
     expect(nei.indexOf("fluid:molten.steel")).toBeGreaterThan(2);
@@ -238,9 +239,9 @@ describe("the NEI sorts", () => {
   it("filter only, in NEI's order, with no ranking", () => {
     const answer = engine(resourceOrder)({ query: "steel", offset: 0, limit: 120, sort: "nei-filter" });
     expect(ids(answer)).toEqual([
-      "item:gregtech:gt.metaitem.01@17305",
       "item:gregtech:gt.metaitem.01@2305",
       "item:gregtech:gt.metaitem.01@11305",
+      "item:gregtech:gt.metaitem.01@17305",
       "fluid:molten.steel",
     ]);
   });
