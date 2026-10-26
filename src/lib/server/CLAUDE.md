@@ -263,10 +263,10 @@ Checks with no exceptions at all:
   comes from a closed map and goes through the builder, never through these.
 
 Accounts, the event log, the library (designs with the live lease, members, folders) go to Postgres directly
-(`getDb` at `DATABASE_URL`, see Local database below); the live service touches nothing else, so it needs only
-`DATABASE_URL` and refuses to start without it, and `services/config.ts` answers "configured" only with both
-clients set. Every other repository, until its swap, goes to PostgREST at `POSTGREST_URL` through
-`@supabase/postgrest-js` (`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
+(`getDb` at `DATABASE_URL`, see Local database below); the live service's queries are all among these, and it
+refuses to start without `DATABASE_URL`; `services/config.ts` answers "configured" only with both clients set.
+Every other repository, until its swap, goes to PostgREST at `POSTGREST_URL` through `@supabase/postgrest-js`
+(`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
 which bypasses row security. No anon role exists, so a request without the token is 401. `SUPABASE_URL` and
 `SUPABASE_SERVICE_ROLE_KEY` are not read; the startup checks warn when either is set. Rules:
 - Every request goes through `fetchWithDbTimeout` (20 s). A timeout answers 504 rather than
