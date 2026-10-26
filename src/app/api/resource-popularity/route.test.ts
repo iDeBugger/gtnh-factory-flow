@@ -5,10 +5,10 @@ import {
   resetDatasetBudget,
   spendDatasetBudget,
 } from "@/lib/server/limits/dataset-rate";
-import { getResourcePopularity } from "@/lib/server/resource-popularity";
+import { getResourcePopularity } from "@/lib/server/services/resource-popularity";
 import { GET } from "./route";
 
-vi.mock("@/lib/server/resource-popularity", () => ({
+vi.mock("@/lib/server/services/resource-popularity", () => ({
   getResourcePopularity: vi.fn(() => new Map<string, number>()),
 }));
 

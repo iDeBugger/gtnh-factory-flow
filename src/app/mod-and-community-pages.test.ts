@@ -28,8 +28,8 @@ vi.mock("@/lib/server/db", async (importOriginal) => {
   return { ...actual, isCommunityConfigured: () => true, getCommunityDb: () => getCommunityDb() };
 });
 const getPublicPlanRow = vi.fn(async () => row);
-vi.mock("@/lib/server/plan-preview", async (importOriginal) => ({
-  quietMarkdown: (await importOriginal<typeof import("@/lib/server/plan-preview")>()).quietMarkdown,
+vi.mock("@/lib/server/services/plan-preview", async (importOriginal) => ({
+  quietMarkdown: (await importOriginal<typeof import("@/lib/server/services/plan-preview")>()).quietMarkdown,
   getPublicPlanRow: () => getPublicPlanRow(),
   describePlanRow: () => "Makes steel",
 }));

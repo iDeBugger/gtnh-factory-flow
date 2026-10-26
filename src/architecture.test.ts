@@ -36,6 +36,8 @@ const MAX_ALLOWED: Record<string, number> = {
   "9": 0,
   "10": 0,
   "11": 0,
+  "12": 0,
+  "13": 0,
   queriesInApp: 0,
 };
 
@@ -236,8 +238,7 @@ const CLIENT_MODULES = new Set(["src/lib/server/db/client.ts", "src/lib/server/d
  * auth, limits, the viewer type, the client address, the live notice, and
  * the query-free helpers the services share with routes and repositories
  * (row shapes and icons, library rows and stamps, the lease clock, blueprint
- * payloads, the plan list cache, the plan solver, plan previews, the file
- * store). Never the HTTP plumbing, the stand-in or the clients.
+ * payloads, the plan list cache, the plan solver, the file store). Never the HTTP plumbing, the stand-in or the clients.
  */
 const isServiceTarget = (file: string): boolean =>
   /^src\/lib\/server\/(services|repos|auth|limits)\//.test(file) ||
@@ -252,7 +253,6 @@ const isServiceTarget = (file: string): boolean =>
     "src/lib/server/blueprints.ts",
     "src/lib/server/plan-list-cache.ts",
     "src/lib/server/plan-engine.ts",
-    "src/lib/server/plan-preview.ts",
     "src/lib/server/file-store.ts",
   ].includes(file);
 
@@ -338,6 +338,15 @@ const RULES: Record<string, (edge: Edge) => boolean> = {
     isDatabaseLayer(from) &&
     (isAboveDataLayer(to) ||
       (from.startsWith("src/lib/server/db/") && to.startsWith("src/lib/server/repos/"))),
+  // 12. Only services, auth, limits, the data layer and the live store call repositories, so a
+  //     route reaches the queries through a service. A type-only import (a row shape) is no call.
+  "12": ({ from, to, typeOnly }) =>
+    to.startsWith("src/lib/server/repos/") &&
+    !typeOnly &&
+    !/^src\/lib\/server\/(services|auth|limits|db|repos)\//.test(from) &&
+    from !== "src/live/store.ts",
+  // 13. src/ never imports tools/: the scripts there are outside the layers above.
+  "13": ({ from, to }) => from.startsWith("src/") && to.startsWith("tools/"),
 };
 
 /** Services return results, never HTTP responses; no allowlist entry excuses one. */
@@ -898,7 +907,7 @@ describe("the layers", () => {
   });
 
   it("refuses a live file that loads a service or auth module it does not need", () => {
-    const live = "src/live/arch-fixture.ts";
+    const live = "src/live/store.ts";
     const bad = new Map([
       [
         live,
@@ -1099,6 +1108,28 @@ describe("the layers", () => {
     ]);
   });
 
+  it("refuses a repository call from outside the services, and an import of tools/", () => {
+    const helper = "src/lib/server/preview-arch-fixture.ts";
+    const route = "src/app/api/arch-fixture/route.ts";
+    const fixtures: Record<string, string> = {
+      [helper]: [
+        'import * as plans from "./repos/plans";',
+        'import type { DesignRow } from "./repos/designs";',
+        'import { hearConnectionErrors } from "../../../tools/local-db/serve";',
+      ].join("\n"),
+      [route]: 'import { publicPlanPage } from "@/lib/server/repos/popularity";',
+    };
+    const bad = new Map(
+      Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
+    );
+    expect(breaks(bad).map(key)).toEqual([
+      `12|${route}|src/lib/server/repos/popularity.ts`,
+      `12|${helper}|src/lib/server/repos/plans.ts`,
+      `13|${helper}|tools/local-db/serve.ts`,
+      `4|${route}|src/lib/server/repos/popularity.ts`,
+    ]);
+  });
+
   it("passes good files under every data-layer rule", () => {
     const fixtures: Record<string, string> = {
       [MIGRATIONS_FILE]: [
@@ -1125,7 +1156,7 @@ describe("the layers", () => {
         '    .select(sql<number>`count(*)`.as("n"));',
         "export const icon = (value: unknown) => json(value);",
       ].join("\n"),
-      "src/live/good-fixture.ts": [
+      "src/live/store.ts": [
         'import { configureDb } from "@/lib/server/db";',
         'import { designRole } from "@/lib/server/services/design-role";',
         'import * as designs from "@/lib/server/repos/designs";',

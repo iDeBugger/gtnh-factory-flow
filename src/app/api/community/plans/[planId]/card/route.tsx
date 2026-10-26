@@ -6,7 +6,7 @@ import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import { PNG } from "pngjs";
 import { GT_TIER_COLORS } from "@/components/flow/tier-colors";
-import { getPlanPreviewPng, getPublicPlanRow, sizePlanPreview } from "@/lib/server/plan-preview";
+import { getPlanPreviewPng, getPublicPlanRow, sizePlanPreview } from "@/lib/server/services/plan-preview";
 import { siteHost } from "@/lib/site-url";
 
 export const runtime = "nodejs";

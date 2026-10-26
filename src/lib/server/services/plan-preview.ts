@@ -1,8 +1,8 @@
 import type { PlanResourceStat } from "@/lib/community/types";
-import { isCommunityConfigured } from "./db";
-import type { PlanRow } from "./community-rows";
-import * as plans from "./repos/plans";
-import { getFileStore, isFileStoreConfigured, type FileBucket } from "./file-store";
+import { isDatabaseConfigured } from "./config";
+import type { PlanRow } from "../community-rows";
+import * as plans from "../repos/plans";
+import { getFileStore, isFileStoreConfigured, type FileBucket } from "../file-store";
 
 /**
  * What a shared link is allowed to tell a stranger's chat window.
@@ -87,7 +87,7 @@ export function sizePlanPreview(
 
 /** The plan's stored board photograph, or undefined when none was uploaded. */
 export async function getPlanPreviewPng(planId: string): Promise<Buffer | undefined> {
-  if (!isCommunityConfigured() || !isFileStoreConfigured()) {
+  if (!isDatabaseConfigured() || !isFileStoreConfigured()) {
     return undefined;
   }
   try {
@@ -97,7 +97,7 @@ export async function getPlanPreviewPng(planId: string): Promise<Buffer | undefi
   }
 }
 export async function getPublicPlanRow(planId: string): Promise<PlanRow | undefined> {
-  if (!planId || !isCommunityConfigured()) {
+  if (!planId || !isDatabaseConfigured()) {
     return undefined;
   }
 

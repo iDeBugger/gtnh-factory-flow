@@ -7,7 +7,7 @@ import {
   meteredDatasetWork,
   searchRequestCost,
 } from "@/lib/server/limits/dataset-rate";
-import { getResourcePopularity } from "@/lib/server/resource-popularity";
+import { getResourcePopularity } from "@/lib/server/services/resource-popularity";
 import { normalizeResourceSearchRequest } from "@/lib/search/resource-search";
 import { parseSearchQuery } from "@/lib/search/text-search";
 

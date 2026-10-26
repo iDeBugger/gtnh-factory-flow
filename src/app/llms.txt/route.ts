@@ -2,7 +2,7 @@ import { siteUrl } from "@/lib/site-url";
 import { publicPlansByScore } from "@/lib/server/services/community-plans";
 import { isDatabaseConfigured } from "@/lib/server/services/config";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { describePlanRow, quietMarkdown } from "@/lib/server/plan-preview";
+import { describePlanRow, quietMarkdown } from "@/lib/server/services/plan-preview";
 import { APP_VERSION } from "@/lib/version";
 
 /**

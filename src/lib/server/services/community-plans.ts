@@ -23,7 +23,7 @@ import type { Viewer } from "../http/viewer";
 import { checkRateLimit } from "../limits/rate-limit";
 import { ensurePlanEngine, solvePlanStats } from "../plan-engine";
 import { invalidatePlanListCache, readPlanListCache, writePlanListCache } from "../plan-list-cache";
-import { PLAN_PREVIEW_BUCKET, PLAN_PREVIEW_MAX_SIDE, readPngHeader } from "../plan-preview";
+import { PLAN_PREVIEW_BUCKET, PLAN_PREVIEW_MAX_SIDE, readPngHeader } from "./plan-preview";
 import * as plans from "../repos/plans";
 import { canSeePlan, isUuid, ownsPlan } from "./access";
 import { fail, ok, type ServiceResult } from "./result";

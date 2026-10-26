@@ -1,6 +1,6 @@
 import { getFilledCellFluidEquivalent } from "@/lib/model/resources";
-import { publicPlanPage } from "./repos/popularity";
-import { isDatabaseConfigured } from "./services/config";
+import { publicPlanPage } from "../repos/popularity";
+import { isDatabaseConfigured } from "./config";
 
 /**
  * What the community actually builds: a per-resource popularity score

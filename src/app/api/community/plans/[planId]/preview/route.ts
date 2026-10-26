@@ -3,7 +3,7 @@ import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
-import { getPlanPreviewPng } from "@/lib/server/plan-preview";
+import { getPlanPreviewPng } from "@/lib/server/services/plan-preview";
 import { readFormDataCapped } from "@/lib/server/http/request-body";
 import { isFileStoreConfigured } from "@/lib/server/file-store";
 import { isDatabaseConfigured } from "@/lib/server/services/config";
