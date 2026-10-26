@@ -2,6 +2,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
+import { setDbFaultForTests } from "@/lib/server/db/guard";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
 import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
 import { resetMemoryTokens } from "@/lib/server/limits/memory-rate";
@@ -562,7 +563,10 @@ describe("saves, creations and deletes arriving at once", () => {
     resetDbBreaker();
   });
 
-  it("two saves racing with newer stamps: one lands, the other is behind", async () => {
+  // The newer save (the owner's: it asks no membership first, so its
+  // transaction starts first) lands first, which is the order where "exactly
+  // one behind" is the right outcome; older first, both land and the newer wins.
+  it("two saves racing with newer stamps, the newer landing first: it lands, the older is behind", async () => {
     await makeUser("race_own");
     await makeUser("race_mem");
     const designId = "design-race-1";
@@ -661,6 +665,114 @@ describe("saves, creations and deletes arriving at once", () => {
     expect(rows).toEqual([{ deleted_at: null }]);
     const memberLibrary = await (await library.GET(request("GET", "/api/library", "tomb_mem"))).json();
     expect(memberLibrary.shared).toEqual([expect.objectContaining({ id: designId })]);
+  });
+});
+
+/**
+ * The statements each write sends, in order, as the direct client compiled
+ * them. On PGlite transactions never overlap, so the race cases above pass
+ * with or without row locks; these pin the locks that make them hold on
+ * Postgres, where requests run on connections of their own.
+ */
+describe("the locks each write takes", () => {
+  function recordSql(): string[] {
+    const sent: string[] = [];
+    setDbFaultForTests((text) => {
+      sent.push(text);
+      return undefined;
+    });
+    return sent;
+  }
+  const at = (sent: string[], pattern: RegExp, from = 0) => {
+    const index = sent.findIndex((text, i) => i >= from && pattern.test(text));
+    expect(index, `${pattern} in\n${sent.join("\n")}`).toBeGreaterThanOrEqual(0);
+    return index;
+  };
+  const DESIGN_READ = /^select .*"live_lease_until" from "library_designs" where \("library_designs"\."user_id" = \$\d+ and "library_designs"\."id" = \$\d+\)/;
+  const ACCOUNT_LOCK = /^select "id" from "community_users" where "id" = \$1 for update$/;
+
+  it("a save reads its design for update, the owner's and a member's alike", async () => {
+    await makeUser("lock_own");
+    await makeUser("lock_mem");
+    const designId = "design-lock-1";
+    await design.PUT(
+      request("PUT", `/api/library/designs/${designId}`, "lock_own", upsertBody("Lock", "2026-10-22T10:00:00.000Z")),
+      params({ designId }),
+    );
+    await member.PUT(
+      request("PUT", `/api/library/designs/${designId}/members/${users.lock_mem!.id}`, "lock_own"),
+      params({ designId, userId: users.lock_mem!.id }),
+    );
+    for (const [who, query, stamp] of [
+      ["lock_own", "", "2026-10-22T10:01:00.000Z"],
+      ["lock_mem", `?owner=${users.lock_own!.id}`, "2026-10-22T10:02:00.000Z"],
+    ] as const) {
+      const sent = recordSql();
+      const saved = await design.PUT(
+        request("PUT", `/api/library/designs/${designId}${query}`, who, upsertBody("Lock", stamp)),
+        params({ designId }),
+      );
+      expect(saved.status).toBe(200);
+      const read = at(sent, DESIGN_READ);
+      expect(sent[read], who).toMatch(/ for update$/);
+      at(sent, /^update "library_designs"/, read);
+      clearDbFault();
+    }
+  });
+
+  it("a new design locks its account, reads again, then counts and inserts", async () => {
+    await makeUser("lock_new");
+    const sent = recordSql();
+    const saved = await design.PUT(
+      request("PUT", "/api/library/designs/design-lock-new", "lock_new", upsertBody("New", "2026-10-22T11:00:00.000Z")),
+      params({ designId: "design-lock-new" }),
+    );
+    expect(saved.status).toBe(200);
+    const first = at(sent, DESIGN_READ);
+    expect(sent[first]).toMatch(/ for update$/);
+    const lock = at(sent, ACCOUNT_LOCK, first + 1);
+    const again = at(sent, DESIGN_READ, lock + 1);
+    expect(sent[again]).toMatch(/ for update$/);
+    const count = at(sent, /^select count\(\*\) as "count" from "library_designs"/, again + 1);
+    at(sent, /^insert into "library_designs"/, count + 1);
+  });
+
+  it("a new folder locks its account before it counts, and a folder save reads for update", async () => {
+    await makeUser("lock_fold");
+    const sent = recordSql();
+    const saved = await folder.PUT(
+      request("PUT", "/api/library/folders/folder-lock", "lock_fold", {
+        name: "Locked",
+        createdAt: "2026-10-22T12:00:00.000Z",
+        updatedAt: "2026-10-22T12:00:00.000Z",
+      }),
+      params({ folderId: "folder-lock" }),
+    );
+    expect(saved.status).toBe(200);
+    const read = at(sent, /^select .* from "library_folders" where .* for update$/);
+    const lock = at(sent, ACCOUNT_LOCK, read + 1);
+    at(sent, /^select .* from "library_folders" where .* for update$/, lock + 1);
+    const count = at(sent, /^select count\(\*\) as "count" from "library_folders"/, lock + 1);
+    at(sent, /^insert into "library_folders"/, count + 1);
+  });
+
+  it("a share locks the design before it counts members and inserts", async () => {
+    await makeUser("lock_share");
+    await makeUser("lock_guest");
+    const designId = "design-lock-share";
+    await design.PUT(
+      request("PUT", `/api/library/designs/${designId}`, "lock_share", upsertBody("Share", "2026-10-22T13:00:00.000Z")),
+      params({ designId }),
+    );
+    const sent = recordSql();
+    const shared = await member.PUT(
+      request("PUT", `/api/library/designs/${designId}/members/${users.lock_guest!.id}`, "lock_share"),
+      params({ designId, userId: users.lock_guest!.id }),
+    );
+    expect(shared.status).toBe(200);
+    const lock = at(sent, /^select "id" from "library_designs" where .* for update$/);
+    const list = at(sent, /^select .* from "library_design_members" inner join "community_users"/, lock + 1);
+    at(sent, /^insert into "library_design_members"/, list + 1);
   });
 });
 
