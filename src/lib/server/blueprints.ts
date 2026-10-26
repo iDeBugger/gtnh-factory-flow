@@ -47,8 +47,32 @@ export function countBlueprintMachines(captured: {
   );
 }
 
-export const BLUEPRINT_SUMMARY_COLUMNS =
-  "id,user_id,name,node_count,storage_count,edge_count,pocket_count,machine_count,is_public,description,author_name,published_at,upvotes,downvotes,score,downloads,needs,outputs,tags,icon,highest_tier,highest_tier_index,created_at";
+/** The columns a listing reads: everything but the payload. */
+export const BLUEPRINT_SUMMARY_FIELDS = [
+  "id",
+  "user_id",
+  "name",
+  "node_count",
+  "storage_count",
+  "edge_count",
+  "pocket_count",
+  "machine_count",
+  "is_public",
+  "description",
+  "author_name",
+  "published_at",
+  "upvotes",
+  "downvotes",
+  "score",
+  "downloads",
+  "needs",
+  "outputs",
+  "tags",
+  "icon",
+  "highest_tier",
+  "highest_tier_index",
+  "created_at",
+] as const;
 
 export interface BlueprintRow {
   id: string;

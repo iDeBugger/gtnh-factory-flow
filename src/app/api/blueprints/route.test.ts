@@ -1,31 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { setDbFaultForTests } from "@/lib/server/db/guard";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 import { oversizeRequest } from "@/test-support/request-bodies";
+import { clearDbFault, useTestDb } from "@/test-support/test-db";
+import { PUBLIC_BLUEPRINT_PAGE_SIZE } from "@/lib/blueprints/types";
+import { json } from "@/lib/server/db";
+import * as blueprintsRepo from "@/lib/server/repos/blueprints";
 
-/** Every query call the routes make, as [method, args]. */
-const calls: Array<[string, unknown[]]> = [];
+const testDb = useTestDb();
 
-/** A stand-in query builder: every call chains, and awaiting it answers no rows. */
-function query(): unknown {
-  const proxy: unknown = new Proxy(() => undefined, {
-    get(_target, name) {
-      if (name === "then") {
-        return (resolve: (value: unknown) => void) => resolve({ data: [], error: null, count: 0 });
-      }
-      if (name === "maybeSingle" || name === "single") {
-        return () => {
-          calls.push([name, []]);
-          return Promise.resolve({ data: null, error: null });
-        };
-      }
-      return (...args: unknown[]) => {
-        calls.push([String(name), args]);
-        return proxy;
-      };
-    },
-  });
-  return proxy;
-}
+/** Every statement the routes send, as compiled, with its parameters. */
+const calls: Array<{ sql: string; parameters: readonly unknown[] }> = [];
+
+/** The statements sent that match `pattern`. */
+const sent = (pattern: RegExp) => calls.filter((call) => pattern.test(call.sql));
 
 const sessionUser = vi.fn<() => { id: string; username: string } | undefined>(() => undefined);
 const storage = { configured: true };
@@ -36,7 +24,6 @@ vi.mock("@/lib/server/db", async (importOriginal) => {
     ...actual,
     isCommunityConfigured: () => storage.configured,
     isDatabaseConfigured: () => storage.configured,
-    getCommunityDb: () => query(),
   };
 });
 vi.mock("@/lib/server/auth/sessions", async (importOriginal) => {
@@ -65,7 +52,7 @@ import * as download from "./[blueprintId]/download/route";
 // A well-formed id: a malformed one is answered before any query.
 const BLUEPRINT_ID = "0b6f7c1e-3d2a-4e5f-8a9b-1c2d3e4f5a6b";
 const context = { params: Promise.resolve({ blueprintId: BLUEPRINT_ID }) };
-const ann = { id: "ann-id", username: "ann" };
+const ann = { id: "a0000000-0000-4000-8000-0000000000a1", username: "ann" };
 
 function get(url: string): Request {
   return new Request(`http://localhost${url}`);
@@ -74,10 +61,25 @@ function post(url: string, body: unknown): Request {
   return new Request(`http://localhost${url}`, { method: "POST", body: JSON.stringify(body) });
 }
 
+beforeAll(async () => {
+  await testDb().db
+    .insertInto("community_users")
+    .values({ id: ann.id, username: ann.username, password_hash: "x:y" })
+    .execute();
+});
+
 beforeEach(() => {
   calls.length = 0;
+  setDbFaultForTests((sql, parameters) => {
+    calls.push({ sql, parameters });
+    return undefined;
+  });
   sessionUser.mockReset();
   sessionUser.mockReturnValue(undefined);
+});
+
+afterEach(() => {
+  clearDbFault();
 });
 
 describe("blueprints with the setting unset", () => {
@@ -115,7 +117,8 @@ describe("blueprints with the setting unset", () => {
     const response = await list.GET(get("/api/blueprints"));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ blueprints: [] });
-    expect(calls).toContainEqual(["eq", ["user_id", ann.id]]);
+    const [own] = sent(/^select .* from "blueprints" where "user_id" = \$1 order by "created_at" desc limit \$2$/);
+    expect(own?.parameters[0]).toBe(ann.id);
   });
 
   it("refuses a save whose declared length is over the cap without reading it", async () => {
@@ -135,7 +138,8 @@ describe("blueprints with the setting unset", () => {
   it("finds only the reader's own blueprint by id, never someone else's published one", async () => {
     sessionUser.mockReturnValue(ann);
     await one.GET(get(`/api/blueprints/${BLUEPRINT_ID}`), context);
-    expect(calls).toContainEqual(["or", [`user_id.eq.${ann.id}`]]);
+    const [mine] = sent(/ from "blueprints" where \("id" = \$1 and "blueprints"\."user_id" = \$2\)$/);
+    expect(mine?.parameters).toEqual([BLUEPRINT_ID, ann.id]);
 
     calls.length = 0;
     sessionUser.mockReturnValue(undefined);
@@ -151,30 +155,39 @@ describe("blueprints with the setting on", () => {
   it("serves the public shelf and lets a public blueprint be read by id", async () => {
     const shelf = await list.GET(get("/api/blueprints?scope=public"));
     expect(shelf.status).toBe(200);
-    expect(calls).toContainEqual(["eq", ["is_public", true]]);
+    expect(sent(/ from "blueprints" where "blueprints"\."is_public" = \$1 order by /)).toHaveLength(1);
 
     calls.length = 0;
     sessionUser.mockReturnValue(ann);
     await one.GET(get(`/api/blueprints/${BLUEPRINT_ID}`), context);
-    expect(calls).toContainEqual(["or", [`is_public.eq.true,user_id.eq.${ann.id}`]]);
+    const [readable] = sent(
+      / from "blueprints" where \("id" = \$1 and \("blueprints"\."is_public" = \$2 or "blueprints"\."user_id" = \$3\)\)$/,
+    );
+    expect(readable?.parameters).toEqual([BLUEPRINT_ID, true, ann.id]);
   });
 
-  it("keeps a shelf search inside its own or() filter", async () => {
+  it("keeps a shelf search inside its own parameters", async () => {
     const shelf = await list.GET(get("/api/blueprints?scope=public&search=oil,is_public.eq.false"));
     expect(shelf.status).toBe(200);
-    const filters = calls.filter(([name]) => name === "or").map(([, args]) => String(args[0]));
-    expect(filters).toHaveLength(1);
-    expect(filters[0]).toContain("name.ilike.%oil is");
-    expect(filters[0]).not.toContain("is_public");
+    const [search] = sent(/ from "blueprints" where /);
+    expect(search?.sql).toMatch(
+      / where \("blueprints"\."is_public" = \$1 and \("name" ilike \$2 or "description" ilike \$3 or "tags_text" ilike \$4\)\) order by /,
+    );
+    expect(search?.parameters.slice(0, 4)).toEqual([
+      true,
+      "%oil is public.eq.false%",
+      "%oil is public.eq.false%",
+      "%oil is public.eq.false%",
+    ]);
 
-    // The shelf reads the search as the community does: `*` is a wildcard to PostgREST, a #tag narrows tags.
+    // The shelf reads the search as the community does: `*` is dropped, a #tag narrows tags.
     calls.length = 0;
     await list.GET(get("/api/blueprints?scope=public&search=" + encodeURIComponent("#fuel a*b")));
-    expect(calls).toContainEqual(["ilike", ["tags_text", "%fuel%"]]);
-    expect(calls).toContainEqual([
-      "or",
-      ["name.ilike.%a b%,description.ilike.%a b%,tags_text.ilike.%a b%"],
-    ]);
+    const [tagged] = sent(/ from "blueprints" where /);
+    expect(tagged?.sql).toMatch(
+      / where \("blueprints"\."is_public" = \$1 and "tags_text" ilike \$2 and \("name" ilike \$3 or "description" ilike \$4 or "tags_text" ilike \$5\)\) order by /,
+    );
+    expect(tagged?.parameters.slice(0, 5)).toEqual([true, "%fuel%", "%a b%", "%a b%", "%a b%"]);
   });
 
   it("reaches publishing, voting and placing", async () => {
@@ -188,5 +201,116 @@ describe("blueprints with the setting on", () => {
       expect(await answer.json()).not.toEqual({ error: "Not found" });
     }
     expect(calls.length).toBeGreaterThan(0);
+  });
+});
+
+describe("the public shelf against the database", () => {
+  withModAndCommunityOn();
+
+  /** Ann's blueprints for this case, published unless said; answers their ids by name. */
+  async function seed(
+    rows: Array<{ name: string; description?: string; tags?: string; isPublic?: boolean; votes?: number; downloads?: number; publishedAt: string }>,
+  ): Promise<Record<string, string>> {
+    const ids: Record<string, string> = {};
+    for (const row of rows) {
+      const inserted = await testDb()
+        .db.insertInto("blueprints")
+        .values({
+          user_id: ann.id,
+          name: row.name,
+          author_name: ann.username,
+          description: row.description ?? "",
+          tags_text: row.tags ?? "",
+          payload: json({ nodes: [] }),
+          is_public: row.isPublic ?? true,
+          upvotes: row.votes ?? 0,
+          downloads: row.downloads ?? 0,
+          published_at: row.publishedAt,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      ids[row.name] = inserted.id;
+    }
+    return ids;
+  }
+
+  afterEach(async () => {
+    await testDb().db.deleteFrom("blueprints").execute();
+  });
+
+  const shelf = async (query: string) => {
+    const answer = await list.GET(get(`/api/blueprints?scope=public&${query}`));
+    expect(answer.status).toBe(200);
+    const body = (await answer.json()) as { blueprints: Array<{ name: string }>; hasMore: boolean };
+    return { names: body.blueprints.map((row) => row.name), hasMore: body.hasMore };
+  };
+
+  it("matches names, descriptions and tags, narrows by tag and creator, and never shows an unpublished one", async () => {
+    await seed([
+      { name: "Oil rig", publishedAt: "2026-10-01T00:00:00Z", tags: "petro" },
+      { name: "Gas plant", description: "Burns oil", publishedAt: "2026-10-02T00:00:00Z" },
+      { name: "Refinery", tags: "oil petro", publishedAt: "2026-10-03T00:00:00Z" },
+      { name: "Hidden oil", isPublic: false, publishedAt: "2026-10-04T00:00:00Z" },
+    ]);
+    expect((await shelf("sort=newest&search=oil")).names).toEqual(["Refinery", "Gas plant", "Oil rig"]);
+    expect((await shelf("sort=newest&search=" + encodeURIComponent("#petro"))).names).toEqual(["Refinery", "Oil rig"]);
+    expect((await shelf("sort=newest&search=" + encodeURIComponent("#petro rig"))).names).toEqual(["Oil rig"]);
+    expect((await shelf("sort=newest&search=" + encodeURIComponent("@ann oil"))).names).toHaveLength(3);
+    expect((await shelf("sort=newest&search=" + encodeURIComponent("@an oil"))).names).toEqual([]);
+    expect((await shelf("sort=newest&search=" + encodeURIComponent("@"))).names).toEqual([]);
+  });
+
+  it("never widens a match on %, _ or a filter's syntax in the box", async () => {
+    await seed([
+      { name: "50% steel", publishedAt: "2026-10-01T00:00:00Z" },
+      { name: "500 steel", publishedAt: "2026-10-02T00:00:00Z" },
+      { name: "a_b furnace", publishedAt: "2026-10-03T00:00:00Z" },
+      { name: "axb furnace", publishedAt: "2026-10-04T00:00:00Z" },
+      { name: "Private", isPublic: false, publishedAt: "2026-10-05T00:00:00Z" },
+    ]);
+    // The box drops % and _ (search-query.ts): "a_b" reads "a b", which neither name holds.
+    expect((await shelf("search=" + encodeURIComponent("a_b"))).names).toEqual([]);
+    expect((await shelf("search=" + encodeURIComponent("%"))).names).toHaveLength(4);
+    expect((await shelf("search=" + encodeURIComponent("oil,is_public.eq.false"))).names).toEqual([]);
+    expect((await shelf("search=" + encodeURIComponent("x' or '1'='1"))).names).toEqual([]);
+    // Past the box, the shelf's own LIKE escape holds: % and _ match only themselves.
+    const page = (text: string) =>
+      blueprintsRepo.listPublic({
+        search: { tags: [], author: "", bareAuthor: false, text },
+        sort: "newest",
+        offset: 0,
+        limit: 10,
+      });
+    expect((await page("a_b")).map((row) => row.name)).toEqual(["a_b furnace"]);
+    expect((await page("50%")).map((row) => row.name)).toEqual(["50% steel"]);
+    expect((await page("\\")).map((row) => row.name)).toEqual([]);
+  });
+
+  it("sorts by score, downloads or publish time, newest first on ties, and pages with one row to spare", async () => {
+    await seed([
+      { name: "Old top", votes: 5, downloads: 1, publishedAt: "2026-10-01T00:00:00Z" },
+      { name: "New top", votes: 5, downloads: 9, publishedAt: "2026-10-03T00:00:00Z" },
+      { name: "Low", votes: 1, downloads: 9, publishedAt: "2026-10-02T00:00:00Z" },
+    ]);
+    expect((await shelf("")).names).toEqual(["New top", "Old top", "Low"]);
+    expect((await shelf("sort=downloads")).names).toEqual(["New top", "Low", "Old top"]);
+    expect((await shelf("sort=newest")).names).toEqual(["New top", "Low", "Old top"]);
+    expect((await shelf("sort=nonsense")).names).toEqual(["New top", "Old top", "Low"]);
+    expect(await shelf("page=0")).toMatchObject({ hasMore: false });
+    expect(await shelf("page=1")).toEqual({ names: [], hasMore: false });
+
+    await seed(
+      Array.from({ length: PUBLIC_BLUEPRINT_PAGE_SIZE }, (_, i) => ({
+        name: `Filler ${i}`,
+        publishedAt: `2026-09-${String(1 + (i % 28)).padStart(2, "0")}T00:00:00Z`,
+      })),
+    );
+    const first = await shelf("sort=newest&page=0");
+    expect(first.names).toHaveLength(PUBLIC_BLUEPRINT_PAGE_SIZE);
+    expect(first.hasMore).toBe(true);
+    const second = await shelf("sort=newest&page=1");
+    expect(second).toMatchObject({ hasMore: false });
+    expect(second.names).toHaveLength(3);
+    expect(new Set([...first.names, ...second.names]).size).toBe(PUBLIC_BLUEPRINT_PAGE_SIZE + 3);
   });
 });

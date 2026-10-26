@@ -3,7 +3,7 @@ import type { PlanSearch } from "@/lib/community/search-query";
 import type { EntryIcon, PlanResourceStat } from "@/lib/community/types";
 import { getCommunityDb, getDb, json, type Database, type Tx } from "../db";
 import { PLAN_SUMMARY_FIELDS, type PLAN_SUMMARY_COLUMNS, type PlanRow } from "../community-rows";
-import { escapeLike } from "./like";
+import { searchConditions } from "./search";
 import { sqlRules, type VisibilityViewer } from "./visibility";
 
 /**
@@ -50,9 +50,6 @@ export interface PlanListQuery {
   limit: number;
 }
 
-/** `%text%` for ilike, the text's own `%`, `_` and backslash matching only themselves. */
-const containing = (text: string) => `%${escapeLike(text)}%`;
-
 /**
  * Every condition of a list query, for both of its statements. The search
  * terms are bound parameters: the free text never becomes a filter of its
@@ -62,26 +59,7 @@ function listWhere(
   query: PlanListQuery,
 ): (eb: ExpressionBuilder<Database, "community_plans">) => Expression<SqlBool> {
   return (eb) => {
-    const where: Expression<SqlBool>[] = [];
-    for (const tag of query.search.tags) {
-      where.push(eb("tags_text", "ilike", containing(tag)));
-    }
-    if (query.search.author) {
-      where.push(eb("author_name", "=", query.search.author));
-    } else if (query.search.bareAuthor) {
-      // A bare @ narrows to nobody rather than to everything.
-      where.push(eb("author_name", "=", ""));
-    }
-    if (query.search.text) {
-      const pattern = containing(query.search.text);
-      where.push(
-        eb.or([
-          eb("name", "ilike", pattern),
-          eb("description", "ilike", pattern),
-          eb("tags_text", "ilike", pattern),
-        ]),
-      );
-    }
+    const where = searchConditions(eb, query.search);
     if (query.maxTierIndex !== undefined) {
       where.push(eb("highest_tier_index", "<=", query.maxTierIndex));
     }

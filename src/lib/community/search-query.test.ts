@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   PLAN_SEARCH_MAX_LENGTH,
-  applyPlanSearch,
   parsePlanSearch,
   withAuthor,
   withTag,
@@ -65,64 +64,6 @@ describe("parsePlanSearch", () => {
     expect(parsePlanSearch("   #oil    steel   ")).toMatchObject({ tags: ["oil"], text: "steel" });
     const long = "x".repeat(PLAN_SEARCH_MAX_LENGTH + 50);
     expect(parsePlanSearch(long).text).toHaveLength(PLAN_SEARCH_MAX_LENGTH);
-  });
-});
-
-describe("applyPlanSearch", () => {
-  /** Records the narrowing calls in order, chaining like PostgREST does. */
-  function recorder() {
-    const calls: string[] = [];
-    const query = {
-      calls,
-      ilike(column: string, pattern: string) {
-        calls.push(`ilike ${column} ${pattern}`);
-        return query;
-      },
-      eq(column: string, value: string) {
-        calls.push(`eq ${column} ${JSON.stringify(value)}`);
-        return query;
-      },
-      or(filters: string) {
-        calls.push(`or ${filters}`);
-        return query;
-      },
-    };
-    return query;
-  }
-
-  it("an or() value can never close its filter", () => {
-    const query = recorder();
-    applyPlanSearch(query, parsePlanSearch("x,y)z,is_public.eq.false"));
-    const filters = query.calls.find((call) => call.startsWith("or "))!.slice(3);
-    expect(filters.match(/\.ilike\./g)).toHaveLength(3);
-    const values = [...filters.matchAll(/%([^%]*)%/g)].map((match) => match[1]);
-    expect(values).toHaveLength(3);
-    for (const value of values) {
-      expect(/[,()]/.test(value)).toBe(false);
-    }
-  });
-
-  it("narrows by every tag, then the creator, then the text", () => {
-    const query = recorder();
-    applyPlanSearch(query, parsePlanSearch("#oil #diesel @brkge fuel"));
-    expect(query.calls).toEqual([
-      "ilike tags_text %oil%",
-      "ilike tags_text %diesel%",
-      'eq author_name "brkge"',
-      "or name.ilike.%fuel%,description.ilike.%fuel%,tags_text.ilike.%fuel%",
-    ]);
-  });
-
-  it("does nothing for an empty search", () => {
-    const query = recorder();
-    applyPlanSearch(query, parsePlanSearch("   "));
-    expect(query.calls).toEqual([]);
-  });
-
-  it("narrows a bare @ to nobody", () => {
-    const query = recorder();
-    applyPlanSearch(query, parsePlanSearch("@"));
-    expect(query.calls).toEqual(['eq author_name ""']);
   });
 });
 

@@ -50,6 +50,9 @@ export async function POST(
   } catch (error) {
     // A fixed sentence: the database's own words would say whether the id exists.
     console.error("blueprint vote failed", error);
-    return NextResponse.json({ error: "Voting failed." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Voting failed." },
+      { status: 500, headers: { "Cache-Control": "no-store" } },
+    );
   }
 }

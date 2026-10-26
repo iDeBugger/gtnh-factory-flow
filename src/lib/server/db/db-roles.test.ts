@@ -4,6 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { Kysely, PGliteDialect } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as accounts from "../repos/accounts";
+import * as blueprints from "../repos/blueprints";
 import * as comments from "../repos/comments";
 import * as designMembers from "../repos/design-members";
 import * as designs from "../repos/designs";
@@ -505,6 +506,71 @@ describe("the database roles", () => {
       useDbForTests(undefined);
       await pglite.query("delete from community_plans where id = $1", [ids.plan]);
       await pglite.query("delete from blueprints where id = $1", [ids.blueprint]);
+    }
+  });
+
+  it("runs every blueprint repository function as the site role", async () => {
+    const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) });
+    useDbForTests(db);
+    const owner = { userId: OWNER, isAdmin: false, adminToken: false };
+    const stranger = { userId: MEMBER, isAdmin: false, adminToken: false };
+    const stat = { kind: "item" as const, resourceId: "steel", displayName: "Steel", ratePerSecond: 1 };
+    let blueprintId: string | undefined;
+    try {
+      await as("gtnh_site", async () => {
+        const saved = await blueprints.insert({
+          user_id: OWNER,
+          name: "Roles",
+          payload: { nodes: [] },
+          node_count: 1,
+          storage_count: 0,
+          edge_count: 0,
+          pocket_count: 0,
+          machine_count: 1,
+          needs: [],
+          outputs: [stat],
+          highest_tier: "LV",
+          highest_tier_index: 1,
+          tags: ["oil"],
+          tags_text: "oil",
+          icon: null,
+        });
+        const id = saved.id;
+        blueprintId = id;
+        expect(saved).toMatchObject({ name: "Roles", outputs: [stat], tags: ["oil"], is_public: false, score: 0 });
+        expect(await blueprints.countOwn(OWNER)).toBe(1);
+        expect(await blueprints.listOwn(OWNER, 10)).toMatchObject([{ id }]);
+        expect(await blueprints.readAccess(id)).toEqual({ id, user_id: OWNER, is_public: false });
+        expect(await blueprints.readReadable(id, owner, true)).toMatchObject({ id, payload: { nodes: [] } });
+        expect(await blueprints.readReadable(id, stranger, true)).toBeUndefined();
+        expect(await blueprints.takeDownload(id, stranger)).toBeUndefined();
+        expect(
+          await blueprints.updateOwn(id, OWNER, {
+            is_public: true,
+            author_name: "owner",
+            published_at: "2026-10-26T00:00:00.000Z",
+            tags: ["oil", "gas"],
+            tags_text: "oil gas",
+            outputs: [],
+          }),
+        ).toMatchObject({ is_public: true, tags: ["oil", "gas"], outputs: [] });
+        const search = { tags: ["gas"], author: "owner", bareAuthor: false, text: "rol" };
+        for (const sort of ["top", "downloads", "newest"] as const) {
+          expect(await blueprints.listPublic({ search, sort, offset: 0, limit: 10 }), sort).toMatchObject([{ id }]);
+        }
+        expect(await blueprints.takeDownload(id, stranger)).toMatchObject({ id, downloads: 1, payload: { nodes: [] } });
+        expect(await blueprints.takeDownload(id, owner)).toMatchObject({ downloads: 1 });
+        expect(await blueprints.takeDownload(id, {})).toMatchObject({ downloads: 2 });
+        expect(await blueprints.updateOwn(id, MEMBER, { name: "Taken" })).toBeUndefined();
+        expect(await blueprints.deleteOwn(id, MEMBER)).toBe(false);
+        expect(await blueprints.deleteOwn(id, OWNER)).toBe(true);
+        expect(await blueprints.readAccess(id)).toBeUndefined();
+      });
+    } finally {
+      useDbForTests(undefined);
+      if (blueprintId) {
+        await pglite.query("delete from blueprints where id = $1", [blueprintId]);
+      }
     }
   });
 

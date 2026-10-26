@@ -19,7 +19,7 @@ import {
   rowToBlueprintSummary,
 } from "../blueprints";
 import { parseEntryIcon } from "../community-rows";
-import { blueprintStorageErrorMessage, DbQueryError } from "../db";
+import { isDatabaseDown, isDatabaseError, storageErrorMessage } from "../db";
 import type { SignedIn, Viewer } from "../http/viewer";
 import { checkRateLimit } from "../limits/rate-limit";
 import * as blueprints from "../repos/blueprints";
@@ -44,12 +44,20 @@ const BLUEPRINT_NOT_FOUND = "Blueprint not found.";
 const TOO_LARGE = "Blueprint is too large to save.";
 const NAME_LENGTH = `Blueprint names run 1–${BLUEPRINT_NAME_MAX_LENGTH} characters.`;
 
-/** What a database failure the route answered with its own sentence says. */
+/**
+ * What a database failure the route answered with its own sentence says: the
+ * database-down line, or the sentence (the database's message goes to the
+ * log). Anything else is a bug and is thrown on.
+ */
 function storageFailure(error: unknown, fallback: string): ServiceResult<never> {
-  if (!(error instanceof DbQueryError)) {
+  const down = isDatabaseDown(error);
+  if (!down && !isDatabaseError(error)) {
     throw error;
   }
-  return fail("unavailable", blueprintStorageErrorMessage(error, fallback), { status: 500 });
+  if (!down) {
+    console.error(fallback, error);
+  }
+  return fail("unavailable", storageErrorMessage(error, fallback), { status: 500 });
 }
 
 /** The account's blueprint writes are paced per account. */
@@ -117,8 +125,8 @@ async function listPublic(
 ): Promise<ServiceResult<BlueprintListResponse>> {
   const sort: PublicBlueprintSort =
     input.sort === "newest" || input.sort === "downloads" ? input.sort : "top";
-  // The community search language (search-query.ts), which also scrubs the
-  // characters that would let the text out of its or() filter.
+  // The community search language (search-query.ts), read as the community
+  // list reads it: the same terms, matched by the same conditions.
   const search = parsePlanSearch(input.search);
   const page = Math.max(0, Number.parseInt(input.page ?? "0", 10) || 0);
   const deviceId = input.deviceId.slice(0, 64);
@@ -378,10 +386,10 @@ export async function deleteBlueprint(
 }
 
 /**
- * A public blueprint's payload for placing, counting the download. Authors
- * placing their own published work do not inflate their own counter: the
- * mine shelf places through `readBlueprint`, and an owner here is not
- * counted either.
+ * A public blueprint's payload for placing, counting the download in the
+ * same statement. Authors placing their own published work do not inflate
+ * their own counter: the mine shelf places through `readBlueprint`, and an
+ * owner here is not counted either.
  */
 export async function downloadBlueprint(
   viewer: Viewer,
@@ -392,22 +400,14 @@ export async function downloadBlueprint(
   }
   let row;
   try {
-    row = await blueprints.readDownload(blueprintId);
+    row = await blueprints.takeDownload(blueprintId, viewer);
   } catch (error) {
     return storageFailure(error, "Blueprint could not be loaded.");
   }
   if (!row) {
     return fail("not-found", BLUEPRINT_NOT_FOUND);
   }
-  const isOwner = viewer.userId !== undefined && row.user_id === viewer.userId;
-  if (!isOwner) {
-    await blueprints.writeDownloads(blueprintId, row.downloads + 1);
-  }
   return ok({
-    blueprint: {
-      ...rowToBlueprintSummary(row, viewer.userId),
-      downloads: row.downloads + (isOwner ? 0 : 1),
-      payload: row.payload,
-    },
+    blueprint: { ...rowToBlueprintSummary(row, viewer.userId), payload: row.payload },
   });
 }

@@ -2,48 +2,12 @@ import type { Expression, ExpressionBuilder, SqlBool } from "kysely";
 import type { Database } from "../db/schema";
 
 /**
- * The access rules in the form a query applies them, so a list holds only
- * the rows `services/access.ts` would let the viewer see: first the
- * PostgREST filters the repositories send today, then (`sqlRules`) the
- * direct client's forms.
- */
-
-/** A PostgREST filter builder, which answers itself from `eq`. */
-interface EqFilter {
-  eq(column: string, value: unknown): unknown;
-}
-
-/** Narrows a query of `blueprints` to the published ones: the public shelf. */
-export function publicBlueprints<T extends EqFilter>(query: T): T {
-  // PostgREST's builders return themselves; the cast keeps the caller's type
-  // without making the compiler expand the builder's generics.
-  return query.eq("is_public", true) as T;
-}
-
-/**
- * `canReadBlueprint` as a PostgREST `or()` filter: the viewer's own
- * blueprints, and the public ones while the community switch is on. Someone
- * else's published blueprint is the community library's, so with the switch
- * off only the viewer's own are found. Undefined when the viewer may read
- * none. The user id is the session's, never request text.
- */
-export function blueprintReadableBy(
-  viewer: { userId?: string },
-  communityOn: boolean,
-): string | undefined {
-  const readable = [
-    communityOn ? "is_public.eq.true" : undefined,
-    viewer.userId ? `user_id.eq.${viewer.userId}` : undefined,
-  ].filter(Boolean);
-  return readable.length > 0 ? readable.join(",") : undefined;
-}
-
-/*
- * The same rules for the direct client, as Kysely expressions over one
- * table: `.where(sqlRules.planVisibleTo(viewer))`. Every value is a bound
- * parameter from the session or the caller's own arguments, never request
- * text; `visibility.test.ts` holds each to `services/access.ts`'s answer.
- * They sit beside the PostgREST forms above until each domain swaps.
+ * The access rules in the form a query applies them, so a list, a read by
+ * id or a counter holds only the rows `services/access.ts` would let the
+ * viewer see, as Kysely expressions over one table:
+ * `.where(sqlRules.planVisibleTo(viewer))`. Every value is a bound parameter
+ * from the session or the caller's own arguments, never request text;
+ * `visibility.test.ts` holds each to `services/access.ts`'s answer.
  */
 
 /** Who is asking, as `http/viewer.ts` builds it (repositories take its shape, not the module). */

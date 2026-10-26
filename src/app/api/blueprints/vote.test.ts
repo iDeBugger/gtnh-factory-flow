@@ -288,3 +288,126 @@ describe("a malformed blueprint id", () => {
     }
   });
 });
+
+describe("downloading a blueprint", () => {
+  withModAndCommunityOn();
+
+  const placeAs = async (blueprintId: string, who?: string) => {
+    const answer = await download.POST(call("POST", `/api/blueprints/${blueprintId}/download`, { who }), params(blueprintId));
+    const body = (await answer.json()) as { blueprint?: { downloads: number; payload: unknown }; error?: string };
+    return { status: answer.status, downloads: body.blueprint?.downloads, error: body.error };
+  };
+  const stored = async (blueprintId: string) =>
+    (
+      await testDb()
+        .db.selectFrom("blueprints")
+        .select("downloads")
+        .where("id", "=", blueprintId)
+        .executeTakeFirstOrThrow()
+    ).downloads;
+
+  it("counts a reader's and an anonymous download, never the author's own", async () => {
+    const blueprintId = await makeBlueprint("Placed furnace", true);
+    expect(await placeAs(blueprintId, "author")).toEqual({ status: 200, downloads: 0, error: undefined });
+    expect(await stored(blueprintId)).toBe(0);
+    expect(await placeAs(blueprintId, "reader")).toEqual({ status: 200, downloads: 1, error: undefined });
+    expect(await placeAs(blueprintId)).toEqual({ status: 200, downloads: 2, error: undefined });
+    expect(await placeAs(blueprintId, "author")).toEqual({ status: 200, downloads: 2, error: undefined });
+    expect(await stored(blueprintId)).toBe(2);
+  });
+
+  it("hands out only a public blueprint, its author's unpublished one included", async () => {
+    expect(await placeAs(privateId, "author")).toEqual({ status: 404, downloads: undefined, error: "Blueprint not found." });
+    const missing = randomUUID();
+    expect(await placeAs(missing, "reader")).toEqual({ status: 404, downloads: undefined, error: "Blueprint not found." });
+  });
+
+  it("ten downloads at once count ten", async () => {
+    const blueprintId = await makeBlueprint("Popular furnace", true);
+    const answers = await Promise.all(Array.from({ length: 10 }, () => placeAs(blueprintId)));
+    expect(answers.map((answer) => answer.status)).toEqual(Array(10).fill(200));
+    expect(answers.map((answer) => answer.downloads).sort((a, b) => a! - b!)).toEqual(
+      Array.from({ length: 10 }, (_, i) => i + 1),
+    );
+    expect(await stored(blueprintId)).toBe(10);
+  });
+
+  it("counts in one statement that carries the public rule and spares the author", async () => {
+    const blueprintId = await makeBlueprint("Recorded furnace", true);
+    const COUNT = {
+      signedIn:
+        /^update "blueprints" set "downloads" = case when "user_id" = \$1 then "downloads" else "downloads" \+ \$2 end where \("id" = \$3 and "blueprints"\."is_public" = \$4\) returning "id", .*, "payload"$/,
+      anonymous:
+        /^update "blueprints" set "downloads" = "downloads" \+ \$1 where \("id" = \$2 and "blueprints"\."is_public" = \$3\) returning "id", .*, "payload"$/,
+    };
+    for (const [who, pattern] of [
+      ["reader", COUNT.signedIn],
+      [undefined, COUNT.anonymous],
+    ] as const) {
+      const sent: Array<{ text: string; parameters: readonly unknown[] }> = [];
+      setDbFaultForTests((text, parameters) => {
+        sent.push({ text, parameters });
+        return undefined;
+      });
+      try {
+        expect((await placeAs(blueprintId, who)).status).toBe(200);
+      } finally {
+        clearDbFault();
+      }
+      const touching = sent.filter(({ text }) => text.includes('"blueprints"'));
+      expect(touching.map(({ text }) => text), who ?? "anonymous").toHaveLength(1);
+      expect(touching[0]!.text).toMatch(pattern);
+      expect(touching[0]!.parameters).toEqual(
+        who ? [users.reader!.id, 1, blueprintId, true] : [1, blueprintId, true],
+      );
+    }
+  });
+});
+
+describe("a database failure on a blueprint", () => {
+  withModAndCommunityOn();
+
+  const DOWN = "The community database is not responding. Try again in a few minutes.";
+  const refused = () => Object.assign(new Error("boom"), { code: "XX000", severity: "ERROR" });
+
+  it("answers the route's sentence when a query is refused, and the down line when the database is down", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      for (const [error, words] of [
+        [refused(), undefined],
+        [undefined, DOWN],
+      ] as const) {
+        withDbFault(/"blueprints"/, error);
+        try {
+          const read = await one.GET(call("GET", `/api/blueprints/${publicId}`, { who: "reader" }), params(publicId));
+          expect(read.status).toBe(500);
+          expect(await read.json()).toEqual({ error: words ?? "Blueprint could not be loaded." });
+          const placed = await download.POST(call("POST", `/api/blueprints/${publicId}/download`), params(publicId));
+          expect(placed.status).toBe(500);
+          expect(await placed.json()).toEqual({ error: words ?? "Blueprint could not be loaded." });
+          expect(placed.headers.get("cache-control")).toBe("no-store");
+          const renamed = await one.PUT(
+            call("PUT", `/api/blueprints/${publicId}`, { who: "author", body: { name: "Renamed" } }),
+            params(publicId),
+          );
+          expect(renamed.status).toBe(500);
+          expect(await renamed.json()).toEqual({ error: words ?? "Blueprint could not be updated." });
+          const voted = await castVote(publicId, { deviceId: "failing", value: 1 }, { address: "198.51.100.70" });
+          expect(voted.status).toBe(500);
+          expect(await voted.json()).toEqual({ error: "Voting failed." });
+          expect(voted.headers.get("cache-control")).toBe("no-store");
+        } finally {
+          clearDbFault();
+          resetDbBreaker();
+        }
+      }
+      // A refused query is logged with the route's sentence; the vote's access read is logged by its route.
+      expect(errors).toHaveBeenCalledWith("Blueprint could not be loaded.", expect.objectContaining({ code: "XX000" }));
+      expect(errors).toHaveBeenCalledWith("blueprint vote failed", expect.objectContaining({ code: "XX000" }));
+    } finally {
+      errors.mockRestore();
+    }
+    // Nothing was counted or renamed, and the blueprint reads again.
+    expect(await readsBy(publicId)).toMatchObject({ reader: [200, "Public furnace"] });
+  });
+});

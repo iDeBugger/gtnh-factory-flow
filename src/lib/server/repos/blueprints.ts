@@ -1,17 +1,18 @@
-import { applyPlanSearch, type PlanSearch } from "@/lib/community/search-query";
+import type { PlanSearch } from "@/lib/community/search-query";
 import type { BlueprintResourceStat, PublicBlueprintSort } from "@/lib/blueprints/types";
 import type { EntryIcon } from "@/lib/community/types";
-import { BLUEPRINT_SUMMARY_COLUMNS, type BlueprintRow } from "../blueprints";
-import { DbQueryError, getCommunityDb, type Tx } from "../db";
-import { blueprintReadableBy, publicBlueprints } from "./visibility";
+import { BLUEPRINT_SUMMARY_FIELDS, type BlueprintRow } from "../blueprints";
+import { getDb, json, type Tx } from "../db";
+import { searchConditions } from "./search";
+import { sqlRules, type VisibilityViewer } from "./visibility";
 
 /**
  * Blueprints (`blueprints`). Who may read or change one is the services'
- * rule (`services/access.ts`); these only read and write rows. A read or
- * write the database refuses throws `DbQueryError` with its code, so the
- * service words it as the route did (`blueprintStorageErrorMessage`).
- * Repositories take an optional transaction last; until the direct client
- * lands there is none and `tx` is unused.
+ * rule (`services/access.ts`); these read and write rows, and where the rule
+ * must hold inside one statement (a read by id, the download counter) they
+ * apply its SQL form (`repos/visibility.ts`). Repositories take an optional
+ * transaction last. A failed read or write throws (a down database as
+ * `DatabaseDownError`); `countOwn` alone reads a failure as none.
  */
 
 /** A blueprint row with the payload it places. */
@@ -47,7 +48,7 @@ export interface NewBlueprintRow extends BlueprintContentColumns {
   icon: EntryIcon | null;
 }
 
-/** The fields an owner's edit or publish may write. */
+/** The fields an owner's edit or publish may write, jsonb fields as plain values (the repository wraps them). */
 export type BlueprintPatch = Partial<
   BlueprintContentColumns & {
     name: string;
@@ -61,108 +62,120 @@ export type BlueprintPatch = Partial<
   }
 >;
 
+/** The public shelf's order by sort, every column descending: a closed set, so no request text names a column. */
+const SHELF_ORDER: Record<PublicBlueprintSort, ReadonlyArray<"score" | "downloads" | "published_at">> = {
+  top: ["score", "published_at"],
+  downloads: ["downloads", "published_at"],
+  newest: ["published_at"],
+};
+
+/** An icon as the column takes it: SQL null when there is none, as PostgREST wrote it. */
+const iconParam = (icon: EntryIcon | null) => (icon === null ? null : json(icon));
+
+/** The content columns as the table takes them, the payload and the stat arrays as jsonb. */
+function contentValues<T extends Partial<BlueprintContentColumns>>(content: T) {
+  const { payload, needs, outputs, ...plain } = content;
+  return {
+    ...plain,
+    ...(payload !== undefined ? { payload: json(payload) } : {}),
+    ...(needs !== undefined ? { needs: json(needs) } : {}),
+    ...(outputs !== undefined ? { outputs: json(outputs) } : {}),
+  };
+}
+
 /** The account's own blueprints, newest first, up to `limit`. */
-export async function listOwn(userId: string, limit: number, _tx?: Tx): Promise<BlueprintRow[]> {
-  const { data, error } = await getCommunityDb()
-    .from("blueprints")
-    .select(BLUEPRINT_SUMMARY_COLUMNS)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) {
-    throw new DbQueryError(error);
-  }
-  return (data ?? []) as unknown as BlueprintRow[];
+export async function listOwn(userId: string, limit: number, tx?: Tx): Promise<BlueprintRow[]> {
+  return (tx ?? getDb())
+    .selectFrom("blueprints")
+    .select(BLUEPRINT_SUMMARY_FIELDS)
+    .where("user_id", "=", userId)
+    .orderBy("created_at", "desc")
+    .limit(limit)
+    .$castTo<BlueprintRow>()
+    .execute();
 }
 
 /**
  * One page of the public shelf. Sorting happens in the database (the shelf
- * can outgrow one page); a plain term matches names, descriptions and
- * tags, #tag narrows to tags, @name to that creator.
+ * can outgrow one page); the search reads as the community's does
+ * (`searchConditions`): a plain term matches names, descriptions and tags,
+ * #tag narrows to tags, @name to that creator.
  */
-export async function listPublic(query: BlueprintListQuery, _tx?: Tx): Promise<BlueprintRow[]> {
-  let builder = getCommunityDb().from("blueprints").select(BLUEPRINT_SUMMARY_COLUMNS);
-  builder = publicBlueprints(builder);
-  builder = applyPlanSearch(builder, query.search);
-  if (query.sort === "top") {
-    builder = builder.order("score", { ascending: false }).order("published_at", { ascending: false });
-  } else if (query.sort === "downloads") {
-    builder = builder
-      .order("downloads", { ascending: false })
-      .order("published_at", { ascending: false });
-  } else {
-    builder = builder.order("published_at", { ascending: false });
+export async function listPublic(query: BlueprintListQuery, tx?: Tx): Promise<BlueprintRow[]> {
+  let builder = (tx ?? getDb())
+    .selectFrom("blueprints")
+    .select(BLUEPRINT_SUMMARY_FIELDS)
+    .where((eb) => eb.and([sqlRules.publicBlueprints()(eb), ...searchConditions(eb, query.search)]));
+  for (const column of SHELF_ORDER[query.sort]) {
+    builder = builder.orderBy(column, "desc");
   }
-  const { data, error } = await builder.range(query.offset, query.offset + query.limit - 1);
-  if (error) {
-    throw new DbQueryError(error);
-  }
-  return (data ?? []) as unknown as BlueprintRow[];
+  return builder.limit(query.limit).offset(query.offset).$castTo<BlueprintRow>().execute();
 }
 
 /** How many blueprints the account holds. A failed count reads as none: the insert after it answers the failure. */
-export async function countOwn(userId: string, _tx?: Tx): Promise<number> {
-  const { count } = await getCommunityDb()
-    .from("blueprints")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId);
-  return count ?? 0;
+export async function countOwn(userId: string, tx?: Tx): Promise<number> {
+  try {
+    const row = await (tx ?? getDb())
+      .selectFrom("blueprints")
+      .select((eb) => eb.fn.countAll<number>().as("count"))
+      .where("user_id", "=", userId)
+      .executeTakeFirstOrThrow();
+    return Number(row.count);
+  } catch {
+    return 0;
+  }
 }
 
 /** Stores a new blueprint and answers its summary row. */
-export async function insert(row: NewBlueprintRow, _tx?: Tx): Promise<BlueprintRow> {
-  const { data, error } = await getCommunityDb()
-    .from("blueprints")
-    .insert(row)
-    .select(BLUEPRINT_SUMMARY_COLUMNS)
-    .single();
-  if (error || !data) {
-    throw new DbQueryError(error);
-  }
-  return data as unknown as BlueprintRow;
+export async function insert(row: NewBlueprintRow, tx?: Tx): Promise<BlueprintRow> {
+  return (tx ?? getDb())
+    .insertInto("blueprints")
+    .values({
+      ...row,
+      payload: json(row.payload),
+      needs: json(row.needs),
+      outputs: json(row.outputs),
+      tags: json(row.tags),
+      icon: iconParam(row.icon),
+    })
+    .returning(BLUEPRINT_SUMMARY_FIELDS)
+    .$castTo<BlueprintRow>()
+    .executeTakeFirstOrThrow();
 }
 
 /**
  * A blueprint with its payload, when the viewer may read it
- * (`canReadBlueprint`'s query form); undefined when there is none, or none
+ * (`canReadBlueprint`'s SQL form); undefined when there is none, or none
  * the viewer may read.
  */
 export async function readReadable(
   id: string,
-  viewer: { userId?: string },
+  viewer: VisibilityViewer,
   communityOn: boolean,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<BlueprintPayloadRow | undefined> {
-  const readable = blueprintReadableBy(viewer, communityOn);
-  if (!readable) {
+  if (!communityOn && viewer.userId === undefined) {
+    // The viewer may read none: no statement to send.
     return undefined;
   }
-  const { data, error } = await getCommunityDb()
-    .from("blueprints")
-    .select(`${BLUEPRINT_SUMMARY_COLUMNS},payload`)
-    .eq("id", id)
-    .or(readable)
-    .maybeSingle();
-  if (error) {
-    throw new DbQueryError(error);
-  }
-  return (data ?? undefined) as BlueprintPayloadRow | undefined;
+  return (tx ?? getDb())
+    .selectFrom("blueprints")
+    .select([...BLUEPRINT_SUMMARY_FIELDS, "payload"])
+    .where((eb) => eb.and([eb("id", "=", id), sqlRules.blueprintReadableBy(viewer, communityOn)(eb)]))
+    .$castTo<BlueprintPayloadRow>()
+    .executeTakeFirst();
 }
 
 /** Who owns a blueprint and whether it is public, for the access rule. */
 export async function readAccess(
   id: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<{ id: string; user_id: string; is_public: boolean } | undefined> {
-  const { data, error } = await getCommunityDb()
-    .from("blueprints")
-    .select("id,user_id,is_public")
-    .eq("id", id)
-    .maybeSingle<{ id: string; user_id: string; is_public: boolean }>();
-  if (error) {
-    throw new DbQueryError(error);
-  }
-  return data ?? undefined;
+  return (tx ?? getDb())
+    .selectFrom("blueprints")
+    .select(["id", "user_id", "is_public"])
+    .where("id", "=", id)
+    .executeTakeFirst();
 }
 
 /** Writes `patch` to the owner's blueprint and answers its summary row; undefined when the owner has no such blueprint. */
@@ -170,50 +183,61 @@ export async function updateOwn(
   id: string,
   ownerId: string,
   patch: BlueprintPatch,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<BlueprintRow | undefined> {
-  const { data, error } = await getCommunityDb()
-    .from("blueprints")
-    .update(patch)
-    .eq("id", id)
-    .eq("user_id", ownerId)
-    .select(BLUEPRINT_SUMMARY_COLUMNS)
-    .maybeSingle();
-  if (error) {
-    throw new DbQueryError(error);
-  }
-  return (data ?? undefined) as BlueprintRow | undefined;
+  const { tags, icon, ...rest } = patch;
+  return (tx ?? getDb())
+    .updateTable("blueprints")
+    .set({
+      ...contentValues(rest),
+      ...(tags !== undefined ? { tags: json(tags) } : {}),
+      ...(icon !== undefined ? { icon: iconParam(icon) } : {}),
+    })
+    .where("id", "=", id)
+    .where("user_id", "=", ownerId)
+    .returning(BLUEPRINT_SUMMARY_FIELDS)
+    .$castTo<BlueprintRow>()
+    .executeTakeFirst();
 }
 
 /** Deletes the owner's blueprint (its votes go with it); answers whether there was one. */
-export async function deleteOwn(id: string, ownerId: string, _tx?: Tx): Promise<boolean> {
-  const { data, error } = await getCommunityDb()
-    .from("blueprints")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", ownerId)
-    .select("id");
-  if (error) {
-    throw new DbQueryError(error);
-  }
-  return (data ?? []).length > 0;
+export async function deleteOwn(id: string, ownerId: string, tx?: Tx): Promise<boolean> {
+  const result = await (tx ?? getDb())
+    .deleteFrom("blueprints")
+    .where("id", "=", id)
+    .where("user_id", "=", ownerId)
+    .executeTakeFirst();
+  return Number(result.numDeletedRows) > 0;
 }
 
-/** A public blueprint with its payload, for a counted download; undefined when there is none. */
-export async function readDownload(id: string, _tx?: Tx): Promise<BlueprintPayloadRow | undefined> {
-  let query = getCommunityDb()
-    .from("blueprints")
-    .select(`${BLUEPRINT_SUMMARY_COLUMNS},payload`)
-    .eq("id", id);
-  query = publicBlueprints(query);
-  const { data, error } = await query.maybeSingle();
-  if (error) {
-    throw new DbQueryError(error);
-  }
-  return (data ?? undefined) as BlueprintPayloadRow | undefined;
-}
-
-/** Sets a blueprint's download count. Best effort: a failure is not reported. */
-export async function writeDownloads(id: string, downloads: number, _tx?: Tx): Promise<void> {
-  await getCommunityDb().from("blueprints").update({ downloads }).eq("id", id);
+/**
+ * Counts one download of a public blueprint and answers it with its payload
+ * and the new count; undefined when there is no such public blueprint. One
+ * statement: concurrent downloads each add one, and the public rule holds in
+ * the same statement. The owner's own download adds nothing, so an author
+ * placing their published work never inflates its count.
+ */
+export async function takeDownload(
+  id: string,
+  viewer: { userId?: string },
+  tx?: Tx,
+): Promise<BlueprintPayloadRow | undefined> {
+  const { userId } = viewer;
+  return (tx ?? getDb())
+    .updateTable("blueprints")
+    .set((eb) => ({
+      downloads:
+        userId === undefined
+          ? eb("downloads", "+", 1)
+          : eb
+              .case()
+              .when("user_id", "=", userId)
+              .then(eb.ref("downloads"))
+              .else(eb("downloads", "+", 1))
+              .end(),
+    }))
+    .where((eb) => eb.and([eb("id", "=", id), sqlRules.publicBlueprints()(eb)]))
+    .returning([...BLUEPRINT_SUMMARY_FIELDS, "payload"])
+    .$castTo<BlueprintPayloadRow>()
+    .executeTakeFirst();
 }

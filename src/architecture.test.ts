@@ -608,13 +608,11 @@ function handleReexports(graph: Map<string, SourceFile>): string[] {
 const SERVICE_DB_NAMES = new Set([
   "withTransaction",
   "Tx",
-  "DbQueryError",
   "DatabaseDownError",
   "isDatabaseDown",
   "isDatabaseError",
   "COMMUNITY_DB_DOWN_MESSAGE",
-  "blueprintStorageErrorMessage",
-  "libraryStorageErrorMessage",
+  "storageErrorMessage",
 ]);
 const CONFIG_DB_NAMES = new Set(["isCommunityConfigured", "isDatabaseConfigured"]);
 
@@ -1242,7 +1240,7 @@ describe("the layers", () => {
         "export const run = (text: string) => [sql.raw(text), CompiledQuery.raw(text)];",
       ].join("\n"),
       "src/lib/server/services/good-fixture.ts": [
-        'import { DbQueryError, withTransaction, type Tx } from "../db";',
+        'import { isDatabaseDown, withTransaction, type Tx } from "../db";',
         'import * as plans from "../repos/plans";',
         'import { makeActorKey } from "../auth/keys";',
         'import { checkRateLimit } from "../limits/rate-limit";',

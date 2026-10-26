@@ -20,13 +20,11 @@ export {
 } from "./rest";
 export { DB_BREAKER_FAILURES, DB_BREAKER_OPEN_MS, resetDbBreaker } from "./breaker";
 export {
-  blueprintStorageErrorMessage,
   COMMUNITY_DB_DOWN_MESSAGE,
   DatabaseDownError,
-  DbQueryError,
   isDatabaseDown,
   isDatabaseError,
-  libraryStorageErrorMessage,
+  storageErrorMessage,
 } from "./errors";
 export { json, type JsonParam } from "./parsers";
 export type { Database, JsonValue } from "./schema";

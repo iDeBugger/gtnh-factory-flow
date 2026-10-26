@@ -1,6 +1,6 @@
 import type { CommunityVoteResponse } from "@/lib/community/types";
 import { makeActorKey, makeVoterKey, saltedKey } from "../auth/keys";
-import { blueprintStorageErrorMessage, DbQueryError, withTransaction } from "../db";
+import { withTransaction } from "../db";
 import { clientAddress } from "../http/client-address";
 import type { Viewer } from "../http/viewer";
 import { checkRateLimit } from "../limits/rate-limit";
@@ -51,7 +51,8 @@ interface TargetRules {
   notFound: string;
   /**
    * Whether the row exists and this viewer may score it, or the answer for a
-   * failed read. A row the viewer may not vote on reads as missing.
+   * failed read. A row the viewer may not vote on reads as missing; a read
+   * that throws goes to the route, which logs it and answers its sentence.
    */
   mayVote(viewer: Viewer, id: string): Promise<ServiceResult<boolean>>;
   /** What else a counted vote changes. */
@@ -81,15 +82,7 @@ const RULES: Record<VoteTarget, TargetRules> = {
     paceAction: "blueprint-vote",
     notFound: "Blueprint not found.",
     async mayVote(_viewer, id) {
-      let row;
-      try {
-        row = await blueprints.readAccess(id);
-      } catch (error) {
-        if (!(error instanceof DbQueryError)) {
-          throw error;
-        }
-        return fail("unavailable", blueprintStorageErrorMessage(error, VOTING_FAILED), { status: 500 });
-      }
+      const row = await blueprints.readAccess(id);
       return ok(Boolean(row?.is_public));
     },
     afterVote: () => undefined,

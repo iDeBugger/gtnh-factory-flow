@@ -1,6 +1,6 @@
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { closeDb, getDb, resetDbBreaker, useDbForTests } from "../db";
+import { closeDb, resetDbBreaker, useDbForTests } from "../db";
 import { createDbClient, type DirectDbClient } from "../db/client";
 import { applyMigrations } from "../db/migrations";
 import type { Viewer } from "../http/viewer";
@@ -24,14 +24,6 @@ vi.mock("../limits/rate-limit", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../limits/rate-limit")>()),
   checkRateLimit: async () => true,
 }));
-// Blueprints still read through PostgREST, which this file has none of: the
-// access read comes from the same database directly.
-vi.mock("../repos/blueprints", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../repos/blueprints")>()),
-  readAccess: async (id: string) =>
-    getDb().selectFrom("blueprints").select(["id", "user_id", "is_public"]).where("id", "=", id).executeTakeFirst(),
-}));
-
 const serverUrl = process.env.GTNH_TEST_POSTGRES_URL;
 const database = `gtnh_vote_race_${process.pid}`;
 let admin: pg.Client | undefined;

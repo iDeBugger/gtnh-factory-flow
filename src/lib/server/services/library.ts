@@ -15,10 +15,9 @@ import {
 } from "@/lib/library/sync-types";
 import { leaseHeld } from "../cloud-plans";
 import {
-  DbQueryError,
   isDatabaseDown,
   isDatabaseError,
-  libraryStorageErrorMessage,
+  storageErrorMessage,
   withTransaction,
   type Tx,
 } from "../db";
@@ -60,13 +59,13 @@ import { fail, ok, type ServiceResult } from "./result";
  */
 function storageFailure(error: unknown, fallback: string): ServiceResult<never> {
   const down = isDatabaseDown(error);
-  if (!down && !(error instanceof DbQueryError) && !isDatabaseError(error)) {
+  if (!down && !isDatabaseError(error)) {
     throw error;
   }
   if (!down) {
     console.error(fallback, error);
   }
-  return fail("unavailable", libraryStorageErrorMessage(error, fallback), { status: 500 });
+  return fail("unavailable", storageErrorMessage(error, fallback), { status: 500 });
 }
 
 const pairKey = (ownerId: string, designId: string) => `${ownerId}:${designId}`;

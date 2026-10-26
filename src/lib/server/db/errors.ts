@@ -8,50 +8,14 @@ export const COMMUNITY_DB_DOWN_MESSAGE =
   "The community database is not responding. Try again in a few minutes.";
 
 /**
- * What the library's sync strip says when a query failed: the database-down
+ * What a service answers when a query failed: the database-down
  * line when it could not be reached, else the route's own sentence. The
  * schema is the migration runner's, so a missing table is a broken deploy,
  * not a setup step a player could take, and the database's own message
  * (table and column names) stays in the log.
  */
-export function libraryStorageErrorMessage(error: unknown, fallback: string): string {
+export function storageErrorMessage(error: unknown, fallback: string): string {
   return isDatabaseDown(error) ? COMMUNITY_DB_DOWN_MESSAGE : fallback;
-}
-
-/**
- * Turns the two schema-drift Postgres errors into messages that say what to
- * actually do, instead of a generic 500: PGRST205 means the blueprints table
- * has never been created; PGRST204/42703 mean the table predates a column
- * this build reads or writes (schema.sql converges when re-run — its later
- * additions are idempotent ALTERs). Anything else keeps the caller's word.
- */
-export function blueprintStorageErrorMessage(
-  error: { code?: string } | null,
-  fallback: string,
-): string {
-  if (error?.code === "PGRST205") {
-    return "Blueprint storage is not set up yet: run supabase/schema.sql in the Supabase SQL editor.";
-  }
-  if (error?.code === "PGRST204" || error?.code === "42703") {
-    return "Blueprint storage is out of date: re-run the latest supabase/schema.sql in the Supabase SQL editor.";
-  }
-  return fallback;
-}
-
-/**
- * A query the database refused or could not answer, thrown by a repository
- * with the database's own code and message, so a service can still word it
- * (`libraryStorageErrorMessage`) as the route did. A failed write that came
- * back with no row and no error carries an empty message.
- */
-export class DbQueryError extends Error {
-  readonly code?: string;
-
-  constructor(error: { code?: string; message?: string } | null | undefined) {
-    super(error?.message ?? "");
-    this.name = "DbQueryError";
-    this.code = error?.code;
-  }
 }
 
 /**
