@@ -105,10 +105,12 @@ export async function addComment(
   if (!text || text.length > COMMUNITY_COMMENT_MAX_LENGTH) {
     return fail("bad-request", `A comment runs 1 to ${COMMUNITY_COMMENT_MAX_LENGTH} characters.`);
   }
-  // A post taken down since `commentAccess` read it is gone here too: the
-  // insert's foreign key fails.
   const row = await withTransaction(async (tx) => {
-    await plans.lockPost(planId, tx);
+    // A post taken down since `commentAccess` read it is as missing as one
+    // that never was.
+    if (!(await plans.lockPost(planId, tx))) {
+      return undefined;
+    }
     const written = await comments.insert(
       { plan_id: planId, user_id: userId, author_name: username, body: text },
       tx,
@@ -116,6 +118,9 @@ export async function addComment(
     await comments.recount(planId, tx);
     return written;
   });
+  if (!row) {
+    return fail("not-found", PLAN_NOT_FOUND);
+  }
   invalidatePlanListCache();
   return ok({ comment: rowToComment(row, viewer, planOwnerId) });
 }

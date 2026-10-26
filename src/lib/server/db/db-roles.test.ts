@@ -437,7 +437,7 @@ describe("the database roles", () => {
         expect(await plans.countView(id, owner)).toBe(1);
         expect(await plans.takeDownload(id, owner)).toEqual({ plan: { nodes: [] }, name: "Roles edited" });
         const written = await withTransaction(async (tx) => {
-          await plans.lockPost(id, tx);
+          expect(await plans.lockPost(id, tx)).toBe(true);
           const row = await comments.insert({ plan_id: id, user_id: MEMBER, author_name: "member", body: "Hi" }, tx);
           await comments.recount(id, tx);
           return row;

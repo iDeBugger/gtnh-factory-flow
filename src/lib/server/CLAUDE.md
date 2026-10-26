@@ -275,7 +275,8 @@ database below); the live service's queries are all among these, and it refuses 
   concurrent counts all land, and a post the viewer may not see counts nothing.
 - A comment's insert or delete and its post's recount (one `update ... from (select count(*), max(created_at))`)
   are one transaction, after `plans.lockPost` (`for no key update`), so a recount sees every comment committed
-  before it (the Postgres case of ten comments at once fails without the lock).
+  before it (the Postgres case of ten comments at once fails without the lock). A comment on a post taken down
+  since the access read finds no row to lock and answers the route's 404.
 - A vote (`repos/votes.ts`, `services/votes.ts`) is one transaction: `votes.lockParent` (`for no key update` on the
   post or blueprint, first, as a comment takes the post), the vote row's upsert or delete, then one recount
   `update ... set upvotes = (select count(*) ...), downvotes = (...) returning`. Without the lock concurrent votes

@@ -198,16 +198,18 @@ export async function readAccess(
 /**
  * Locks a post's row until the transaction ends, so the writes that restamp
  * its figures (a comment and its recount) run one at a time per post and
- * each recount sees the comments committed before it. `for no key update`:
- * a comment's foreign-key check on the post never waits for it.
+ * each recount sees the comments committed before it, and answers whether
+ * the post is there. `for no key update`: a comment's foreign-key check on
+ * the post never waits for it.
  */
-export async function lockPost(planId: string, tx: Tx): Promise<void> {
-  await tx
+export async function lockPost(planId: string, tx: Tx): Promise<boolean> {
+  const row = await tx
     .selectFrom("community_plans")
     .select("id")
     .where("id", "=", planId)
     .forNoKeyUpdate()
-    .execute();
+    .executeTakeFirst();
+  return row !== undefined;
 }
 
 /** A post's owner, or undefined when there is none; a failed read answers undefined too, as a missing post. */

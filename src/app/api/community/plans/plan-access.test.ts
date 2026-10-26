@@ -612,6 +612,22 @@ describe("a post's comments", () => {
     expect((await deleteIt()).status).toBe(200);
   });
 
+  it("a comment on a post taken down after its access read is not found", async () => {
+    const planId = randomUUID();
+    // The access read still saw the post; it is gone by the time the comment locks it.
+    const seen = vi
+      .spyOn(plansRepo, "readAccess")
+      .mockResolvedValueOnce({ id: planId, user_id: users.owner!.id, is_public: true });
+    try {
+      const posted = await postComment(planId, "poster", "Too late");
+      expect(posted.status).toBe(404);
+      expect(await posted.json()).toEqual({ error: "Plan not found." });
+    } finally {
+      seen.mockRestore();
+    }
+    expect(await commentsRepo.list(planId, 10)).toEqual([]);
+  });
+
   it("writes a comment and its post's figures under the post's lock", async () => {
     const planId = await makePlan("Locked thread", true);
     const LOCK = /^select "id" from "community_plans" where "id" = \$1 for no key update$/;
