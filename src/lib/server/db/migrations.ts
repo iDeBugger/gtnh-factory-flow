@@ -10,7 +10,11 @@ import path from "node:path";
  * - `db/migrations/NNNN-name.sql`, each applied once, in name order, in its
  *   own transaction, and recorded with its sha256 in `schema_migrations`.
  *   An applied file is never edited: a change is a new file, and a changed
- *   one is refused by name.
+ *   one is refused by name. The runner's transaction is the file's, so a
+ *   file holds no transaction control (`begin`, `commit`, `rollback`,
+ *   `savepoint`, ...) and nothing `concurrently`, which cannot run inside
+ *   one: a file that commits itself would be applied with no ledger row if
+ *   the run stopped before the row.
  * - `db/grants.sql`, what the app roles may touch, applied again on every
  *   run by `ensureRoles`, so a new table gets its grants and a grant removed
  *   from the file is gone after the next run.
@@ -57,16 +61,23 @@ export const MIGRATION_NAME = /^\d{4}-[a-z0-9-]+\.sql$/;
 const LEDGER = "schema_migrations";
 /** Held for the whole run, so two deploys never migrate one database at once. */
 const LOCK_KEY = 7361;
+/** How long a run waits for another to finish before it gives up and says so. */
+export const LOCK_WAIT_MS = 120_000;
+const LOCK_POLL_MS = 500;
 const APP_ROLES = ["gtnh_site", "gtnh_live"] as const;
 
 export class MigrationError extends Error {
   override name = "MigrationError";
 }
 
-/** The migration files in order, each name checked. */
+/**
+ * The migration files in order. Every entry of `migrations/` is one, so a
+ * misnamed file (`0002-x.SQL`, `0002_x.sql`) is refused, never skipped;
+ * only hidden files (an editor's or the OS's, `.DS_Store`) are passed over.
+ */
 export function migrationFiles(dir: string): string[] {
   const names = readdirSync(path.join(dir, "migrations"))
-    .filter((file) => file.endsWith(".sql"))
+    .filter((file) => !file.startsWith("."))
     .sort();
   for (const name of names) {
     if (!MIGRATION_NAME.test(name)) {
@@ -76,16 +87,78 @@ export function migrationFiles(dir: string): string[] {
   return names;
 }
 
+/**
+ * The file's text as git stores it: a checkout that writes CRLF line ends
+ * (core.autocrlf) hashes the same file as the image's copy does.
+ */
 function sha256(text: string): string {
-  return createHash("sha256").update(text).digest("hex");
+  return createHash("sha256").update(text.replace(/\r\n/g, "\n")).digest("hex");
 }
 
-async function withLock<T>(run: RunSql, work: () => Promise<T>): Promise<T> {
-  await run("select pg_advisory_lock($1)", [LOCK_KEY]);
+/** The statements that end or open a transaction, and `concurrently`, outside strings and comments. */
+const TRANSACTION_CONTROL =
+  /^(begin|commit|rollback|abort|end|start\s+transaction|savepoint|release|prepare\s+transaction)\b/i;
+
+/** Refuses a file that would take over the runner's transaction or cannot run inside one. */
+export function checkMigrationText(name: string, text: string): void {
+  // Comments, string literals, quoted names and dollar-quoted bodies (a DO
+  // block's begin ... end) are not statements.
+  const code = text
+    .replace(/\$([A-Za-z_][A-Za-z0-9_]*)?\$[\s\S]*?\$\1\$/g, " ")
+    .replace(/'(?:[^']|'')*'/g, " ")
+    .replace(/"(?:[^"]|"")*"/g, " ")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/--[^\n]*/g, " ");
+  const statements = code.split(";").map((statement) => statement.trim());
+  if (statements.some((statement) => TRANSACTION_CONTROL.test(statement))) {
+    throw new MigrationError(
+      `${name}: runs in the runner's transaction, so it holds no begin, commit, rollback or savepoint`,
+    );
+  }
+  if (/\bconcurrently\b/i.test(code)) {
+    throw new MigrationError(
+      `${name}: runs in the runner's transaction, where concurrently cannot run`,
+    );
+  }
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Runs `work` holding the advisory lock. A run that cannot have it within
+ * `waitMs` fails and says another run holds it, rather than hang a deploy.
+ * The unlock never replaces the error `work` failed with (on a lost
+ * connection it fails too, and the server drops the lock with the session).
+ */
+async function withLock<T>(run: RunSql, work: () => Promise<T>, waitMs: number): Promise<T> {
+  const until = Date.now() + waitMs;
+  for (;;) {
+    const { rows } = await run("select pg_try_advisory_lock($1) as locked", [LOCK_KEY]);
+    if ((rows[0] as { locked?: boolean } | undefined)?.locked) {
+      break;
+    }
+    if (Date.now() >= until) {
+      throw new MigrationError(
+        `another migration run holds the lock (pg_advisory_lock ${LOCK_KEY}); waited ${Math.round(waitMs / 1000)} s`,
+      );
+    }
+    await sleep(LOCK_POLL_MS);
+  }
+  let failed = false;
   try {
     return await work();
+  } catch (error) {
+    failed = true;
+    throw error;
   } finally {
-    await run("select pg_advisory_unlock($1)", [LOCK_KEY]);
+    try {
+      await run("select pg_advisory_unlock($1)", [LOCK_KEY]);
+    } catch (error) {
+      if (!failed) {
+        // eslint-disable-next-line no-unsafe-finally
+        throw error;
+      }
+    }
   }
 }
 
@@ -134,47 +207,57 @@ async function openLedger(run: RunSql): Promise<void> {
 export async function applyMigrations(
   run: RunSql,
   dir: string,
-  options: { onApplied?: (name: string) => void } = {},
+  options: { onApplied?: (name: string) => void; lockWaitMs?: number } = {},
 ): Promise<string[]> {
   const names = migrationFiles(dir);
-  return withLock(run, async () => {
-    await openLedger(run);
-    const { rows } = await run(`select name, sha256 from public.${LEDGER}`, []);
-    const applied = new Map(
-      (rows as { name: string; sha256: string }[]).map((row) => [row.name, row.sha256]),
-    );
-    for (const name of applied.keys()) {
-      if (!names.includes(name)) {
-        throw new MigrationError(`${name}: applied to this database, but no such file`);
-      }
-    }
-    const done: string[] = [];
-    for (const name of names) {
-      const text = readFileSync(path.join(dir, "migrations", name), "utf8");
-      const digest = sha256(text);
-      const recorded = applied.get(name);
-      if (recorded !== undefined) {
-        if (recorded !== digest) {
-          throw new MigrationError(
-            `${name}: changed since it was applied; put the change in a new migration`,
-          );
+  const texts = new Map(
+    names.map((name) => [name, readFileSync(path.join(dir, "migrations", name), "utf8")]),
+  );
+  for (const [name, text] of texts) {
+    checkMigrationText(name, text);
+  }
+  return withLock(
+    run,
+    async () => {
+      await openLedger(run);
+      const { rows } = await run(`select name, sha256 from public.${LEDGER}`, []);
+      const applied = new Map(
+        (rows as { name: string; sha256: string }[]).map((row) => [row.name, row.sha256]),
+      );
+      for (const name of applied.keys()) {
+        if (!names.includes(name)) {
+          throw new MigrationError(`${name}: applied to this database, but no such file`);
         }
-        continue;
       }
-      await run("begin");
-      try {
-        await run(text);
-        await run(`insert into public.${LEDGER} (name, sha256) values ($1, $2)`, [name, digest]);
-        await run("commit");
-      } catch (error) {
-        await run("rollback").catch(() => undefined);
-        throw new MigrationError(`${name}: ${(error as Error).message}`, { cause: error });
+      const done: string[] = [];
+      for (const name of names) {
+        const text = texts.get(name)!;
+        const digest = sha256(text);
+        const recorded = applied.get(name);
+        if (recorded !== undefined) {
+          if (recorded !== digest) {
+            throw new MigrationError(
+              `${name}: changed since it was applied; put the change in a new migration`,
+            );
+          }
+          continue;
+        }
+        await run("begin");
+        try {
+          await run(text);
+          await run(`insert into public.${LEDGER} (name, sha256) values ($1, $2)`, [name, digest]);
+          await run("commit");
+        } catch (error) {
+          await run("rollback").catch(() => undefined);
+          throw new MigrationError(`${name}: ${(error as Error).message}`, { cause: error });
+        }
+        done.push(name);
+        options.onApplied?.(name);
       }
-      done.push(name);
-      options.onApplied?.(name);
-    }
-    return done;
-  });
+      return done;
+    },
+    options.lockWaitMs ?? LOCK_WAIT_MS,
+  );
 }
 
 /**
@@ -193,23 +276,26 @@ export async function ensureRoles(
   run: RunSql,
   passwords: { site?: string; live?: string },
   dir: string,
+  options: { lockWaitMs?: number } = {},
 ): Promise<void> {
   const grants = readFileSync(path.join(dir, "grants.sql"), "utf8");
   const password: Record<(typeof APP_ROLES)[number], string | undefined> = {
     gtnh_site: passwords.site,
     gtnh_live: passwords.live,
   };
-  await withLock(run, async () => {
-    await run("begin");
-    try {
-      await run(`
+  await withLock(
+    run,
+    async () => {
+      await run("begin");
+      try {
+        await run(`
         set local log_min_error_statement = panic;
         set local log_statement = 'none';
         set local log_min_duration_statement = -1;
         set local log_parameter_max_length_on_error = 0;
       `);
-      for (const role of APP_ROLES) {
-        await run(`
+        for (const role of APP_ROLES) {
+          await run(`
           do $$
           begin
             if not exists (select 1 from pg_roles where rolname = '${role}') then
@@ -219,13 +305,13 @@ export async function ensureRoles(
           $$;
           alter role ${role} nosuperuser nocreatedb nocreaterole noreplication nobypassrls;
         `);
-        const secret = password[role];
-        if (!secret) {
-          await run(`alter role ${role} nologin`);
-          continue;
-        }
-        await run("select set_config('gtnh.role_password', $1, true)", [secret]);
-        await run(`
+          const secret = password[role];
+          if (!secret) {
+            await run(`alter role ${role} nologin`);
+            continue;
+          }
+          await run("select set_config('gtnh.role_password', $1, true)", [secret]);
+          await run(`
           do $$
           begin
             execute format('alter role ${role} login password %L', current_setting('gtnh.role_password'));
@@ -235,12 +321,14 @@ export async function ensureRoles(
           $$;
           select set_config('gtnh.role_password', '', true);
         `);
+        }
+        await run(grants);
+        await run("commit");
+      } catch (error) {
+        await run("rollback").catch(() => undefined);
+        throw error;
       }
-      await run(grants);
-      await run("commit");
-    } catch (error) {
-      await run("rollback").catch(() => undefined);
-      throw error;
-    }
-  });
+    },
+    options.lockWaitMs ?? LOCK_WAIT_MS,
+  );
 }

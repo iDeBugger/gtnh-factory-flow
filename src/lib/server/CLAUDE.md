@@ -478,8 +478,9 @@ Rules:
   `db/schema.test.ts` fails while `db/schema.ts` is stale).
 - The schema is `db/migrations/NNNN-words.sql`, applied once each by the runner (`db/migrations.ts`,
   `tools/db/migrate.ts`; docs/deploy.md, Migrations). A change is a new file, never an edit to an applied one (the
-  runner refuses a changed file by name); a new table gets its grants in `db/grants.sql` in the same commit; then
-  `npm run db:types`. Exam: `db/migrations.test.ts`, `db/db-roles.test.ts`.
+  runner refuses a changed file by name). A file runs in the runner's transaction: no `begin`, `commit`, `rollback`,
+  `savepoint` or `concurrently` (refused by name). A new table gets its grants in `db/grants.sql` in the same
+  commit; then `npm run db:types`. Exam: `db/migrations.test.ts`, `db/db-roles.test.ts`.
 - Tests open an in-memory PGlite per file, built by `applyMigrations` from `db/`, with `useTestDb()`
   (`src/test-support/test-db.ts`), and fail queries with `withDbFault`.
 - `npm run dev:local` gives Next and the live service `DATABASE_URL=postgres://postgres@127.0.0.1:54330/postgres`,

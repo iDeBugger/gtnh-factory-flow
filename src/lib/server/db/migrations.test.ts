@@ -145,9 +145,19 @@ describe("the migration runner", () => {
 
   it("refuses a file that is not named NNNN-words.sql, and an applied file that is gone", async () => {
     const { run } = database();
-    await expect(applyMigrations(run, folder({ "1-first.sql": "select 1;" }))).rejects.toThrow(
-      "1-first.sql: a migration is named NNNN-words.sql (lowercase, hyphens)",
-    );
+    for (const name of [
+      "1-first.sql",
+      "0001-first.SQL",
+      "0001-first.sq",
+      "0001_first.sql",
+      "0001-First.sql",
+    ]) {
+      await expect(applyMigrations(run, folder({ [name]: "select 1;" })), name).rejects.toThrow(
+        `${name}: a migration is named NNNN-words.sql (lowercase, hyphens)`,
+      );
+    }
+    // An editor's or the OS's hidden file is no migration.
+    expect(await applyMigrations(run, folder({ ".DS_Store": "x" }))).toEqual([]);
     const dir = folder({ "0001-first.sql": "create table a (id int primary key);" });
     await applyMigrations(run, dir);
     rmSync(path.join(dir, "migrations", "0001-first.sql"));
@@ -183,5 +193,73 @@ describe("the migration runner", () => {
         await pglite.exec("reset role");
       }
     }
+  });
+
+  it("refuses a file with its own transaction control or concurrently, by name, before applying any", async () => {
+    const refused: Record<string, string> = {
+      "begin;\ncreate table a (id int);\ncommit;": "holds no begin, commit, rollback or savepoint",
+      "create table a (id int);\nCOMMIT;": "holds no begin, commit, rollback or savepoint",
+      "start transaction; create table a (id int);":
+        "holds no begin, commit, rollback or savepoint",
+      "create table a (id int); savepoint s;": "holds no begin, commit, rollback or savepoint",
+      "create table a (id int);\nend;": "holds no begin, commit, rollback or savepoint",
+      "create index concurrently a_idx on community_users (username);": "concurrently cannot run",
+    };
+    // Refused while reading the files, so no database work is needed per case.
+    const { pglite, run } = database();
+    for (const [text, message] of Object.entries(refused)) {
+      const dir = folder({ "0001-fine.sql": "create table fine (id int);", "0002-bad.sql": text });
+      const error = await applyMigrations(run, dir).catch((caught: unknown) => caught);
+      expect(String(error), text).toContain("0002-bad.sql: runs in the runner's transaction");
+      expect(String(error), text).toContain(message);
+    }
+    expect(await tables(pglite)).toEqual([]);
+    // A DO block's begin ... end, and the words inside strings and comments, are not statements.
+    const fine = folder({
+      "0001-fine.sql": [
+        "-- begin; commit; concurrently",
+        "/* rollback; */",
+        "create table notes (body text default 'commit; begin');",
+        'create table "end" (id int);',
+        "do $$ begin perform 1; end $$;",
+        "do $body$ begin perform 'concurrently'; end $body$;",
+      ].join("\n"),
+    });
+    expect(await applyMigrations(run, fine)).toEqual(["0001-fine.sql"]);
+  });
+
+  it("hashes a file's text with LF line ends, so a CRLF checkout reads as unchanged", async () => {
+    const { run } = database();
+    const dir = folder({
+      "0001-first.sql": "create table a (id int);\ncreate table b (id int);\n",
+    });
+    await applyMigrations(run, dir);
+    writeFileSync(
+      path.join(dir, "migrations", "0001-first.sql"),
+      "create table a (id int);\r\ncreate table b (id int);\r\n",
+    );
+    expect(await applyMigrations(run, dir)).toEqual([]);
+  });
+
+  it("gives up on a held lock after its wait and says so, and keeps a failed file's error over the unlock's", async () => {
+    const { run } = database();
+    const held: RunSql = (text, params) =>
+      /pg_try_advisory_lock/.test(text)
+        ? Promise.resolve({ rows: [{ locked: false }] })
+        : run(text, params);
+    const started = Date.now();
+    await expect(applyMigrations(held, folder({}), { lockWaitMs: 600 })).rejects.toThrow(
+      "another migration run holds the lock (pg_advisory_lock 7361); waited 1 s",
+    );
+    expect(Date.now() - started).toBeGreaterThanOrEqual(600);
+
+    const lost: RunSql = (text, params) =>
+      /pg_advisory_unlock/.test(text)
+        ? Promise.reject(new Error("Connection terminated"))
+        : run(text, params);
+    const dir = folder({ "0001-bad.sql": "select no_such_function();" });
+    await expect(applyMigrations(lost, dir)).rejects.toThrow(/^0001-bad\.sql: .*no_such_function/);
+    // With nothing else failing, the unlock's own error is the run's.
+    await expect(applyMigrations(lost, folder({}))).rejects.toThrow("Connection terminated");
   });
 });

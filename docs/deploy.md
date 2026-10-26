@@ -233,8 +233,12 @@ role's `gtnh_trusted_proxies` and here.
 The migrate image runs the migration runner (`tools/db/migrate.ts`, bundled with `pg` inside to
 `dist-db/migrate.mjs` by `npm run build:db`) over the image's copy of `db/`, on every deploy. Under an advisory
 lock it applies each file in `db/migrations/` (`NNNN-words.sql`, numbered from 0001 with no gaps) that the ledger
-`schema_migrations` does not hold, each in its own transaction, and records its sha256. An applied file that has
-changed is refused by name: a schema change is always a new file. A database whose `public` schema holds tables
+`schema_migrations` does not hold, each in its own transaction, and records its sha256 (of the text with LF line
+ends, so a CRLF checkout matches). An applied file that has changed is refused by name: a schema change is always
+a new file. The transaction is the runner's, so a file holds no `begin`, `commit`, `rollback` or `savepoint` and
+nothing `concurrently`; the runner refuses such a file by name before applying anything, and refuses any file in
+`db/migrations/` not named `NNNN-words.sql` rather than skip it. A run that cannot take the lock within 2 minutes
+fails ("another migration run holds the lock"). A database whose `public` schema holds tables
 but no ledger is refused ("this database was not set up by the migration runner"), and so is one that has
 Supabase's `anon` or `authenticated` role, where row security is what keeps tables off the public API key. It
 prints `migrate: <file>` for each file it applies and `migrate: done`; a rerun prints only `migrate: done`.
