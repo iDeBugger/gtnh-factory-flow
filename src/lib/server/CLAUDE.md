@@ -291,9 +291,11 @@ cutover removes. Community posts (`repos/plans.ts`,
   leave stale counters on Postgres; PGlite never overlaps transactions, so the race is pinned by
   `services/votes-postgres.test.ts` and the lock order by recorded statements in `plan-access.test.ts` and
   `blueprints/vote.test.ts`. A row taken down since the access read answers the route's 404.
-- A blueprint download (`repos/blueprints.takeDownload`) is one `update ... returning` with the public rule in
-  its `where`; its author's own download adds nothing (a `case` on `user_id`), so concurrent downloads all land
-  and an author never inflates the count. Exam `blueprints/vote.test.ts`, `services/blueprints-postgres.test.ts`.
+Blueprints (`repos/blueprints.ts`, `services/blueprints.ts`; exam `blueprints/route.test.ts`,
+`blueprints/vote.test.ts`, the Postgres cases in `services/blueprints-postgres.test.ts`):
+- A download (`repos/blueprints.takeDownload`) is one `update ... returning` with the public rule in its `where`;
+  its author's own download adds nothing (a `case` on `user_id`), so concurrent downloads all land and an author
+  never inflates the count.
 Rules:
 - Every query has the pool's limits (`db/settings.ts`: 5 s to get a connection, 15 s statement timeout on the
   server, 20 s on the client), so a stalled database fails as down instead of holding a request open.
