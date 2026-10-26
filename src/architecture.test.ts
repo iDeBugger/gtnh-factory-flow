@@ -489,6 +489,68 @@ function clientHandleImports(graph: Map<string, SourceFile>): string[] {
     .sort();
 }
 
+/** The names a module exports: declarations, export lists (both names), `*` for `export *`. */
+function exportedNames(file: SourceFile): string[] {
+  const names: string[] = [];
+  for (const statement of syntaxTree(file).statements) {
+    if (ts.isExportDeclaration(statement)) {
+      const clause = statement.exportClause;
+      if (!clause || ts.isNamespaceExport(clause)) {
+        names.push("*");
+      } else {
+        for (const element of clause.elements) {
+          if (element.propertyName) names.push(element.propertyName.text);
+          names.push(element.name.text);
+        }
+      }
+    } else if (ts.isExportAssignment(statement)) {
+      if (ts.isIdentifier(statement.expression)) names.push(statement.expression.text);
+    } else if (
+      ts.canHaveModifiers(statement) &&
+      ts.getModifiers(statement)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+    ) {
+      if (ts.isVariableStatement(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+          if (ts.isIdentifier(declaration.name)) names.push(declaration.name.text);
+        }
+      } else if (
+        (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
+        statement.name
+      ) {
+        names.push(statement.name.text);
+      }
+    }
+  }
+  return names;
+}
+
+/** The modules that define or gather the database handles, and the names they hand on. */
+const HANDLE_MODULES = new Set([
+  DB_ENTRY,
+  "src/lib/server/db/client.ts",
+  "src/lib/server/db/rest.ts",
+]);
+const HANDLE_NAMES = new Set(["getDb", "getCommunityDb", "createDbClient", "sql", "CompiledQuery"]);
+
+/**
+ * Data-layer modules other than the handle modules that export a handle (or
+ * `export *`), which would let a service, allowed to import repositories,
+ * take one past the db entry's name checks.
+ */
+function handleReexports(graph: Map<string, SourceFile>): string[] {
+  return [...graph.values()]
+    .filter(
+      (file) =>
+        isDatabaseLayer(file.path) && !isExempt(file.path) && !HANDLE_MODULES.has(file.path),
+    )
+    .flatMap((file) =>
+      exportedNames(file)
+        .filter((name) => name === "*" || HANDLE_NAMES.has(name))
+        .map((name) => `${file.path}: ${name}`),
+    )
+    .sort();
+}
+
 /**
  * What a service takes from the db entry: the transaction, its handle's type
  * and the failure types and sentences. Building SQL (`json`) is the
@@ -791,6 +853,34 @@ describe("the layers", () => {
 
   it("services take only transactions and failure types from the db entry", () => {
     expect(serviceDbNames(graph)).toEqual([]);
+  });
+
+  it("no repository hands on a database handle", () => {
+    expect(handleReexports(graph)).toEqual([]);
+  });
+
+  it("refuses a repository that re-exports a handle", () => {
+    const repo = (name: string) => `src/lib/server/repos/handle-${name}.ts`;
+    const fixtures: Record<string, string> = {
+      [repo("named")]: 'export { getDb } from "../db";',
+      [repo("renamed")]: 'export { getCommunityDb as plans } from "../db";',
+      [repo("star")]: 'export * from "../db";',
+      [repo("sql")]: 'import { sql } from "kysely";\nexport { sql };',
+      [repo("default")]: 'import { getDb } from "../db";\nexport default getDb;',
+      [repo("declared")]: "export const sql = 1;\nexport function rows() { return []; }",
+      [repo("fine")]: 'import { getDb } from "../db";\nexport const count = () => getDb();',
+    };
+    const bad = new Map(
+      Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
+    );
+    expect(handleReexports(bad)).toEqual([
+      `${repo("declared")}: sql`,
+      `${repo("default")}: getDb`,
+      `${repo("named")}: getDb`,
+      `${repo("renamed")}: getCommunityDb`,
+      `${repo("sql")}: sql`,
+      `${repo("star")}: *`,
+    ]);
   });
 
   it("SQL is written only in the data layer, and spliced text only in the migrations", () => {
