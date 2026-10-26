@@ -25,8 +25,6 @@ export const VOTES_PER_ADDRESS_PER_PLAN_PER_DAY = 3;
 /** What the next anonymous voter behind that address is told: a shared network, not haste. */
 export const NETWORK_VOTES_SPENT = "Too many votes from this network today. Sign in to vote.";
 
-const VOTING_FAILED = "Voting failed.";
-
 /** A vote as the route read it from the body. */
 export interface VoteInput {
   deviceId: string;
@@ -50,11 +48,11 @@ interface TargetRules {
   paceAction: string;
   notFound: string;
   /**
-   * Whether the row exists and this viewer may score it, or the answer for a
-   * failed read. A row the viewer may not vote on reads as missing; a read
-   * that throws goes to the route, which logs it and answers its sentence.
+   * Whether the row exists and this viewer may score it. A row the viewer may
+   * not vote on reads as missing; a failed read throws to the route, which
+   * logs it and answers its sentence.
    */
-  mayVote(viewer: Viewer, id: string): Promise<ServiceResult<boolean>>;
+  mayVote(viewer: Viewer, id: string): Promise<boolean>;
   /** What else a counted vote changes. */
   afterVote(): void;
 }
@@ -66,13 +64,8 @@ const RULES: Record<VoteTarget, TargetRules> = {
     paceAction: "vote",
     notFound: "Plan not found.",
     async mayVote(viewer, id) {
-      let row;
-      try {
-        row = await plans.readAccess(id);
-      } catch {
-        return fail("unavailable", VOTING_FAILED, { status: 500 });
-      }
-      return ok(Boolean(row && canSeePlan(viewer, row)));
+      const row = await plans.readAccess(id);
+      return Boolean(row && canSeePlan(viewer, row));
     },
     // The list's cached pages and the voter's cached votes are stale now.
     afterVote: invalidatePlanListCache,
@@ -83,7 +76,7 @@ const RULES: Record<VoteTarget, TargetRules> = {
     notFound: "Blueprint not found.",
     async mayVote(_viewer, id) {
       const row = await blueprints.readAccess(id);
-      return ok(Boolean(row?.is_public));
+      return Boolean(row?.is_public);
     },
     afterVote: () => undefined,
   },
@@ -117,11 +110,7 @@ export async function castVote(
   if (!(await checkRateLimit(makeActorKey(request), rules.paceAction, 60, 60 * 10))) {
     return fail("rate-limited", "Voting too fast. Slow down.");
   }
-  const allowed = await rules.mayVote(viewer, id);
-  if (!allowed.ok) {
-    return allowed;
-  }
-  if (!allowed.value) {
+  if (!(await rules.mayVote(viewer, id))) {
     return fail("not-found", rules.notFound);
   }
 

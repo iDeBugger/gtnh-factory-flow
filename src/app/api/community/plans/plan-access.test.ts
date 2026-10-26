@@ -203,6 +203,23 @@ describe("voting on a post", () => {
     expect(rows).toEqual([]);
   });
 
+  it("logs a failed access read and answers the fixed sentence", async () => {
+    const planId = await makePlan("Unreadable", true);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      withDbFault(/^select "id", "user_id", "is_public" from "community_plans"/, refused());
+      const failed = await castVote(planId, { deviceId: "device-fail", value: 1 }, { who: "stranger" });
+      expect(failed.status).toBe(500);
+      expect(await failed.json()).toEqual({ error: "Voting failed." });
+      expect(failed.headers.get("cache-control")).toBe("no-store");
+      expect(errors).toHaveBeenCalledWith("vote failed", expect.objectContaining({ code: "XX000" }));
+    } finally {
+      clearDbFault();
+      errors.mockRestore();
+    }
+    expect((await planRow(planId)).upvotes).toBe(0);
+  });
+
   it("lets the owner vote on their own unpublished post, and anyone once it is public", async () => {
     const planId = await makePlan("Mine", false);
     const owner = await castVote(planId, { deviceId: "device-owner", value: 1 }, { who: "owner" });
