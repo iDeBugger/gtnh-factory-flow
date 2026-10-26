@@ -16,9 +16,40 @@
  * sorts by its approximation.
  */
 
-/** The dataset's `neiItemOrder` from an oracle export's `neiItemList`, or undefined without one. */
+/**
+ * NEI's default `inventory.itemsort`, which both packs ship. A mod's own sort options come after it,
+ * so only this start is checked: `default` (each item's own sub-item order) settles every tie
+ * before them.
+ */
+export const NEI_DEFAULT_SORT = [
+  "nei.itemsort.minecraft",
+  "nei.itemsort.mod",
+  "nei.itemsort.id",
+  "nei.itemsort.default",
+  "nei.itemsort.damage",
+  "nei.itemsort.name",
+];
+
+/**
+ * Why an exported list cannot stand for the pack's NEI order, or undefined when it can. An
+ * instance whose sort was changed in game exports that sort, not the one players see.
+ */
+export function neiSortProblem(neiItemList) {
+  const sort = String(neiItemList?.sort ?? "").split(",").map((rule) => rule.trim());
+  return NEI_DEFAULT_SORT.every((rule, index) => sort[index] === rule)
+    ? undefined
+    : `NEI item list sorted by "${neiItemList?.sort ?? ""}", not NEI's default (${NEI_DEFAULT_SORT.join(",")}): the export instance's config/NEI/client.cfg has another inventory.itemsort.`;
+}
+
+/**
+ * The dataset's `neiItemOrder` from an oracle export's `neiItemList`, or undefined without one or
+ * when it was not sorted by NEI's default (`neiSortProblem`, which the normalizer prints).
+ */
 export function neiItemOrderFromExport(neiItemList) {
   if (neiItemList?.status !== "exported" || !Array.isArray(neiItemList.stacks)) {
+    return undefined;
+  }
+  if (neiSortProblem(neiItemList)) {
     return undefined;
   }
   const seen = new Set();

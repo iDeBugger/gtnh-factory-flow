@@ -5,7 +5,7 @@ import path from "node:path";
 import { gunzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { neiItemOrderFromExport, resourceOrderFor } from "./nei-item-order.mjs";
+import { NEI_DEFAULT_SORT, neiItemOrderFromExport, neiSortProblem, resourceOrderFor } from "./nei-item-order.mjs";
 
 const script = (name) => fileURLToPath(new URL(`./${name}`, import.meta.url));
 
@@ -79,7 +79,7 @@ describe("NEI's item order through the pipeline", () => {
       ...EXPORT,
       neiItemList: {
         status: "exported",
-        sort: "nei.itemsort.minecraft,nei.itemsort.mod,nei.itemsort.id,nei.itemsort.default",
+        sort: NEI_DEFAULT_SORT.join(","),
         // The charged battery, then the empty one: one resource, two stacks.
         stacks: [
           "item:minecraft:stone",
@@ -112,7 +112,7 @@ describe("NEI's item order through the pipeline", () => {
   it("leaves a resource NEI does not list unplaced (null), for the search to put after every placed one", () => {
     const { dataset } = runPipeline({
       ...EXPORT,
-      neiItemList: { status: "exported", stacks: ["item:minecraft:stone", "fluid:water"] },
+      neiItemList: { status: "exported", sort: NEI_DEFAULT_SORT.join(","), stacks: ["item:minecraft:stone", "fluid:water"] },
     });
     const places = PLACES(dataset);
     expect(places["item:modx:onlyinrecipes"]).toBeNull();
@@ -130,12 +130,24 @@ describe("NEI's item order through the pipeline", () => {
   });
 });
 
+const DEFAULT = NEI_DEFAULT_SORT.join(",");
+
 describe("the order helpers", () => {
+  it("take a list only when it was sorted by NEI's default, mods' own rules after it allowed", () => {
+    const list = (sort) => ({ status: "exported", sort, stacks: ["item:a"] });
+    expect(neiSortProblem(list(DEFAULT))).toBeUndefined();
+    expect(neiItemOrderFromExport(list(`${DEFAULT},somemod.itemsort.colour`))).toEqual(["item:a"]);
+    const changed = list("nei.itemsort.name,nei.itemsort.minecraft,nei.itemsort.mod,nei.itemsort.id,nei.itemsort.default,nei.itemsort.damage");
+    expect(neiSortProblem(changed)).toMatch(/not NEI's default/);
+    expect(neiItemOrderFromExport(changed)).toBeUndefined();
+    expect(neiItemOrderFromExport({ status: "exported", stacks: ["item:a"] })).toBeUndefined();
+  });
+
   it("keep each key once at its first place and skip what is not a key", () => {
     expect(
-      neiItemOrderFromExport({ status: "exported", stacks: ["item:b", "item:a", "item:b", "", null, 3, "item:c"] }),
+      neiItemOrderFromExport({ status: "exported", sort: DEFAULT, stacks: ["item:b", "item:a", "item:b", "", null, 3, "item:c"] }),
     ).toEqual(["item:b", "item:a", "item:c"]);
-    expect(neiItemOrderFromExport({ status: "exported", stacks: [] })).toBeUndefined();
+    expect(neiItemOrderFromExport({ status: "exported", sort: DEFAULT, stacks: [] })).toBeUndefined();
     expect(neiItemOrderFromExport(undefined)).toBeUndefined();
   });
 
@@ -143,7 +155,7 @@ describe("the order helpers", () => {
     // The oracle moves a group's members (cells of several mods) to the first member's place.
     const stacks = ["item:minecraft:stone", "item:ic2:itemcellempty", "item:gregtech:gt.metaitem.01@30", "item:gregtech:gt.metaitem.01@31", "item:gregtech:gt.blockores"];
     const records = stacks.map((key) => ({ kind: "item", id: key.slice("item:".length) })).reverse();
-    const order = resourceOrderFor(records, neiItemOrderFromExport({ status: "exported", stacks }));
+    const order = resourceOrderFor(records, neiItemOrderFromExport({ status: "exported", sort: DEFAULT, stacks }));
     const placed = records.map((record, index) => [order[index], record.id]).sort((left, right) => left[0] - right[0]);
     expect(placed.map(([, id]) => `item:${id}`)).toEqual(stacks);
   });
