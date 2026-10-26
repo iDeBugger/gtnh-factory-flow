@@ -2334,7 +2334,8 @@
       "position": {
         "x": -320,
         "y": -200
-      }
+      },
+      "solvePin": 1
     },
     {
       "id": "node-fad7576c-fcad-41b2-a036-50e7c40281c5",
@@ -2365,7 +2366,8 @@
       "position": {
         "x": -760,
         "y": -20
-      }
+      },
+      "solvePin": 1
     },
     {
       "id": "node-7ef0ce4b-d3bc-4b96-9f25-65aa52459f1d",
@@ -2397,7 +2399,8 @@
       "position": {
         "x": -320,
         "y": 100
-      }
+      },
+      "solvePin": 3
     },
     {
       "id": "node-6c24ecc0-ac08-4da5-bcc5-a6d25b3d069c",
@@ -2420,7 +2423,8 @@
       "position": {
         "x": 120,
         "y": 100
-      }
+      },
+      "solvePin": 1
     },
     {
       "id": "node-12b5d4d3-76f6-40c1-957f-3141377af4aa",
@@ -2451,7 +2455,8 @@
       "position": {
         "x": -760,
         "y": 460
-      }
+      },
+      "solvePin": 1
     },
     {
       "id": "node-65d48922-98ae-4f8a-848f-21a4ce6c6543",
@@ -2474,7 +2479,8 @@
       "position": {
         "x": -320,
         "y": 420
-      }
+      },
+      "solvePin": 1
     }
   ],
   "storages": [
@@ -2709,5 +2715,7 @@
     "updatedAt": "2026-08-12T23:58:37.430Z",
     "communityPlanId": "19912cac-6881-4405-a986-b2d055e46234",
     "communityFingerprint": "7npb68ojr3"
-  }
+  },
+  "planMode": true,
+  "solveMode": true
 }

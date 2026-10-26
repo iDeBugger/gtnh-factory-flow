@@ -95,7 +95,6 @@ describe("loose cell wires become fluid tanks", () => {
     expect(flow("w:tank")).toBeCloseTo(emptying ? cells * 1000 : cells, 6);
     expect(flow("out")).toBeCloseTo(takerAct, 6);
     expect(notice).toEqual({
-      origin: "plan",
       text: "1 cell wire now goes through a fluid tank.",
       details: ["Cells no longer wire straight into fluid slots."],
     });
@@ -242,17 +241,6 @@ describe("loose cell wires become fluid tanks", () => {
   it("keeps a checked wire checked on both halves", () => {
     const checked = loosePlan(true, "maker", 1000, { checklist: { cards: [], edges: ["w"] } });
     expect(convertLooseCellWires(checked).project.checklist?.edges).toEqual(["w", "w:tank"]);
-  });
-
-  it("adds a line to an older mode's notice", () => {
-    const build = loosePlan(true, "maker");
-    delete build.planMode;
-    delete build.solveMode;
-    const { project, notice } = normalizeLoadedProjectWithNotice(build);
-    expect(project.planMode).toBe(true);
-    expect(project.nodes.find((entry) => entry.id === "cell-tank:w")?.solvePin).toBeUndefined();
-    expect(notice?.text).toBe("Converted from a Build plan.");
-    expect(notice?.details).toContain("1 cell wire now goes through a fluid tank.");
   });
 });
 

@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { sectionNodeView } from "../../../model/shared-machine";
 import type { FactoryProject, ThroughputResult } from "../../../model/types";
 import { calculateThroughput } from "../../throughput";
-import { convertBuildToPlan } from "../convert";
 import { unanchored } from "../unanchored";
 import type { Answer, DrawerReadout, SolutionView, SolveInput, UpToReadout } from "../types";
 import { setSolveCore } from "./engine";
@@ -372,19 +371,14 @@ describe("the nodes: an Up to card's utilization and status", () => {
   });
 });
 
-describe("opening an old plan", () => {
-  const build = () =>
-    project({
-      recipes: [recipe("a", [["x", 1]], [["y", 1]])],
-      nodes: [node("a", "a", { machineCount: 3 }), node("b", "a", { machineCount: 2 })],
-      extra: { solveMode: undefined, planMode: undefined },
-    });
-
-  it("a Build plan's built counts become Up to pins: no flag is set anywhere", () => {
-    const converted = convertBuildToPlan(build());
-    expect(converted.nodes.map((n) => n.solvePin)).toEqual([3, 2]);
-    expect(converted.nodes.every((n) => n.solvePinExact === undefined)).toBe(true);
-    const { input } = run(converted);
+describe("pins", () => {
+  it("a pin is Up to unless it is exact: each card a pool of its own at its count", () => {
+    const { input } = run(
+      project({
+        recipes: [recipe("a", [["x", 1]], [["y", 1]])],
+        nodes: [node("a", "a", { solvePin: 3 }), node("b", "a", { solvePin: 2 })],
+      }),
+    );
     expect(
       input.pools.map((pool) => [pool.machines[0], pool.capacity, pool.exact, pool.upTo]),
     ).toEqual([
@@ -394,13 +388,14 @@ describe("opening an old plan", () => {
     expect(input.machines.every((m) => !m.countFixed)).toBe(true);
   });
 
-  it("a Solve plan's pins read as Up to, and a custom rate card stays exact", () => {
+  it("a custom rate card stays exact beside an Up to pin", () => {
     const rate = customRecipe("rate", "x", 3, "supply");
-    const solve = project({
-      recipes: [recipe("a", [["x", 1]], [["y", 1]]), rate],
-      nodes: [node("a", "a", { solvePin: 2 }), node("c", "rate")],
-    });
-    const { input } = run(convertBuildToPlan(solve));
+    const { input } = run(
+      project({
+        recipes: [recipe("a", [["x", 1]], [["y", 1]]), rate],
+        nodes: [node("a", "a", { solvePin: 2 }), node("c", "rate")],
+      }),
+    );
     expect(input.pools.map((pool) => pool.machines[0])).toEqual(["a"]);
     const c = input.machines.find((m) => m.id === "c")!;
     expect([c.countFixed, c.machineCount]).toEqual([true, 1]);

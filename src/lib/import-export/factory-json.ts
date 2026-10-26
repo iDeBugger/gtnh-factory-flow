@@ -12,10 +12,8 @@ export class FactoryJsonError extends Error {
 }
 
 /**
- * A plan's JSON as a project. It keeps the mode the plan was saved in: every
- * plan that arrives lands on the board through the store (`markHydratedProject`,
- * `loadViewedProject`), and that is where it becomes a plan-mode project, so
- * the one conversion also gets to tell the player what it could not carry over.
+ * A plan's JSON as a project. Its loose cell wires stay: every plan that arrives lands on the board through the store
+ * (`markHydratedProject`, `loadViewedProject`), and that is where they become tanks, so the landing can say so.
  */
 export function parseFactoryProjectJson(source: string, options?: LoadOptions): FactoryProject {
   let raw: unknown;

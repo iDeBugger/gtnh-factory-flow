@@ -6,7 +6,6 @@ export * from "./types";
 export { makePortKey, parsePortKey } from "./port-key";
 export { LEFTOVER_KEY_SEPARATOR, makeLeftoverKey, splitLeftoverKey } from "./port-key";
 export { compareIds, comparePortRef } from "./ids";
-export { convertBuildToPlan } from "./convert";
 export type { PlanHelpers, PlanSolveArgs, PlanUnit } from "./adapter/args";
 export { getSolveCore, setSolveCore, type SolveCore } from "./adapter/engine";
 

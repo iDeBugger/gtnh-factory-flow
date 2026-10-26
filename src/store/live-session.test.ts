@@ -852,26 +852,6 @@ describe("live editing in the store", () => {
     expect(useLiveSession.getState().notice?.text).toBe("bob shared Big mall with you");
   });
 
-  it("converts a live plan in an old mode to the one board mode once, as an edit undo never takes back", async () => {
-    // The game writes Solve plans; an older build wrote Build plans. Both land through the live room.
-    const old: FactoryProject = { ...createEmptyProject(), id: "plan-live", name: "Live", solveMode: true, annotations: [annotation("n1", "one")] };
-    await openLiveDesign(planWith(annotation("n1", "one")), old);
-
-    expect(useFactoryStore.getState().project.planMode).toBe(true);
-    const batches = service.sent("ops");
-    expect(batches).toHaveLength(1);
-    expect(batches[0]!.ops).toContainEqual(expect.objectContaining({ o: "meta", f: expect.objectContaining({ planMode: true }) }));
-    expect(service.plan.planMode).toBe(true);
-    // Nothing of this person's to undo: the conversion is not theirs to take back.
-    expect(useFactoryStore.getState().liveUndo?.canUndo).toBe(false);
-
-    // A plan already in the one mode sends nothing more.
-    service.remote([{ o: "patch", c: "annotations", id: "n1", f: { text: "from bob" } }]);
-    await settle();
-    expect(service.sent("ops")).toHaveLength(1);
-    expect(annotations()[0]!.text).toBe("from bob");
-  });
-
   it("turns a live plan's loose cell wire into a fluid tank once, for everyone, as an edit undo never takes back", async () => {
     // An older build saved a cell wired straight into a fluid slot; the plan is already in the one mode.
     const recipes = [

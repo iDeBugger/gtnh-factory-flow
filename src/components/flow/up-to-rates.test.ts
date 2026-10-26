@@ -4,7 +4,7 @@ import { normalizeLoadedProject } from "@/lib/model/project-normalize";
 import { makeResourceKey } from "@/lib/model/resources";
 import { listNodeSections, sectionNodeId } from "@/lib/model/shared-machine";
 import type { FactoryProject } from "@/lib/model/types";
-import { calculatePlanBoardThroughput } from "@/lib/solver/plan/adapter/open";
+import { calculateThroughput } from "@/lib/solver";
 import { buildRailModel } from "./clean/rail/rail-model";
 import { buildRailPorts, deriveNodeVerdict } from "./node-verdict";
 
@@ -19,7 +19,7 @@ const project = normalizeLoadedProject(
     readFileSync(new URL("./__fixtures__/up-to-silicon-line.json", import.meta.url), "utf8"),
   ) as FactoryProject,
 );
-const result = calculatePlanBoardThroughput(project);
+const result = calculateThroughput(project);
 const freezer = "node-e06ad164-9e85-4633-86de-0d54aa6ea512";
 const hotIngot = makeResourceKey("item", "gregtech:gt.metaitem.01@12856");
 const ingot = makeResourceKey("item", "gregtech:gt.metaitem.01@11856");
@@ -72,7 +72,7 @@ describe("a shared card below its Up to count reads every recipe's rates once", 
     );
     const card = shared.nodes.find((node) => node.id === "node-5f49041d-0bc1-4ef6-8cea-ad435b3d2add")!;
     card.solvePin = 20;
-    const solved = calculatePlanBoardThroughput(shared);
+    const solved = calculateThroughput(shared);
     expect(solved.plan!.upTo![card.id]!.reached).toBeLessThan(1);
     const sections = listNodeSections(card);
     expect(sections.length).toBeGreaterThan(1);

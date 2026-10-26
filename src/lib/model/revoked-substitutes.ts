@@ -1,5 +1,5 @@
 import type { FactoryProject, MachineHandler, Recipe, RecipeInput } from "./types";
-import type { PlanConversionNotice } from "@/lib/solver/plan/to-plan";
+import type { PlanNotice } from "./plan-notice";
 import type { RecipeSummary } from "@/lib/datasets/types";
 import { listNodeSections } from "./shared-machine";
 import { resourceLabel } from "./resources";
@@ -112,13 +112,13 @@ export const STEAM_HANDLER_NOTICE = "Some cards moved off a steam machine that h
 
 /** A notice with these lines: one more set of lines under the notice already shown, or a notice of its own. */
 export function withNoticeLines(
-  notice: PlanConversionNotice | null | undefined,
+  notice: PlanNotice | null | undefined,
   text: string,
   lines: string[],
-): PlanConversionNotice | null {
+): PlanNotice | null {
   if (lines.length === 0) return notice ?? null;
   if (notice) return { ...notice, details: [...notice.details, ...lines] };
-  return { origin: "plan", text, details: lines };
+  return { text, details: lines };
 }
 
 /**

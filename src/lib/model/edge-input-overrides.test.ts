@@ -34,6 +34,7 @@ function project(): FactoryProject {
       id: index ? "wiremill" : "bench",
       recipeId,
       machineCount: 1,
+      solvePin: 1,
       parallel: 1,
       overclockTier: "LV",
       enabled: true,

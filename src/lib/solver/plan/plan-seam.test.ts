@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { calculateThroughput } from "../throughput";
-import { convertBuildToPlan } from "./convert";
 import { mockForced, mockLeftovers, mockPlans, mockUnneeded } from "./__fixtures__/mock-extras";
 import { parsePortKey } from "./port-key";
 
@@ -30,15 +29,6 @@ describe("the dispatch seam in calculateThroughput", () => {
     const result = calculateThroughput(mockForced.project, { generatedAt: "t" });
     expect(result.plan).toBeDefined();
     expect(result.nodes["mac"]!.theoreticalMachinesRequired).toBeCloseTo(3, 9);
-  });
-
-  it("a converted Build project reaches the plan solver too", () => {
-    const { solveMode: _s, planMode: _p, ...build } = mockForced.project;
-    void _s;
-    void _p;
-    const plan = convertBuildToPlan(build as typeof mockForced.project);
-    expect(plan.planMode).toBe(true);
-    expect(calculateThroughput(plan).plan).toBeDefined();
   });
 });
 

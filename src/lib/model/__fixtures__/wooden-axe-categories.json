@@ -391,6 +391,7 @@
       "id": "node-5e054e36-5e8e-4e41-8be3-e6614ca1681f",
       "recipeId": "oracle:local-2.9.0-beta-2:crafting:shaped:95dcd370a7c5abf7",
       "machineCount": 1,
+      "solvePin": 1,
       "parallel": 1,
       "overclockTier": "NONE",
       "recipeInputOverrides": {

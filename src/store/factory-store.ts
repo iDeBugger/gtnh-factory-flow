@@ -51,8 +51,7 @@ import {
   type LoadOptions,
 } from "@/lib/model/project-normalize";
 import { convertLooseCellWires, hasLooseCellWires } from "@/lib/model/cell-wires";
-import type { PlanConversionNotice } from "@/lib/solver/plan/to-plan";
-import { planClipboard } from "@/lib/solver/plan/convert";
+import type { PlanNotice } from "@/lib/model/plan-notice";
 import { playBoardSound, quietBoardSoundsFor, suppressBoardSound } from "@/lib/board-sounds";
 import { playEditSfx } from "@/lib/sound/sfx";
 import { GT_VOLTAGE_TIERS } from "@/lib/model/tiers";
@@ -211,8 +210,8 @@ interface FactoryStore {
   /** Public viewing sessions never accept edits to their project. */
   isReadOnly: boolean;
   loadViewedProject: (project: FactoryProject) => void;
-  /** What turning the plan that just arrived into a plan-mode one could not carry over; null once read. */
-  planNotice: PlanConversionNotice | null;
+  /** What the plan that just arrived, or the last edit, changed without being asked; null once read. */
+  planNotice: PlanNotice | null;
   dismissPlanNotice: () => void;
   checklistMode: boolean;
   setChecklistMode: (active: boolean) => void;
@@ -326,11 +325,8 @@ interface FactoryStore {
    * untouched card the same object, and the books re-solve. Never an edit of
    * this tab's, never in history, never sent back.
    *
-   * There is one board mode: a live plan that is not in it yet (made by an
-   * older build, or by the game, which writes Solve plans) is converted as
-   * every landing plan is (`normalizeLoadedProjectWithNotice`), and the plan
-   * before and after the conversion come back for the live session to send
-   * as an edit, so every screen shows the same converted plan.
+   * A live plan's loose cell wires become tanks as in every landing plan, and the plan before and after come back
+   * for the live session to send as an edit, so every screen shows the same tanks.
    */
   applyLiveOps: (ops: LiveOp[]) => { before: FactoryProject; after: FactoryProject } | undefined;
   /**
@@ -1291,15 +1287,10 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
     quietly(() =>
       write((state) => {
         const landed = applyOps(state.project as unknown as Record<string, unknown>, ops) as unknown as FactoryProject;
-        // A plan in the one mode can still carry an older build's loose cell wires: only those convert (to tanks),
-        // never the rest of the funnel, which would move the game's own things.
-        const opened = landed.planMode
-          ? hasLooseCellWires(landed)
-            ? convertCellWiresWithNotice(landed)
-            : undefined
-          : normalizeLoadedProjectWithNotice(landed);
-        // Tests that keep the old modes get the plan back unconverted: nothing to send then.
-        const project = opened?.project.planMode ? opened.project : landed;
+        // Only loose cell wires convert (to tanks), never the rest of the funnel, which would move the game's own
+        // things.
+        const opened = hasLooseCellWires(landed) ? convertCellWiresWithNotice(landed) : undefined;
+        const project = opened?.project ?? landed;
         if (project !== landed) {
           conversion = { before: landed, after: project };
         }
@@ -3833,16 +3824,13 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
     // converts first (`preparePayloadForPlan`); one that did not pastes nothing.
     const copiedOn = planGameVersion(clipboard);
     if (copiedOn !== planGameVersion(get().project)) {
-      set({ planNotice: { origin: "plan", text: otherVersionPasteText(copiedOn), details: [] } });
+      set({ planNotice: { text: otherVersionPasteText(copiedOn), details: [] } });
       return [];
     }
     const pastedIds: string[] = [];
     set((state) => {
-      // Plan mode has no buffers, ratios, pool sides or groups, and cells meet
-      // fluids only in a tank: what an older board copied (or a blueprint it
-      // saved) is converted on the way in, like a plan that arrives.
-      const cells = convertLooseCellWires(clipboard).project;
-      const payload = state.project.planMode ? planClipboard(cells) : cells;
+      // Cells meet fluids only in a tank, so a loose cell wire becomes one on the way in, as in a plan that arrives.
+      const payload = convertLooseCellWires(clipboard).project;
       const shift = (position: { x: number; y: number }) =>
         snapPositionToGrid({ x: position.x + offset.x, y: position.y + offset.y });
       const payloadRecipesById = new Map(payload.recipes.map((recipe) => [recipe.id, recipe]));

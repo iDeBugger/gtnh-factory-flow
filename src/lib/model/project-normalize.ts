@@ -12,7 +12,7 @@ import { resynthesizePowerRecipes } from "@/lib/power/power-recipe";
 import { snapPositionToGrid, snapSizeUpToGrid } from "@/lib/board-grid";
 import { sectionNodeView, splitSectionHandleId } from "./shared-machine";
 import { repairWiredInputOverrides } from "./edge-input-overrides";
-import { openAsPlan, type PlanConversionNotice } from "@/lib/solver/plan/to-plan";
+import type { PlanNotice } from "./plan-notice";
 import { convertLooseCellWires } from "./cell-wires";
 import { planGameVersion } from "@/lib/model/game-version";
 
@@ -29,9 +29,8 @@ export function normalizeLoadedProject(
 }
 
 /**
- * `keepMode` skips the conversion to the one mode. Nothing in the app passes
- * it; the old Build, Solve and Pool code stays in the tree and its tests load
- * their plans this way.
+ * `keepMode` leaves a plan's mode as it came. Nothing in the app passes it; the old Build, Solve and Pool code stays
+ * in the tree until it is removed and its tests load their plans this way.
  */
 export interface LoadOptions {
   keepMode?: boolean;
@@ -49,55 +48,52 @@ export function allowLegacyModesForTests(on = true): void {
 }
 
 /**
- * The funnel, plus what its last step had to say. There is one mode, so a
- * Build, Solve or Pool plan comes out as a plan-mode project (`openAsPlan`)
- * and the notice names what that could not carry over. Nothing is written
- * anywhere: the converted plan is saved by the player's first edit.
+ * The funnel, plus what it has to say: the tanks that loose cell wires became. Nothing is written anywhere: the
+ * migrated plan is saved by the player's first edit.
  */
 export function normalizeLoadedProjectWithNotice(
   project: FactoryProject,
   options?: LoadOptions,
 ): {
   project: FactoryProject;
-  notice?: PlanConversionNotice;
+  notice?: PlanNotice;
 } {
   if (options?.keepMode ?? legacyModes) {
-    // Cell wires stay too: they turn into tanks where the plan lands, which says so.
     return { project: normalizeLegacyProject(project) };
   }
-  // Cell wires first, so the legacy passes and the mode conversion see ordinary wires (a buffer beside one stays a
-  // buffer). A pool plan's cell and fluid pairs get their tanks in its own conversion (`wirePoolProject`).
+  // Cell wires first, so the passes after them see ordinary wires.
   const wired = convertLooseCellWires(project);
-  const opened = openAsPlan(normalizeLegacyProject(wired.project));
-  return { project: opened.project, notice: withCellWireNotice(opened.notice, wired.converted) };
+  return { project: asPlan(normalizeLegacyProject(wired.project)), notice: cellWireNotice(wired.converted) };
+}
+
+/** Every plan opens on the plan board. */
+function asPlan(project: FactoryProject): FactoryProject {
+  if (project.planMode && project.solveMode && !project.poolMode) {
+    return project;
+  }
+  return { ...project, planMode: true, solveMode: true, poolMode: undefined };
 }
 
 /**
- * A plan already in the one mode whose loose cell wires became tanks (a live plan landing through `applyLiveOps`),
- * with the notice. The same object and no notice when it has none.
+ * A plan whose loose cell wires became tanks (a live plan landing through `applyLiveOps`), with the notice. The same
+ * object and no notice when it has none.
  */
 export function convertCellWiresWithNotice(project: FactoryProject): {
   project: FactoryProject;
-  notice?: PlanConversionNotice;
+  notice?: PlanNotice;
 } {
   const cells = convertLooseCellWires(project);
-  return { project: cells.project, notice: withCellWireNotice(undefined, cells.converted) };
+  return { project: cells.project, notice: cellWireNotice(cells.converted) };
 }
 
-/** What the tanks a landing put in say: a line of their own, or one more line under a mode conversion's. */
-function withCellWireNotice(
-  notice: PlanConversionNotice | undefined,
-  tanks: number,
-): PlanConversionNotice | undefined {
+/** What the tanks a landing put in say. */
+function cellWireNotice(tanks: number): PlanNotice | undefined {
   if (tanks === 0) {
-    return notice;
+    return undefined;
   }
   const line =
     tanks === 1 ? "1 cell wire now goes through a fluid tank." : `${tanks} cell wires now go through fluid tanks.`;
-  if (notice) {
-    return { ...notice, details: [...notice.details, line] };
-  }
-  return { origin: "plan", text: line, details: ["Cells no longer wire straight into fluid slots."] };
+  return { text: line, details: ["Cells no longer wire straight into fluid slots."] };
 }
 
 function normalizeLegacyProject(project: FactoryProject): FactoryProject {
@@ -122,7 +118,7 @@ function normalizeLegacyProject(project: FactoryProject): FactoryProject {
                       normalizeProjectFuelProfiles(
                         normalizeFullFarms(
                           restampAmpMapMinimums(
-                            renameOpvTier(adoptSetupRules(requirePlanForSolve(requireSolveForPool(project)))),
+                            renameOpvTier(adoptSetupRules(requireSolveForPool(project))),
                             gameVersion,
                           ),
                         ),
@@ -502,15 +498,3 @@ function requireSolveForPool(project: FactoryProject): FactoryProject {
   return project;
 }
 
-/**
- * Plan mode implies solve mode and excludes pool mode: a plan that says plan
- * without solve (hand-edited, or written by a build that dropped a key) opens
- * with solve mode on, and a pool flag beside it is dropped. Always writing
- * both flags is also what lets an older build open a plan-mode design as Solve.
- */
-export function requirePlanForSolve(project: FactoryProject): FactoryProject {
-  if (project.planMode && (!project.solveMode || project.poolMode)) {
-    return { ...project, solveMode: true, poolMode: undefined };
-  }
-  return project;
-}

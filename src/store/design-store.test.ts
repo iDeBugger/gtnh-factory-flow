@@ -369,57 +369,6 @@ describe("public viewing sessions", () => {
 });
 
 
-describe("one mode for every design", () => {
-  // Its public-post case opens community posts.
-  withModAndCommunityOn();
-  const modeOf = () => {
-    const project = useFactoryStore.getState().project;
-    return { plan: project.planMode === true, solve: project.solveMode === true, pool: project.poolMode === true };
-  };
-
-  it("opens Build, Solve and Pool designs as plan boards and leaves what is stored alone", async () => {
-    useFactoryStore.getState().markHydratedProject(createEmptyProject());
-    useDesignStore.setState({ publicView: undefined, publicViews: [] });
-    library(summary("a"), summary("b"), summary("c"));
-    const records = new Map<string, DesignRecord>([
-      ["a", { ...summary("a"), project: createEmptyProject() }],
-      ["b", { ...summary("b"), project: { ...createEmptyProject(), solveMode: true } }],
-      ["c", { ...summary("c"), project: { ...createEmptyProject(), solveMode: true, poolMode: true } }],
-    ]);
-    storage.readDesign.mockImplementation(async (id) => records.get(id));
-    storage.writeDesign.mockImplementation(async (record) => { records.set(record.id, record); });
-    storage.readActiveDesignId.mockReturnValue("a");
-    await useDesignStore.getState().hydrate();
-    for (const id of ["a", "b", "c", "a"]) {
-      await useDesignStore.getState().switchToDesign(id);
-      expect(modeOf()).toEqual({ plan: true, solve: true, pool: false });
-    }
-    await useDesignStore.getState().reloadActiveDesign();
-    expect(modeOf()).toEqual({ plan: true, solve: true, pool: false });
-    // Opening is a view: nothing was converted in storage.
-    expect(records.get("a")?.project.planMode).toBeUndefined();
-    expect(records.get("b")?.project.planMode).toBeUndefined();
-    expect(records.get("c")?.project.poolMode).toBe(true);
-    expect(storage.writeDesign).not.toHaveBeenCalled();
-  });
-
-  it("opens public posts in the one mode without writing personal designs", async () => {
-    useDesignStore.setState({ activeDesignId: undefined, publicView: undefined, publicViews: [], designs: [] });
-    const store = useDesignStore.getState();
-    const original = { ...createEmptyProject(), solveMode: true, poolMode: true };
-    await store.viewPublicProject({ id: "pool-post", name: "Pool" }, original);
-    expect(modeOf()).toEqual({ plan: true, solve: true, pool: false });
-    expect(useFactoryStore.getState().planNotice?.origin).toBe("pool");
-    await store.viewPublicProject({ id: "build-post", name: "Build" }, createEmptyProject());
-    expect(modeOf()).toEqual({ plan: true, solve: true, pool: false });
-    expect(useFactoryStore.getState().planNotice).toBeNull();
-    await store.switchToPublicView("pool-post");
-    expect(modeOf()).toEqual({ plan: true, solve: true, pool: false });
-    expect(original.poolMode).toBe(true);
-    expect(storage.writeDesign).not.toHaveBeenCalled();
-  });
-});
-
 describe("public viewing sessions with the community library switched off", () => {
   withModAndCommunityUnset();
 

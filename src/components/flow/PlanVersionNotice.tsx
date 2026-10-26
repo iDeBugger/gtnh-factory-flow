@@ -34,7 +34,7 @@ export function usePlanVersionNotice(): BoardNotice | undefined {
 
 /**
  * The version notice in the notice stack's dress, for boards without the notices bar. Plan boards
- * say it in the bar (clean/rail/NoticeBar), as PlanConversionNotice does.
+ * say it in the bar (clean/rail/NoticeBar).
  */
 export const PlanVersionNotice = memo(function PlanVersionNotice() {
   const notice = usePlanVersionNotice();

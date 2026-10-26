@@ -4,7 +4,6 @@ import { normalizeLoadedProject } from "@/lib/model/project-normalize";
 import { loadGolden, loadInput } from "../__fixtures__/load";
 import { solveForTest } from "../__fixtures__/solve-entry";
 import { calculateThroughput } from "../../throughput";
-import { convertBuildToPlan } from "../convert";
 import type { SolveInput } from "../types";
 import { setSolveCore } from "./engine";
 
@@ -78,7 +77,7 @@ function adapterInputWithBuffers(path: string): SolveInput {
       drawers: { rates: {}, unmet: [], shortfalls: [], ports: {} },
     };
   });
-  calculateThroughput(convertBuildToPlan(project), { generatedAt: "t" });
+  calculateThroughput(project, { generatedAt: "t" });
   setSolveCore(undefined);
   return got!;
 }

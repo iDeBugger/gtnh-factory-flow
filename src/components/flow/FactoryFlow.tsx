@@ -139,7 +139,6 @@ import {
   type BoardFraming,
 } from "@/store/factory-store";
 import { activeVersionServesPlan } from "@/lib/datasets/dataset-cache";
-import { PlanConversionNotice } from "./PlanConversionNotice";
 import { PlanVersionNotice } from "./PlanVersionNotice";
 import { dropFilesOnPlanBoard } from "@/lib/import-export/open-plan-file";
 import { getStorageRoles } from "@/lib/model/storage-role";
@@ -6662,7 +6661,6 @@ export function FactoryFlow() {
         <ClogLockNotice onShow={handleShowNodes} />
         </PlanNoticeSwitch>
         <PlanVersionNotice />
-        <PlanConversionNotice />
         <RecipeAddChips />
       </div>
       {isProjectImporting ? <FlowLoadingOverlay /> : null}

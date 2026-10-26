@@ -52,6 +52,7 @@ const node = (i: number): FactoryNode => ({
   machineHandlerId: slug(FUSION_MACHINES[i].name),
   overclockTier: "EV",
   machineCount: 1,
+  solvePin: 1,
   parallel: 1,
   enabled: true,
   position: { x: 0, y: 0 },

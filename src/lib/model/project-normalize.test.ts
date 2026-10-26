@@ -478,7 +478,7 @@ describe("loose cell wires on load", () => {
       ["w", "maker", "cell-tank:w", undefined],
       ["w:tank", "cell-tank:w", "taker", undefined],
     ]);
-    expect(notice?.details).toContain("1 cell wire now goes through a fluid tank.");
+    expect(notice?.text).toBe("1 cell wire now goes through a fluid tank.");
     // A parser keeps the wire for the landing to convert and say so.
     expect(normalizeLoadedProject(project, { keepMode: true }).edges[0]?.crossForm?.litresPerCell).toBe(1000);
   });

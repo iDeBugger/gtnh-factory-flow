@@ -1626,7 +1626,6 @@ describe("project recipe refresh", () => {
       );
       expect(state.project.edges).toHaveLength(2);
       expect(state.planNotice).toEqual({
-        origin: "plan",
         text: "Some cards used an input the game does not accept there.",
         details: [
           "Fluid Solidifier: Solder Ingot takes Molten Tin in place of Molten Soldering Alloy. The game does not accept that.",
@@ -1788,7 +1787,6 @@ describe("project recipe refresh", () => {
       const state = useFactoryStore.getState();
       expect(state.project.nodes[0]?.machineHandlerId).toBeUndefined();
       expect(state.planNotice).toEqual({
-        origin: "plan",
         text: "Some cards moved off a steam machine that has no hatch for their fluid.",
         details: [line],
       });
