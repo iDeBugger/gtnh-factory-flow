@@ -504,6 +504,9 @@ export async function addMember(
   }
   const before = await designMembers.list(ownerId, designId);
   let added = false;
+  // The answer's list is read in the change's own transaction: a read after
+  // the commit could fail with the share stored, and answer it as a failure.
+  let members = before;
   if (!before.some((member) => member.id === userId)) {
     if (before.length >= LIBRARY_MAX_MEMBERS) {
       return fail("conflict", `A plan can be shared with ${LIBRARY_MAX_MEMBERS} accounts at most.`);
@@ -522,19 +525,20 @@ export async function addMember(
     try {
       // The checks above again, in one transaction under the design's row
       // lock, so shares arriving at once meet the cap one at a time.
-      outcome = await withTransaction(async (tx) => {
+      ({ outcome, members } = await withTransaction(async (tx) => {
         if (!(await designMembers.lockDesign(ownerId, designId, tx))) {
-          return "gone";
+          return { outcome: "gone" as const, members: before };
         }
         const current = await designMembers.list(ownerId, designId, tx);
         if (current.some((member) => member.id === userId)) {
-          return "already";
+          return { outcome: "already" as const, members: current };
         }
         if (current.length >= LIBRARY_MAX_MEMBERS) {
-          return "full";
+          return { outcome: "full" as const, members: current };
         }
-        return designMembers.add(ownerId, designId, userId, tx);
-      });
+        const done = await designMembers.add(ownerId, designId, userId, tx);
+        return { outcome: done, members: await designMembers.list(ownerId, designId, tx) };
+      }));
     } catch (error) {
       return storageFailure(error, "The plan could not be shared.");
     }
@@ -546,7 +550,6 @@ export async function addMember(
     }
     added = outcome === "added";
   }
-  const members = await designMembers.list(ownerId, designId);
   await notifyLive({
     kind: "members",
     ownerId,
@@ -577,12 +580,16 @@ export async function removeMember(
       return fail("forbidden", "Only the plan's owner can change who it is shared with.");
     }
   }
+  let members: PlanMember[];
   try {
-    await designMembers.remove(ownerId, designId, userId);
+    // The answer's list in the change's own transaction, as in `addMember`.
+    members = await withTransaction(async (tx) => {
+      await designMembers.remove(ownerId, designId, userId, tx);
+      return designMembers.list(ownerId, designId, tx);
+    });
   } catch (error) {
     return storageFailure(error, "Sharing could not be changed.");
   }
-  const members = await designMembers.list(ownerId, designId);
   await notifyLive({ kind: "members", ownerId, designId, members, removed: [userId] });
   return ok({ members });
 }

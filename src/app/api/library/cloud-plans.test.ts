@@ -845,6 +845,70 @@ describe("when the database fails a read", () => {
     expect(await gone.json()).toEqual({ user: null });
   });
 
+  it("never stores a share or an unshare and answers it as a failure", async () => {
+    const designId = "design-outage-4";
+    await design.PUT(
+      request(
+        "PUT",
+        `/api/library/designs/${designId}`,
+        "carol",
+        upsertBody("Zinc", "2026-10-19T11:00:00.000Z"),
+      ),
+      params({ designId }),
+    );
+    const stored = async () =>
+      (
+        await testDb()
+          .db.selectFrom("library_design_members")
+          .select("member_id")
+          .where("owner_id", "=", users.carol!.id)
+          .where("design_id", "=", designId)
+          .execute()
+      ).map((row) => row.member_id);
+    /** Fails the first member list read after `write`, as a connection lost then would. */
+    const failListAfter = (write: RegExp) => {
+      let written = false;
+      let failed = false;
+      setDbFaultForTests((sql) => {
+        if (write.test(sql)) {
+          written = true;
+        } else if (
+          written &&
+          !failed &&
+          /from "library_design_members" inner join "community_users"/.test(sql)
+        ) {
+          failed = true;
+          return Object.assign(new Error("connection reset"), { code: "ECONNRESET" });
+        }
+        return undefined;
+      });
+    };
+    const dan = users.dan!.id;
+    const path = `/api/library/designs/${designId}/members/${dan}`;
+
+    failListAfter(/^insert into "library_design_members"/);
+    const share = await member.PUT(
+      request("PUT", path, "carol"),
+      params({ designId, userId: dan }),
+    );
+    clearDbFault();
+    resetDbBreaker();
+    expect(share.status === 200, `share ${share.status}`).toBe((await stored()).includes(dan));
+
+    await member.PUT(request("PUT", path, "carol"), params({ designId, userId: dan }));
+    expect(await stored()).toEqual([dan]);
+    failListAfter(/^delete from "library_design_members"/);
+    const unshare = await member.DELETE(
+      request("DELETE", path, "carol"),
+      params({ designId, userId: dan }),
+    );
+    clearDbFault();
+    resetDbBreaker();
+    expect(unshare.status === 200, `unshare ${unshare.status}`).toBe(
+      !(await stored()).includes(dan),
+    );
+  });
+
   it("answers the down line on every library, blueprint and search route once the account cache expired", async () => {
     const designId = "design-outage-2";
     const folderId = "folder-outage-2";

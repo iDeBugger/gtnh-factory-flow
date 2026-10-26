@@ -349,7 +349,8 @@ is pinned twice: by recorded statements (the lock comes first) in the route suit
 | Design save (`services/library.saveDesign`) | read, compare stamps, write | the design row `for update`, so an owner's and a member's save cannot both pass the "behind" check |
 | New design, new folder, blueprint save | count, then insert | the account row first (`accounts.lockAccount`, `for no key update`, which foreign-key checks never wait for), so creations at once meet the cap one at a time |
 | Folder save | read, compare, write | the folder row `for update` |
-| Share (member add) | design exists, count members, insert | the design row `for update` (`designMembers.lockDesign`) |
+| Share (member add) | design exists, count members, insert, the answer's member list | the design row `for update` (`designMembers.lockDesign`) |
+| Unshare (member remove or leave) | delete, the answer's member list | |
 | Design delete | tombstone and members delete | |
 | Comment add or delete | the comment write and one recount `update ... from (select count(*), max(created_at))` | the post `for no key update` (`plans.lockPost`) |
 | Vote | toggle, then `update ... set upvotes = (select count(*) ...), downvotes = (...) returning` | the post `for no key update` (`votes.lockParent`) |
