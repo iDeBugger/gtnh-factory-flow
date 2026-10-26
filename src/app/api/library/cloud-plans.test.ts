@@ -689,7 +689,7 @@ describe("the locks each write takes", () => {
     return index;
   };
   const DESIGN_READ = /^select .*"live_lease_until" from "library_designs" where \("library_designs"\."user_id" = \$\d+ and "library_designs"\."id" = \$\d+\)/;
-  const ACCOUNT_LOCK = /^select "id" from "community_users" where "id" = \$1 for update$/;
+  const ACCOUNT_LOCK = /^select "id" from "community_users" where "id" = \$1 for no key update$/;
 
   it("a save reads its design for update, the owner's and a member's alike", async () => {
     await makeUser("lock_own");

@@ -6,6 +6,7 @@ import { closeDb, resetDbBreaker, useDbForTests } from "../db";
 import { createDbClient, type DirectDbClient } from "../db/client";
 import { applyMigrations } from "../db/migrations";
 import type { SignedIn } from "../http/viewer";
+import * as designs from "../repos/designs";
 import { saveDesign } from "./library";
 
 /**
@@ -105,5 +106,40 @@ describe.skipIf(!serverUrl)("the library on Postgres", () => {
       [viewer.userId],
     );
     expect(Number(rows[0]!.count)).toBe(LIBRARY_MAX_DESIGNS);
+  }, 60_000);
+
+  it("lets a row naming the account in while a creation holds the account's lock", async () => {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let locked: () => void = () => undefined;
+    const lockTaken = new Promise<void>((resolve) => (locked = resolve));
+    const creation = client!.db.transaction().execute(async (tx) => {
+      await designs.lockAccount(viewer.userId, tx);
+      locked();
+      await held;
+    });
+    await lockTaken;
+    try {
+      // A foreign-key check takes a key-share lock on the account row.
+      const other = await client!.pool.connect();
+      try {
+        await other.query("set lock_timeout = 2000");
+        await other.query(
+          "insert into library_designs (user_id, id, name, plan) values ($1, 'during-lock', 'x', '{}')",
+          [viewer.userId],
+        );
+        // A second creation's lock waits for the first.
+        await other.query("begin");
+        await expect(
+          other.query("select id from community_users where id = $1 for no key update nowait", [viewer.userId]),
+        ).rejects.toThrow(/could not obtain lock/);
+        await other.query("rollback");
+      } finally {
+        other.release();
+      }
+    } finally {
+      release();
+      await creation;
+    }
   }, 60_000);
 });

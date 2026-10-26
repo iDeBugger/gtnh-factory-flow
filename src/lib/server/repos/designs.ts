@@ -159,13 +159,16 @@ export async function read(
 /**
  * Locks the account's row until the transaction ends, so one account's
  * creations (a design or a folder past the cap check) queue behind each other.
+ * `for no key update` conflicts with itself but not with the key-share locks
+ * foreign-key checks take, so a share to this account or any other row
+ * naming it never waits for a creation.
  */
 export async function lockAccount(userId: string, tx: Tx): Promise<void> {
   await tx
     .selectFrom("community_users")
     .select("id")
     .where("id", "=", userId)
-    .forUpdate()
+    .forNoKeyUpdate()
     .execute();
 }
 
