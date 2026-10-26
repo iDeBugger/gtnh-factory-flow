@@ -38,6 +38,5 @@ create table if not exists library_design_members (
 
 create index if not exists library_design_members_member on library_design_members (member_id);
 
--- Same access model as every other table: RLS on, no policies, service-role
--- only. Without it the hosted project's anon key could read the table.
-alter table library_design_members enable row level security;
+-- Same access model as every other table: the server's rules and the roles'
+-- grants, row security off (2026-10-26-row-security-off.sql).

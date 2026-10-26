@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { applyMigrations } from "./migrations";
+import { applyMigrations, schemaFiles } from "./migrations";
 
 /**
  * The deploy's roles on a database built as the deploy builds it: the schema
@@ -102,6 +102,37 @@ describe("the database roles", () => {
       readFileSync(path.join(process.cwd(), "supabase", "migrations", ROW_SECURITY_OFF), "utf8"),
     );
     expect(await withRowSecurity()).toEqual([]);
+  });
+
+  it("takes no table lock once row security is off, and alters only the tables that still have it", async () => {
+    const migration = readFileSync(
+      path.join(process.cwd(), "supabase", "migrations", ROW_SECURITY_OFF),
+      "utf8",
+    );
+    const exclusiveLocks = async (): Promise<string[]> => {
+      await pglite.exec("begin");
+      try {
+        await pglite.exec(migration);
+        const { rows } = await pglite.query<{ relname: string }>(
+          `select c.relname from pg_locks l join pg_class c on c.oid = l.relation
+           where l.mode = 'AccessExclusiveLock' and c.relnamespace = 'public'::regnamespace`,
+        );
+        return rows.map((row) => row.relname).sort();
+      } finally {
+        await pglite.exec("rollback");
+      }
+    };
+    expect(await exclusiveLocks()).toEqual([]);
+    await pglite.exec("alter table library_designs enable row level security");
+    try {
+      expect(await exclusiveLocks()).toEqual(["library_designs"]);
+    } finally {
+      await pglite.exec("alter table library_designs disable row level security");
+    }
+    // No other file turns it on, so a deploy's run of every migration never cycles it.
+    for (const file of schemaFiles()) {
+      expect(readFileSync(file, "utf8"), file).not.toMatch(/enable row level security/i);
+    }
   });
 
   it("lets the site role read and write every app table, and nothing more", async () => {
