@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
+import { useTestDb } from "@/test-support/test-db";
 import { checkRateLimit, serially } from "./limits/rate-limit";
 
 /**
@@ -8,18 +7,13 @@ import { checkRateLimit, serially } from "./limits/rate-limit";
  * arrive together must take turns or they all read a count under the limit.
  */
 
-let local: LocalDatabase;
+useTestDb();
 
-beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
+beforeAll(() => {
   vi.stubEnv("COMMUNITY_HASH_SALT", "rate-limit-test-salt");
-  local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
-}, 60_000);
+});
 
-afterAll(async () => {
-  useInProcessLocalDb(undefined);
-  await local?.close();
+afterAll(() => {
   vi.unstubAllEnvs();
 });
 

@@ -19,6 +19,12 @@ import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/dat
 export interface TestDb {
   db: Kysely<Database>;
   pglite: PGlite;
+  /**
+   * The stand-in's request handler as installed (it honours `withDbFault`),
+   * for a test that wraps it to fail a PostgREST request its own way and then
+   * puts it back with `useInProcessLocalDb(standIn)`.
+   */
+  standIn: (request: Request) => Promise<Response>;
 }
 
 type Fault = { match: RegExp; error: Error };
@@ -41,6 +47,12 @@ export function withDbFault(
   setDbFaultForTests((sqlText) => (match.test(sqlText) ? error : undefined));
 }
 
+/** Ends the fault `withDbFault` set, before the test does. */
+export function clearDbFault(): void {
+  fault = undefined;
+  setDbFaultForTests(undefined);
+}
+
 /** Registers the hooks; call at the top of a test file, read the database inside tests. */
 export function useTestDb(): () => TestDb {
   let local: LocalDatabase | undefined;
@@ -52,25 +64,25 @@ export function useTestDb(): () => TestDb {
     process.env.LOCAL_DB = "1";
     local = await openLocalDatabase();
     const handle = local.handle;
-    useInProcessLocalDb(async (request) => {
+    const standIn = async (request: Request): Promise<Response> => {
       const url = new URL(request.url);
       if (fault?.match.test(`${url.pathname}${url.search}`)) {
         return standInDown();
       }
       return handle(request);
-    });
+    };
+    useInProcessLocalDb(standIn);
     const db = new Kysely<Database>({
       dialect: new GuardedDialect(new PGliteDialect({ pglite: local.db })),
     });
     useDbForTests(db);
-    testDb = { db, pglite: local.db };
+    testDb = { db, pglite: local.db, standIn };
   }, 60_000);
 
   afterEach(() => {
     resetDbBreaker();
     forgetSessionUsers();
-    fault = undefined;
-    setDbFaultForTests(undefined);
+    clearDbFault();
   });
 
   afterAll(async () => {

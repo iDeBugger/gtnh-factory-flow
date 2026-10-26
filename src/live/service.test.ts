@@ -9,8 +9,7 @@ import type { LiveOp, LivePlan } from "@/lib/live/ops";
 import { plansEqual } from "@/lib/live/ops";
 import { docKey, type ServerFrame } from "@/lib/live/protocol";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
+import { useTestDb } from "@/test-support/test-db";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
 import { getCommunityDb } from "@/lib/server/db";
 import * as designRoute from "@/app/api/library/designs/[designId]/route";
@@ -47,7 +46,7 @@ function countingStore(): { store: PlanStore; calls: Record<string, number> } {
 const ORIGIN = "http://localhost:3000";
 const INTERNAL_TOKEN = "live-test-internal";
 
-let local: LocalDatabase;
+useTestDb();
 const users: Record<string, { id: string; cookie: string }> = {};
 const journalDirs: string[] = [];
 const services: LiveService[] = [];
@@ -292,10 +291,7 @@ async function rawUpgrade(
 }
 
 beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "live-service-test-salt");
-  local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
   for (const name of ["ann", "bob", "carol"]) {
     await makeUser(name);
   }
@@ -307,8 +303,6 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  useInProcessLocalDb(undefined);
-  await local?.close();
   for (const dir of journalDirs) {
     rmSync(dir, { recursive: true, force: true });
   }

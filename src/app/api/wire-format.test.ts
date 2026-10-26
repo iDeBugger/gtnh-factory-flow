@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
+import { useTestDb, type TestDb } from "@/test-support/test-db";
 import { makeSessionToken } from "@/lib/server/auth/sessions";
 import { saltedKey } from "@/lib/server/auth/keys";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
@@ -48,7 +47,7 @@ const SEED_NAMES: Record<string, string> = {
 
 const TIMESTAMP = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d{1,6})?\+00:00$/;
 
-let local: LocalDatabase;
+const testDb = useTestDb();
 const cookies: Record<string, string> = {};
 
 const project = (name: string) => ({
@@ -69,7 +68,7 @@ const outputs = JSON.stringify([
   { kind: "fluid", resourceId: "steam", displayName: "Steam", ratePerSecond: 2400 },
 ]);
 
-async function seed(db: LocalDatabase["db"]): Promise<void> {
+async function seed(db: TestDb["pglite"]): Promise<void> {
   await db.query(
     `insert into community_users (id, username, password_hash, is_admin, created_at, session_epoch) values
       ($1, 'ann', 'x:y', false, '2026-10-01 08:00:00+00', 1761400000123),
@@ -178,18 +177,13 @@ async function seed(db: LocalDatabase["db"]): Promise<void> {
 }
 
 beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "wire-format-test-salt");
-  local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
-  await seed(local.db);
+  await seed(testDb().pglite);
   cookies.ann = `gtnh_session=${makeSessionToken(ANN, 1761400000123)}`;
   cookies.bob = `gtnh_session=${makeSessionToken(BOB, 0)}`;
 }, 60_000);
 
 afterAll(async () => {
-  useInProcessLocalDb(undefined);
-  await local?.close();
   vi.unstubAllEnvs();
 });
 

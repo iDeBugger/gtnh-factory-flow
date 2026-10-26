@@ -1,8 +1,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
+import { Kysely, PGliteDialect } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import * as accounts from "../repos/accounts";
+import * as events from "../repos/events";
+import { useDbForTests } from "./index";
 import { applyMigrations, schemaFiles } from "./migrations";
+import type { Database } from "./schema";
 
 /**
  * The deploy's roles on a database built as the deploy builds it: the schema
@@ -81,6 +86,7 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  useDbForTests(undefined);
   await pglite.close();
 });
 
@@ -235,6 +241,43 @@ describe("the database roles", () => {
         [OWNER],
       );
     });
+  });
+
+  it("runs the account and event repositories under the role of each process that calls them", async () => {
+    // The repositories' own statements, as Kysely compiles them, on this database.
+    useDbForTests(new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) }));
+    try {
+      await as("gtnh_site", async () => {
+        const made = await accounts.createAccount("repo-made", "hash");
+        expect(made).toMatchObject({ username: "repo-made" });
+        const id = (made as { id: string }).id;
+        expect(await accounts.createAccount("repo-made", "hash")).toBe("taken");
+        expect(await accounts.readLoginAccount("repo-made")).toMatchObject({ id, password_hash: "hash" });
+        expect(await accounts.readSessionAccount(id)).toMatchObject({ id, session_epoch: 0 });
+        await accounts.setSessionEpoch(id, 5);
+        expect(await accounts.readSessionAccount(id)).toMatchObject({ session_epoch: 5 });
+        expect(await accounts.searchByPrefix("repo", OWNER)).toEqual([{ id, username: "repo-made" }]);
+        expect(await accounts.accountExists(id)).toBe(true);
+        expect((await accounts.usernamesFor([id, OWNER])).size).toBe(2);
+        await events.insert([{ actorKey: "repo", action: "probe" }]);
+        expect(await events.countSince("repo", "probe", new Date(0))).toBe(1);
+        const ids = await events.oldestIdsBefore(new Date(Date.now() + 60_000), 500);
+        expect(ids.length).toBeGreaterThan(0);
+        expect(await events.deleteIds(ids)).toBe(ids.length);
+        await pglite.query("delete from community_users where id = $1", [id]);
+      });
+      await as("gtnh_live", async () => {
+        expect(await accounts.readSessionAccount(OWNER)).toMatchObject({ username: "owner" });
+        expect(await accounts.usernamesFor([OWNER, MEMBER])).toEqual(
+          new Map([
+            [OWNER, "owner"],
+            [MEMBER, "member"],
+          ]),
+        );
+      });
+    } finally {
+      useDbForTests(undefined);
+    }
   });
 
   it("refuses the live role everything else", async () => {

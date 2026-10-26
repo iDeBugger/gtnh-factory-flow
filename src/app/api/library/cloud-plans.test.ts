@@ -1,8 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
+import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
 import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
 import { resetMemoryTokens } from "@/lib/server/limits/memory-rate";
@@ -22,7 +21,7 @@ import * as meRoute from "../community/auth/me/route";
  * notices the live service is sent.
  */
 
-let local: LocalDatabase;
+useTestDb();
 let notices: Array<{ path: string; auth: string | undefined; body: unknown }> = [];
 let noticeServer: Server;
 const users: Record<string, { id: string; cookie: string }> = {};
@@ -82,10 +81,7 @@ function upsertBody(name: string, stamp: string, withPlan = true) {
 }
 
 beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "cloud-plans-test-salt");
-  local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
   noticeServer = createServer((req, res) => {
     let text = "";
     req.on("data", (chunk) => (text += chunk));
@@ -110,9 +106,7 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  useInProcessLocalDb(undefined);
   noticeServer?.close();
-  await local?.close();
   vi.unstubAllEnvs();
 });
 
@@ -520,19 +514,15 @@ describe("cloud plans over REST", () => {
 });
 
 describe("when the database fails a read", () => {
-  /** The local database, failing every request whose URL names `table` as a stalled Supabase does. */
+  /** The test database, failing every query or request that names `table` as a stalled database does. */
   function failing(table: string) {
     forgetSessionUsers();
     resetDbBreaker();
-    useInProcessLocalDb((req) =>
-      req.url.includes(`/rest/v1/${table}`)
-        ? Promise.resolve(new Response("<!DOCTYPE html>522", { status: 522, headers: { "content-type": "text/plain" } }))
-        : local.handle(req),
-    );
+    withDbFault(new RegExp(`/rest/v1/${table}|"${table}"`));
   }
 
   afterEach(() => {
-    useInProcessLocalDb(local.handle);
+    clearDbFault();
     resetDbBreaker();
   });
 
@@ -567,7 +557,7 @@ describe("when the database fails a read", () => {
       error: "The community database is not responding. Try again in a few minutes.",
     });
 
-    useInProcessLocalDb(local.handle);
+    clearDbFault();
     const back = await meRoute.GET(request("GET", "/api/community/auth/me", "dan"));
     expect(await back.json()).toEqual({ user: { username: "dan", isAdmin: false } });
     const gone = await meRoute.GET(

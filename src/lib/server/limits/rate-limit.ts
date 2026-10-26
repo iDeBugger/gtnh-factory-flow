@@ -61,9 +61,8 @@ export async function recordEvents(rows: { actorKey: string; action: string }[])
  * back short or `PRUNE_BUDGET_MS` has gone, so a backlog drains as fast as
  * the hour's prune can manage yet never holds one request past the statement
  * timeout; what a prune does not reach waits for the next hour. A batch of
- * 500 ids keeps the `id=in.(...)` query string at 4 to 6 KB, under the usual
- * 8 KB request-line limit: never raise `PRUNE_BATCH_ROWS` past that. A prune
- * never fails a save.
+ * 500 keeps each delete short, so the budget is checked often. A prune never
+ * fails a save.
  */
 export const EVENTS_KEPT_DAYS = 31;
 export const PRUNE_BATCH_ROWS = 500;

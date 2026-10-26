@@ -2,8 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
+import { useTestDb } from "@/test-support/test-db";
 import { getCommunityDb } from "@/lib/server/db";
 import {
   forgetImageCapWarnings,
@@ -22,7 +21,7 @@ import { GET } from "./[month]/[name]/route";
  * capped for the whole site.
  */
 
-let local: LocalDatabase;
+const testDb = useTestDb();
 let files: string;
 
 const PNG = Buffer.from(
@@ -54,24 +53,19 @@ async function uploadsRecorded(): Promise<number> {
 }
 
 beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "images-test-salt");
   vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://stage.gtnhplanner.idebugger.net");
   files = mkdtempSync(path.join(tmpdir(), "images-route-"));
   vi.stubEnv("FILE_STORE_DIR", files);
-  local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
 }, 60_000);
 
 afterAll(async () => {
-  useInProcessLocalDb(undefined);
-  await local?.close();
   vi.unstubAllEnvs();
   rmSync(files, { recursive: true, force: true });
 });
 
 beforeEach(async () => {
-  await local.db.exec("delete from community_events");
+  await testDb().pglite.exec("delete from community_events");
   forgetImageCapWarnings();
 });
 

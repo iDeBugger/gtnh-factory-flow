@@ -1,9 +1,8 @@
 import { createHmac } from "node:crypto";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { useTestDb, withDbFault } from "@/test-support/test-db";
 import { bumpSessionEpoch, forgetSessionUsers } from "@/lib/server/auth/sessions";
 import {
   checkPassword,
@@ -13,7 +12,7 @@ import {
   PasswordCheckBusyError,
   passwordChecksInFlight,
 } from "@/lib/server/auth/passwords";
-import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
+import { getCommunityDb } from "@/lib/server/db";
 import * as login from "./login/route";
 import * as logout from "./logout/route";
 import * as me from "./me/route";
@@ -24,13 +23,26 @@ import * as register from "./register/route";
  * the session cookie, and signing out.
  */
 
-let local: LocalDatabase;
 let addresses = 0;
-/** When set, the answer of every account row read waits on it (a slow database); the read itself happens at once. */
-let holdAccountReads: Promise<void> | undefined;
-let heldAccountReads = 0;
-/** When set, every write to the accounts table fails as a database that does not answer. */
-let failAccountWrites = false;
+/** When `reads` is set, the answer of every session account read waits on it (a slow database); the read itself happens at once. */
+const hold = vi.hoisted(() => ({ reads: undefined as Promise<void> | undefined, held: 0 }));
+
+vi.mock("@/lib/server/repos/accounts", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/server/repos/accounts")>();
+  return {
+    ...real,
+    readSessionAccount: async (...args: Parameters<typeof real.readSessionAccount>) => {
+      const row = await real.readSessionAccount(...args);
+      if (hold.reads) {
+        hold.held += 1;
+        await hold.reads;
+      }
+      return row;
+    },
+  };
+});
+
+useTestDb();
 
 /** A fresh client address per call: the per-address limits never meet across cases. */
 const nextAddress = () => `10.1.${Math.floor(addresses / 250)}.${(addresses++ % 250) + 1}`;
@@ -66,43 +78,11 @@ async function whoAmI(cookie: string): Promise<unknown> {
   return ((await response.json()) as { user: unknown }).user;
 }
 
-beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
+beforeAll(() => {
   vi.stubEnv("COMMUNITY_HASH_SALT", "auth-test-salt");
-  local = await openLocalDatabase();
-  useInProcessLocalDb(async (request) => {
-    if (
-      failAccountWrites &&
-      request.method === "PATCH" &&
-      request.url.includes("community_users")
-    ) {
-      return Response.json(
-        { message: "down", code: "PGRST000", details: "", hint: "" },
-        { status: 503 },
-      );
-    }
-    const response = await local.handle(request);
-    if (
-      holdAccountReads &&
-      request.method === "GET" &&
-      request.url.includes("community_users") &&
-      request.url.includes("session_epoch")
-    ) {
-      heldAccountReads += 1;
-      await holdAccountReads;
-    }
-    return response;
-  });
-}, 60_000);
-
-afterEach(() => {
-  resetDbBreaker();
-  forgetSessionUsers();
 });
 
-afterAll(async () => {
-  useInProcessLocalDb(undefined);
-  await local?.close();
+afterAll(() => {
   vi.unstubAllEnvs();
 });
 
@@ -289,10 +269,10 @@ describe("signing out everywhere", () => {
     forgetSessionUsers();
     // A request with the token starts its row read and stalls in the database.
     let release!: () => void;
-    holdAccountReads = new Promise<void>((resolve) => (release = resolve));
+    hold.reads = new Promise<void>((resolve) => (release = resolve));
     const inFlight = whoAmI(cookie);
-    await vi.waitFor(() => expect(heldAccountReads).toBe(1));
-    holdAccountReads = undefined;
+    await vi.waitFor(() => expect(hold.held).toBe(1));
+    hold.reads = undefined;
     // Sign out everywhere lands meanwhile: the row's epoch moves, the cache forgets the account.
     expect(await bumpSessionEpoch((data as { id: string }).id)).toBeGreaterThan(0);
     // The stalled read answers with the pre-bump row: fine for the request that started before.
@@ -308,15 +288,14 @@ describe("signing out everywhere", () => {
       password: "ann-password",
     });
     const cookie = cookieOf(made);
-    failAccountWrites = true;
-    try {
-      const out = await post(logout, "logout", { everywhere: true }, { cookie });
-      expect(out.status).toBe(503);
-      expect(await out.json()).toEqual({ error: "Could not sign out everywhere. Try again." });
-      expect(out.headers.get("set-cookie")).toBeNull();
-    } finally {
-      failAccountWrites = false;
-    }
+    withDbFault(
+      /update "community_users"/,
+      Object.assign(new Error("terminating connection"), { code: "57P01" }),
+    );
+    const out = await post(logout, "logout", { everywhere: true }, { cookie });
+    expect(out.status).toBe(503);
+    expect(await out.json()).toEqual({ error: "Could not sign out everywhere. Try again." });
+    expect(out.headers.get("set-cookie")).toBeNull();
     expect(await whoAmI(cookie)).toEqual({ username: "ann_down", isAdmin: false });
   });
 

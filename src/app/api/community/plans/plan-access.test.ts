@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FactoryProject } from "@/lib/model/types";
 import { takeLpCount } from "@/lib/solver/plan/lp";
 import { APP_VERSION } from "@/lib/version";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
+import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
 import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
@@ -51,7 +51,7 @@ const PNG = Buffer.from(
  * voting and the board photograph of a post that is not public.
  */
 
-let local: LocalDatabase;
+const testDb = useTestDb();
 let files: string;
 const users: Record<string, { id: string; cookie: string }> = {};
 let addresses = 0;
@@ -129,20 +129,15 @@ async function planRow(planId: string): Promise<{ upvotes: number; downvotes: nu
 }
 
 beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "plan-access-test-salt");
   files = mkdtempSync(path.join(tmpdir(), "plan-access-"));
   vi.stubEnv("FILE_STORE_DIR", files);
-  local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
   for (const name of ["owner", "stranger", "poster"]) {
     await makeUser(name);
   }
 }, 60_000);
 
 afterAll(async () => {
-  useInProcessLocalDb(undefined);
-  await local?.close();
   vi.unstubAllEnvs();
   resetDbBreaker();
   forgetSessionUsers();
@@ -319,19 +314,13 @@ describe("a post's board photograph", () => {
     const planId = await makePlan("Looked up", true);
     expect((await postPreview(planId, PNG, "owner")).status).toBe(200);
     forgetSessionUsers();
-    useInProcessLocalDb(async (request) => {
-      const url = new URL(request.url);
-      if (request.method === "GET" && url.pathname.endsWith("/community_users")) {
-        return Response.json({ message: "boom", code: "XX000", details: "", hint: "" }, { status: 500 });
-      }
-      return local.handle(request);
-    });
+    withDbFault(/from "community_users"/, Object.assign(new Error("boom"), { code: "XX000" }));
     try {
       const failed = await getPreview(planId, "stranger");
       expect(failed.status).toBe(404);
       expect(await failed.json()).toEqual({ error: "No preview." });
     } finally {
-      useInProcessLocalDb(local.handle);
+      clearDbFault();
       resetDbBreaker();
     }
     expect((await getPreview(planId, "stranger")).status).toBe(200);
@@ -401,14 +390,14 @@ describe("a post's comments", () => {
       if (request.method === "GET" && url.pathname.endsWith("/community_plans")) {
         return Response.json({ message: "boom", code: "XX000", details: "", hint: "" }, { status: 500 });
       }
-      return local.handle(request);
+      return testDb().standIn(request);
     });
     try {
       const failed = await readComments(planId);
       expect(failed.status).toBe(500);
       expect(await failed.json()).toEqual({ error: "Comments could not be loaded." });
     } finally {
-      useInProcessLocalDb(local.handle);
+      useInProcessLocalDb(testDb().standIn);
       resetDbBreaker();
     }
     expect((await readComments(planId)).status).toBe(200);
@@ -426,14 +415,14 @@ describe("a post's comments", () => {
       if (request.method === "GET" && url.pathname.endsWith("/community_plans")) {
         return Response.json({ message: "boom", code: "XX000", details: "", hint: "" }, { status: 500 });
       }
-      return local.handle(request);
+      return testDb().standIn(request);
     });
     try {
       const failed = await postComment();
       expect(failed.status).toBe(500);
       expect(await failed.json()).toEqual({ error: "The comment could not be posted." });
     } finally {
-      useInProcessLocalDb(local.handle);
+      useInProcessLocalDb(testDb().standIn);
       resetDbBreaker();
     }
     expect((await postComment()).status).toBe(200);

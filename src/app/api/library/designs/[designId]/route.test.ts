@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { planWithAdditions } from "@/lib/model/__fixtures__/plan-additions";
 import type { FactoryProject } from "@/lib/model/types";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
+import { useTestDb } from "@/test-support/test-db";
 import { getCommunityDb } from "@/lib/server/db";
 import { makeSessionToken } from "@/lib/server/auth/sessions";
 import { oversizeRequest } from "@/test-support/request-bodies";
@@ -15,14 +14,11 @@ import { GET, PUT } from "./route";
  * jsonb in between).
  */
 
-let local: LocalDatabase;
+useTestDb();
 let cookie = "";
 
 beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "library-put-test-salt");
-  local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
   const { data } = await getCommunityDb()
     .from("community_users")
     .insert({ username: "ann", password_hash: "x:y" })
@@ -32,8 +28,6 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  useInProcessLocalDb(undefined);
-  await local?.close();
   vi.unstubAllEnvs();
 });
 

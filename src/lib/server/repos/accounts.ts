@@ -1,9 +1,9 @@
-import { getCommunityDb, type Tx } from "../db";
+import { getDb, type Tx } from "../db";
 
 /**
  * The account rows: who signs in, under which name, and the epoch that ends
- * every older session. Repositories take an optional transaction last; until
- * the direct client lands there is none and `tx` is unused.
+ * every older session. Repositories take an optional transaction last; a
+ * query runs on it when one is passed, else on the pool.
  */
 
 export interface SessionUser {
@@ -22,21 +22,19 @@ export interface LoginAccount {
   session_epoch: number;
 }
 
+/** Postgres's unique-violation SQLSTATE: the name is taken. */
+const UNIQUE_VIOLATION = "23505";
+
 /** The account behind a session, or undefined when it is gone. Throws when the database does not answer. */
 export async function readSessionAccount(
   userId: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<SessionUser | undefined> {
-  const { data, error } = await getCommunityDb()
-    .from("community_users")
-    .select("id,username,is_admin,session_epoch")
-    .eq("id", userId)
-    .maybeSingle<SessionUser>();
-  if (error) {
-    throw new Error(error.message || "Account lookup failed.");
-  }
-  // bigint arrives as a JSON number; a row from before the column reads as 0.
-  return data ? { ...data, session_epoch: Number(data.session_epoch ?? 0) } : undefined;
+  return (tx ?? getDb())
+    .selectFrom("community_users")
+    .select(["id", "username", "is_admin", "session_epoch"])
+    .where("id", "=", userId)
+    .executeTakeFirst();
 }
 
 /**
@@ -46,99 +44,98 @@ export async function readSessionAccount(
  */
 export async function readLoginAccount(
   username: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<LoginAccount | undefined> {
-  const { data } = await getCommunityDb()
-    .from("community_users")
-    .select("id,username,password_hash,is_admin,session_epoch")
-    .eq("username", username)
-    .single<Omit<LoginAccount, "session_epoch"> & { session_epoch: number | null }>();
-  return data ? { ...data, session_epoch: Number(data.session_epoch ?? 0) } : undefined;
+  try {
+    return await (tx ?? getDb())
+      .selectFrom("community_users")
+      .select(["id", "username", "password_hash", "is_admin", "session_epoch"])
+      .where("username", "=", username)
+      .executeTakeFirst();
+  } catch {
+    return undefined;
+  }
 }
 
-/** A new account, or "taken" when the name exists. Any other failure throws, the database's error as its cause. */
+/** A new account, or "taken" when the name exists. Any other failure throws. */
 export async function createAccount(
   username: string,
   passwordHash: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<{ id: string; username: string } | "taken"> {
-  const { data, error } = await getCommunityDb()
-    .from("community_users")
-    .insert({ username, password_hash: passwordHash })
-    .select("id,username")
-    .single<{ id: string; username: string }>();
-  if (error || !data) {
-    if (error?.message.includes("duplicate") || error?.code === "23505") {
+  try {
+    return await (tx ?? getDb())
+      .insertInto("community_users")
+      .values({ username, password_hash: passwordHash })
+      .returning(["id", "username"])
+      .executeTakeFirstOrThrow();
+  } catch (error) {
+    if ((error as { code?: unknown }).code === UNIQUE_VIOLATION) {
       return "taken";
     }
-    throw new Error(error?.message || "No account row came back.", { cause: error });
+    throw error;
   }
-  return data;
 }
 
 /** Sets the account's session epoch. Throws when the database does not answer. */
-export async function setSessionEpoch(userId: string, epoch: number, _tx?: Tx): Promise<void> {
-  const { error } = await getCommunityDb()
-    .from("community_users")
-    .update({ session_epoch: epoch })
-    .eq("id", userId);
-  if (error) {
-    throw new Error(error.message || "Sign out everywhere failed.");
-  }
+export async function setSessionEpoch(userId: string, epoch: number, tx?: Tx): Promise<void> {
+  await (tx ?? getDb())
+    .updateTable("community_users")
+    .set({ session_epoch: epoch })
+    .where("id", "=", userId)
+    .execute();
+}
+
+/**
+ * Escapes LIKE's wildcards (`%`, `_`) and its escape character (backslash,
+ * Postgres's default), so the pattern matches the typed characters only.
+ */
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, "\\$&");
 }
 
 /**
  * Up to 10 accounts whose name starts with `prefix` (any case), by name,
- * `excludeId` left out. The caller holds `prefix` to letters, digits, `-`
- * and `_`; `_` is a LIKE wildcard, so it is escaped to match only itself.
+ * `excludeId` left out. Every character of `prefix` matches only itself.
  */
 export async function searchByPrefix(
   prefix: string,
   excludeId: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<Array<{ id: string; username: string }>> {
-  const pattern = `${prefix.replace(/_/g, "\\_")}%`;
-  const { data, error } = await getCommunityDb()
-    .from("community_users")
-    .select("id,username")
-    .ilike("username", pattern)
-    .neq("id", excludeId)
-    .order("username", { ascending: true })
-    .limit(10);
-  if (error) {
-    throw new Error(`Account search failed: ${error.message}`);
-  }
-  return (data ?? []) as Array<{ id: string; username: string }>;
+  return (tx ?? getDb())
+    .selectFrom("community_users")
+    .select(["id", "username"])
+    .where("username", "ilike", `${escapeLike(prefix)}%`)
+    .where("id", "<>", excludeId)
+    .orderBy("username", "asc")
+    .limit(10)
+    .execute();
 }
 
 /** Whether an account with this id exists. Throws when the database does not answer. */
-export async function accountExists(id: string, _tx?: Tx): Promise<boolean> {
-  const { data, error } = await getCommunityDb()
-    .from("community_users")
+export async function accountExists(id: string, tx?: Tx): Promise<boolean> {
+  const row = await (tx ?? getDb())
+    .selectFrom("community_users")
     .select("id")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) {
-    throw new Error(`Account lookup failed: ${error.message}`);
-  }
-  return Boolean(data);
+    .where("id", "=", id)
+    .executeTakeFirst();
+  return row !== undefined;
 }
 
 /** Usernames by account id; an id with no account is left out. Throws when the database does not answer. */
-export async function usernamesFor(ids: Iterable<string>, _tx?: Tx): Promise<Map<string, string>> {
+export async function usernamesFor(ids: Iterable<string>, tx?: Tx): Promise<Map<string, string>> {
   const unique = [...new Set(ids)];
   const names = new Map<string, string>();
   if (unique.length === 0) {
     return names;
   }
-  const { data, error } = await getCommunityDb()
-    .from("community_users")
-    .select("id,username")
-    .in("id", unique);
-  if (error) {
-    throw new Error(`Account lookup failed: ${error.message}`);
-  }
-  for (const row of (data ?? []) as Array<{ id: string; username: string }>) {
+  const rows = await (tx ?? getDb())
+    .selectFrom("community_users")
+    .select(["id", "username"])
+    .where("id", "in", unique)
+    .execute();
+  for (const row of rows) {
     names.set(row.id, row.username);
   }
   return names;

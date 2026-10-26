@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
+import { useTestDb } from "@/test-support/test-db";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
 import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
 import * as blueprintsRepo from "@/lib/server/repos/blueprints";
@@ -18,7 +17,7 @@ import * as vote from "./[blueprintId]/vote/route";
  * votes do; accounts and other addresses are not held by it.
  */
 
-let local: LocalDatabase;
+useTestDb();
 const users: Record<string, { id: string; cookie: string }> = {};
 
 async function makeUser(username: string) {
@@ -86,10 +85,7 @@ function castVote(blueprintId: string, body: unknown, options: { who?: string; a
 }
 
 beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "blueprint-vote-test-salt");
-  local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
   await makeUser("author");
   await makeUser("reader");
   privateId = await makeBlueprint("Private furnace", false);
@@ -97,8 +93,6 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  useInProcessLocalDb(undefined);
-  await local?.close();
   vi.unstubAllEnvs();
   resetDbBreaker();
   forgetSessionUsers();

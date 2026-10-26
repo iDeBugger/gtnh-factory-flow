@@ -262,7 +262,8 @@ Checks with no exceptions at all:
   `CompiledQuery` as a value (and outside `db/` at all); a namespace or dynamic import of kysely. A sort column
   comes from a closed map and goes through the builder, never through these.
 
-The server and the live service talk to PostgREST at `POSTGREST_URL` through `@supabase/postgrest-js`
+Accounts and the event log go to Postgres directly (`getDb`, see Local database below); every other repository,
+until its swap, goes to PostgREST. The server and the live service talk to PostgREST at `POSTGREST_URL` through `@supabase/postgrest-js`
 (`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
 which bypasses row security. No anon role exists, so a request without the token is 401. `SUPABASE_URL` and
 `SUPABASE_SERVICE_ROLE_KEY` are not read; the startup checks warn when either is set. Rules:
@@ -285,7 +286,7 @@ which bypasses row security. No anon role exists, so a request without the token
 - `community_events` keeps 31 days (`EVENTS_KEPT_DAYS`; the longest window read is 30): `recordEvents` deletes older
   rows once an hour per process, oldest first in batches of `PRUNE_BATCH_ROWS` until one comes back short or
   `PRUNE_BUDGET_MS` (2 s) has gone (so a backlog drains fast yet never holds a request past the statement timeout;
-  the rest waits an hour; 500 ids keep the delete's query string under 8 KB), over the `created_at` index (migration
+  the rest waits an hour), over the `created_at` index (migration
   `2026-10-25-community-events-created-at.sql`, mirrored in `schema.sql`), and a failed prune never fails a save. Exam:
   `community-events.test.ts`.
 
@@ -423,7 +424,8 @@ which bypasses row security. No anon role exists, so a request without the token
 - Next.js never loads PGlite: it reaches the database over HTTP at `LOCAL_DB_URL` (`tools/local-db/serve.ts`, data in
   `scratch/local-db/pgdata`). Tests open it in memory and register it in-process (`useInProcessLocalDb`).
 - The direct client (`getDb`, Kysely over `pg`, `db/client.ts`) sits beside the PostgREST one while repositories move
-  across, behind the same breaker (`db/guard.ts`); nothing queries through it yet. It reads `DATABASE_URL`; pool sizes and
+  across, behind the same breaker (`db/guard.ts`); accounts and the event log (`repos/accounts`, `repos/events`) query
+  through it, every other repository still through PostgREST. It reads `DATABASE_URL`; pool sizes and
   timeouts are `db/settings.ts`. Values parse the same on `pg` and PGlite (`DB_TYPE_PARSERS`: timestamptz as PostgREST's
   JSON text, bigint as a number); a jsonb column takes only `json(value)`. Row types are generated (`npm run db:types`,
   `db/schema.test.ts` fails while `db/schema.ts` is stale). Tests reach one PGlite through both clients with

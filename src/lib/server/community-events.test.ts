@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
+import { useTestDb } from "@/test-support/test-db";
 import {
   EVENTS_KEPT_DAYS,
   forgetEventPrune,
@@ -14,7 +13,7 @@ import { getCommunityDb } from "./db";
  * what no window reads any more, once an hour.
  */
 
-let local: LocalDatabase;
+const testDb = useTestDb();
 
 async function insertAgedEvent(actorKey: string, daysBack: number): Promise<void> {
   const { error } = await getCommunityDb()
@@ -28,16 +27,11 @@ async function actorsRecorded(): Promise<string[]> {
   return ((data ?? []) as Array<{ actor_key: string }>).map((row) => row.actor_key);
 }
 
-beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
+beforeAll(() => {
   vi.stubEnv("COMMUNITY_HASH_SALT", "events-test-salt");
-  local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
-}, 60_000);
+});
 
-afterAll(async () => {
-  useInProcessLocalDb(undefined);
-  await local?.close();
+afterAll(() => {
   vi.unstubAllEnvs();
 });
 
@@ -56,7 +50,7 @@ describe("recording events", () => {
   });
 
   async function insertBacklog(backlog: number): Promise<void> {
-    await local.db.exec("delete from community_events");
+    await testDb().pglite.exec("delete from community_events");
     const { error } = await getCommunityDb()
       .from("community_events")
       .insert(
