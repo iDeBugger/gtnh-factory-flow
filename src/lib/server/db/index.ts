@@ -5,6 +5,7 @@
  */
 import { sql, type Kysely, type Transaction } from "kysely";
 import { createDbClient, type DirectDbClient } from "./client";
+import { isRetryableTransactionError } from "./errors";
 import type { Database } from "./schema";
 import type { DbService } from "./settings";
 
@@ -14,6 +15,7 @@ export {
   DatabaseDownError,
   isDatabaseDown,
   isDatabaseError,
+  isRetryableTransactionError,
   storageErrorMessage,
 } from "./errors";
 export { json, type JsonParam } from "./parsers";
@@ -74,26 +76,40 @@ export interface TransactionOptions {
   readSnapshot?: boolean;
 }
 
+/** Runs of one transaction in all, when a deadlock or a serialization failure rolls it back. */
+const TRANSACTION_ATTEMPTS = 3;
+
 /**
  * Runs `work` in one transaction: committed when it resolves, rolled back
  * when it throws. Inside, use only `tx` and await nothing else (no session
  * read, no rate limit, no fetch): on PGlite an outside query waits for the
- * transaction forever, on Postgres it takes a second pool slot.
+ * transaction forever, on Postgres it takes a second pool slot. That also
+ * makes `work` safe to run again: a deadlock or a serialization failure
+ * (`isRetryableTransactionError`) left nothing of it standing, so it runs
+ * again, up to `TRANSACTION_ATTEMPTS` in all, before the error goes on.
  */
-export function withTransaction<T>(
+export async function withTransaction<T>(
   work: (tx: Tx) => Promise<T>,
   options: TransactionOptions = {},
 ): Promise<T> {
-  return getDb()
-    .transaction()
-    .execute(async (tx) => {
-      if (options.readSnapshot) {
-        // A statement of its own rather than the driver's transaction
-        // settings, which PGlite's driver drops: the same SQL on both.
-        await sql`set transaction isolation level repeatable read, read only`.execute(tx);
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await getDb()
+        .transaction()
+        .execute(async (tx) => {
+          if (options.readSnapshot) {
+            // A statement of its own rather than the driver's transaction
+            // settings, which PGlite's driver drops: the same SQL on both.
+            await sql`set transaction isolation level repeatable read, read only`.execute(tx);
+          }
+          return work(tx);
+        });
+    } catch (error) {
+      if (attempt >= TRANSACTION_ATTEMPTS || !isRetryableTransactionError(error)) {
+        throw error;
       }
-      return work(tx);
-    });
+    }
+  }
 }
 
 /** Closes the pool (on shutdown). A test database is its owner's to close. */

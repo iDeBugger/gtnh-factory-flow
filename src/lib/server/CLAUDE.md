@@ -331,7 +331,10 @@ a connection; then one goes through to try. A stalled database recovers only onc
 keeps asking. Down (`isDatabaseDown`) means a socket error (`ECONNREFUSED`, `ECONNRESET`, `ETIMEDOUT`,
 `EHOSTUNREACH`, `ENETUNREACH`, `ENOTFOUND` and `EAI_AGAIN` for a stopped compose service, `EPIPE`,
 `ECONNABORTED`), the pool's connect timeout, the client's query timeout, a dropped connection, SQLSTATE `57014`,
-`57P01`..`57P03`, `53300` or class `08`. A constraint or syntax error is an answer and closes the count. A down
+`55P03` (a lock not had within `lock_timeout`), `57P01`..`57P03`, `53300` or class `08`. A constraint or syntax
+error is an answer and closes the count. A deadlock (`40P01`) or a serialization failure (`40001`) is an answer too,
+and retryable: `withTransaction` runs the transaction again, 3 runs in all, before the route's sentence
+(`isRetryableTransactionError`; `guard.test.ts`). A down
 error is rethrown as `DatabaseDownError`, whose message is `COMMUNITY_DB_DOWN_MESSAGE` ("The community database
 is not responding. Try again in a few minutes."); `storageErrorMessage(error, fallback)` gives that line for a down
 error and the route's own sentence otherwise, so table and column names stay in the log. Exam: `guard.test.ts`,

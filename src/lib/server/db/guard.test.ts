@@ -12,7 +12,8 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useTestDb, withDbFault } from "@/test-support/test-db";
 import { dbBreakerOpen, DB_BREAKER_FAILURES, DB_BREAKER_OPEN_MS, resetDbBreaker } from "./breaker";
-import { DatabaseDownError, isDatabaseDown } from "./errors";
+import { DatabaseDownError, isDatabaseDown, isRetryableTransactionError } from "./errors";
+import { withTransaction } from "./index";
 import { GuardedDialect, setDbFaultForTests } from "./guard";
 import type { Database } from "./schema";
 
@@ -98,9 +99,18 @@ describe("the direct client's guard", () => {
       "57P01",
       "53300",
       "08006",
+      // lock_timeout: a row lock not had in 5 s, as a statement timeout is time run out.
+      "55P03",
     ]) {
       expect(isDatabaseDown(withCode(code)), code).toBe(true);
     }
+    // A deadlock or a serialization failure is the work's own conflict: run again, never down.
+    for (const code of ["40P01", "40001"]) {
+      expect(isDatabaseDown(withCode(code)), code).toBe(false);
+      expect(isRetryableTransactionError({ code, severity: "ERROR" }), code).toBe(true);
+    }
+    expect(isRetryableTransactionError({ code: "55P03", severity: "ERROR" })).toBe(false);
+    expect(isRetryableTransactionError(withCode("40P01"))).toBe(false);
     expect(isDatabaseDown(new Error("Query read timeout"))).toBe(true);
     expect(isDatabaseDown(new Error("timeout exceeded when trying to connect"))).toBe(true);
     expect(isDatabaseDown(new DatabaseDownError())).toBe(true);
@@ -243,5 +253,48 @@ describe("the direct client's guard", () => {
     // A hook left installed is never consulted there, and none can be installed.
     await expect(db.selectFrom("community_events").select("id").execute()).resolves.toEqual([]);
     expect(() => setDbFaultForTests(() => undefined)).toThrow(/tests only/);
+  });
+  it("runs a transaction again after a deadlock or a serialization failure, up to three times in all", async () => {
+    await testDb().pglite.exec("create table if not exists retry_probe (n int)");
+    for (const code of ["40P01", "40001"]) {
+      await testDb().pglite.exec("delete from retry_probe");
+      let inserts = 0;
+      setDbFaultForTests((sqlText) => {
+        if (/^insert into "retry_probe"/.test(sqlText) && ++inserts === 1) {
+          return Object.assign(new Error(code), { code, severity: "ERROR" });
+        }
+        return undefined;
+      });
+      let runs = 0;
+      await withTransaction(async (tx) => {
+        runs += 1;
+        await tx
+          .insertInto("retry_probe" as never)
+          .values({ n: runs } as never)
+          .execute();
+      });
+      expect(runs, code).toBe(2);
+      expect((await testDb().pglite.query("select n from retry_probe")).rows, code).toEqual([
+        { n: 2 },
+      ]);
+    }
+
+    setDbFaultForTests((sqlText) =>
+      /^insert into "retry_probe"/.test(sqlText)
+        ? Object.assign(new Error("deadlock"), { code: "40P01", severity: "ERROR" })
+        : undefined,
+    );
+    let runs = 0;
+    await expect(
+      withTransaction(async (tx) => {
+        runs += 1;
+        await tx
+          .insertInto("retry_probe" as never)
+          .values({ n: 9 } as never)
+          .execute();
+      }),
+    ).rejects.toMatchObject({ code: "40P01" });
+    expect(runs).toBe(3);
+    setDbFaultForTests(undefined);
   });
 });

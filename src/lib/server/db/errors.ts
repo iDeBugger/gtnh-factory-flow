@@ -63,11 +63,24 @@ const DOWN_SOCKET_CODES = new Set([
 ]);
 /**
  * SQLSTATEs that mean the server stopped the work or has no room for it:
- * 57014 a statement timeout or cancel, 57P01..57P03 a shutdown or a server
- * not accepting connections yet, 53300 too many connections. Class 08 is
- * every connection exception.
+ * 57014 a statement timeout or cancel, 55P03 a row lock not had within the
+ * pool's `lock_timeout` (time run out, as a statement timeout is),
+ * 57P01..57P03 a shutdown or a server not accepting connections yet, 53300
+ * too many connections. Class 08 is every connection exception.
  */
-const DOWN_SQLSTATES = new Set(["57014", "57P01", "57P02", "57P03", "53300"]);
+const DOWN_SQLSTATES = new Set(["57014", "55P03", "57P01", "57P02", "57P03", "53300"]);
+
+/**
+ * SQLSTATEs after which a transaction may simply run again: Postgres rolled
+ * the whole of it back for a deadlock (40P01) or a serialization failure
+ * (40001), the work's own conflict with another transaction, not an outage.
+ */
+const RETRYABLE_SQLSTATES = new Set(["40P01", "40001"]);
+
+/** Whether a failed transaction may run again as it is (`withTransaction` does, a few times). */
+export function isRetryableTransactionError(error: unknown): boolean {
+  return isDatabaseError(error) && RETRYABLE_SQLSTATES.has((error as { code: string }).code);
+}
 /** What `pg` and its pool throw with no code: the client's query timeout, the pool's connect timeout, a dropped socket. */
 const DOWN_MESSAGES = [
   /^Query read timeout$/,
