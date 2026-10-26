@@ -1,16 +1,15 @@
 import { beforeEach, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({ page: vi.fn() }));
-vi.mock("@/lib/server/db", () => ({
-  isCommunityConfigured: () => true,
-  getCommunityDb: () => {
-    const query = {
-      select: () => query,
-      or: () => query,
-      order: () => query,
-      range: () => db.page(),
-    };
-    return { from: () => query };
+vi.mock("@/lib/server/services/config", () => ({ isDatabaseConfigured: () => true }));
+// The stand-in answers each page the way the PostgREST client did; the repository throws its error.
+vi.mock("@/lib/server/repos/popularity", () => ({
+  publicPlanPage: async () => {
+    const { data, error } = (await db.page()) as { data: unknown[] | null; error: { message: string } | null };
+    if (error) {
+      throw new Error(error.message);
+    }
+    return data ?? [];
   },
 }));
 

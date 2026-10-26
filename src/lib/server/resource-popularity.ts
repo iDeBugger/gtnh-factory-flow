@@ -1,5 +1,6 @@
 import { getFilledCellFluidEquivalent } from "@/lib/model/resources";
-import { getCommunityDb, isCommunityConfigured } from "./db";
+import { publicPlanPage } from "./repos/popularity";
+import { isDatabaseConfigured } from "./services/config";
 
 /**
  * What the community actually builds: a per-resource popularity score
@@ -90,29 +91,20 @@ export function resetResourcePopularityForTests(): void {
 
 async function buildPopularityMap(): Promise<Map<string, number>> {
   const totals = new Map<string, number>();
-  if (!isCommunityConfigured()) {
+  if (!isDatabaseConfigured()) {
     return totals;
   }
-  const db = getCommunityDb();
 
   for (let offset = 0; offset < MAX_PLANS; offset += PAGE_SIZE) {
-    const { data, error } = await db
-      .from("community_plans")
-      .select("plan, outputs")
-      .or("is_public.eq.true,is_public.is.null")
-      .order("id", { ascending: true })
-      .range(offset, offset + PAGE_SIZE - 1);
-    if (error) {
-      throw new Error(error.message);
-    }
-    for (const row of data ?? []) {
+    const rows = await publicPlanPage(offset, PAGE_SIZE);
+    for (const row of rows) {
       const votes = scoreOnePlan(row.plan, row.outputs);
       for (const [key, score] of votes) {
         const weight = key.startsWith("item:") ? ITEM_WEIGHT : 1;
         totals.set(key, (totals.get(key) ?? 0) + score * weight);
       }
     }
-    if (!data || data.length < PAGE_SIZE) {
+    if (rows.length < PAGE_SIZE) {
       break;
     }
   }

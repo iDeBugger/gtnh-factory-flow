@@ -15,6 +15,7 @@ import { makeActorKey, makeVoterKey } from "../auth/keys";
 import {
   attachMyVotes,
   parseEntryIcon,
+  type PLAN_SUMMARY_COLUMNS,
   readPlanVotesByVoter,
   rowToPlanSummary,
   type PlanRow,
@@ -108,6 +109,35 @@ function resourceKeys(raw: string): plans.PlanResourceKey[] {
       const [kind, ...rest] = entry.split(":");
       return { kind: kind!, resourceId: rest.join(":") };
     });
+}
+
+/** A post's link and dates, for the sitemap. */
+export interface PlanLinkRow {
+  id: string;
+  created_at: string;
+  updated_at: string | null;
+}
+
+/**
+ * The published posts, best score first, up to `limit`: the posts the
+ * sitemap and llms.txt name, pages a stranger can open. Throws when the
+ * database does not answer; both callers then list no post.
+ */
+export function publicPlansByScore(
+  limit: number,
+  columns: typeof PLAN_SUMMARY_COLUMNS,
+): Promise<PlanRow[]>;
+export function publicPlansByScore(
+  limit: number,
+  columns: "id,created_at,updated_at",
+): Promise<PlanLinkRow[]>;
+export function publicPlansByScore(
+  limit: number,
+  columns: plans.PublicByScoreColumns,
+): Promise<PlanRow[] | PlanLinkRow[]> {
+  return plans.publicByScore<PlanRow | PlanLinkRow>(limit, columns) as Promise<
+    PlanRow[] | PlanLinkRow[]
+  >;
 }
 
 /**
