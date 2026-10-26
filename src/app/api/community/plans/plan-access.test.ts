@@ -478,6 +478,7 @@ describe("a post's comments", () => {
       const failed = await readComments(planId);
       expect(failed.status).toBe(500);
       expect(await failed.json()).toEqual({ error: "Comments could not be loaded." });
+      expect(failed.headers.get("Cache-Control")).toBe("no-store");
     } finally {
       clearDbFault();
       resetDbBreaker();
@@ -497,6 +498,7 @@ describe("a post's comments", () => {
       const failed = await postComment();
       expect(failed.status).toBe(500);
       expect(await failed.json()).toEqual({ error: "The comment could not be posted." });
+      expect(failed.headers.get("Cache-Control")).toBe("no-store");
     } finally {
       clearDbFault();
       resetDbBreaker();
@@ -600,6 +602,7 @@ describe("a post's comments", () => {
         const failed = await deleteIt();
         expect(failed.status, String(table)).toBe(500);
         expect(await failed.json()).toEqual({ error: "The comment could not be deleted." });
+        expect(failed.headers.get("Cache-Control"), String(table)).toBe("no-store");
       } finally {
         clearDbFault();
         resetDbBreaker();

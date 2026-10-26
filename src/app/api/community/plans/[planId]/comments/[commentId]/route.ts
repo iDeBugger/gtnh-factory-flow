@@ -31,6 +31,9 @@ export async function DELETE(request: Request, context: RouteContext) {
     const result = await deleteComment(viewer, planId, commentId);
     return serviceResponse(result, (value) => value);
   } catch (error) {
-    return serverErrorResponse(error, "The comment could not be deleted.");
+    // `no-store`, as on a service refusal: no cache may keep an outage's answer past the outage.
+    return serverErrorResponse(error, "The comment could not be deleted.", {
+      headers: { "Cache-Control": "no-store" },
+    });
   }
 }

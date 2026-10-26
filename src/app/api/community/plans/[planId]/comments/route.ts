@@ -15,6 +15,9 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// `no-store`, as on a service refusal: no cache may keep an outage's answer past the outage.
+const NO_STORE = { headers: { "Cache-Control": "no-store" } };
+
 type RouteContext = { params: Promise<{ planId: string }> };
 
 export async function GET(request: Request, context: RouteContext) {
@@ -29,7 +32,7 @@ export async function GET(request: Request, context: RouteContext) {
     const result = await listComments(await readViewer(request), planId);
     return serviceResponse(result, (value) => value);
   } catch (error) {
-    return serverErrorResponse(error, "Comments could not be loaded.");
+    return serverErrorResponse(error, "Comments could not be loaded.", NO_STORE);
   }
 }
 
@@ -57,6 +60,6 @@ export async function POST(request: Request, context: RouteContext) {
     const result = await addComment(viewer, planId, access.value.planOwnerId, read.value);
     return serviceResponse(result, (value) => value);
   } catch (error) {
-    return serverErrorResponse(error, "The comment could not be posted.");
+    return serverErrorResponse(error, "The comment could not be posted.", NO_STORE);
   }
 }
