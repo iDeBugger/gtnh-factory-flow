@@ -31,6 +31,7 @@ import { accountExists, usernamesFor } from "../repos/accounts";
 import * as designMembers from "../repos/design-members";
 import * as designs from "../repos/designs";
 import * as folders from "../repos/folders";
+import { designRole, type DesignRole } from "./design-role";
 import { fail, ok, type ServiceResult } from "./result";
 
 /**
@@ -45,8 +46,6 @@ import { fail, ok, type ServiceResult } from "./result";
  * body); these take a signed-in viewer.
  */
 
-export type DesignRole = "owner" | "editor";
-
 /** What a database failure the route answered with its own sentence says. */
 function storageFailure(error: unknown, fallback: string): ServiceResult<never> {
   if (!(error instanceof DbQueryError)) {
@@ -56,21 +55,6 @@ function storageFailure(error: unknown, fallback: string): ServiceResult<never> 
 }
 
 const pairKey = (ownerId: string, designId: string) => `${ownerId}:${designId}`;
-
-/**
- * What `userId` may do with the design: "owner", "editor" (a member), or
- * null (nothing, or no such design). Throws when the database does not answer.
- */
-export async function designRole(
-  userId: string,
-  ownerId: string,
-  designId: string,
-): Promise<DesignRole | null> {
-  if (userId === ownerId) {
-    return "owner";
-  }
-  return (await designMembers.isMember(userId, ownerId, designId)) ? "editor" : null;
-}
 
 /**
  * The account's whole library, without plans: every design's metadata and

@@ -45,9 +45,20 @@ Longer references, read on demand: `docs/solver-equations.md` (solver doctrine),
    at run time) never reaches `src/lib/server` or a Node built-in.
 7. The stores never import the UI.
 8. Non-UI `src/lib` never imports the UI or the stores.
+9. Only the data layer (`lib/server/{db,repos}`) in `src/` loads `kysely`, `pg`,
+   `@supabase/postgrest-js`, `db/client.ts` or `db/rest.ts`.
+10. Services import from `lib/server` only services, repositories, `auth/`, `limits/`,
+    `db/index.ts`, `http/{viewer,client-address}.ts`, `live-notify.ts` and the query-free helpers
+    the test names.
+11. The data layer never imports services, `auth/`, `limits/`, `http/` or `live-notify.ts`, and
+    `db/` never imports `repos/`.
 
 Services (`lib/server/services`) never import `next/*`, with no exceptions, and the live service
-never loads `auth/passwords.ts`. Today's exceptions to the rules above are listed in
+never loads `auth/passwords.ts`. Also with no exceptions: outside the data layer (and the
+PostgREST stand-in) no file sends a query or takes `getDb` or `getCommunityDb`; services take only
+the transaction and the failure types from `db/index.ts`; a `sql` template appears only in the data
+layer; and `sql.raw`, `sql.ref`, `sql.id`, `sql.lit`, `sql.table`, `dynamic.ref` and
+`dynamic.table`, which put their argument into the SQL text, appear only in `db/migrations.ts`. Today's exceptions to the rules above are listed in
 `src/architecture-allowlist.json`, and the list only shrinks: a fixed edge still listed fails, the
 dump (`ARCH_DUMP=1 npx vitest run src/architecture.test.ts`) only removes fixed entries, and
 `MAX_ALLOWED` in the test caps each rule's count, so a new exception needs an edit to the test in

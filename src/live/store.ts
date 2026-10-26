@@ -4,7 +4,7 @@ import { usernamesFor } from "@/lib/server/repos/accounts";
 import * as designMembers from "@/lib/server/repos/design-members";
 import * as designs from "@/lib/server/repos/designs";
 import type { LeaseOutcome } from "@/lib/server/repos/designs";
-import { designRole, type DesignRole } from "@/lib/server/services/library";
+import { designRole, type DesignRole } from "@/lib/server/services/design-role";
 import type { LivePlan } from "@/lib/live/ops";
 
 /**

@@ -15,6 +15,12 @@ import { describe, expect, it } from "vitest";
  * entries from the allowlist. It never adds one, and `MAX_ALLOWED` below holds
  * each rule's entries, so a new exception takes an edit to this file in the
  * same diff. Lower a cap when a task leaves fewer.
+ *
+ * The data layer (`src/lib/server/db/` and `src/lib/server/repos/`) alone
+ * holds the database: its clients, its queries and its SQL. No request value
+ * can reach SQL text: a `sql` template's `${}` is a bound parameter, and the
+ * calls that splice text in (`sql.raw`, `sql.ref`, `sql.id`, ...) appear only
+ * in `db/migrations.ts`, which reads the repository's own files.
  */
 
 /** The most entries the allowlist may hold, per rule and for the querying app files. */
@@ -26,6 +32,9 @@ const MAX_ALLOWED: Record<string, number> = {
   "6": 1,
   "7": 4,
   "8": 48,
+  "9": 0,
+  "10": 0,
+  "11": 0,
   queriesInApp: 0,
 };
 
@@ -136,6 +145,29 @@ function isClientEntry(file: string, text: string): boolean {
   return /^\s*["']use client["']/.test(preProcessed);
 }
 
+/** One file's imports; `relative` is its repository path, which need not exist on disk. */
+function toSourceFile(relative: string, text: string): SourceFile {
+  const absolute = path.join(ROOT, relative);
+  const info = ts.preProcessFile(text, true, true);
+  const seen = new Map<string, Edge>();
+  for (const imported of info.importedFiles) {
+    const to = resolveSpecifier(absolute, imported.fileName);
+    const typeOnly = isTypeOnlyAt(text, imported.pos);
+    const known = seen.get(to);
+    if (known) {
+      known.typeOnly &&= typeOnly;
+    } else {
+      seen.set(to, { from: relative, to, typeOnly });
+    }
+  }
+  return {
+    path: relative,
+    text,
+    isClientEntry: isClientEntry(relative, text),
+    edges: [...seen.values()],
+  };
+}
+
 function readGraph(): Map<string, SourceFile> {
   const absolute: string[] = [];
   walk(path.join(ROOT, "src"), absolute);
@@ -143,25 +175,7 @@ function readGraph(): Map<string, SourceFile> {
   const graph = new Map<string, SourceFile>();
   for (const file of absolute) {
     const relative = path.relative(ROOT, file).split(path.sep).join("/");
-    const text = fs.readFileSync(file, "utf8");
-    const info = ts.preProcessFile(text, true, true);
-    const seen = new Map<string, Edge>();
-    for (const imported of info.importedFiles) {
-      const to = resolveSpecifier(file, imported.fileName);
-      const typeOnly = isTypeOnlyAt(text, imported.pos);
-      const known = seen.get(to);
-      if (known) {
-        known.typeOnly &&= typeOnly;
-      } else {
-        seen.set(to, { from: relative, to, typeOnly });
-      }
-    }
-    graph.set(relative, {
-      path: relative,
-      text,
-      isClientEntry: isClientEntry(relative, text),
-      edges: [...seen.values()],
-    });
+    graph.set(relative, toSourceFile(relative, fs.readFileSync(file, "utf8")));
   }
   return graph;
 }
@@ -201,6 +215,50 @@ const isUiOrStore = (file: string): boolean => /^src\/(components|store)\//.test
 
 /** What only repositories may hold: the database client and its SQL. */
 const isDatabaseLayer = (file: string): boolean => /^src\/lib\/server\/(db|repos)\//.test(file);
+
+/**
+ * The PostgREST stand-in for tests and dev: a database of its own, which
+ * answers PostgREST requests with SQL. It goes with the PostgREST client.
+ */
+const isStandIn = (file: string): boolean => file.startsWith("src/lib/server/local-db/");
+
+/** The one module whose SQL is text it reads from the repository: the migrations. */
+const MIGRATIONS_FILE = "src/lib/server/db/migrations.ts";
+
+/** The packages and modules that open a database connection. */
+const CLIENT_PACKAGES = /^pkg:(@supabase\/postgrest-js|kysely|pg)(\/|$)/;
+const CLIENT_MODULES = new Set(["src/lib/server/db/client.ts", "src/lib/server/db/rest.ts"]);
+
+/**
+ * What a service may import from lib/server: other services, repositories,
+ * the db entry (for transactions and error types; names checked below),
+ * auth, limits, the viewer type, the client address, the live notice, and
+ * the query-free helpers the services share with routes and repositories
+ * (row shapes and icons, library rows and stamps, the lease clock, blueprint
+ * payloads, the plan list cache, the plan solver, plan previews, the file
+ * store). Never the HTTP plumbing, the stand-in or the clients.
+ */
+const isServiceTarget = (file: string): boolean =>
+  /^src\/lib\/server\/(services|repos|auth|limits)\//.test(file) ||
+  [
+    "src/lib/server/db/index.ts",
+    "src/lib/server/http/viewer.ts",
+    "src/lib/server/http/client-address.ts",
+    "src/lib/server/live-notify.ts",
+    "src/lib/server/community-rows.ts",
+    "src/lib/server/library.ts",
+    "src/lib/server/cloud-plans.ts",
+    "src/lib/server/blueprints.ts",
+    "src/lib/server/plan-list-cache.ts",
+    "src/lib/server/plan-engine.ts",
+    "src/lib/server/plan-preview.ts",
+    "src/lib/server/file-store.ts",
+  ].includes(file);
+
+/** The layers above the data layer, which it never imports. */
+const isAboveDataLayer = (file: string): boolean =>
+  /^src\/lib\/server\/(services|auth|limits|http)\//.test(file) ||
+  file === "src/lib/server/live-notify.ts";
 
 /** Packages the domain and the contracts never load: they stay pure. */
 function isImpurePackage(name: string): boolean {
@@ -254,6 +312,21 @@ const RULES: Record<string, (edge: Edge) => boolean> = {
   "7": ({ from, to }) => from.startsWith("src/store/") && to.startsWith("src/components/"),
   // 8. Non-UI lib never imports the UI or the stores.
   "8": ({ from, to }) => from.startsWith("src/lib/") && !isServer(from) && isUiOrStore(to),
+  // 9. Only the data layer loads a database client (kysely, pg, postgrest-js, db/client, db/rest).
+  //    tools/ is out of scope: its scripts (the dev database server, the type generator, the
+  //    migration runner) open a database themselves and answer no request.
+  "9": ({ from, to }) =>
+    from.startsWith("src/") &&
+    !isDatabaseLayer(from) &&
+    (CLIENT_PACKAGES.test(to) || CLIENT_MODULES.has(to)),
+  // 10. Services import from lib/server only what `isServiceTarget` names.
+  "10": ({ from, to }) =>
+    from.startsWith("src/lib/server/services/") && isServer(to) && !isServiceTarget(to),
+  // 11. The data layer never imports the layers above it, and db/ never imports repos/.
+  "11": ({ from, to }) =>
+    isDatabaseLayer(from) &&
+    (isAboveDataLayer(to) ||
+      (from.startsWith("src/lib/server/db/") && to.startsWith("src/lib/server/repos/"))),
 };
 
 /** Services return results, never HTTP responses; no allowlist entry excuses one. */
@@ -298,8 +371,6 @@ function clientCrossings(graph: Map<string, SourceFile>): Edge[] {
   return crossings;
 }
 
-const QUERY_PACKAGES = /^pkg:(@supabase\/postgrest-js|kysely|pg)(\/|$)/;
-
 /**
  * A query builder's `.from("table")`, whatever the client is named. The
  * built-ins' static `from` (`Array.from`, `Buffer.from`, typed arrays) is no
@@ -308,8 +379,190 @@ const QUERY_PACKAGES = /^pkg:(@supabase\/postgrest-js|kysely|pg)(\/|$)/;
 const QUERY_TEXT =
   /(?<!\b(?:Array|Buffer|Object|Set|Map|String|Iterator|(?:Int|Uint|Float|BigInt|BigUint)(?:8|16|32|64)(?:Clamped)?Array)\s*)\.from\(\s*["'`]/;
 
+/** Kysely's statement builders, which no other library in the app names. */
+const KYSELY_QUERY_TEXT =
+  /\.(selectFrom|selectNoFrom|insertInto|replaceInto|updateTable|deleteFrom|mergeInto)\(/;
+
 function sendsQuery(text: string): boolean {
-  return QUERY_TEXT.test(text);
+  return QUERY_TEXT.test(text) || KYSELY_QUERY_TEXT.test(text);
+}
+
+/** Files outside the data layer (and the stand-in) that send a query. */
+function queriesOutsideDataLayer(graph: Map<string, SourceFile>): string[] {
+  return [...graph.values()]
+    .filter(
+      (file) =>
+        file.path.startsWith("src/") &&
+        !isExempt(file.path) &&
+        !isDatabaseLayer(file.path) &&
+        !isStandIn(file.path),
+    )
+    .filter((file) => sendsQuery(file.text))
+    .map((file) => file.path)
+    .sort();
+}
+
+const syntaxTrees = new Map<string, ts.SourceFile>();
+
+function syntaxTree(file: SourceFile): ts.SourceFile {
+  let tree = syntaxTrees.get(file.path);
+  if (!tree || tree.text !== file.text) {
+    const kind = file.path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+    tree = ts.createSourceFile(file.path, file.text, ts.ScriptTarget.Latest, true, kind);
+    syntaxTrees.set(file.path, tree);
+  }
+  return tree;
+}
+
+/**
+ * The names `file` imports or re-exports from `target`: each binding's
+ * exported name, `*` for a namespace or `export *`, `default` for a default.
+ */
+function namesImported(file: SourceFile, target: string): string[] {
+  if (!file.edges.some((edge) => edge.to === target)) return [];
+  const names: string[] = [];
+  for (const statement of syntaxTree(file).statements) {
+    const isImport = ts.isImportDeclaration(statement);
+    if (!isImport && !ts.isExportDeclaration(statement)) continue;
+    const specifier = statement.moduleSpecifier;
+    if (!specifier || !ts.isStringLiteral(specifier)) continue;
+    if (resolveSpecifier(path.join(ROOT, file.path), specifier.text) !== target) continue;
+    if (isImport) {
+      const clause = statement.importClause;
+      if (!clause) continue;
+      if (clause.name) names.push("default");
+      const bindings = clause.namedBindings;
+      if (bindings && ts.isNamespaceImport(bindings)) names.push("*");
+      if (bindings && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          names.push((element.propertyName ?? element.name).text);
+        }
+      }
+    } else {
+      const clause = statement.exportClause;
+      if (!clause || ts.isNamespaceExport(clause)) {
+        names.push("*");
+      } else {
+        for (const element of clause.elements) {
+          names.push((element.propertyName ?? element.name).text);
+        }
+      }
+    }
+  }
+  return names;
+}
+
+const DB_ENTRY = "src/lib/server/db/index.ts";
+
+/** The db entry's database handles: only the data layer takes one. */
+const CLIENT_HANDLES = new Set(["getDb", "getCommunityDb", "*"]);
+
+/** Files outside the data layer that take a database handle from the db entry. */
+function clientHandleImports(graph: Map<string, SourceFile>): string[] {
+  return [...graph.values()]
+    .filter((file) => !isExempt(file.path) && !isDatabaseLayer(file.path))
+    .flatMap((file) =>
+      namesImported(file, DB_ENTRY)
+        .filter((name) => CLIENT_HANDLES.has(name))
+        .map((name) => `${file.path}: ${name}`),
+    )
+    .sort();
+}
+
+/**
+ * What a service takes from the db entry: the transaction, its handle's type
+ * and the failure types and sentences. Building SQL (`json`) is the
+ * repositories' work; `services/config.ts` alone also asks whether a
+ * database is configured.
+ */
+const SERVICE_DB_NAMES = new Set([
+  "withTransaction",
+  "Tx",
+  "DbQueryError",
+  "DatabaseDownError",
+  "isDatabaseDown",
+  "COMMUNITY_DB_DOWN_MESSAGE",
+  "blueprintStorageErrorMessage",
+  "communityStorageErrorMessage",
+  "libraryStorageErrorMessage",
+  "isMissingColumnError",
+]);
+const CONFIG_DB_NAMES = new Set(["isCommunityConfigured", "isDatabaseConfigured"]);
+
+function serviceDbNames(graph: Map<string, SourceFile>): string[] {
+  return [...graph.values()]
+    .filter((file) => file.path.startsWith("src/lib/server/services/") && !isExempt(file.path))
+    .flatMap((file) =>
+      namesImported(file, DB_ENTRY)
+        .filter(
+          (name) =>
+            !SERVICE_DB_NAMES.has(name) &&
+            !(file.path === "src/lib/server/services/config.ts" && CONFIG_DB_NAMES.has(name)),
+        )
+        .map((name) => `${file.path}: ${name}`),
+    )
+    .sort();
+}
+
+/** Kysely's calls that put their argument into the SQL text rather than bind it. */
+const SPLICING_CALLS = new Set(["raw", "ref", "id", "lit", "table"]);
+
+const namedSql = (node: ts.Expression): boolean =>
+  (ts.isIdentifier(node) && node.text === "sql") ||
+  (ts.isPropertyAccessExpression(node) && node.name.text === "sql");
+
+/**
+ * Where SQL is written: each `sql` template, each splicing call (`sql.raw`,
+ * `sql.ref`, `sql.id`, `sql.lit`, `sql.table`, `dynamic.ref`,
+ * `dynamic.table`), and each import of Kysely's `sql` under another name,
+ * which would hide the rest from this reading.
+ */
+function sqlWriting(file: SourceFile): { template: boolean; splicing: string[] } {
+  const found = { template: false, splicing: [] as string[] };
+  if (!/\bsql\b|\.dynamic\b/.test(file.text)) return found;
+  const visit = (node: ts.Node): void => {
+    if (ts.isTaggedTemplateExpression(node) && namedSql(node.tag)) {
+      found.template = true;
+    }
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const callee = node.expression;
+      const name = callee.name.text;
+      if (SPLICING_CALLS.has(name) && namedSql(callee.expression)) {
+        found.splicing.push(`sql.${name}`);
+      }
+      if (
+        (name === "ref" || name === "table") &&
+        ts.isPropertyAccessExpression(callee.expression) &&
+        callee.expression.name.text === "dynamic"
+      ) {
+        found.splicing.push(`dynamic.${name}`);
+      }
+    }
+    if (
+      ts.isImportSpecifier(node) &&
+      node.propertyName?.text === "sql" &&
+      node.name.text !== "sql"
+    ) {
+      found.splicing.push(`sql as ${node.name.text}`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(syntaxTree(file));
+  return found;
+}
+
+/** SQL written where it may not be: templates outside the data layer, splicing outside the migrations. */
+function sqlOutOfPlace(graph: Map<string, SourceFile>): string[] {
+  const out: string[] = [];
+  for (const file of graph.values()) {
+    if (isExempt(file.path)) continue;
+    const { template, splicing } = sqlWriting(file);
+    if (template && !isDatabaseLayer(file.path)) out.push(`${file.path}: sql template`);
+    if (file.path !== MIGRATIONS_FILE) {
+      for (const call of splicing) out.push(`${file.path}: ${call}`);
+    }
+  }
+  return out.sort();
 }
 
 /**
@@ -326,7 +579,8 @@ function queryingAppFiles(graph: Map<string, SourceFile>): string[] {
       (file) =>
         sendsQuery(file.text) ||
         file.edges.some(
-          (edge) => QUERY_PACKAGES.test(edge.to) || /^src\/lib\/server\/(db|repos)\//.test(edge.to),
+          (edge) =>
+            CLIENT_PACKAGES.test(edge.to) || /^src\/lib\/server\/(db|repos)\//.test(edge.to),
         ),
     )
     .map((file) => file.path)
@@ -446,5 +700,78 @@ describe("the layers", () => {
     );
     const next = services.flatMap((file) => file.edges.filter(importsNext));
     expect(next.map((edge) => `${edge.from} -> ${edge.to}`)).toEqual([]);
+  });
+
+  it("only the data layer sends a query", () => {
+    expect(queriesOutsideDataLayer(graph)).toEqual([]);
+  });
+
+  it("only the data layer takes a database handle from the db entry", () => {
+    expect(clientHandleImports(graph)).toEqual([]);
+  });
+
+  it("services take only transactions and failure types from the db entry", () => {
+    expect(serviceDbNames(graph)).toEqual([]);
+  });
+
+  it("SQL is written only in the data layer, and spliced text only in the migrations", () => {
+    expect(sqlOutOfPlace(graph)).toEqual([]);
+  });
+
+  it("refuses a bad file under each data-layer rule", () => {
+    // Read from memory through the same parser as the real tree; nothing is written to disk.
+    const fixtures: Record<string, string> = {
+      "src/lib/server/services/arch-fixture.ts": [
+        'import { Kysely } from "kysely";',
+        'import { getDb, json } from "../db";',
+        'import { readJsonBody } from "../http/request-body";',
+        'import { openLocalDatabase } from "../local-db/database";',
+        'export const rows = () => getDb().selectFrom("community_plans").selectAll();',
+      ].join("\n"),
+      "src/live/arch-fixture.ts": 'import { createDbClient } from "@/lib/server/db/client";',
+      "src/lib/server/plan-arch-fixture.ts": [
+        'import * as db from "./db";',
+        'export const rows = () => db.getCommunityDb().from("community_plans").select("id");',
+      ].join("\n"),
+      "src/lib/server/repos/arch-fixture.ts": [
+        'import { sql } from "kysely";',
+        'import { checkRateLimit } from "../limits/rate-limit";',
+        "export const byColumn = (column: string) => sql`select ${sql.raw(column)}`;",
+        "export const named = (column: string) => sql.ref(column);",
+      ].join("\n"),
+      "src/lib/server/db/arch-fixture.ts": [
+        'import { sql as text } from "kysely";',
+        'import { findPlan } from "../repos/plans";',
+        "export const any = (name: string) => text.id(name);",
+      ].join("\n"),
+      "src/lib/server/auth/arch-fixture.ts": "export const one = () => sql`select 1`;",
+    };
+    const bad = new Map(
+      Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
+    );
+    const services = "src/lib/server/services/arch-fixture.ts";
+    expect(breaks(bad).map(key)).toEqual(
+      expect.arrayContaining([
+        `9|${services}|pkg:kysely`,
+        `10|${services}|src/lib/server/http/request-body.ts`,
+        `10|${services}|src/lib/server/local-db/database.ts`,
+        "5|src/live/arch-fixture.ts|src/lib/server/db/client.ts",
+        "9|src/live/arch-fixture.ts|src/lib/server/db/client.ts",
+        "11|src/lib/server/repos/arch-fixture.ts|src/lib/server/limits/rate-limit.ts",
+        "11|src/lib/server/db/arch-fixture.ts|src/lib/server/repos/plans.ts",
+      ]),
+    );
+    expect(queriesOutsideDataLayer(bad)).toEqual(["src/lib/server/plan-arch-fixture.ts", services]);
+    expect(clientHandleImports(bad)).toEqual([
+      "src/lib/server/plan-arch-fixture.ts: *",
+      `${services}: getDb`,
+    ]);
+    expect(serviceDbNames(bad)).toEqual([`${services}: getDb`, `${services}: json`]);
+    expect(sqlOutOfPlace(bad)).toEqual([
+      "src/lib/server/auth/arch-fixture.ts: sql template",
+      "src/lib/server/db/arch-fixture.ts: sql as text",
+      "src/lib/server/repos/arch-fixture.ts: sql.raw",
+      "src/lib/server/repos/arch-fixture.ts: sql.ref",
+    ]);
   });
 });
