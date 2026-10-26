@@ -196,7 +196,9 @@ The website joins the room of the design on the canvas when it is a cloud plan: 
   difference they make to the view, so untouched cards keep their identity. Undo applies recorded inverses of your
   own edits only.
 - Pending batches are kept in IndexedDB per plan and tab and sent again after a reconnect; a closed tab's are adopted
-  by the next tab to open the plan. Each tab joins for itself rather than one tab holding the connection for all:
+  by the next tab to open the plan, ahead of what that tab holds. The same store keeps, per design, the base of edits
+  made while no room was open for the plan (`detached|<design id>`): the room that opens sends base-to-canvas after
+  the adopted batches (rules: `src/store/CLAUDE.md`, Edits away from the room). Each tab joins for itself rather than one tab holding the connection for all:
   no tab depends on another staying open, at the cost of a socket a tab.
 - Presence: the pointer on the board at most 10 a second, the selection when it changes, drawn for others by
   `LivePresenceLayer`; faces of who is here on the plan bar.

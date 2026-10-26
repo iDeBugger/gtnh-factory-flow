@@ -39,7 +39,7 @@ console.log(
 if (!resourceOrder) {
   console.warn(
     "WARNING: this dataset has NO NEI order: its item list sorts As in NEI by the approximation. " +
-      "NEI's list comes only from a client export (GTNH_EXPORT_PACK_KIND=client, or GTNH_FORCE_CLIENT_ICON_EXPORT=1).",
+      "NEI's list comes only from a client export: build-datasets.mjs <version> --export.",
   );
 }
 
@@ -200,7 +200,12 @@ function buildResourceIndex(dataset) {
         recipeCount: 1,
         tooltip: indexed ? indexed.tooltip : resource.tooltip,
         oreDictionary: indexed?.oreDictionary ?? resource.oreDictionary,
-        alternatives: indexed?.alternatives ?? resource.alternatives,
+        // The index entry is the resource itself, shared by every recipe that names it, so it takes only the
+        // catalog's item-level choices (an ore dictionary group's members). What one SLOT accepts (GT5U's
+        // SubstituteFluidStack, mOreDictAlt and unification) stays on that recipe's input: copied here, the
+        // Fertilizer's Water-or-Distilled-Water slot offered Distilled Water in every Water slot the server
+        // hydrates, and a machine's unified Steel Plate slot offered Refined Iron Plate in shaped crafting.
+        alternatives: indexed?.alternatives,
       });
     }
   }
@@ -237,7 +242,7 @@ function mergeResourceIcon(target, resource, indexed) {
     target.tooltip = resource.tooltip;
   }
   if (!target.alternatives) {
-    target.alternatives = indexed?.alternatives ?? resource.alternatives;
+    target.alternatives = indexed?.alternatives;
   }
 }
 

@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { createNewProject } from "@/examples";
+import { forgetDetachedBase } from "@/lib/live/live-pending-store";
 import {
   UNTITLED_DESIGN_NAME,
   conflictCopyName,
@@ -657,6 +658,8 @@ export const useDesignStore = create<DesignStore>((set, get) => ({
       id: sharedDesignLocalId(ref),
       cloud: ref,
     };
+    // A copy made now starts clean: a base an earlier copy of the same plan left is not its edits.
+    await forgetDetachedBase(record.id).catch(() => undefined);
     await writeDesign(record);
     landOnDesign(set, record);
     leaveWelcomeTab();

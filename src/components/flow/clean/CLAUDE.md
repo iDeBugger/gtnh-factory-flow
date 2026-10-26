@@ -5,6 +5,9 @@ The mod's flat card on the website's board. It draws every `RecipeNode`: `Recipe
 classic `RecipeNode` and `StorageNode` stay in the tree, unreachable from the board). A node the plain card
 cannot be goes to `special/` (`specialKindOf`): a shared machine, a generator, a custom rate or fluid tank
 holder, a crop card. Bees, the Extreme Entity Crusher and every other machine are the plain card.
+- A bee or crop map's icon is a specimen, never the machine (`cardPicture`): those cards wear the housing's or
+  harvester's own face (the server's `SYNTHESIZED_HANDLER_FACES`) or its name. A bee card's species is a kept row
+  ("in housing", `freeInputRowLabel`, node-verdict's inert rows), the only thing on it that names the bee.
 
 - `special/` is those cards on the plain card's classes (`cc-card`, `cc-head`, `cc-rail`, `cc-row`, `cc-pic`,
   `cc-strip`) plus `sp-*` (`special.css`, loaded after `clean.css`; `cs-*` is the menus'). `use-special.ts` has
@@ -15,6 +18,11 @@ holder, a crop card. Bees, the Extreme Entity Crusher and every other machine ar
   handles) until a port is dropped on it; the fluid tank adopts the dataset's Tank recipe the port fits
   (`lib/datasets/tank-recipe.ts`, `lib/model/fluid-tank.ts`) and lets go when unwired. A generator's pinned settings
   are the plan's `settingPins["power:<source>"]`.
+  A crop card's count is seeds, never machines (`.cc-run`, the word small beside the number). Its harvesters are a
+  number setting (`CROP_MACHINES_ID`, `NumberSetting`), pinned by default: what the seeds fill at the tier's capacity
+  (`cropsNhCropsPerMachine`), of the seeds set when a count is set and of the solved seeds on Any; typed or stepped,
+  it sets the seeds to that many full machines, and below one clears a set count. Pin toggles pass every
+  pinnable setting, or the ones left out unpin. Exam: `special/crop-machines.test.ts`.
 
 - A card's menu (`menus/CardActionsMenu.tsx` `CardRows`, from its actions key and a right click on it) is the mod's
   order: Clone node, Add another recipe, Replace the recipe, Add to a task, then Delete node in red. The recipe rows
@@ -31,8 +39,8 @@ holder, a crop card. Bees, the Extreme Entity Crusher and every other machine ar
   every width is measured again when a face of the app's font loads.
 - The count (`docs/up-to.md`): under the machine's art what runs, big (`data-run`), and what is set, as the overview's
   machine lines say it: the rule word on every rule and the set box (`::after`: the number in gold, else "Set"; Any,
-  Up to, Exactly through `lib/model/pin-rule.ts`; `menus/CountRuleMenu.tsx`). With no count a card reads Up to (a new
-  card, a cleared count) unless the player picked Any (`solvePinAny`, `shownPinRule`).
+  Up to, Exactly through `lib/model/pin-rule.ts`; `menus/CountRuleMenu.tsx`). As a drawer's rate: no count is Any (a new
+  card, a cleared count), a count typed in is Up to, Exactly only from the menu.
   An Up to card has one foot bar (`.cc-foot`): fill reached / count, the reason word in its tone, a plain line,
   the fraction, a bottleneck's striped run-on to what the line wants; an Exactly card with a forced input says
   FORCED IN. The read-out is `PlanSolveExtras.upTo`; the overview's words and colours are `up-to-reason.ts`.

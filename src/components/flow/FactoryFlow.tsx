@@ -157,7 +157,7 @@ import {
   writeDesignCamera,
   type BoardCamera,
 } from "@/lib/designs/design-camera";
-import { isEditableKeyboardTarget } from "./keyboard";
+import { isBoardCovered, isEditableKeyboardTarget } from "./keyboard";
 import {
   didBoardTimelapseEndHeld,
   getBoardTimelapseCameraMode,
@@ -273,6 +273,7 @@ import {
 import { RecipeAddChips } from "@/components/RecipeAddChip";
 import {
   LANE_CAPACITY,
+  cardRimDocks,
   laneWidthForHeat,
   solveGridRoutes,
   type GridEndpoint,
@@ -1179,59 +1180,10 @@ function resolveGridRouteEndpoints(
 ): GridEndpoint[] {
   const nodeId = end === "source" ? input.sourceNodeId : input.targetNodeId;
   const rect = getMeasuredNodeBoundsById(nodeId);
-  if (!rect) {
-    return [];
-  }
-  const snap = (value: number) => Math.round(value / BOARD_GRID) * BOARD_GRID;
-
   // Every wire docks freely, self loops included; the router keeps a self
   // loop's two ends apart so it reads as a loop.
-  const left = snap(rect.left);
-  const right = snap(rect.right);
-  const top = snap(rect.top);
-  const bottom = snap(rect.bottom);
-  // Every grid line crossing the border is a candidate; huge multiblock
-  // cards coarsen to every other line so the candidate set stays bounded.
-  const perimeterCells = (right - left + (bottom - top)) / BOARD_GRID;
-  const step = perimeterCells > 60 ? 2 * BOARD_GRID : BOARD_GRID;
-  // The corner itself is not a dock (a wire off the very corner reads as
-  // clipped through the card); one cell in is fine, at 45° too.
-  const keepOutFor = (span: number) => (span >= 2 * BOARD_GRID ? BOARD_GRID : 0);
-  const dockTop = top;
-  const centerX = (left + right) / 2;
-  const centerY = (dockTop + bottom) / 2;
-  const candidates: GridEndpoint[] = [];
-  const keepOutX = keepOutFor(right - left);
-  const keepOutY = keepOutFor(bottom - dockTop);
-  for (let x = left + keepOutX; x <= right - keepOutX; x += step) {
-    const penalty = Math.abs(x - centerX) * DOCK_CENTER_BIAS;
-    candidates.push({ x, y: top, side: "top", penalty });
-    candidates.push({ x, y: bottom, side: "bottom", penalty });
-  }
-  for (let y = dockTop + keepOutY; y <= bottom - keepOutY; y += step) {
-    const penalty = Math.abs(y - centerY) * DOCK_CENTER_BIAS;
-    candidates.push({ x: left, y, side: "left", penalty }, { x: right, y, side: "right", penalty });
-  }
-  // Defensive: a card with no dock left after the keep-out falls back to its
-  // side centres.
-  if (candidates.length === 0) {
-    candidates.push(
-      { x: left, y: snap(centerY), side: "left" },
-      { x: right, y: snap(centerY), side: "right" },
-      { x: snap(centerX), y: bottom, side: "bottom" },
-    );
-    candidates.push({ x: snap(centerX), y: top, side: "top" });
-  }
-  return candidates;
+  return rect ? cardRimDocks(rect) : [];
 }
-
-/**
- * Cost per pixel of distance from a side's centre when choosing a dock:
- * mid-way out a machine's long side costs about one extra turn, so facing
- * wires meet centre-to-centre and a wire slides toward a corner only when
- * the route earns it.
- */
-const DOCK_CENTER_BIAS = 0.25;
 
 /**
  * Runs the grid solve if anything it depends on changed, and parks every
@@ -1976,7 +1928,6 @@ export function FactoryFlow() {
     }
   }, [poolPairsSignature, poolVersionServes]);
   const addStorageForConnection = useFactoryStore((state) => state.addStorageForConnection);
-  const selectedNodeId = useFactoryStore((state) => state.selectedNodeId);
   const deleteNode = useFactoryStore((state) => state.deleteNode);
   const deleteStorage = useFactoryStore((state) => state.deleteStorage);
   const deleteEdge = useFactoryStore((state) => state.deleteEdge);
@@ -4851,6 +4802,18 @@ export function FactoryFlow() {
     return true;
   }, [deleteBoardSelection, selectNode, selectedEdgeIds, selectedNodeIds]);
 
+  /** Escape lets go of the selection, as the controls list says: nothing stays armed for a later Delete. */
+  const clearBoardSelection = useCallback(() => {
+    setFlowNodes((current) =>
+      current.some((node) => node.selected)
+        ? current.map((node) => (node.selected ? { ...node, selected: false } : node))
+        : current,
+    );
+    setSelectedNodeIds([]);
+    setSelectedEdgeIds([]);
+    setSelectedBoardIds([]);
+  }, [setSelectedBoardIds]);
+
   // The recipe search covers the board; the board's own notices mute while
   // it does.
   const recipeSearchOpen = useFactoryStore((state) => Boolean(state.recipeBrowserResource));
@@ -4961,6 +4924,10 @@ export function FactoryFlow() {
       if (useFactoryStore.getState().project.poolMode && document.querySelector("[data-pool-worksheet]")) return;
       if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
         const key = event.key.toLowerCase();
+        // Keys that change the plan leave a covered board alone.
+        if (key !== "c" && isBoardCovered()) {
+          return;
+        }
         if (key === "c" || key === "x") {
           // Never fight the browser for real text: typing fields and selected
           // page text keep native copy/cut.
@@ -5003,32 +4970,17 @@ export function FactoryFlow() {
       // Backspace deletes too. React Flow's own delete key is off
       // (deleteKeyCode null): it removes cards from the canvas without
       // telling the project, so they come back on the next commit.
+      // Only what is selected on the board goes, and nothing while the board
+      // is covered (the recipe search walks back on a bare Backspace). The
+      // store's selectedNodeId is never drawn (a landing and every delete
+      // point it at the first card), so a key on it would delete cards nobody saw.
       if (event.key === "Delete" || event.key === "Backspace") {
-        if (isEditableKeyboardTarget(event.target)) {
+        if (isEditableKeyboardTarget(event.target) || event.defaultPrevented || isBoardCovered()) {
           return;
         }
 
         if (deleteSelectedBoardItems()) {
           return;
-        }
-
-        if (selectedNodeId) {
-          if (project.nodes.some((node) => node.id === selectedNodeId)) {
-            deleteNode(selectedNodeId);
-            return;
-          }
-
-          if ((project.storages ?? []).some((storage) => storage.id === selectedNodeId)) {
-            deleteStorage(selectedNodeId);
-            selectNode(undefined);
-            return;
-          }
-
-          if ((project.annotations ?? []).some((annotation) => annotation.id === selectedNodeId)) {
-            deleteAnnotation(selectedNodeId);
-            selectNode(undefined);
-            return;
-          }
         }
 
         cancelResourceConnection();
@@ -5057,11 +5009,16 @@ export function FactoryFlow() {
           return;
         }
 
-        // Escape backs out of whatever tool or half-made wire is active.
+        // Escape backs out of whatever tool or half-made wire is active, and
+        // lets go of the selection.
         cancelResourceConnection();
         setNodeColorPaintMode(undefined);
         setAnnotationTool(undefined);
         setDeleteMode(false);
+        // A popup that took the Escape (its own dismiss) keeps the board's selection.
+        if (!event.defaultPrevented && !isBoardCovered()) {
+          clearBoardSelection();
+        }
       }
     };
 
@@ -5070,19 +5027,12 @@ export function FactoryFlow() {
   }, [
     annotationTool,
     cancelResourceConnection,
+    clearBoardSelection,
     copyBoardSelection,
-    deleteAnnotation,
-    deleteNode,
     deleteSelectedBoardItems,
-    deleteStorage,
     isDeleteMode,
     nodeColorPaintMode,
     pasteBoardClipboard,
-    project.annotations,
-    project.nodes,
-    project.storages,
-    selectNode,
-    selectedNodeId,
     setNodeColorPaintMode,
     wrapSelectedBoardItems,
   ]);

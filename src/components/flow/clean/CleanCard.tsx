@@ -37,7 +37,7 @@ const TASKS_ENABLED = isLiveConfigured();
 import { checklistLocked } from "../RecipeNode";
 import { wheelChangesValues } from "@/lib/device-settings";
 import { MobPickerMenu } from "../MobPickerMenu";
-import { isControllerSlotInput } from "@/lib/model/free-input";
+import { freeInputRowLabel, isBeeSpeciesInput, isControllerSlotInput } from "@/lib/model/free-input";
 import type {
   CleanCardActions,
   CleanCardContext,
@@ -155,14 +155,16 @@ export function CleanPortRow({
   if (port.free) {
     // The item in a machine's controller slot (the Extreme Entity Crusher's spawner) names its mob: pressing it picks another.
     const controller = port.resource !== undefined && isControllerSlotInput(port.resource);
+    // A bee card's species, kept in the housing: the row is what says which bee it is.
+    const bee = port.resource !== undefined && isBeeSpeciesInput(port.resource);
     // The game gives this one away: shown so it is set down beside the machine, nothing to wire.
     return (
       <div
         className="cc-row"
         data-side={p.side}
         data-controller={controller ? "" : undefined}
-        title={controller ? undefined : `${p.name}: free input, no supply needed`}
-        style={{ opacity: controller ? 0.85 : 0.6 }}
+        title={controller ? undefined : bee ? `${p.name}: stays in the housing, not used up` : `${p.name}: free input, no supply needed`}
+        style={{ opacity: controller || bee ? 0.85 : 0.6 }}
         {...(controller
           ? {
               role: "button",
@@ -188,7 +190,7 @@ export function CleanPortRow({
       >
         {port.resource ? <PortIcon resource={port.resource} iconProps={iconProps} /> : null}
         <span className="cc-num" data-small="" data-unit="">
-          {controller ? "in controller" : "free"}
+          {port.resource ? freeInputRowLabel(port.resource) : "free"}
         </span>
         <span
           className="cc-pname"
@@ -393,7 +395,7 @@ function Words({ p, iconProps }: { p: CleanPortView; iconProps: Record<string, u
  * The count under the machine (docs/up-to.md): what runs, big and white (`::before`, from `data-run`), and under it
  * what is set, as the overview's machine lines say it: the rule word, always (a click opens Any, Up to, Exactly), and
  * the set box (`::after`, from `data-set`): the number in gold, or "Set" with no count. A click anywhere else types a
- * count (Any becomes Up to), the wheel steps it, the middle button clears it (Up to, waiting). Two elements: the block and the rule
+ * count (Any becomes Up to), the wheel steps it, the middle button clears it (Any). Two elements: the block and the rule
  * word.
  */
 export function CountBox({
@@ -482,9 +484,10 @@ export function CountBox({
       tabIndex={0}
       className="cc-count nowheel"
       data-wheel-value=""
-      aria-label={`${view.text} running, ${view.ruleWord.toLowerCase()}${view.pinned ? ` ${view.setText}` : ""}`}
+      aria-label={`${view.text}${view.unit ? ` ${view.unit}` : ""} running, ${view.ruleWord.toLowerCase()}${view.pinned ? ` ${view.setText}` : ""}`}
       data-rule={view.rule}
       data-run={view.text}
+      data-unit={view.unit}
       data-set={view.box}
       data-pinned={view.pinned ? "" : undefined}
       data-zero={view.zero ? "" : undefined}
@@ -503,7 +506,7 @@ export function CountBox({
           setDraft(view.set !== undefined ? view.setText : "");
         }
       }}
-      // The middle button clears the count: Up to, waiting for one, while the plan decides it again.
+      // The middle button clears the count: Any, the plan decides it again.
       onMouseDown={(event) => {
         if (event.button === 1) event.preventDefault();
       }}
@@ -515,6 +518,11 @@ export function CountBox({
         onSet(undefined);
       }}
     >
+      {view.unit ? (
+        <div className="cc-run" data-unit={view.unit}>
+          {view.text}
+        </div>
+      ) : null}
       <div
         role={view.ruleFixed ? undefined : "button"}
         tabIndex={view.ruleFixed ? undefined : 0}

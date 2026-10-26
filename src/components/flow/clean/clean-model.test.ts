@@ -17,6 +17,7 @@ import {
   FOOT_TRACK,
   buildCountView,
   buildFootView,
+  cardPicture,
   cardCountState,
   circuitNumber,
   frameTone,
@@ -41,14 +42,11 @@ vi.mock("@/lib/solver/overclock", async (original) => {
 const node = (
   pin?: number,
   exact?: boolean,
-): Pick<FactoryNode, "id" | "solvePin" | "solvePinExact" | "solvePinAny"> => ({
+): Pick<FactoryNode, "id" | "solvePin" | "solvePinExact"> => ({
   id: "n",
   ...(pin !== undefined ? { solvePin: pin } : {}),
   ...(exact ? { solvePinExact: true } : {}),
 });
-
-/** A card the player set to Any. */
-const anyNode = () => ({ ...node(), solvePinAny: true });
 
 const plan = (upTo?: Record<string, PlanUpTo>, extra: Partial<PlanSolveExtras> = {}) =>
   ({
@@ -100,11 +98,9 @@ const ports = {
 
 describe("the count", () => {
   it("reads Any, Up to and Exactly through the pin rule", () => {
-    // No count: Up to, waiting for one; Any only when the player picked it. Either way nothing is pinned.
+    // No count: Any, nothing pinned.
     const fresh = cardCountState(result(3), node(), plan());
-    expect([fresh.rule, fresh.pinned]).toEqual(["upTo", false]);
-    const any = cardCountState(result(3), anyNode(), plan());
-    expect([any.rule, any.pinned]).toEqual(["any", false]);
+    expect([fresh.rule, fresh.pinned]).toEqual(["any", false]);
     expect(cardCountState(result(3), node(4), plan()).rule).toBe("upTo");
     expect(cardCountState(result(3), node(4, true), plan()).rule).toBe("exact");
     // A custom rate card's set count is always Exactly.
@@ -134,17 +130,13 @@ describe("the count", () => {
       "24",
       "24",
     ]);
-    // A new card: Up to with the Set box asking.
+    // A new card: Any with the Set box asking while nothing sets this part of the plan.
     const fresh = buildCountView(
       cardCountState(result(0), node(), plan(undefined, { unanchored: ["n"] })),
     );
-    expect([fresh.ruleWord, fresh.box, fresh.prompt]).toEqual(["Up to", "Set", true]);
-    expect(fresh.title).toBe("Set how many you have. Until then the plan picks.");
-    const unset = buildCountView(
-      cardCountState(result(0), anyNode(), plan(undefined, { unanchored: ["n"] })),
-    );
-    expect([unset.ruleWord, unset.box, unset.prompt]).toEqual(["Any", "Set", true]);
-    const any = buildCountView(cardCountState(result(1.2), anyNode(), plan()));
+    expect([fresh.ruleWord, fresh.box, fresh.prompt]).toEqual(["Any", "Set", true]);
+    expect(fresh.title).toBe("How many of this machine the plan needs.");
+    const any = buildCountView(cardCountState(result(1.2), node(), plan()));
     expect([any.text, any.ruleWord, any.setText, any.box, any.prompt]).toEqual([
       "×1.2",
       "Any",
@@ -153,7 +145,7 @@ describe("the count", () => {
       false,
     ]);
     const crop = buildCountView(cardCountState(result(12), node(), plan()), { noTimes: true });
-    expect([crop.text, crop.ruleWord, crop.box]).toEqual(["12", "Up to", "Set"]);
+    expect([crop.text, crop.ruleWord, crop.box]).toEqual(["12", "Any", "Set"]);
     // A custom rate card has no Up to: with no count it is Any.
     const rate = buildCountView(
       cardCountState(result(1), node(), plan(), { machineType: "Custom Rate" }),
@@ -205,14 +197,14 @@ describe("the count", () => {
 });
 
 describe("writing a count", () => {
-  it("goes through withPinRule: Any clears the count and marks Any, Up to clears the flag, Exactly sets it", () => {
-    const none = { solvePin: undefined, solvePinExact: undefined, solvePinAny: undefined };
-    expect(pinPatch(node(4, true), "any", 4)).toEqual({ ...none, solvePinAny: true });
+  it("goes through withPinRule: Any clears the count, Up to clears the flag, Exactly sets it", () => {
+    const none = { solvePin: undefined, solvePinExact: undefined };
+    expect(pinPatch(node(4, true), "any", 4)).toEqual(none);
     expect(pinPatch(node(4, true), "upTo", 6)).toEqual({ ...none, solvePin: 6 });
-    expect(pinPatch(anyNode(), "exact", 3)).toEqual({ ...none, solvePin: 3, solvePinExact: true });
-    // A cleared count is Up to waiting for one, not Any.
+    expect(pinPatch(node(), "exact", 3)).toEqual({ ...none, solvePin: 3, solvePinExact: true });
+    // A cleared count is Any.
     expect(pinPatch(node(4), "upTo", 0)).toEqual(none);
-    expect(pinPatch(anyNode(), "upTo", undefined)).toEqual(none);
+    expect(pinPatch(node(4, true), "exact", undefined)).toEqual(none);
   });
 
   it("keeps the rule on a typed or stepped count, starts Up to from Any, and takes the rule menu's pick", () => {
@@ -245,33 +237,32 @@ describe("writing a count", () => {
     ]);
   });
 
-  it("starts a new card on Up to, clears a count back to Up to, and marks Any only when picked", () => {
-    const writes: Array<Pick<FactoryNode, "solvePin" | "solvePinExact" | "solvePinAny">> = [];
+  it("starts a new card on Any, clears a count back to Any, and types Up to again after Exactly", () => {
+    const writes: Array<Pick<FactoryNode, "solvePin" | "solvePinExact">> = [];
     const update = (_id: string, patch: (typeof writes)[number]) => void writes.push(patch);
     const locked = () => false;
     const fresh = buildCountView(cardCountState(result(18.2), node(), plan()));
     const onFresh = pinActions(node(), fresh, update, locked);
-    // Up to is what it already reads: nothing to write.
-    onFresh.setRule("upTo");
+    // Any is what it already reads: nothing to write.
+    onFresh.setRule("any");
     expect(writes).toEqual([]);
     onFresh.setCount(7);
-    onFresh.setRule("any");
+    expect(writes).toStrictEqual([{ solvePin: 7, solvePinExact: undefined }]);
+    writes.length = 0;
+    const exact = buildCountView(cardCountState(result(4), node(4, true), plan()));
+    const onExact = pinActions(node(4, true), exact, update, locked);
+    // Picking Any or clearing the count (the middle button, an empty box) is Any.
+    onExact.setRule("any");
+    onExact.setCount(0);
     expect(writes).toStrictEqual([
-      { solvePin: 7, solvePinExact: undefined, solvePinAny: undefined },
-      { solvePin: undefined, solvePinExact: undefined, solvePinAny: true },
+      { solvePin: undefined, solvePinExact: undefined },
+      { solvePin: undefined, solvePinExact: undefined },
     ]);
     writes.length = 0;
-    const any = buildCountView(cardCountState(result(18.2), anyNode(), plan()));
-    const onAny = pinActions(anyNode(), any, update, locked);
-    // A count typed on Any is Up to; clearing it (the middle button, an empty box) is Up to waiting, never Any.
-    onAny.setCount(4);
-    onAny.setCount(undefined);
-    onAny.setCount(0);
-    expect(writes).toStrictEqual([
-      { solvePin: 4, solvePinExact: undefined, solvePinAny: undefined },
-      { solvePin: undefined, solvePinExact: undefined, solvePinAny: undefined },
-      { solvePin: undefined, solvePinExact: undefined, solvePinAny: undefined },
-    ]);
+    // Back on Any, the next count typed is Up to, not Exactly.
+    const cleared = buildCountView(cardCountState(result(4), node(), plan()));
+    pinActions(node(), cleared, update, locked).setCount(5);
+    expect(writes).toStrictEqual([{ solvePin: 5, solvePinExact: undefined }]);
   });
 
   it("keeps a custom rate card Exactly and writes nothing while locked", () => {
@@ -620,5 +611,44 @@ describe("the card model reads the plan's version", () => {
     renderHook(() => useCleanCardModel({ projectNode, recipe }, false));
     expect(stats).toHaveBeenCalled();
     expect(new Set(stats.mock.calls.map((call) => call[2]))).toEqual(new Set(["2.8.1"]));
+  });
+});
+
+describe("the card's picture", () => {
+  const uranium = { kind: "item", id: "factoryflow:bee_species:uranium", displayName: "Uranium Princess", amount: 1 };
+  const alveary = { kind: "item", id: "forestry:alveary", displayName: "Alveary", amount: 1 };
+  const mapIcons = new Map([["Bee Produce", uranium]]) as unknown as Parameters<typeof cardPicture>[4];
+  const beeRecipe = {
+    id: "salt",
+    name: "Salt Bee",
+    kind: "bee_produce",
+    category: "forestry-bee",
+    machineType: "Apiary",
+    source: { recipeMap: "Bee Produce" },
+  } as unknown as Parameters<typeof cardPicture>[0];
+  const beeNode = { id: "bee", overclockTier: "NONE" } as unknown as FactoryNode;
+  const face = (id: string) =>
+    ({ selectedMachineHandler: { id, label: id }, tierControl: undefined }) as unknown as Parameters<typeof cardPicture>[2];
+
+  it("never takes a bee map's specimen for the machine", () => {
+    const none = new Map() as Parameters<typeof cardPicture>[3];
+    expect(cardPicture(beeRecipe, beeNode, face("magic-apiary"), none, mapIcons).machineIcon).toBeUndefined();
+  });
+
+  it("wears the housing's own face", () => {
+    const entries = new Map([["alveary", { familyId: "alveary", resource: alveary }]]) as unknown as Parameters<
+      typeof cardPicture
+    >[3];
+    expect(cardPicture(beeRecipe, beeNode, face("alveary"), entries, mapIcons).machineIcon?.displayName).toBe("Alveary");
+  });
+
+  it("still falls back to the map's machine for other recipes", () => {
+    const mixer = { kind: "item", id: "gregtech:mixer", displayName: "Basic Mixer", amount: 1 };
+    const recipe = { id: "m", name: "Mixer", machineType: "Mixer", source: { recipeMap: "Mixer" } } as unknown as Parameters<
+      typeof cardPicture
+    >[0];
+    const icons = new Map([["Mixer", mixer]]) as unknown as Parameters<typeof cardPicture>[4];
+    const none = new Map() as Parameters<typeof cardPicture>[3];
+    expect(cardPicture(recipe, beeNode, face("mixer"), none, icons).machineIcon?.displayName).toBe("Basic Mixer");
   });
 });

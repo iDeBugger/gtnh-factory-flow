@@ -48,6 +48,9 @@ The board must stay smooth with 100+ cards on weak PCs.
 
 ## Cards and ports
 
+- A wired port keeps its row at any rate (`buildRailPorts`): the row holds the handle its wire is drawn to, and a card
+  the plan runs at almost nothing would otherwise drop it and leave the wire undrawn while the plan still runs it.
+  Exam: `flow-explainers.test.ts`.
 - The port ROW is the control: click = what makes it, right click = what uses it, R / U
   over the hovered row, long press = menu, drag = wire. The icon is `pointer-events-none`.
   `port-browse.ts` holds the hovered row imperatively; do not subscribe cards to it.
@@ -69,6 +72,10 @@ The board must stay smooth with 100+ cards on weak PCs.
 - A one-port machine card, 6x4 cells: a title bar (move grip, board menu, never starts a
   wire) and a port chip that answers exactly like a port row (`usePortRowBrowse`). Keep
   the two zones separate.
+- The move grip is `.cd::before`, taller than the 7 px bar: the bar and 6 px of the row, edge to edge, over the row's
+  wiring handle (z 30) and under the delete and side keys (z 41). It never reaches past the drawer: a drawer drawn
+  after a card right above it would take that card's presses. The bar's tip rides `.cd` (zoomed out, the whole drawer
+  shows it).
 - Solve mode: source and product drawers show a rule row, a rule button (Any / At least /
   Exactly / At most) and a sunken rate box (`RuleInput`, `useRateRule`, `setStorageRule`). A buffer has none: it passes
   what its users take, and the adapter sends it as Any whatever it stores (`docs/buffer-drawers.md`).
@@ -121,7 +128,10 @@ The board must stay smooth with 100+ cards on weak PCs.
   stub. Diagonals only for trips whose card rims are 6+ cells apart, at least two cells
   long. Self loops use 90-degree turns and land a cell from their exit. Turns and
   crossings are priced; reversals are all but forbidden.
-- Docking is free on the whole perimeter (corners excepted). Wire width follows flow
+- Docking is free on the whole perimeter (corners excepted). Docks sit on each side's first grid line at or
+  outside the border, never the nearest (`cardRimDocks`, which Arrange's judge uses too), and `stubDepth` draws the wire on to the border: clean
+  drawers and cards come in 10 px sizes and group members can sit half a cell off, and a dock inside the card
+  loses the whole side or draws the wire from under it. Wire width follows flow
   (`laneWidthForHeat`) and wires sit under cards. No rate labels on wires, except
   ratio-drawer percentages. One drawn wire per material between two cards
   (`channelEdgeIdsByRepresentative`).
@@ -159,6 +169,10 @@ The board must stay smooth with 100+ cards on weak PCs.
 - Other people in a live plan are `LivePresenceLayer.tsx`, mounted only with live plans: a ViewportPortal layer
   over the cards fed by `src/lib/live/live-presence.ts`, never by a board store, so a remote pointer never re-renders
   a card. Its outline selector costs one length check while nobody else has anything selected.
+- Delete and Backspace take React Flow's selection only, never the store's `selectedNodeId` (never drawn), and do
+  nothing while the recipe search, Library, Welcome, a task board, an open menu or a focused dialog covers the board
+  (`isBoardCovered`); the search walks back on a bare Backspace. Escape lets go of the selection unless a popup took
+  it (`defaultPrevented`). Exam: `board-delete-key.test.ts`.
 - One right-click menu, `BoardContextMenu.tsx`. A control with its own right click calls
   `preventDefault`; board handlers skip prevented events.
 - Calm mode is session-only and never stored: a stored flag once stranded players with no

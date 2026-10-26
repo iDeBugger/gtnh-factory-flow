@@ -122,6 +122,190 @@ describe("dropping cross-form connections on load", () => {
   });
 });
 
+/**
+ * The shape players saved from a search for what makes Distilled Water: the
+ * dataset offered Distilled Water in every Water slot, so the pick filled the
+ * Distillation Tower's Water slot with its own product, and the tower then
+ * needed a drawer of Distilled Water to make Distilled Water. A Distillery
+ * picked from the uses of Water stored Water itself.
+ */
+function createSelfLoopProject(): FactoryProject {
+  const water = { kind: "fluid", id: "water", displayName: "Water" } as const;
+  const distilled = { kind: "fluid", id: "ic2distilledwater", displayName: "Distilled Water" } as const;
+  return {
+    schemaVersion: PROJECT_SCHEMA_VERSION,
+    id: "self-loop",
+    name: "Self loop",
+    recipes: [
+      {
+        id: "tower-distilled-water",
+        name: "Distillation Tower: Distilled Water",
+        machineType: "Distillation Tower",
+        minimumTier: "MV",
+        durationTicks: 32,
+        eut: 120,
+        inputs: [
+          { ...water, amount: 1000, alternatives: [{ ...water, amount: 1 }, { ...distilled, amount: 1 }] },
+        ],
+        outputs: [{ ...distilled, amount: 1000 }],
+      },
+      {
+        id: "distillery-distilled-water",
+        name: "Distillery: Distilled Water",
+        machineType: "Distillery",
+        minimumTier: "ULV",
+        durationTicks: 25,
+        eut: 7,
+        inputs: [
+          { ...water, amount: 10, alternatives: [{ ...water, amount: 1 }, { ...distilled, amount: 1 }] },
+        ],
+        outputs: [{ ...distilled, amount: 10 }],
+      },
+      {
+        id: "reactor",
+        name: "Chemical Reactor: Something",
+        machineType: "Chemical Reactor",
+        minimumTier: "LV",
+        durationTicks: 20,
+        eut: 30,
+        inputs: [{ ...distilled, amount: 1000 }],
+        outputs: [{ kind: "item", id: "dust", amount: 1 }],
+      },
+    ],
+    nodes: [
+      {
+        id: "tower",
+        recipeId: "tower-distilled-water",
+        machineCount: 1,
+        parallel: 1,
+        position: { x: 0, y: 0 },
+        recipeInputOverrides: { "0": { ...distilled, amount: 1000 } },
+      },
+      {
+        id: "distillery",
+        recipeId: "distillery-distilled-water",
+        machineCount: 1,
+        parallel: 1,
+        position: { x: 0, y: 400 },
+        recipeInputOverrides: { "0": { ...water, amount: 1 } },
+      },
+      {
+        id: "reactor",
+        recipeId: "reactor",
+        machineCount: 1,
+        parallel: 1,
+        position: { x: 400, y: 0 },
+      },
+    ],
+    storages: [
+      {
+        id: "drawer",
+        kind: "fluid",
+        resourceId: "ic2distilledwater",
+        displayName: "Distilled Water",
+        position: { x: -400, y: 0 },
+      },
+    ],
+    edges: [
+      {
+        id: "drawer-to-tower",
+        source: "drawer",
+        target: "tower",
+        sourceHandle: "output:fluid:ic2distilledwater",
+        targetHandle: "input:fluid:ic2distilledwater",
+        resourceKind: "fluid",
+        resourceId: "ic2distilledwater",
+      },
+      {
+        id: "tower-to-reactor",
+        source: "tower",
+        target: "reactor",
+        sourceHandle: "output:fluid:ic2distilledwater",
+        targetHandle: "input:fluid:ic2distilledwater",
+        resourceKind: "fluid",
+        resourceId: "ic2distilledwater",
+      },
+    ],
+    fuelProfiles: [],
+  } as unknown as FactoryProject;
+}
+
+describe("a slot filled with its own recipe's product, on load", () => {
+  // The funnel has no dataset to tell a leaked pick from a real one, so it
+  // leaves every pick and wire as saved; the recipe refresh settles leaked ones.
+  it("keeps the pick and its wire as saved", () => {
+    const normalized = normalizeLoadedProject(createSelfLoopProject());
+
+    expect(normalized.nodes.find((node) => node.id === "tower")?.recipeInputOverrides?.["0"]?.id).toBe(
+      "ic2distilledwater",
+    );
+    expect(normalized.edges.map((edge) => edge.id).sort()).toEqual(["drawer-to-tower", "tower-to-reactor"]);
+  });
+
+  /**
+   * A Thaumcraft Crucible duplicates its own input: any iron nugget and
+   * Metallum make three Iron Nuggets. A player who wires Iron Nuggets into the
+   * nugget slot, from a feeder or from the card's own output, keeps the wire.
+   */
+  function crucibleProject(withPick: boolean, targetHandle: string): FactoryProject {
+    const nugget = { kind: "item", id: "gregtech:gt.metaitem.01@9032", displayName: "Iron Nugget" } as const;
+    const group = { kind: "item", id: "oredict:nuggetIron", displayName: "Ore Dictionary: nuggetIron" } as const;
+    return {
+      schemaVersion: PROJECT_SCHEMA_VERSION,
+      id: "crucible",
+      name: "Crucible",
+      recipes: [
+        {
+          id: "crucible-iron",
+          name: "Thaumcraft Crucible: Iron Nugget",
+          machineType: "Thaumcraft Crucible",
+          minimumTier: "ULV",
+          durationTicks: 20,
+          eut: 0,
+          inputs: [
+            { ...group, amount: 1, alternatives: [{ ...nugget, amount: 1 }] },
+            { kind: "aspect", id: "thaumcraft:aspect:metallum", amount: 1, displayName: "Metallum" },
+          ],
+          outputs: [{ ...nugget, amount: 3 }],
+        },
+      ],
+      nodes: [
+        {
+          id: "c",
+          recipeId: "crucible-iron",
+          machineCount: 1,
+          parallel: 1,
+          position: { x: 0, y: 0 },
+          ...(withPick ? { recipeInputOverrides: { "0": { ...group, ...nugget, amount: 1 } } } : {}),
+        },
+      ],
+      storages: [],
+      edges: [
+        {
+          id: "loop",
+          source: "c",
+          target: "c",
+          sourceHandle: `output:item:${encodeURIComponent(nugget.id)}`,
+          targetHandle,
+          resourceKind: "item",
+          resourceId: nugget.id,
+        },
+      ],
+      fuelProfiles: [],
+    } as unknown as FactoryProject;
+  }
+
+  for (const withPick of [true, false]) {
+    for (const handle of ["gregtech:gt.metaitem.01@9032", "oredict:nuggetIron"]) {
+      it(`keeps a Crucible's nugget loop (pick ${withPick ? "saved" : "absent"}, wired to ${handle})`, () => {
+        const normalized = normalizeLoadedProject(crucibleProject(withPick, `input:item:${encodeURIComponent(handle)}`));
+
+        expect(normalized.edges.map((edge) => edge.id)).toEqual(["loop"]);
+      });
+    }
+  }
+});
+
 describe("wires into a trash can survive a reload", () => {
   /** A plate maker with its output piped into a can, saved and loaded back. */
   function createTrashProject(kind: "item" | "fluid"): FactoryProject {

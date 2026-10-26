@@ -7,7 +7,7 @@ import type {
   ResourceKind,
   ThroughputResult,
 } from "@/lib/model/types";
-import { isFreeRecipeInput, isOreDictionaryResource, isRecipeInputConsumed, makeResourceKey, resourceLabel } from "@/lib/model";
+import { isBeeSpeciesInput, isFreeRecipeInput, isOreDictionaryResource, isRecipeInputConsumed, makeResourceKey, resourceLabel } from "@/lib/model";
 import { getPoolProject, isPoolStorageId } from "@/lib/solver/pool-mode";
 import { findDeathSpirals, type DeathSpiral } from "./death-spiral";
 import { findClogLocks, type ClogLock } from "./clog-lock";
@@ -2063,8 +2063,11 @@ export function buildRailPorts(
     };
 
     if (flows) {
+      // A wired port keeps its row at any rate: its row holds the handle the wire is drawn to, and a card the plan runs
+      // at almost nothing (an edit elsewhere) would otherwise lose it, leaving the wire undrawn while the plan runs it.
+      const wiredKeys = new Set<string>(sideEdges.map((edge) => makeResourceKey(edge.resourceKind, edge.resourceId)));
       for (const [key, flow] of Object.entries(flows)) {
-        if (flow.amountPerSecond <= RATE_EPSILON) {
+        if (flow.amountPerSecond <= RATE_EPSILON && !wiredKeys.has(key)) {
           continue;
         }
         pushPort(key, flow.kind, flow.resourceId, flow.displayName, flow.amountPerSecond);
@@ -2083,11 +2086,12 @@ export function buildRailPorts(
 
     // Free-in-the-game inputs never reach the solver's flows and pushPort
     // skips them as non-consumed, so they are added last as inert rows:
-    // the item and its name, every figure zero, no handle to wire.
+    // the item and its name, every figure zero, no handle to wire. A bee
+    // card's species rides here too: it is all that names the bee.
     if (isInput) {
       for (const resource of resources) {
         const key = makeResourceKey(resource.kind, resource.id);
-        if (!isFreeRecipeInput(resource) || seen.has(key)) {
+        if (!(isFreeRecipeInput(resource) || isBeeSpeciesInput(resource)) || seen.has(key)) {
           continue;
         }
         seen.add(key);

@@ -1,3 +1,5 @@
+import "fake-indexeddb/auto";
+import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesignRecord, DesignSummary } from "@/lib/designs/design-library";
 import type { PendingBatch } from "@/lib/live/client-state";
@@ -55,38 +57,38 @@ vi.mock("@/lib/designs/design-camera", () => ({
   beginDesignCameraHandover: vi.fn(),
 }));
 
+// The real pending store on an in-memory IndexedDB (fake-indexeddb, fresh per test); only the tab locks are faked.
 const pendingStore = vi.hoisted(() => ({
-  entries: new Map<string, { key: string; doc: string; tabId: string; pending: PendingBatch[] }>(),
   alive: new Set<string>(["tab-a"]),
 }));
-vi.mock("@/lib/live/live-pending-store", () => ({
-  pendingKey: (doc: string, tabId: string) => `${doc}|${tabId}`,
-  writePending: vi.fn(async (doc: string, tabId: string, pending: PendingBatch[]) => {
-    const key = `${doc}|${tabId}`;
-    if (pending.length === 0) {
-      pendingStore.entries.delete(key);
-    } else {
-      pendingStore.entries.set(key, { key, doc, tabId, pending: structuredClone(pending) });
-    }
-  }),
-  readPending: vi.fn(async (doc?: string) =>
-    [...pendingStore.entries.values()].filter((entry) => !doc || entry.doc === doc),
-  ),
-  deletePending: vi.fn(async (key: string) => {
-    pendingStore.entries.delete(key);
-  }),
-  holdTabLock: vi.fn(),
-  aliveTabs: vi.fn(async () => pendingStore.alive),
-}));
+vi.mock("@/lib/live/live-pending-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/live/live-pending-store")>();
+  return {
+    ...actual,
+    readPending: vi.fn(actual.readPending),
+    deletePending: vi.fn(actual.deletePending),
+    takeDetachedBase: vi.fn(actual.takeDetachedBase),
+    holdTabLock: vi.fn(),
+    aliveTabs: vi.fn(async () => pendingStore.alive),
+  };
+});
 
 import { createEmptyProject, createNewProject } from "@/examples";
+import {
+  keepDetachedBase,
+  readDetachedBase,
+  readPending,
+  takeDetachedBase,
+  writePending,
+} from "@/lib/live/live-pending-store";
+import { liveShape } from "@/lib/live/live-shape";
 import { applyOps, type LiveOp, type LivePlan, type LiveThing } from "@/lib/live/ops";
 import { LIVE_LIMITS, type ServerFrame } from "@/lib/live/protocol";
 import type { FactoryAnnotation, FactoryProject } from "@/lib/model/types";
 import { useCommunityAuthStore } from "./community-auth-store";
 import { useDesignStore } from "./design-store";
 import { useFactoryStore } from "./factory-store";
-import { liveUndoHandler, markDesignFresh } from "./live-edit-gate";
+import { liveUndoHandler, markDesignFresh, quietlyOnThisScreen } from "./live-edit-gate";
 import {
   chunkOps,
   noteLeavingPlan,
@@ -245,10 +247,39 @@ function annotations(): FactoryAnnotation[] {
   return useFactoryStore.getState().project.annotations ?? [];
 }
 
+/** Another tab's write of the base, straight to storage, with a stamp of its own. */
+function replaceStoredBase(designId: string, base: LivePlan): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open("gtnh-factory-flow-live");
+    request.onsuccess = () => {
+      const tx = request.result.transaction("pending", "readwrite");
+      const key = `detached|${designId}`;
+      tx.objectStore("pending").put({ key, doc: key, tabId: "", base, updatedAt: "", stamp: "another-tab" });
+      tx.oncomplete = () => {
+        request.result.close();
+        resolve();
+      };
+      tx.onerror = () => reject(tx.error);
+    };
+  });
+}
+
+/** Holds the next take of the base until the returned function is called. */
+function holdTake(store: typeof import("@/lib/live/live-pending-store")): () => void {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  const real = vi.mocked(store.takeDetachedBase).getMockImplementation()!;
+  vi.mocked(store.takeDetachedBase).mockImplementationOnce(async (id, use) => {
+    await gate;
+    return real(id, use);
+  });
+  return release;
+}
+
 let service: FakeService;
 let stop: (() => void) | undefined;
 
-async function openLiveDesign(local: FactoryProject, server: FactoryProject = local) {
+async function openLiveDesign(local: FactoryProject, server: FactoryProject = local, signedIn = true) {
   service.plan = JSON.parse(JSON.stringify(server)) as LivePlan;
   const record: DesignRecord = {
     id: DESIGN,
@@ -267,11 +298,18 @@ async function openLiveDesign(local: FactoryProject, server: FactoryProject = lo
     activeDesignId: DESIGN,
     isHydrated: true,
   });
-  useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
+  if (signedIn) {
+    useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
+  }
   stop = startLiveSessions({
     url: () => "ws://live.test/live",
     createSocket: (url) => service.connect(url),
   });
+  await settle();
+  // The room joins once storage (an in-memory IndexedDB, slower under load) has answered: wait for that, a while.
+  for (let round = 0; signedIn && round < 200 && service.sent("join").length === 0; round += 1) {
+    await settle(1);
+  }
   await settle();
 }
 
@@ -279,7 +317,7 @@ beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_LIVE_URL", "ws://live.test/live");
   service = new FakeService();
   storage.records.clear();
-  pendingStore.entries.clear();
+  globalThis.indexedDB = new IDBFactory();
   useLiveSession.setState({
     status: "off",
     members: [],
@@ -330,6 +368,461 @@ describe("live editing in the store", () => {
     service = new FakeService();
     await openLiveDesign(planWith(annotation("n1", "one"), annotation("n2", "two", 300)), planWith(annotation("n1", "one")));
     expect(annotations().map((note) => note.id)).toEqual(["n1"]);
+  });
+
+  it("keeps machines built before the session knew who was signed in, and sends them over the live plan", async () => {
+    // Signing in was slow (the database was down): the plan on the canvas is in the account, but no room is open.
+    const machine = (id: string) => ({
+      id, name: id, machineType: "Bender", minimumTier: "LV", durationTicks: 20, eut: 30,
+      inputs: [{ kind: "item" as const, id: `${id}_in`, amount: 1, displayName: `${id} in` }],
+      outputs: [{ kind: "item" as const, id: `${id}_out`, amount: 1, displayName: `${id} out` }],
+    });
+    const card = (id: string, recipeId: string, x: number) => ({
+      id, recipeId, machineCount: 1, parallel: 1, overclockTier: "LV" as const, enabled: true, position: { x, y: 0 },
+    });
+    const local: FactoryProject = {
+      ...planWith(annotation("n1", "one")),
+      recipes: [machine("press")],
+      nodes: [card("m1", "press", 0)],
+    };
+    // Meanwhile someone else added a note to the live plan.
+    const server: FactoryProject = { ...local, annotations: [annotation("n1", "one"), annotation("n9", "bob", 600)] };
+    await openLiveDesign(local, server, false);
+    expect(useLiveSession.getState().status).toBe("off");
+
+    // A second machine, wired to the first, and a note changed: none of it reaches the service yet.
+    useFactoryStore.setState((state) => ({
+      project: {
+        ...state.project,
+        recipes: [...state.project.recipes, machine("mixer")],
+        nodes: [...state.project.nodes, card("m2", "mixer", 400)],
+        edges: [{ id: "w", source: "m1", target: "m2", sourceHandle: "output:item:press_out",
+          targetHandle: "input:item:mixer_in", resourceKind: "item" as const, resourceId: "press_out" }],
+      },
+    }));
+    useFactoryStore.getState().updateAnnotation("n1", { text: "mine" });
+    await settle();
+    expect(service.sent("ops")).toHaveLength(0);
+
+    useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
+    await settle(12);
+
+    expect(useLiveSession.getState().status).toBe("live");
+    const project = useFactoryStore.getState().project;
+    expect(project.nodes.map((node) => node.id)).toEqual(["m1", "m2"]);
+    expect(project.edges.map((edge) => edge.id)).toEqual(["w"]);
+    expect(annotations().map((note) => note.text)).toEqual(["mine", "bob"]);
+    // The live plan has them now, and still has the other person's edit.
+    expect((service.plan.nodes as Array<{ id: string }>).map((node) => node.id)).toEqual(["m1", "m2"]);
+    expect((service.plan.edges as Array<{ id: string }>).map((edge) => edge.id)).toEqual(["w"]);
+    expect((service.plan.recipes as Array<{ id: string }>).map((recipe) => recipe.id)).toEqual(["press", "mixer"]);
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["mine", "bob"]);
+    expect(useLiveSession.getState().pending).toBe(0);
+    await settle();
+    expect(await readDetachedBase(DESIGN)).toBeUndefined();
+  });
+
+  it("keeps edits made on an earlier visit while no room was open, from the stored base", async () => {
+    // The page closed before the session ever knew who was signed in; this visit opens the plan live.
+    const local = planWith(annotation("n1", "mine"), annotation("n2", "built offline", 300));
+    await keepDetachedBase(DESIGN, () => liveShape(planWith(annotation("n1", "one"))));
+    await openLiveDesign(local, planWith(annotation("n1", "one"), annotation("n9", "bob", 600)));
+    await settle();
+
+    expect(annotations().map((note) => note.text)).toEqual(["mine", "built offline", "bob"]);
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual([
+      "mine",
+      "bob",
+      "built offline",
+    ]);
+    expect(await readDetachedBase(DESIGN)).toBeUndefined();
+  });
+
+  it("sends a closed tab's older edit first, so an edit made here away from the room wins on the same note", async () => {
+    await writePending(DOC, "tab-gone", [
+      { cid: "gone-1", ops: [{ o: "patch", c: "annotations", id: "n1", f: { text: "old" } }], inverse: [] },
+    ]);
+    await openLiveDesign(planWith(annotation("n1", "old")), planWith(annotation("n1", "one")), false);
+    useFactoryStore.getState().updateAnnotation("n1", { text: "newest" });
+    await settle();
+
+    useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
+    await settle(12);
+
+    expect(service.sent("ops").map((frame) => frame.cid)[0]).toBe("gone-1");
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["newest"]);
+    expect(annotations().map((note) => note.text)).toEqual(["newest"]);
+  });
+
+  it("keeps a note deleted away from the room deleted when a closed tab's older edit added it", async () => {
+    await writePending(DOC, "tab-gone", [
+      {
+        cid: "gone-2",
+        ops: [{ o: "put", c: "annotations", id: "n2", v: annotation("n2", "added offline", 300) as unknown as LiveThing }],
+        inverse: [],
+      },
+    ]);
+    await openLiveDesign(
+      planWith(annotation("n1", "one"), annotation("n2", "added offline", 300)),
+      planWith(annotation("n1", "one")),
+      false,
+    );
+    useFactoryStore.getState().deleteAnnotation("n2");
+    await settle();
+
+    useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
+    await settle(12);
+
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.id)).toEqual(["n1"]);
+    expect(annotations().map((note) => note.id)).toEqual(["n1"]);
+  });
+
+  it("does not take back an edit made in the room before a closed tab's older edits were read", async () => {
+    // Storage answers late: the person edits in the room first; the closed tab's edit is older and goes under it.
+    const { readPending: read } = await import("@/lib/live/live-pending-store");
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    vi.mocked(read).mockImplementationOnce(async (doc) => {
+      await gate;
+      return [
+        {
+          key: `${DOC}|tab-gone`,
+          doc: doc!,
+          tabId: "tab-gone",
+          updatedAt: "",
+          pending: [{ cid: "gone-4", ops: [{ o: "patch", c: "annotations", id: "n1", f: { text: "old" } }], inverse: [] }],
+        },
+      ];
+    });
+    await openLiveDesign(planWith(annotation("n1", "one")));
+    useFactoryStore.getState().updateAnnotation("n1", { text: "newest" });
+    release();
+    await settle(12);
+
+    expect(service.sent("ops").map((frame) => frame.cid)[0]).toBe("gone-4");
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["newest"]);
+    expect(annotations().map((note) => note.text)).toEqual(["newest"]);
+  });
+
+  it("sends a closed tab's edit once when it is taken in before the room is joined", async () => {
+    await writePending(DOC, "tab-gone", [
+      { cid: "gone-3", ops: [{ o: "patch", c: "annotations", id: "n1", f: { text: "old" } }], inverse: [] },
+    ]);
+    await openLiveDesign(planWith(annotation("n1", "one")));
+    await settle(12);
+
+    expect(service.sent("ops").filter((frame) => frame.cid === "gone-3")).toHaveLength(1);
+    // Confirmed: nothing is left stored for the next tab to send again.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(await readPending()).toEqual([]);
+  });
+
+  it("sends nothing of a base another tab took first", async () => {
+    await keepDetachedBase(DESIGN, () => liveShape(planWith(annotation("n1", "one"))));
+    // Another tab's room took the base (its batches are its own now): this tab finds none.
+    await takeDetachedBase(DESIGN, () => ({ doc: DOC, tabId: "tab-b", pending: [] }));
+    await openLiveDesign(planWith(annotation("n1", "stale here")), planWith(annotation("n1", "live")));
+    await settle();
+
+    expect(service.sent("ops")).toHaveLength(0);
+    expect(annotations().map((note) => note.text)).toEqual(["live"]);
+  });
+
+  it("takes the base once: a second tab opening the plan later sends none of it again", async () => {
+    await keepDetachedBase(DESIGN, () => liveShape(planWith(annotation("n1", "one"))));
+    await openLiveDesign(planWith(annotation("n1", "mine")), planWith(annotation("n1", "one")));
+    await settle();
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["mine"]);
+
+    let second: unknown = "not called";
+    await takeDetachedBase(DESIGN, (base) => {
+      second = base;
+      return undefined;
+    });
+    expect(second).toBeUndefined();
+  });
+
+  it("forgets the base when a plan made moments ago takes its first snapshot over", async () => {
+    await keepDetachedBase(DESIGN, () => liveShape(planWith(annotation("n1", "one"))));
+    markDesignFresh(DESIGN);
+    await openLiveDesign(planWith(annotation("n1", "mine")), planWith(annotation("n1", "one")));
+    await settle();
+
+    expect(service.sent("ops")).toHaveLength(1);
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["mine"]);
+    expect(await readDetachedBase(DESIGN)).toBeUndefined();
+  });
+
+  it("never sends a change made on this screen only as an edit made away from the room", async () => {
+    await openLiveDesign(planWith(annotation("n1", "one")), planWith(annotation("n1", "one")), false);
+    useFactoryStore.getState().addAnnotation({
+      kind: "text",
+      text: "mine",
+      position: { x: 300, y: 0 },
+      size: { width: 200, height: 40 },
+    } as Omit<FactoryAnnotation, "id">);
+    await settle();
+    // The recipe refresh re-keys on this screen only; a note stands in for what it rewrites.
+    quietlyOnThisScreen(() =>
+      useFactoryStore.setState((state) => ({
+        project: {
+          ...state.project,
+          annotations: state.project.annotations!.map((note) => (note.id === "n1" ? { ...note, text: "screen" } : note)),
+        },
+      })),
+    );
+    await settle();
+
+    useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
+    await settle(12);
+
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["one", "mine"]);
+  });
+
+  it("puts the recipe a card made away from the room names, when the live plan lacks it", async () => {
+    const press = {
+      id: "press", name: "press", machineType: "Bender", minimumTier: "LV", durationTicks: 20, eut: 30,
+      inputs: [{ kind: "item" as const, id: "plate_in", amount: 1, displayName: "in" }],
+      outputs: [{ kind: "item" as const, id: "plate_out", amount: 1, displayName: "out" }],
+    };
+    const local: FactoryProject = { ...planWith(annotation("n1", "one")), recipes: [press] };
+    await openLiveDesign(local, planWith(annotation("n1", "one")), false);
+    useFactoryStore.setState((state) => ({
+      project: {
+        ...state.project,
+        nodes: [{ id: "m1", recipeId: "press", machineCount: 1, parallel: 1, overclockTier: "LV" as const,
+          enabled: true, position: { x: 0, y: 0 } }],
+      },
+    }));
+    await settle();
+    // What the take stores in place of the base: these ids must be the ones sent, or a crash could apply them twice.
+    const store = await import("@/lib/live/live-pending-store");
+    const stored: string[] = [];
+    const real = vi.mocked(store.takeDetachedBase).getMockImplementation()!;
+    vi.mocked(store.takeDetachedBase).mockImplementationOnce((id, use) =>
+      real(id, (base, stamp) => {
+        const taken = use(base, stamp);
+        stored.push(...(taken?.pending.map((batch) => batch.cid) ?? []));
+        return taken;
+      }),
+    );
+
+    useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
+    await settle(12);
+
+    expect((service.plan.nodes as Array<{ id: string }>).map((node) => node.id)).toEqual(["m1"]);
+    expect((service.plan.recipes as Array<{ id: string }>).map((recipe) => recipe.id)).toEqual(["press"]);
+    expect(stored.length).toBeGreaterThan(0);
+    const sent = service.sent("ops").map((frame) => frame.cid);
+    expect(stored.every((cid) => sent.includes(cid))).toBe(true);
+    // The recipe goes as a batch of its own, ahead of the stored ones.
+    expect(sent.length).toBe(stored.length + 1);
+  });
+
+  it("joins without waiting for ever on storage that never answers", async () => {
+    const { readPending: read } = await import("@/lib/live/live-pending-store");
+    vi.mocked(read).mockImplementationOnce(() => new Promise(() => undefined));
+    await openLiveDesign(planWith(annotation("n1", "one")), planWith(annotation("n1", "live")));
+    expect(service.sent("join")).toHaveLength(0);
+
+    await new Promise((resolve) => setTimeout(resolve, 3200));
+    await settle();
+
+    expect(useLiveSession.getState().status).toBe("live");
+    expect(annotations().map((note) => note.text)).toEqual(["live"]);
+  });
+
+  it("lands a take that finishes after the join on the canvas as the live plan has it", async () => {
+    const store = await import("@/lib/live/live-pending-store");
+    // The closed tab's unsent edit is already on this canvas (its autosave wrote the record); the service never got it.
+    await writePending(DOC, "tab-gone", [
+      { cid: "gone-9", ops: [{ o: "patch", c: "annotations", id: "n1", f: { text: "old" } }], inverse: [] },
+    ]);
+    const release = holdTake(store);
+    await openLiveDesign(planWith(annotation("n1", "old")), planWith(annotation("n1", "one")));
+    await new Promise((resolve) => setTimeout(resolve, 3200));
+    await settle();
+    expect(useLiveSession.getState().status).toBe("live");
+
+    release();
+    await settle(12);
+
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["old"]);
+    expect(annotations().map((note) => note.text)).toEqual(["old"]);
+  });
+
+  it("puts a late take after what the room sent, even when the connection dropped since", async () => {
+    const store = await import("@/lib/live/live-pending-store");
+    await writePending(DOC, "tab-gone", [
+      { cid: "gone-8", ops: [{ o: "patch", c: "annotations", id: "n2", f: { text: "old" } }], inverse: [] },
+    ]);
+    const release = holdTake(store);
+    await openLiveDesign(
+      planWith(annotation("n1", "one"), annotation("n2", "two", 300)),
+      planWith(annotation("n1", "one"), annotation("n2", "two", 300)),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 3200));
+    await settle();
+    useFactoryStore.getState().updateAnnotation("n1", { text: "sent" });
+    await settle();
+    service.socket!.drop();
+
+    release();
+    await settle(12);
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await settle(12);
+
+    const pending = (await readPending(DOC)).flatMap((entry) => entry.pending.map((batch) => batch.cid));
+    expect(useLiveSession.getState().status).toBe("live");
+    expect(pending).not.toContain("gone-8");
+    expect(service.sent("ops").map((frame) => frame.cid).indexOf("gone-8")).toBeGreaterThan(0);
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["sent", "old"]);
+    expect(annotations().map((note) => note.text)).toEqual(["sent", "old"]);
+  });
+
+  it("forgets a base whose take failed after its edits went out in the joined room, so they never go twice", async () => {
+    const store = await import("@/lib/live/live-pending-store");
+    const base = liveShape(planWith(annotation("n1", "one")));
+    await keepDetachedBase(DESIGN, () => base);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const real = vi.mocked(store.takeDetachedBase).getMockImplementation()!;
+    vi.mocked(store.takeDetachedBase).mockImplementationOnce(async (id, use) => {
+      await gate;
+      // The batches are made, then the transaction aborts: storage keeps the base.
+      return real(id, (read, stamp) => {
+        use(read, stamp);
+        throw new Error("aborted");
+      });
+    });
+    await openLiveDesign(planWith(annotation("n1", "mine")), planWith(annotation("n1", "live")));
+    await new Promise((resolve) => setTimeout(resolve, 3200));
+    await settle();
+
+    release();
+    await settle(12);
+
+    // Joined: the edits went at once, so the base is not left for another room to send again.
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["mine"]);
+    expect(annotations().map((note) => note.text)).toEqual(["mine"]);
+    expect(await readDetachedBase(DESIGN)).toBeUndefined();
+  });
+
+  it("keeps a base another tab kept after a failed take whose edits went out", async () => {
+    const store = await import("@/lib/live/live-pending-store");
+    await keepDetachedBase(DESIGN, () => liveShape(planWith(annotation("n1", "one"))));
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const real = vi.mocked(store.takeDetachedBase).getMockImplementation()!;
+    const theirs = liveShape(planWith(annotation("n1", "theirs")));
+    vi.mocked(store.takeDetachedBase).mockImplementationOnce(async (id, use) => {
+      await gate;
+      try {
+        return await real(id, (read, stamp) => {
+          use(read, stamp);
+          throw new Error("aborted");
+        });
+      } catch (error) {
+        // Meanwhile another tab used that base and kept a new one for its own edits.
+        await replaceStoredBase(DESIGN, theirs);
+        throw error;
+      }
+    });
+    await openLiveDesign(planWith(annotation("n1", "mine")), planWith(annotation("n1", "live")));
+    await new Promise((resolve) => setTimeout(resolve, 3200));
+    await settle();
+
+    release();
+    await settle(12);
+
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["mine"]);
+    expect(await readDetachedBase(DESIGN)).toEqual(theirs);
+  });
+
+  it("stores the recipe batches the first snapshot adds at once, with the batches they go before", async () => {
+    const press = {
+      id: "press", name: "press", machineType: "Bender", minimumTier: "LV", durationTicks: 20, eut: 30,
+      inputs: [{ kind: "item" as const, id: "plate_in", amount: 1, displayName: "in" }],
+      outputs: [{ kind: "item" as const, id: "plate_out", amount: 1, displayName: "out" }],
+    };
+    const local: FactoryProject = { ...planWith(annotation("n1", "one")), recipes: [press] };
+    await openLiveDesign(local, planWith(annotation("n1", "one")), false);
+    useFactoryStore.setState((state) => ({
+      project: {
+        ...state.project,
+        nodes: [{ id: "m1", recipeId: "press", machineCount: 1, parallel: 1, overclockTier: "LV" as const,
+          enabled: true, position: { x: 0, y: 0 } }],
+      },
+    }));
+    await settle();
+    // A dead link: nothing is confirmed, so what is stored is what a tab after a crash would adopt.
+    const send = service.handle.bind(service);
+    service.handle = (frame) => (frame.t === "ops" ? undefined : send(frame));
+
+    useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
+    await settle(12);
+
+    const stored = (await readPending(DOC)).flatMap((entry) => entry.pending);
+    expect(stored[0]!.ops.map((op) => `${op.o}:${"c" in op ? op.c : ""}`)).toEqual(["put:recipes"]);
+    expect(stored.length).toBeGreaterThan(1);
+  });
+
+  it("sends a late take's batches before an edit made while the closed tab's entry is being removed", async () => {
+    const store = await import("@/lib/live/live-pending-store");
+    await writePending(DOC, "tab-gone", [
+      { cid: "gone-8", ops: [{ o: "patch", c: "annotations", id: "n1", f: { text: "old" } }], inverse: [] },
+    ]);
+    const release = holdTake(store);
+    let releaseDelete: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (releaseDelete = resolve));
+    const realDelete = vi.mocked(store.deletePending).getMockImplementation()!;
+    vi.mocked(store.deletePending).mockImplementationOnce(async (key) => {
+      await gate;
+      return realDelete(key);
+    });
+    await openLiveDesign(planWith(annotation("n1", "old")), planWith(annotation("n1", "one")));
+    await new Promise((resolve) => setTimeout(resolve, 3200));
+    await settle();
+    release();
+    await settle(12);
+    // The take is in; the closed tab's entry is still being removed. The person edits the same note now.
+    useFactoryStore.getState().updateAnnotation("n1", { text: "newest" });
+    await settle(6);
+    releaseDelete();
+    await settle(20);
+
+    expect(service.sent("ops").map((frame) => frame.cid)[0]).toBe("gone-8");
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.text)).toEqual(["newest"]);
+    expect(annotations().map((note) => note.text)).toEqual(["newest"]);
+  });
+
+  it("splits edits made away from the room again when the recipes they name take them past the batch limit", async () => {
+    const bulk = "x".repeat(90_000);
+    const press = {
+      id: "press", name: "press", machineType: "Bender", minimumTier: "LV", durationTicks: 20, eut: 30,
+      inputs: [{ kind: "item" as const, id: "plate_in", amount: 1, displayName: bulk }],
+      outputs: [{ kind: "item" as const, id: "plate_out", amount: 1, displayName: "out" }],
+    };
+    const local: FactoryProject = { ...planWith(annotation("n1", "one")), recipes: [press] };
+    await openLiveDesign(local, planWith(annotation("n1", "one")), false);
+    useFactoryStore.setState((state) => ({
+      project: {
+        ...state.project,
+        annotations: [...state.project.annotations!, annotation("n2", "y".repeat(180_000), 300)],
+        nodes: [{ id: "m1", recipeId: "press", machineCount: 1, parallel: 1, overclockTier: "LV" as const,
+          enabled: true, position: { x: 0, y: 0 } }],
+      },
+    }));
+    await settle();
+
+    useCommunityAuthStore.setState({ user: { username: "ann" }, hasHydrated: true });
+    await settle(20);
+
+    expect(useLiveSession.getState().notice).toBeUndefined();
+    expect(service.sent("ops").length).toBeGreaterThan(1);
+    expect((service.plan.nodes as Array<{ id: string }>).map((node) => node.id)).toEqual(["m1"]);
+    expect((service.plan.recipes as Array<{ id: string }>).map((recipe) => recipe.id)).toEqual(["press"]);
+    expect((service.plan.annotations as FactoryAnnotation[]).map((note) => note.id)).toEqual(["n1", "n2"]);
   });
 
   it("says who shared a plan with the player, with a key to open it, once however often it is sent", async () => {
@@ -481,7 +974,7 @@ describe("live editing in the store", () => {
       expect(useLiveSession.getState().pending).toBe(1);
       expect(annotations()[0]!.text).toBe("offline");
       await vi.advanceTimersByTimeAsync(250);
-      expect(pendingStore.entries.get(`${DOC}|tab-a`)?.pending).toHaveLength(1);
+      expect((await readPending(DOC)).find((entry) => entry.tabId === "tab-a")?.pending).toHaveLength(1);
 
       // Someone edited meanwhile; the backoff runs out and the session joins again.
       service.remote([
@@ -499,31 +992,26 @@ describe("live editing in the store", () => {
       expect(annotations().map((note) => note.text)).toEqual(["offline", "bob"]);
       expect((service.plan.annotations as FactoryAnnotation[])[0]!.text).toBe("offline");
       await vi.advanceTimersByTimeAsync(250);
-      expect(pendingStore.entries.size).toBe(0);
+      expect(await readPending()).toEqual([]);
     } finally {
       vi.useRealTimers();
     }
   });
 
   it("sends a closed tab's leftover edits with its own", async () => {
-    pendingStore.entries.set(`${DOC}|tab-gone`, {
-      key: `${DOC}|tab-gone`,
-      doc: DOC,
-      tabId: "tab-gone",
-      pending: [
-        {
-          cid: "left-1",
-          ops: [{ o: "patch", c: "annotations", id: "n1", f: { text: "left behind" } }],
-          inverse: [{ o: "patch", c: "annotations", id: "n1", f: { text: "one" } }],
-        },
-      ],
-    });
+    await writePending(DOC, "tab-gone", [
+      {
+        cid: "left-1",
+        ops: [{ o: "patch", c: "annotations", id: "n1", f: { text: "left behind" } }],
+        inverse: [{ o: "patch", c: "annotations", id: "n1", f: { text: "one" } }],
+      },
+    ]);
     await openLiveDesign(planWith(annotation("n1", "one")));
     await settle();
 
     expect(service.sent("ops").map((frame) => frame.cid)).toEqual(["left-1"]);
     expect(annotations()[0]!.text).toBe("left behind");
-    expect(pendingStore.entries.has(`${DOC}|tab-gone`)).toBe(false);
+    expect((await readPending(DOC)).map((entry) => entry.tabId)).not.toContain("tab-gone");
   });
 
   it("takes a refused edit back off the canvas and says so", async () => {

@@ -63,10 +63,24 @@ import {
   type RateUnit,
 } from "@/lib/model/rate-unit";
 import { registerBooksSink, solveBooks } from "./solve-books";
-import { liveUndoHandler, quietly } from "./live-edit-gate";
+import { liveUndoHandler, quietly, quietlyOnThisScreen } from "./live-edit-gate";
 import { applyOps, type LiveOp } from "@/lib/live/ops";
 import { applyEdgeInputOverride } from "@/lib/model/edge-input-overrides";
-import { applyRecipeInputOverrides, inputOverrideAmount } from "@/lib/model/recipe-input-overrides";
+import {
+  applyRecipeInputOverrides,
+  inputOverrideAmount,
+  switchesSlotToOwnProduct,
+} from "@/lib/model/recipe-input-overrides";
+import {
+  findRevokedSubstitutes,
+  findSteamHandlerMoves,
+  keptSubstituteLine,
+  movedSubstituteLine,
+  REVOKED_SUBSTITUTES_NOTICE,
+  STEAM_HANDLER_NOTICE,
+  withNoticeLines,
+  type RevokedSubstitute,
+} from "@/lib/model/revoked-substitutes";
 import type { AlternativeCycleFace } from "@/lib/nei/alternative-cycle";
 import { createCropFarmPlaceholderRecipe, isCropFarmRecipe } from "@/lib/model/passive-production";
 import { buildPowerRecipe, isPowerRecipe } from "@/lib/power/power-recipe";
@@ -340,7 +354,20 @@ interface FactoryStore {
    * that stands in for it (matched by content on load), and the nodes on
    * it follow to the new id.
    */
-  refreshProjectRecipes: (recipes: Recipe[], migration?: Record<string, string>) => void;
+  /** The recipe refresh; answers the slot picks the fresh bodies no longer offer, for settleRevokedSubstitutes. */
+  refreshProjectRecipes: (
+    recipes: Recipe[],
+    migration?: Record<string, string>,
+    options?: { defer?: boolean },
+  ) => { revoked: RevokedSubstitute[]; deferred: Recipe[] };
+  /**
+   * Settles revoked picks once their twins are known: a card whose pick has one twin on its own map moves onto it
+   * as an edit (wires kept, one undo step, sent to a live room like any edit); any other card stays as it is. The
+   * plan notice names every card either way.
+   */
+  settleRevokedSubstitutes: (settled: Array<{ revoked: RevokedSubstitute; twin?: Recipe }>, fresh?: Recipe[]) => void;
+  /** Adds the lines saying where cards saved on a steam machine went (`findSteamHandlerMoves`) to the plan notice. */
+  noteSteamHandlerMoves: (lines: string[]) => void;
   clearDataset: () => void;
   setDatasetLoading: (isLoading: boolean) => void;
   setProjectImporting: (isImporting: boolean) => void;
@@ -1419,7 +1446,9 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
       return undefined;
     }
   },
-  refreshProjectRecipes: (recipes, migration = {}) => quietly(() => {
+  refreshProjectRecipes: (recipes, migration = {}, options = {}) => quietlyOnThisScreen(() => {
+    let revoked: RevokedSubstitute[] = [];
+    let deferred: Recipe[] = [];
     setPresentation((state) => {
       if (recipes.length === 0) {
         return state;
@@ -1429,7 +1458,7 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
       const refreshedFor = (storedId: string) =>
         recipesById.get(storedId) ??
         (migration[storedId] ? recipesById.get(migration[storedId]) : undefined);
-      const project = {
+      let project: FactoryProject = {
         ...state.project,
         recipes: state.project.recipes.map((recipe) => {
           const refreshedRecipe = refreshedFor(recipe.id);
@@ -1475,13 +1504,95 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
             : nextNode;
         }),
       };
+      // A steam multiblock with no fluid input hatch is never offered for a recipe with a fluid input
+      // (getRecipeMachineHandlers, and the pipeline per pack): a card saved on one says where it went.
+      const steamMoves = findSteamHandlerMoves(state.project, project);
+      const moved = new Set(steamMoves.map((entry) => entry.nodeId));
+      if (moved.size > 0) {
+        project = {
+          ...project,
+          nodes: project.nodes.map((node) => (moved.has(node.id) ? { ...node, machineHandlerId: undefined } : node)),
+        };
+      }
+      const steamLines = steamMoves.map((entry) => entry.line);
+      // A substitute the fresh body no longer lists is one the game never took. The card keeps it here (the
+      // refresh is quiet, so it must not rewire anything); settleRevokedSubstitutes moves or names it.
+      revoked = findRevokedSubstitutes(state.project, project);
+      // The stored body is the only evidence of a revoked pick, so a card holding one keeps its stored body and
+      // node until settleRevokedSubstitutes has an answer (a failed or dropped lookup asks again at the next
+      // landing). A migrated id cannot wait: its node already follows the new id, so it is settled from this
+      // refresh alone.
+      if (options.defer !== false) {
+        const storedIds = new Set(state.project.recipes.map((recipe) => recipe.id));
+        const waiting = new Set(revoked.map((entry) => entry.recipeId).filter((id) => storedIds.has(id)));
+        if (waiting.size > 0) {
+          deferred = project.recipes.filter((recipe) => waiting.has(recipe.id));
+          const before = new Map(state.project.nodes.map((node) => [node.id, node]));
+          project = {
+            ...project,
+            recipes: project.recipes.map((recipe) =>
+              waiting.has(recipe.id) ? state.project.recipes.find((entry) => entry.id === recipe.id)! : recipe,
+            ),
+            nodes: project.nodes.map((node) => {
+              const stored = before.get(node.id);
+              return stored ? withWaitingSectionsRestored(node, stored, waiting) : node;
+            }),
+          };
+          // A steam move belongs to the card's own recipe: one that waits says it when it is settled.
+          const waitingCards = new Set(
+            state.project.nodes.filter((node) => waiting.has(node.recipeId)).map((node) => node.id),
+          );
+          steamLines.splice(
+            0,
+            steamLines.length,
+            ...steamMoves.filter((entry) => !waitingCards.has(entry.nodeId)).map((entry) => entry.line),
+          );
+        }
+      }
 
       return {
         project,
         lastResult: solveBooks(project),
+        ...(steamLines.length > 0
+          ? { planNotice: withNoticeLines(state.planNotice, STEAM_HANDLER_NOTICE, steamLines) }
+          : {}),
       };
     });
+    return { revoked, deferred };
   }),
+  noteSteamHandlerMoves: (lines) => {
+    if (lines.length === 0) return;
+    set((state) => ({ planNotice: withNoticeLines(state.planNotice, STEAM_HANDLER_NOTICE, lines) }));
+  },
+  settleRevokedSubstitutes: (settled, fresh = []) => {
+    const lines: string[] = [];
+    for (const { revoked, twin } of settled) {
+      const state = get();
+      const node = state.project.nodes.find((entry) => entry.id === revoked.nodeId);
+      const recipe = state.project.recipes.find((entry) => entry.id === revoked.recipeId);
+      const view = node ? listNodeSections(node).find((entry) => entry.section === revoked.section)?.node : undefined;
+      const pick = view?.recipeInputOverrides?.[String(revoked.slot)];
+      // The card moved on since the refresh (an edit, a remote batch): nothing to say about it any more.
+      if (!node || !recipe || view?.recipeId !== revoked.recipeId || pick?.kind !== revoked.pick.kind || pick.id !== revoked.pick.id) {
+        continue;
+      }
+      // Only a card's own recipe, on a card that runs no other, moves: a shared machine's sections must all
+      // fit its machine, which a swap here would not check.
+      if (twin && revoked.section === 0 && !node.extraRecipes?.length && !state.isReadOnly && !refusesDatasetRecipe(state, twin)) {
+        set((current) => swapMachineRecipeToState(current, node.id, twin, { keepPicksFrom: recipe, select: false }));
+        lines.push(movedSubstituteLine(recipe, revoked.pick));
+      } else {
+        lines.push(keptSubstituteLine(recipe, revoked));
+      }
+    }
+    // The waiting fresh bodies land now, quietly, as the refresh would have landed them.
+    if (fresh.length > 0) {
+      get().refreshProjectRecipes(fresh, {}, { defer: false });
+    }
+    if (lines.length > 0) {
+      set((state) => ({ planNotice: withNoticeLines(state.planNotice, REVOKED_SUBSTITUTES_NOTICE, lines) }));
+    }
+  },
   clearDataset: () => {
     set({
       dataset: undefined,
@@ -5555,6 +5666,12 @@ function swapMachineRecipeToState(
   state: FactoryStore,
   nodeId: string,
   recipe: Recipe,
+  options: {
+    /** The card's recipe before the swap: its picks on slots whose resource the new recipe shares stay. */
+    keepPicksFrom?: Recipe;
+    /** False on a swap the player did not make: the board's selection and inspector stay as they are. */
+    select?: boolean;
+  } = {},
 ): Partial<FactoryStore> {
   const node = state.project.nodes.find((entry) => entry.id === nodeId);
   if (!node || node.recipeId === recipe.id) {
@@ -5573,7 +5690,9 @@ function swapMachineRecipeToState(
               )
             : [...state.project.recipes, recipe],
           nodes: state.project.nodes.map((entry) =>
-            entry.id === nodeId ? { ...entry, recipeId: recipe.id, recipeInputOverrides: undefined } : entry,
+            entry.id === nodeId
+              ? { ...entry, recipeId: recipe.id, recipeInputOverrides: keptPicks(entry, options.keepPicksFrom, recipe) }
+              : entry,
           ),
           edges: [...state.project.edges.filter((edge) => !touching.includes(edge)), ...carried],
         },
@@ -5583,10 +5702,55 @@ function swapMachineRecipeToState(
   );
   return withProjectHistory(state, {
     project,
-    selectedNodeId: nodeId,
-    selectedRecipeId: recipe.id,
+    ...(options.select === false ? {} : { selectedNodeId: nodeId, selectedRecipeId: recipe.id }),
     lastResult: solveBooks(project),
   });
+}
+
+/**
+ * A card whose sections wait on a revoked pick, as the refresh leaves it: every
+ * section takes the fresh node's recipe id (a migrated sibling keeps its new id),
+ * and a waiting section takes back its stored picks, and for the card's own
+ * recipe its stored machine too, until settleRevokedSubstitutes lands the fresh
+ * body. A waiting section's id is never migrated (only stored ids wait).
+ */
+function withWaitingSectionsRestored(fresh: FactoryNode, stored: FactoryNode, waiting: Set<string>): FactoryNode {
+  const ownWaits = waiting.has(stored.recipeId);
+  const extrasWait = stored.extraRecipes?.some((extra) => waiting.has(extra.recipeId)) ?? false;
+  if (!ownWaits && !extrasWait) return fresh;
+  const { recipeInputOverrides: _overrides, machineHandlerId: _handler, ...rest } = fresh;
+  void _overrides;
+  void _handler;
+  const own = ownWaits ? stored : fresh;
+  return {
+    ...rest,
+    ...(own.recipeInputOverrides ? { recipeInputOverrides: own.recipeInputOverrides } : {}),
+    ...(own.machineHandlerId ? { machineHandlerId: own.machineHandlerId } : {}),
+    ...(fresh.extraRecipes
+      ? {
+          extraRecipes: fresh.extraRecipes.map((extra, index) => {
+            const storedExtra = stored.extraRecipes?.[index];
+            if (!storedExtra || !waiting.has(storedExtra.recipeId)) return extra;
+            const { recipeInputOverrides: _picks, ...keep } = extra;
+            void _picks;
+            return storedExtra.recipeInputOverrides ? { ...keep, recipeInputOverrides: storedExtra.recipeInputOverrides } : keep;
+          }),
+        }
+      : {}),
+  };
+}
+
+/** The card's picks the new recipe can still hold: same slot, same resource in both recipes. */
+function keptPicks(node: FactoryNode, from: Recipe | undefined, to: Recipe): FactoryNode["recipeInputOverrides"] {
+  if (!from || !node.recipeInputOverrides) return undefined;
+  const kept = Object.fromEntries(
+    Object.entries(node.recipeInputOverrides).filter(([slot]) => {
+      const before = from.inputs[Number(slot)];
+      const after = to.inputs[Number(slot)];
+      return before !== undefined && after !== undefined && before.kind === after.kind && before.id === after.id;
+    }),
+  );
+  return Object.keys(kept).length > 0 ? kept : undefined;
 }
 
 /**
@@ -5869,6 +6033,11 @@ function buildRecipeInputOverrides(
       resource.inputIndex === undefined &&
       resourceMatchesInput(resource, input);
     if (!matchesSlot && !matchesIndex && !matchesResource) {
+      return;
+    }
+    // A pick from "what makes Distilled Water" never puts Distilled Water in
+    // a Water slot that also takes it: the recipe would run on its own product.
+    if (switchesSlotToOwnProduct(recipe, input, resource)) {
       return;
     }
 

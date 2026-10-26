@@ -13,9 +13,8 @@
 //
 // recipes.json is read and written line by line (dataset-json-writer.mjs puts each array
 // element on its own line): only lines holding `"asset:` are parsed. The real datasets are
-// 1.5 to 1.9 GB, too big for one JSON.parse; apply-texture-icons.mjs, which does parse it
-// whole, skips itself above GTNH_TEXTURE_ICON_MAX_DATASET_BYTES, and that skip is how the
-// hints shipped. Run this after the normalizer and before the index builds.
+// 1.5 to 1.9 GB, too big for one JSON.parse. Run this after the normalizer and before the index
+// builds (rebuild-dataset.sh).
 //
 // Writes `textures/icon-report.json` with what it resolved and cleared; the publish refuses
 // a version with no report, one that says `skipped`, or any file still holding `"asset:`
@@ -319,10 +318,8 @@ export async function resolveIconHints({ modsRoot, datasetPath, outDir, log = co
   }
 
   // A re-run on a resolved dataset finds no hints. Its report would list nothing, so the one the
-  // first run wrote is kept: it is the record of which files came from which jars, and it holds
-  // the textureMatching apply-texture-icons merged in. Otherwise the fields this step does not
-  // own are merged as apply-texture-icons merges them, minus a top-level `skipped`, which the
-  // publish refuses.
+  // first run wrote is kept: it is the record of which files came from which jars. Otherwise the
+  // fields this step does not own are kept, minus a top-level `skipped`, which the publish refuses.
   const reportPath = path.join(textureDir, "icon-report.json");
   let previous = {};
   try {

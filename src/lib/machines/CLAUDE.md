@@ -50,6 +50,12 @@ computes in float: replicate it.
   their `voltageTier + 1` is our ordinal), and their `speed` is throughput (ours is a
   duration multiplier, `1 / speed`). `machine-table.test.ts` checks every entry against
   `__fixtures__/reference-coefficients.json` and says how to regenerate it; run it.
+- A map with one machine family ships no handlers, so its cards carry the MAP's name ("Milling",
+  "Flotation Cell", 2.9's "Industrial Chisel" and "Cable Coating"): the machine's entry needs that
+  name as an alias, or its cards silently run on scraped data. `dataset-machine-names.test.ts` checks
+  every entry is reached from a card name of each served dataset (`__fixtures__/dataset-machine-names.json`,
+  regenerated with `tools/audits/extract-dataset-machine-names.mjs` after a rebuild); the few it lists
+  as unreached say why.
 - `ctx.tier(id)` is an option's position; `ctx.value(id)` is the number behind a count
   knob. Formulas that read a count must use `value`.
 - A table machine that declares `speed` or `power` seeds from the recipe's base stats
@@ -127,7 +133,15 @@ computes in float: replicate it.
 - Coke Oven alias matches the brick oven too: no `cokeOvenSlices` control means no
   overclocks and one parallel.
 - Steam: the 8 steam multis are table entries (8 parallels, no OC, shared pressure
-  control); steam singleblocks are synthesized in `src/lib/model/recipe-rules.ts`. EU stays
+  control); steam singleblocks are synthesized in `src/lib/model/recipe-rules.ts`. The Separator,
+  Grinder, Fuser and Hearth have no fluid input hatch on either version, so `getRecipeMachineHandlers`
+  never offers them for a recipe with a fluid input. The pipeline drops them per pack
+  (`tools/dataset-pipeline/scripts/steam-fluid-hatches.mjs`), 2.8.1's Squasher and Presser too; the app's
+  version-free set covers older stored bodies. A card saved on one moves to the map's first machine at the
+  recipe refresh, and the plan notice says so. Only the Separator and the Blender take a fluid output
+  hatch: void protection is on by default (`VOID_NONE`), so any other steam multi never starts a recipe
+  with a fluid output (it would run only in a fluid-voiding mode, the fluid lost), and the same rule
+  leaves it off such recipes in the app and the pipeline. EU stays
   zero on steam cards; litres are billed instead, never both.
 - Crafting maps run on GT++'s Auto Workbench (synthesized in `recipe-rules.ts`, flat 2048 EU
   per craft) with instant hand-craft as the second handler.

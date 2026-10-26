@@ -1,4 +1,7 @@
 import { DEFAULT_DATASET_MANIFEST_URL, pickDatasetVersionFor } from "@/lib/datasets";
+import { findRevokedSubstitutes, findSteamHandlerMoves } from "@/lib/model/revoked-substitutes";
+import { findRevokedSubstituteTwins } from "@/lib/datasets/revoked-substitute-twins";
+import { forgetRecipeChecks } from "@/lib/datasets/refresh-project-recipes";
 import {
   getRecipeDatasetRecipe,
   getRecipeDatasetRecipeIds,
@@ -215,7 +218,38 @@ async function openPlanJson(text: string, fallbackName: string): Promise<void> {
     return;
   }
   const hydration = await hydrateImportedProjectRecipes(importedProject, datasetVersion);
-  await importProjectAsDesign(refreshImportedProjectEdges(hydration.project), name);
+  // The fresh bodies replace the file's, and the file's are the only evidence of a revoked pick or a card on a
+  // steam machine that cannot take its fluid. A recipe the dataset still has under its id keeps the file's body,
+  // so the landing refresh finds, settles and names it once, as for any stored plan. A migrated id cannot wait
+  // (its cards already follow the new id), so it is settled here.
+  const revoked = findRevokedSubstitutes(importedProject, hydration.project);
+  const steamMoves = findSteamHandlerMoves(importedProject, hydration.project);
+  const fileBodies = new Map(importedProject.recipes.map((recipe) => [recipe.id, recipe]));
+  const nodeRecipe = new Map(hydration.project.nodes.map((node) => [node.id, node.recipeId]));
+  const waiting = new Set(
+    [...revoked.map((entry) => entry.recipeId), ...steamMoves.map((entry) => nodeRecipe.get(entry.nodeId) ?? "")].filter(
+      (id) => fileBodies.has(id),
+    ),
+  );
+  const nowMoves = steamMoves.filter((entry) => !waiting.has(nodeRecipe.get(entry.nodeId) ?? ""));
+  const nowRevoked = revoked.filter((entry) => !waiting.has(entry.recipeId));
+  const moved = new Set(nowMoves.map((entry) => entry.nodeId));
+  const landing = {
+    ...hydration.project,
+    recipes: hydration.project.recipes.map((recipe) => (waiting.has(recipe.id) ? fileBodies.get(recipe.id)! : recipe)),
+    // The card leaves the steam machine here, as the refresh would, so the landing refresh does not say it again.
+    nodes: hydration.project.nodes.map((node) => (moved.has(node.id) ? { ...node, machineHandlerId: undefined } : node)),
+  };
+  forgetRecipeChecks(datasetVersion.id, [...waiting].map((id) => fileBodies.get(id)!));
+  await importProjectAsDesign(refreshImportedProjectEdges(landing), name);
+  useFactoryStore.getState().noteSteamHandlerMoves(nowMoves.map((entry) => entry.line));
+  if (nowRevoked.length > 0) {
+    const landed = useFactoryStore.getState().project;
+    const settled = await findRevokedSubstituteTwins(DEFAULT_DATASET_MANIFEST_URL, datasetVersion, landed, nowRevoked);
+    if (useFactoryStore.getState().project.id === landed.id) {
+      useFactoryStore.getState().settleRevokedSubstitutes(settled.filter((entry) => !entry.failed));
+    }
+  }
 }
 
 /** Open a plan file (.json, or a .png / .svg picture that carries the plan) as a new design tab. */

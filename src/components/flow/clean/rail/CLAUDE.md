@@ -28,4 +28,6 @@ modes keep it.
 - Fonts live on spans and divs, never on a `<button>` (globals.css forces `font: inherit` on buttons); every control
   is a `div role=button`. State hangs on data attributes.
 - Type is Monocraft at 10 px (`RAIL_FONT`), measured with `measureClean`; rate boxes are 44 and keys 16 (controls 62, the mod's 26% of the rail). A machine line drops its unit when it does not fit, as the mod does; names ellipsize. The rail is 234 CSS px in shell units (screen px = x the UI scale, 273.8 at the default 1.17): measure with `offsetWidth`.
+- Every memoised row that prints a rate or a draw (`ItemView`, `LineRow`, `MachineRow`) calls `useRateDisplayUnits()`:
+  a unit switch repaints them and never re-solves. Exam: `OverviewRail.test.tsx` ("repaints its rates").
 - The notices ride the TOP of the board (`PlanTopNotices`, under the toolbars). A failed solve (nothing set) counts no flows. Only resource rows and spare places light the board on hover; the mod's machine lines light nothing (OverviewRail.java drawRail).

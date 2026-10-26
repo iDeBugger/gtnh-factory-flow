@@ -396,6 +396,29 @@ it("counts a crop card's crops with no times sign, with the rule and the set box
   expect(upTo.container.querySelector(".cc-rule")!.textContent).toBe("Up to");
 });
 
+it("says a crop card's count is seeds: the word small beside the number, in its label too", () => {
+  const view: SpecialView = {
+    ...baseView(),
+    kind: "crop",
+    name: "Stickreed",
+    hasPicker: false,
+    amps: undefined,
+    tier: undefined,
+    sections: [{ section: 0, inputs: [], outputs: [port("output", 1)] }],
+    power: undefined,
+    count: countOf("any", undefined, 12, { noTimes: true, unit: "seeds" }),
+  };
+  const { container } = renderCard(view);
+  const count = container.querySelector(".cc-count")!;
+  const run = count.querySelector(".cc-run")!;
+  expect([run.textContent, run.getAttribute("data-unit")]).toEqual(["12", "seeds"]);
+  expect(count.getAttribute("aria-label")).toBe("12 seeds running, any");
+  cleanup();
+  // A machine count has no unit and no extra line.
+  const plain = renderCard({ ...view, count: countOf("any", undefined, 12, { noTimes: true }) });
+  expect(plain.container.querySelector(".cc-run")).toBeNull();
+});
+
 it("puts a generator's bar under its warnings", () => {
   const count = countOf("upTo", 2, 2);
   const outputs = [port("output", 1, "n1", "power")];

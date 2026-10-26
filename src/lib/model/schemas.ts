@@ -447,10 +447,11 @@ export const factoryNodeSchema = z.object({
     )
     .optional(),
   unconverted: unconvertedRecipeSchema.optional(),
-  // The machine count the player set: Up to by default, Exactly with solvePinExact; absent = the solver's choice,
-  // shown as Up to waiting for a count, or as Any with solvePinAny.
+  // The machine count the player set: Up to by default, Exactly with solvePinExact; absent = Any, the solver's choice.
   solvePin: z.number().nonnegative().optional(),
   solvePinExact: z.boolean().optional(),
+  // An older plan's Any mark. Read by nothing (no count is Any) and dropped by the next count write; still accepted
+  // so saved and exported plans that carry it keep loading.
   solvePinAny: z.boolean().optional(),
   // Plan mode's port-rate pins by canonical handle id, units per second.
   portRates: z

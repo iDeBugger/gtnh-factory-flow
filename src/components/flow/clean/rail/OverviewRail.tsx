@@ -476,6 +476,9 @@ const ItemView = memo(function ItemView({
   euText: string;
   peak: boolean;
 }) {
+  // Memoised rows print rates and draw through the unit dials: each one subscribes, or a unit switch leaves them
+  // showing the old unit's numbers (a dial repaints numbers only, it never re-solves).
+  useRateDisplayUnits();
   const { item } = placed;
   switch (item.t) {
     case "section":
@@ -599,6 +602,7 @@ const LineRow = memo(function LineRow({
   item: Extract<Placed["item"], { t: "line" }>;
   state: RailState;
 }) {
+  useRateDisplayUnits();
   const { line, section, amount, setters } = item;
   const [hot, setHot] = useState(false);
   const setHovered = useFactoryStore((s) => s.setHoveredFlowResourceKey);
@@ -1098,6 +1102,7 @@ const MachineRow = memo(function MachineRow({
   peak: boolean;
   state: RailState;
 }) {
+  useRateDisplayUnits();
   useFontEpoch();
   const railWidth = useContext(RailWidthContext);
   const [hot, setHot] = useState(false);
@@ -1217,7 +1222,7 @@ const MachineRow = memo(function MachineRow({
         </span>
         <div className="rail-controls" onClick={(event) => event.stopPropagation()}>
           <RuleKey
-            // ≤ Up to (grey while it waits for a count; a count wheeled onto Any is Up to), = Exactly, ~ Any.
+            // ≤ Up to (a count wheeled onto Any is Up to), = Exactly, ~ Any.
             mark={entry.rule === "exact" ? "=" : upTo || set ? "≤" : "~"}
             tone={set ? "gold" : "muted"}
             label={`Pin the ${entry.label}`}
@@ -1250,9 +1255,7 @@ const MachineRow = memo(function MachineRow({
                     title: PIN_RULE_LABEL[entry.rule],
                     notes: [
                       {
-                        text: upTo
-                          ? "Set how many you have. Until then the plan picks."
-                          : "The plan decides how many.",
+                        text: "The plan decides how many.",
                         tone: "muted",
                       },
                     ],
