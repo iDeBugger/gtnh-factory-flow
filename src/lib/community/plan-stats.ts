@@ -2,7 +2,7 @@ import type { FactoryProject, MachineTier, ThroughputResult } from "@/lib/model/
 import { GT_VOLTAGE_TIERS, getVoltageTierIndex } from "@/lib/model/tiers";
 import { getNodeMachineBuildCount } from "@/lib/model/passive-production";
 import { buildMachineList } from "@/lib/model/machine-list";
-import { compareByRate } from "@/lib/model/rate-order";
+import { sortByRate } from "@/lib/model/rate-order";
 import {
   COMMUNITY_RESOURCE_STAT_LIMIT,
   type CommunityPlanStats,
@@ -127,40 +127,29 @@ function toResourceStats(
   icons: Map<string, ResourceIconInfo>,
   limit: number = COMMUNITY_RESOURCE_STAT_LIMIT,
 ): PlanResourceStat[] {
-  return (
-    balances
-      .map((balance) => {
-        const icon = icons.get(`${balance.kind}:${balance.resourceId}`);
-        return {
-          kind: balance.kind,
-          resourceId: balance.resourceId,
-          displayName: balance.displayName ?? icon?.displayName,
-          iconPath: icon?.iconPath,
-          iconAtlas: icon?.iconAtlas,
-          dominantColor: icon?.dominantColor,
-          ratePerSecond:
-            direction === "consumed"
-              ? Math.abs(balance.consumedPerSecond)
-              : Math.abs(balance.surplusPerSecond || balance.producedPerSecond),
-        };
-      })
-      .filter((stat) => stat.ratePerSecond > 0)
-      // Biggest first, rates equal within float noise by name then key (`rate-order.ts`), before the cut: noise never
-      // decides the order or which of two tied rows makes the list.
-      .sort((a, b) =>
-        compareByRate(
-          {
-            rate: a.ratePerSecond,
-            name: a.displayName ?? a.resourceId,
-            key: `${a.kind}:${a.resourceId}`,
-          },
-          {
-            rate: b.ratePerSecond,
-            name: b.displayName ?? b.resourceId,
-            key: `${b.kind}:${b.resourceId}`,
-          },
-        ),
-      )
-      .slice(0, Number.isFinite(limit) ? limit : balances.length)
-  );
+  const stats = balances
+    .map((balance) => {
+      const icon = icons.get(`${balance.kind}:${balance.resourceId}`);
+      return {
+        kind: balance.kind,
+        resourceId: balance.resourceId,
+        displayName: balance.displayName ?? icon?.displayName,
+        iconPath: icon?.iconPath,
+        iconAtlas: icon?.iconAtlas,
+        dominantColor: icon?.dominantColor,
+        ratePerSecond:
+          direction === "consumed"
+            ? Math.abs(balance.consumedPerSecond)
+            : Math.abs(balance.surplusPerSecond || balance.producedPerSecond),
+      };
+    })
+    .filter((stat) => stat.ratePerSecond > 0);
+  // Biggest first, rates equal within float noise by name then key (`rate-order.ts`), before the cut: noise does not
+  // decide the order or which of two tied rows makes the list.
+  sortByRate(stats, (stat) => ({
+    rate: stat.ratePerSecond,
+    name: stat.displayName ?? stat.resourceId,
+    key: `${stat.kind}:${stat.resourceId}`,
+  }));
+  return stats.slice(0, Number.isFinite(limit) ? limit : balances.length);
 }

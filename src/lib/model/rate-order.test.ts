@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareByRate, rateOrderKey } from "./rate-order";
+import { compareByRate, rateOrderKey, sortByRate } from "./rate-order";
 
 const row = (rate: number, name: string, key = name) => ({ rate, name, key });
 
@@ -46,8 +46,35 @@ describe("the order of a list of rates", () => {
     const b = row(1 + 0.8e-9, "B");
     const c = row(1 + 1.6e-9, "A");
     const sorted = [a, b, c].sort(compareByRate);
-    for (const perm of [[a, b, c], [c, b, a], [b, a, c], [c, a, b]]) {
+    for (const perm of [
+      [a, b, c],
+      [c, b, a],
+      [b, a, c],
+      [c, a, b],
+    ]) {
       expect([...perm].sort(compareByRate)).toEqual(sorted);
     }
+  });
+});
+
+describe("sorting a list of rates", () => {
+  it("orders as compareByRate does, keying each row once", () => {
+    const rows = [
+      row(0, "Zinc"),
+      row(8.000000000000002, "Oxygen"),
+      row(16, "Chlorine"),
+      row(7.999999999999999, "Benzene"),
+    ];
+    const expected = [...rows].sort(compareByRate);
+    let keyed = 0;
+    const list = [...rows].reverse();
+    expect(
+      sortByRate(list, (r) => {
+        keyed += 1;
+        return r;
+      }),
+    ).toBe(list);
+    expect(list).toEqual(expected);
+    expect(keyed).toBe(rows.length);
   });
 });

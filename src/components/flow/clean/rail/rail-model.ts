@@ -2,7 +2,7 @@ import { isCustomRateRecipe } from "@/lib/model/custom-rate";
 import { isFluidTankRecipe } from "@/lib/model/fluid-tank";
 import { buildMachineList, type MachineListEntry } from "@/lib/model/machine-list";
 import { pinRuleOf, shownPinRule, type PinRule } from "@/lib/model/pin-rule";
-import { compareByRate } from "@/lib/model/rate-order";
+import { sortByRate } from "@/lib/model/rate-order";
 import type { PlanUpTo } from "@/lib/solver/plan/types";
 import { makeResourceKey } from "@/lib/model/resources";
 import { getStorageRoles, type StorageRole } from "@/lib/model/storage-role";
@@ -212,14 +212,11 @@ function addTo<T>(map: Map<string, T[]>, key: string, value: T): void {
 }
 
 /**
- * A section's lines: biggest first, lines equal within float noise by name, then key (`rate-order.ts`). Lines held at
- * 0 (an open port, a drawer) sort as 0, so they sit at the bottom, A to Z.
+ * A section's lines: biggest first, lines equal within float noise by the label the rail prints, then key
+ * (`rate-order.ts`). Lines held at 0 (an open port, a drawer) sort as 0, so they sit at the bottom, A to Z.
  */
-function byAmount(a: RailLine, b: RailLine): number {
-  return compareByRate(
-    { rate: a.amount, name: a.label, key: a.key },
-    { rate: b.amount, name: b.label, key: b.key },
-  );
+function sortLines(lines: RailLine[]): void {
+  sortByRate(lines, (l) => ({ rate: l.amount, name: l.label, key: l.key }));
 }
 
 interface Look {
@@ -240,6 +237,7 @@ export function buildRailModel(
   const wired = wiredPorts(project);
   const roles = getStorageRoles(project);
 
+  // Machines keep the machine list's order (tier, EU/t, name, card order).
   const machineEntries = buildMachineList(project, result);
   const machines: RailMachine[] = machineEntries
     // A fluid tank is free and instant: no machine to build (the mod lists none for it).
@@ -428,10 +426,9 @@ export function buildRailModel(
   for (const key of productDrawers.keys()) {
     if (!outputs.some((l) => l.key === key)) outputs.push(line(key, 0, "o"));
   }
-  // Machines keep the machine list's order (tier, EU/t, name, card order).
-  inputs.sort(byAmount);
-  outputs.sort(byAmount);
-  internal.sort(byAmount);
+  sortLines(inputs);
+  sortLines(outputs);
+  sortLines(internal);
 
   const sum = (pick: (entry: MachineListEntry) => number | undefined) =>
     machineEntries.reduce((total, entry) => total + (pick(entry) ?? 0), 0);

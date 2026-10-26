@@ -1,4 +1,4 @@
-import { compareByRate } from "../model/rate-order";
+import { sortByRate } from "../model/rate-order";
 import { makeResourceKey } from "../model/resources";
 import type {
   EdgeThroughput,
@@ -341,13 +341,19 @@ function applyTrashedOutputBalances(
   }
 }
 
-/** Biggest first, equal within float noise by name, then key (`rate-order.ts`): a new target never swaps rows that read the same. */
-function byBalanceRate(rate: (balance: ResourceBalance) => number) {
-  return (a: ResourceBalance, b: ResourceBalance) =>
-    compareByRate(
-      { rate: rate(a), name: a.displayName ?? a.resourceId, key: a.key },
-      { rate: rate(b), name: b.displayName ?? b.resourceId, key: b.key },
-    );
+/**
+ * Biggest first, equal within float noise by the name the lists print (`displayName ?? resourceId`), then key
+ * (`rate-order.ts`), so a new target does not swap rows that read the same.
+ */
+function sortBalances(
+  list: ResourceBalance[],
+  rate: (balance: ResourceBalance) => number,
+): ResourceBalance[] {
+  return sortByRate(list, (b) => ({
+    rate: rate(b),
+    name: b.displayName ?? b.resourceId,
+    key: b.key,
+  }));
 }
 
 /**
@@ -360,12 +366,14 @@ export function splitBalances(balances: Iterable<ResourceBalance>): {
 } {
   const all = [...balances];
   return {
-    externalInputs: all
-      .filter((balance) => balance.deficitPerSecond > EPSILON)
-      .sort(byBalanceRate((balance) => balance.deficitPerSecond)),
-    unconsumedOutputs: all
-      .filter((balance) => balance.surplusPerSecond > EPSILON)
-      .sort(byBalanceRate((balance) => balance.surplusPerSecond)),
+    externalInputs: sortBalances(
+      all.filter((balance) => balance.deficitPerSecond > EPSILON),
+      (balance) => balance.deficitPerSecond,
+    ),
+    unconsumedOutputs: sortBalances(
+      all.filter((balance) => balance.surplusPerSecond > EPSILON),
+      (balance) => balance.surplusPerSecond,
+    ),
   };
 }
 

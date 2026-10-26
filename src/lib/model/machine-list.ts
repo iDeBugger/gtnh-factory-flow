@@ -187,19 +187,21 @@ export function buildMachineList(
       state: report?.state ?? "ok",
     });
   }
-  // Tier, then EU/t biggest first with float noise ignored (`rate-order.ts`), then name, then the board's card order:
-  // two cards whose draws match to nine digits never swap when a re-solve moves their last bits.
-  const cardOrder = new Map(project.nodes.map((node, index) => [node.id, index]));
-  return entries.sort((a, b) => {
-    if (a.tierIndex !== b.tierIndex) return a.tierIndex < b.tierIndex ? -1 : 1;
-    const ea = rateOrderKey(a.euT ?? 0);
-    const eb = rateOrderKey(b.euT ?? 0);
-    if (ea !== eb) return eb > ea ? 1 : -1;
-    return (
-      orderNames.compare(a.label, b.label) ||
-      (cardOrder.get(a.nodeId) ?? 0) - (cardOrder.get(b.nodeId) ?? 0)
-    );
+  // Tier, then EU/t biggest first on the rate key (`rate-order.ts`), then name, then the board's card order: two
+  // cards whose draws match to nine digits keep their places when a re-solve moves the last bits. Entries are pushed in
+  // card order, so the index is the card order.
+  const keyed = entries.map((entry, index) => ({
+    entry,
+    euT: rateOrderKey(entry.euT ?? 0),
+    index,
+  }));
+  keyed.sort((a, b) => {
+    if (a.entry.tierIndex !== b.entry.tierIndex)
+      return a.entry.tierIndex < b.entry.tierIndex ? -1 : 1;
+    if (a.euT !== b.euT) return b.euT > a.euT ? 1 : -1;
+    return orderNames.compare(a.entry.label, b.entry.label) || a.index - b.index;
   });
+  return keyed.map((k) => k.entry);
 }
 
 /** Keep fractional answers at large counts too; never round up to a build. */
