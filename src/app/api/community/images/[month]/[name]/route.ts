@@ -34,7 +34,10 @@ export async function GET(
   if (!BOARD_IMAGE_MONTH.test(month) || !BOARD_IMAGE_NAME.test(name) || !isFileStoreConfigured()) {
     return notFound();
   }
-  const contentType = BOARD_IMAGE_TYPES[name.slice(name.lastIndexOf(".") + 1)];
+  const extension = name.slice(name.lastIndexOf(".") + 1);
+  const contentType = Object.hasOwn(BOARD_IMAGE_TYPES, extension)
+    ? BOARD_IMAGE_TYPES[extension]
+    : undefined;
   if (!contentType) {
     return notFound();
   }

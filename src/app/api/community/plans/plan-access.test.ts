@@ -855,6 +855,10 @@ describe("filtering and sorting the list", () => {
     // No activity sorts last, whichever way the column is read.
     expect(await names(`${v}&sort=active`)).toEqual(["Old busy", "Quiet", "New busy"]);
     expect(await names(`${v}&sort=nonsense`)).toEqual(["New busy", "Quiet", "Old busy"]);
+    // An inherited key is no column either: it sorts as an unknown one.
+    for (const inherited of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+      expect(await names(`${v}&sort=${inherited}`), inherited).toEqual(["New busy", "Quiet", "Old busy"]);
+    }
     expect(await names(`${v}&sort=views&pageSize=1&page=2`)).toEqual(["Old busy"]);
   });
 

@@ -159,7 +159,8 @@ export async function listPlans(
   input: PlanListInput,
   request: Request,
 ): Promise<ServiceResult<{ body: CommunityPlanListResponse; noStore: boolean }>> {
-  const sort = SORT_COLUMNS[input.sort as CommunityPlanSort] ? (input.sort as CommunityPlanSort) : "new";
+  // Own keys only: `constructor` or `__proto__` would find the prototype's value.
+  const sort = Object.hasOwn(SORT_COLUMNS, input.sort) ? (input.sort as CommunityPlanSort) : "new";
   // #tags stack, one @name is exact (underscores and all), the rest is free
   // text: see search-query.ts, which the library's box shares.
   const search = parsePlanSearch(input.search);

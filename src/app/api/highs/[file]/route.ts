@@ -21,7 +21,8 @@ export function generateStaticParams() {
 
 export async function GET(_request: Request, { params }: { params: Promise<{ file: string }> }) {
   const { file } = await params;
-  const type = FILES[file];
+  // Own keys only: `constructor` would find the prototype's function.
+  const type = Object.hasOwn(FILES, file) ? FILES[file] : undefined;
   if (!type) return new Response("Not found", { status: 404 });
   try {
     const body = await readFile(path.join(process.cwd(), "node_modules", "highs", "build", file));
