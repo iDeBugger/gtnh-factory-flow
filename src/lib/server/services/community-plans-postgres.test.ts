@@ -7,6 +7,7 @@ import type { SignedIn, Viewer } from "../http/viewer";
 import * as plans from "../repos/plans";
 import { addComment } from "./comments";
 import { countPlanView } from "./community-plans";
+import { realPostgresUrl } from "@/test-support/real-postgres";
 
 /**
  * Community counters and comment figures on a real Postgres, where each
@@ -27,7 +28,7 @@ vi.mock("../limits/rate-limit", async (importOriginal) => ({
   checkRateLimit: async () => true,
 }));
 
-const serverUrl = process.env.GTNH_TEST_POSTGRES_URL;
+const serverUrl = realPostgresUrl();
 const database = `gtnh_community_race_${process.pid}`;
 let admin: pg.Client | undefined;
 let client: DirectDbClient | undefined;

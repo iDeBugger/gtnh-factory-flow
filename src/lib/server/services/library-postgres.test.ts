@@ -8,6 +8,7 @@ import { applyMigrations, dbDir, sqlRunner } from "../db/migrations";
 import type { SignedIn } from "../http/viewer";
 import * as accounts from "../repos/accounts";
 import { saveDesign } from "./library";
+import { realPostgresUrl } from "@/test-support/real-postgres";
 
 /**
  * The library's creation cap on a real Postgres, where each request runs on
@@ -27,7 +28,7 @@ vi.mock("../limits/rate-limit", async (importOriginal) => ({
   checkRateLimit: async () => true,
 }));
 
-const serverUrl = process.env.GTNH_TEST_POSTGRES_URL;
+const serverUrl = realPostgresUrl();
 const database = `gtnh_library_race_${process.pid}`;
 let admin: pg.Client | undefined;
 let client: DirectDbClient | undefined;

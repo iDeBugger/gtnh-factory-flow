@@ -571,7 +571,8 @@ Rules:
   the deploy applies (`applyMigrations` over `db/`), the same parsers and the breaker (`GuardedDialect`), installed
   with `useDbForTests`. `withDbFault` fails the queries whose SQL matches. PGlite runs one transaction at a time,
   so races need a real Postgres: the `services/*-postgres.test.ts` files run with `GTNH_TEST_POSTGRES_URL` (a
-  server they may create a database on), and `db/pg-real.local.test.ts` runs the repository cases against the
+  server they may create a database on; CI's test job has a postgres service with the compose file's image and
+  digest, and under `CI` a missing URL fails them, `test-support/real-postgres.ts`), and `db/pg-real.local.test.ts` runs the repository cases against the
   rehearsal stack's database under the real roles (`REAL_DATABASE_URL`, `REAL_LIVE_DATABASE_URL`;
   `docs/deploy.md`, Rehearsal).
 - `npm run dev:local` gives Next and the live service `DATABASE_URL=postgres://postgres@127.0.0.1:54330/postgres`,

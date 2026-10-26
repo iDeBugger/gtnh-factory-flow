@@ -5,6 +5,7 @@ import { createDbClient, type DirectDbClient } from "../db/client";
 import { applyMigrations, dbDir, sqlRunner } from "../db/migrations";
 import type { Viewer } from "../http/viewer";
 import { castVote, type VoteTarget } from "./votes";
+import { realPostgresUrl } from "@/test-support/real-postgres";
 
 /**
  * Votes on a real Postgres, where each request runs on a connection of its
@@ -24,7 +25,7 @@ vi.mock("../limits/rate-limit", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../limits/rate-limit")>()),
   checkRateLimit: async () => true,
 }));
-const serverUrl = process.env.GTNH_TEST_POSTGRES_URL;
+const serverUrl = realPostgresUrl();
 const database = `gtnh_vote_race_${process.pid}`;
 let admin: pg.Client | undefined;
 let client: DirectDbClient | undefined;

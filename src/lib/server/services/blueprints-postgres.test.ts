@@ -7,6 +7,7 @@ import { createDbClient, type DirectDbClient } from "../db/client";
 import { applyMigrations, dbDir, sqlRunner } from "../db/migrations";
 import type { SignedIn } from "../http/viewer";
 import { saveBlueprint } from "./blueprints";
+import { realPostgresUrl } from "@/test-support/real-postgres";
 
 /**
  * Blueprint saves on a real Postgres, where each request runs on a
@@ -18,7 +19,7 @@ import { saveBlueprint } from "./blueprints";
  *   GTNH_TEST_POSTGRES_URL=postgres://postgres:race@127.0.0.1:<port>/postgres npx vitest run <this file>
  */
 
-const serverUrl = process.env.GTNH_TEST_POSTGRES_URL;
+const serverUrl = realPostgresUrl();
 const database = `gtnh_blueprint_race_${process.pid}`;
 let admin: pg.Client | undefined;
 let client: DirectDbClient | undefined;
