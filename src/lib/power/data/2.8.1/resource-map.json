@@ -117,22 +117,22 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@17540",
    "displayName": "Aer Crystal Plate",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aer_crystal_plate-e693700b94d3.png",
-   "dominantColor": "#d6d609"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aer_crystal_plate-3b311179ed62.png",
+   "dominantColor": "#e1e10a"
   },
   "Aer Crystal Powder": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@2540",
    "displayName": "Aer Crystal Powder",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aer_crystal_powder-fabad75c4089.png",
-   "dominantColor": "#dbdb09"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aer_crystal_powder-62b1476a4d71.png",
+   "dominantColor": "#e2e209"
   },
   "Aer Shard": {
    "kind": "item",
    "id": "tgregworks:tgregtoolpartchunk@1563",
    "displayName": "Aer Shard",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aer_shard-9746a84a6d3b.png",
-   "dominantColor": "#898900"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aer_shard-0458561e2b86.png",
+   "dominantColor": "#959500"
   },
   "Air": {
    "kind": "fluid",
@@ -208,22 +208,22 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@17543",
    "displayName": "Aqua Crystal Plate",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aqua_crystal_plate-e70d116f139d.png",
-   "dominantColor": "#0909d6"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aqua_crystal_plate-f230c36f2ed4.png",
+   "dominantColor": "#0a0ae1"
   },
   "Aqua Crystal Powder": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@2543",
    "displayName": "Aqua Crystal Powder",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aqua_crystal_powder-3f592765b02a.png",
-   "dominantColor": "#0909db"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aqua_crystal_powder-c5b910b68267.png",
+   "dominantColor": "#0909e2"
   },
   "Aqua Shard": {
    "kind": "item",
    "id": "tgregworks:tgregtoolpartchunk@1566",
    "displayName": "Aqua Shard",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aqua_shard-b5ec4cc43ed3.png",
-   "dominantColor": "#000089"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/aqua_shard-d5f6e597e88b.png",
+   "dominantColor": "#000095"
   },
   "Ardite Plasma": {
    "kind": "fluid",
@@ -1076,14 +1076,14 @@
    "kind": "item",
    "id": "tconstruct:boltpart@1576",
    "displayName": "Enriched Naquadah Bolt",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/enriched_naquadah_bolt-a38e21b77a24.png",
-   "dominantColor": "#0d0f0d"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/enriched_naquadah_bolt-0ae024bb3653.png",
+   "dominantColor": "#222222"
   },
   "Enriched Naquadah Rod (IV)": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@23326",
    "displayName": "Enriched Naquadah Rod",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/enriched_naquadah_rod-24b336076804.png",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/enriched_naquadah_rod-957e101c3c2a.png",
    "dominantColor": "#6b7280"
   },
   "Envy Shard": {
@@ -1195,22 +1195,22 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@2346",
    "displayName": "Fiery Steel Dust",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fiery_steel_dust-8c3188e92625.png",
-   "dominantColor": "#340303"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fiery_steel_dust-037496136032.png",
+   "dominantColor": "#3d0303"
   },
   "Fiery Steel Ingot": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@11346",
    "displayName": "Fiery Steel Ingot",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fiery_steel_ingot-0489474605bf.png",
-   "dominantColor": "#290000"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fiery_steel_ingot-c3a2bf9241e6.png",
+   "dominantColor": "#2f0000"
   },
   "Fiery Steel Plate": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@17346",
    "displayName": "Fiery Steel Plate",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fiery_steel_plate-89c4d924a1c7.png",
-   "dominantColor": "#310000"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/fiery_steel_plate-d6ae138d1a49.png",
+   "dominantColor": "#3c0000"
   },
   "Fiery Tears": {
    "kind": "item",
@@ -1657,22 +1657,22 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@17541",
    "displayName": "Ignis Crystal Plate",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ignis_crystal_plate-4a7b810a24dd.png",
-   "dominantColor": "#d60909"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ignis_crystal_plate-37bb9754d3b9.png",
+   "dominantColor": "#e10a0a"
   },
   "Ignis Crystal Powder": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@2541",
    "displayName": "Ignis Crystal Powder",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ignis_crystal_powder-8411812505ad.png",
-   "dominantColor": "#db0909"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ignis_crystal_powder-b4f4adca5642.png",
+   "dominantColor": "#e20909"
   },
   "Ignis Shard": {
    "kind": "item",
    "id": "tgregworks:tgregtoolpartchunk@1564",
    "displayName": "Ignis Shard",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ignis_shard-fdfb8f8a7b3c.png",
-   "dominantColor": "#890000"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ignis_shard-11631423f704.png",
+   "dominantColor": "#950000"
   },
   "Imbued Slate": {
    "kind": "item",
@@ -1713,14 +1713,14 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@2397",
    "displayName": "Infinity Dust",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/infinity_dust-68539f5b8aa1.png",
-   "dominantColor": "#784846"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/infinity_dust-ba9636ec4db9.png",
+   "dominantColor": "#5b3937"
   },
   "Infinity Ingot": {
    "kind": "item",
    "id": "avaritia:resource@6",
    "displayName": "Infinity Ingot",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/infinity_ingot-d82b556f7331.png",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/infinity_ingot-acda9e69004c.png",
    "dominantColor": "#efd05b"
   },
   "Infinity Plasma": {
@@ -1734,7 +1734,7 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@17397",
    "displayName": "Infinity Plate",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/infinity_plate-d7afe2d00ad6.png",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/infinity_plate-a00d0c40613d.png",
    "dominantColor": "#ecd269"
   },
   "Iodine": {
@@ -1965,7 +1965,7 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.02@22326",
    "displayName": "Long Enriched Naquadah Rod",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/long_enriched_naquadah_rod-e1994ee2ee60.png",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/long_enriched_naquadah_rod-c6cf0857721a.png",
    "dominantColor": "#6b7280"
   },
   "Long Naquadah Rod": {
@@ -2350,8 +2350,8 @@
    "kind": "fluid",
    "id": "molten.force",
    "displayName": "Molten Force",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_force-cf53f85f16b4.png",
-   "dominantColor": "#c7c700"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_force-743711c8aa8d.png",
+   "dominantColor": "#efef00"
   },
   "Molten Gadolinium": {
    "kind": "fluid",
@@ -2378,8 +2378,8 @@
    "kind": "fluid",
    "id": "molten.glowstone",
    "displayName": "Molten Glowstone",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_glowstone-cf53f85f16b4.png",
-   "dominantColor": "#c7c700"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_glowstone-743711c8aa8d.png",
+   "dominantColor": "#efef00"
   },
   "Molten Gold": {
    "kind": "fluid",
@@ -2511,8 +2511,8 @@
    "kind": "fluid",
    "id": "molten.naquadria",
    "displayName": "Molten Naquadria",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_naquadria-459192d2a152.png",
-   "dominantColor": "#4cc34c"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_naquadria-595bcb4dd57a.png",
+   "dominantColor": "#78f178"
   },
   "Molten Neodymium": {
    "kind": "fluid",
@@ -2588,8 +2588,8 @@
    "kind": "fluid",
    "id": "molten.plutonium241",
    "displayName": "Molten Plutonium 241",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_plutonium_241-597ac0a5578e.png",
-   "dominantColor": "#c41c1c"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_plutonium_241-8b152b1120cc.png",
+   "dominantColor": "#eb4242"
   },
   "Molten Potassium": {
    "kind": "fluid",
@@ -2812,8 +2812,8 @@
    "kind": "fluid",
    "id": "molten.uranium235",
    "displayName": "Molten Uranium 235",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_uranium_235-2cf23765296b.png",
-   "dominantColor": "#16be16"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/molten_uranium_235-e2cec8b6684d.png",
+   "dominantColor": "#42eb42"
   },
   "Molten Uranium-238": {
    "kind": "fluid",
@@ -2959,8 +2959,8 @@
    "kind": "item",
    "id": "tconstruct:boltpart@1574",
    "displayName": "Naquadah Bolt",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_bolt-a38e21b77a24.png",
-   "dominantColor": "#0d0f0d"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadah_bolt-0ae024bb3653.png",
+   "dominantColor": "#222222"
   },
   "Naquadah Gas": {
    "kind": "fluid",
@@ -2987,22 +2987,22 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@26327",
    "displayName": "Naquadria Bolt",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadria_bolt-89a07f1fa9a9.png",
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadria_bolt-227b8c25a745.png",
    "dominantColor": "#6b7280"
   },
   "Naquadria Plasma": {
    "kind": "fluid",
    "id": "plasma.naquadria",
    "displayName": "Naquadria Plasma",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadria_plasma-7fc1c0f6df1a.png",
-   "dominantColor": "#51d155"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadria_plasma-098476ab8ed1.png",
+   "dominantColor": "#77fa7d"
   },
   "Naquadria Rod (UV)": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@23327",
    "displayName": "Naquadria Rod",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadria_rod-4e388f9899ef.png",
-   "dominantColor": "#141414"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/naquadria_rod-a7daa944e798.png",
+   "dominantColor": "#171717"
   },
   "Natural Gas": {
    "kind": "fluid",
@@ -3071,15 +3071,15 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@2506",
    "displayName": "Nether Star Dust",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nether_star_dust-21214b355f1f.png",
-   "dominantColor": "#a0a0a0"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nether_star_dust-29b7c1c1185e.png",
+   "dominantColor": "#e1e1e1"
   },
   "Nether Star Plate": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@17506",
    "displayName": "Nether Star Plate",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nether_star_plate-f927fc35933b.png",
-   "dominantColor": "#a6a6a6"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/nether_star_plate-f472d48d69e7.png",
+   "dominantColor": "#cfcfcf"
   },
   "Neutronium Plasma": {
    "kind": "fluid",
@@ -3162,22 +3162,22 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@17545",
    "displayName": "Ordo Crystal Plate",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ordo_crystal_plate-ef2297fd25f1.png",
-   "dominantColor": "#c8c8c8"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ordo_crystal_plate-665479c076dd.png",
+   "dominantColor": "#dadada"
   },
   "Ordo Crystal Powder": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@2545",
    "displayName": "Ordo Crystal Powder",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ordo_crystal_powder-fd706c74fbce.png",
-   "dominantColor": "#d1d1d1"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ordo_crystal_powder-00927eb382ab.png",
+   "dominantColor": "#dcdcdc"
   },
   "Ordo Shard": {
    "kind": "item",
    "id": "tgregworks:tgregtoolpartchunk@1568",
    "displayName": "Ordo Shard",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ordo_shard-20927e223b99.png",
-   "dominantColor": "#7b7b7b"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/ordo_shard-c0af68279fbe.png",
+   "dominantColor": "#919191"
   },
   "Oriharukon Plasma": {
    "kind": "fluid",
@@ -3232,22 +3232,22 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@17544",
    "displayName": "Perditio Crystal Plate",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/perditio_crystal_plate-7654204c1e45.png",
-   "dominantColor": "#151515"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/perditio_crystal_plate-2e6df820ae39.png",
+   "dominantColor": "#121212"
   },
   "Perditio Crystal Powder": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@2544",
    "displayName": "Perditio Crystal Powder",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/perditio_crystal_powder-3c99f906d6ca.png",
-   "dominantColor": "#131313"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/perditio_crystal_powder-dfa1b0d7b513.png",
+   "dominantColor": "#111111"
   },
   "Perditio Shard": {
    "kind": "item",
    "id": "tgregworks:tgregtoolpartchunk@1567",
    "displayName": "Perditio Shard",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/perditio_shard-dc904d459d28.png",
-   "dominantColor": "#131313"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/perditio_shard-4694c12e7650.png",
+   "dominantColor": "#0d0d0d"
   },
   "Phenol": {
    "kind": "fluid",
@@ -3302,8 +3302,8 @@
    "kind": "fluid",
    "id": "plasma.plutonium241",
    "displayName": "Plutonium 241 Plasma",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/plutonium_241_plasma-d8de27db9e00.png",
-   "dominantColor": "#c31c1c"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/plutonium_241_plasma-daedcf807a34.png",
+   "dominantColor": "#e94545"
   },
   "Po Pellet": {
    "kind": "item",
@@ -3386,8 +3386,8 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@2843",
    "displayName": "Pyrotheum Dust",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/pyrotheum_dust-72a19f2cd9e1.png",
-   "dominantColor": "#e27206"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/pyrotheum_dust-2fd561d05096.png",
+   "dominantColor": "#f09c42"
   },
   "Quad Fuel Rod (Depleted Excited Plutonium)": {
    "kind": "item",
@@ -3890,22 +3890,22 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@17542",
    "displayName": "Terra Crystal Plate",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/terra_crystal_plate-bab1e0368643.png",
-   "dominantColor": "#09d609"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/terra_crystal_plate-5e70f20036fb.png",
+   "dominantColor": "#0ae10a"
   },
   "Terra Crystal Powder": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@2542",
    "displayName": "Terra Crystal Powder",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/terra_crystal_powder-4dece0be2236.png",
-   "dominantColor": "#09db09"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/terra_crystal_powder-e8fb4e39fe9a.png",
+   "dominantColor": "#09e209"
   },
   "Terra Shard": {
    "kind": "item",
    "id": "tgregworks:tgregtoolpartchunk@1565",
    "displayName": "Terra Shard",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/terra_shard-d59610557df1.png",
-   "dominantColor": "#008900"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/terra_shard-d2d429b28e7e.png",
+   "dominantColor": "#009500"
   },
   "Thallium Plasma": {
    "kind": "fluid",
@@ -3960,8 +3960,8 @@
    "kind": "item",
    "id": "tconstruct:boltpart@1709",
    "displayName": "Tiberium Bolt",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/tiberium_bolt-b59953295fcd.png",
-   "dominantColor": "#1b981b"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/tiberium_bolt-f3e2e4d7d165.png",
+   "dominantColor": "#17a117"
   },
   "Tiberium Rod (IV)": {
    "kind": "item",
@@ -4086,8 +4086,8 @@
    "kind": "fluid",
    "id": "plasma.uranium235",
    "displayName": "Uranium 235 Plasma",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/uranium_235_plasma-2d66beb08133.png",
-   "dominantColor": "#16c717"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/uranium_235_plasma-8adb3bd297a7.png",
+   "dominantColor": "#41f545"
   },
   "Uranium-238 Plasma": {
    "kind": "fluid",
@@ -4114,29 +4114,29 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@2529",
    "displayName": "Vinteum Dust",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/vinteum_dust-7198633510b4.png",
-   "dominantColor": "#4692bb"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/vinteum_dust-5dde8679fc26.png",
+   "dominantColor": "#4c97c1"
   },
   "Vinteum Gem": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@8529",
    "displayName": "Vinteum",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/vinteum-e0114ca4824a.png",
-   "dominantColor": "#53a7d5"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/vinteum-0ed3294cf10a.png",
+   "dominantColor": "#55aad8"
   },
   "Vinteum Ingot": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@11529",
    "displayName": "Vinteum Ingot",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/vinteum_ingot-adfd16bdaa6a.png",
-   "dominantColor": "#346b89"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/vinteum_ingot-fdbc709fc7a4.png",
+   "dominantColor": "#397291"
   },
   "Vinteum Plate": {
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@17529",
    "displayName": "Vinteum Plate",
-   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/vinteum_plate-4ec5ac0c0abf.png",
-   "dominantColor": "#4595bf"
+   "iconPath": "/datasets/gtnh/local-2.8.1/textures/rendered/vinteum_plate-9e8ad227b868.png",
+   "dominantColor": "#4f9fca"
   },
   "Void Metal Dust": {
    "kind": "item",

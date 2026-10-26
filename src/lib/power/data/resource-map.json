@@ -1118,8 +1118,8 @@
    "kind": "item",
    "id": "tconstruct:boltpart@1576",
    "displayName": "Enriched Naquadah Bolt",
-   "iconPath": "/datasets/gtnh/local-2.9.0-rc-2/textures/rendered/enriched_naquadah_bolt-e96b05b639b0.png",
-   "dominantColor": "#d6d654"
+   "iconPath": "/datasets/gtnh/local-2.9.0-rc-2/textures/rendered/enriched_naquadah_bolt-0ae024bb3653.png",
+   "dominantColor": "#222222"
   },
   "Enriched Naquadah Rod (IV)": {
    "kind": "item",
@@ -1790,8 +1790,8 @@
    "kind": "item",
    "id": "avaritia:resource@6",
    "displayName": "Infinity Ingot",
-   "iconPath": "/datasets/gtnh/local-2.9.0-rc-2/textures/rendered/infinity_ingot-36cce217e30a.png",
-   "dominantColor": "#e2c454"
+   "iconPath": "/datasets/gtnh/local-2.9.0-rc-2/textures/rendered/infinity_ingot-73ec8c893fc7.png",
+   "dominantColor": "#e6c856"
   },
   "Infinity Plasma": {
    "kind": "fluid",
@@ -1804,8 +1804,8 @@
    "kind": "item",
    "id": "gregtech:gt.metaitem.01@17397",
    "displayName": "Infinity Plate",
-   "iconPath": "/datasets/gtnh/local-2.9.0-rc-2/textures/rendered/infinity_plate-e1d7d76ca77a.png",
-   "dominantColor": "#854946"
+   "iconPath": "/datasets/gtnh/local-2.9.0-rc-2/textures/rendered/infinity_plate-783c36a180ed.png",
+   "dominantColor": "#f77f95"
   },
   "Iodine": {
    "kind": "fluid",
@@ -3022,8 +3022,8 @@
    "kind": "item",
    "id": "tconstruct:boltpart@1574",
    "displayName": "Naquadah Bolt",
-   "iconPath": "/datasets/gtnh/local-2.9.0-rc-2/textures/rendered/naquadah_bolt-e96b05b639b0.png",
-   "dominantColor": "#d6d654"
+   "iconPath": "/datasets/gtnh/local-2.9.0-rc-2/textures/rendered/naquadah_bolt-0ae024bb3653.png",
+   "dominantColor": "#222222"
   },
   "Naquadah Gas": {
    "kind": "fluid",
