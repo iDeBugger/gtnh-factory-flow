@@ -21,12 +21,12 @@ import { describe, expect, it } from "vitest";
 const MAX_ALLOWED: Record<string, number> = {
   "1": 11,
   "2": 1,
-  "4": 5,
+  "4": 3,
   "5": 1,
   "6": 1,
   "7": 4,
   "8": 48,
-  queriesInApp: 4,
+  queriesInApp: 2,
 };
 
 const ROOT = path.resolve(__dirname, "..");

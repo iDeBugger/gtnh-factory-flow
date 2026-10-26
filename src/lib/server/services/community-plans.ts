@@ -15,6 +15,7 @@ import { makeActorKey, makeVoterKey } from "../auth/keys";
 import {
   attachMyVotes,
   parseEntryIcon,
+  PLAN_SUMMARY_COLUMNS,
   readPlanVotesByVoter,
   rowToPlanSummary,
   type PlanRow,
@@ -108,6 +109,41 @@ function resourceKeys(raw: string): plans.PlanResourceKey[] {
       const [kind, ...rest] = entry.split(":");
       return { kind: kind!, resourceId: rest.join(":") };
     });
+}
+
+/** A post's link and dates, for the sitemap. */
+export interface PlanLinkRow {
+  id: string;
+  created_at: string;
+  updated_at: string | null;
+}
+
+/**
+ * The column lists a by-score read may ask for, by name: a closed set, so a
+ * caller cannot pass a list whose rows do not match the type it gets back.
+ */
+const BY_SCORE_COLUMNS = {
+  summary: PLAN_SUMMARY_COLUMNS,
+  links: "id,created_at,updated_at",
+} as const;
+
+/** The rows each by-score column list reads. */
+interface ByScoreRows {
+  summary: PlanRow;
+  links: PlanLinkRow;
+}
+
+/**
+ * The published posts, best score first, up to `limit`: the posts the
+ * sitemap and llms.txt name, pages a stranger can open. `summary` reads a
+ * post's listing columns, `links` only its id and dates. Throws when the
+ * database does not answer; both callers then list no post.
+ */
+export function publicPlansByScore<K extends keyof ByScoreRows>(
+  limit: number,
+  columns: K,
+): Promise<ByScoreRows[K][]> {
+  return plans.publicByScore<ByScoreRows[K]>(limit, BY_SCORE_COLUMNS[columns]);
 }
 
 /**

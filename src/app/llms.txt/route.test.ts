@@ -11,18 +11,9 @@ const rows = [
 ];
 
 vi.mock("@/lib/server/community-rows", () => ({ PLAN_SUMMARY_COLUMNS: "*" }));
-vi.mock("@/lib/server/db", () => ({
-  isCommunityConfigured: () => true,
-  getCommunityDb: () => {
-    const query = {
-      select: () => query,
-      or: () => query,
-      order: () => query,
-      limit: () => query,
-      returns: async () => ({ data: rows, error: null }),
-    };
-    return { from: () => query };
-  },
+vi.mock("@/lib/server/services/config", () => ({ isDatabaseConfigured: () => true }));
+vi.mock("@/lib/server/services/community-plans", () => ({
+  publicPlansByScore: async () => rows,
 }));
 
 import { GET } from "./route";

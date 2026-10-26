@@ -1,6 +1,6 @@
 import { siteUrl } from "@/lib/site-url";
-import { getCommunityDb, isCommunityConfigured } from "@/lib/server/db";
-import { PLAN_SUMMARY_COLUMNS, type PlanRow } from "@/lib/server/community-rows";
+import { publicPlansByScore } from "@/lib/server/services/community-plans";
+import { isDatabaseConfigured } from "@/lib/server/services/config";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { describePlanRow, quietMarkdown } from "@/lib/server/plan-preview";
 import { APP_VERSION } from "@/lib/version";
@@ -15,19 +15,13 @@ import { APP_VERSION } from "@/lib/version";
 export const revalidate = 3600;
 
 async function topPlans(base: string): Promise<string[]> {
-  if (!isModAndCommunityOn() || !isCommunityConfigured()) {
+  if (!isModAndCommunityOn() || !isDatabaseConfigured()) {
     return [];
   }
   try {
-    const { data } = await getCommunityDb()
-      .from("community_plans")
-      .select(PLAN_SUMMARY_COLUMNS)
-      .or("is_public.eq.true,is_public.is.null")
-      .order("score", { ascending: false })
-      .limit(10)
-      .returns<PlanRow[]>();
+    const rows = await publicPlansByScore(10, "summary");
     // A name and a description are player text: one line each, with no markdown of their own.
-    return (data ?? []).map(
+    return rows.map(
       (row) =>
         `- [${quietMarkdown(row.name)}](${base}/?plan=${encodeURIComponent(row.id)}): ${quietMarkdown(describePlanRow(row))}`,
     );

@@ -76,16 +76,6 @@
       "rule": "4"
     },
     {
-      "from": "src/app/llms.txt/route.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
-      "from": "src/app/sitemap.ts",
-      "to": "src/lib/server/db/index.ts",
-      "rule": "4"
-    },
-    {
       "from": "src/live/main.ts",
       "to": "src/lib/server/local-db/client.ts",
       "rule": "5"
@@ -358,8 +348,6 @@
   ],
   "queriesInApp": [
     "src/app/api/blueprints/[blueprintId]/vote/route.ts",
-    "src/app/api/community/plans/[planId]/vote/route.ts",
-    "src/app/llms.txt/route.ts",
-    "src/app/sitemap.ts"
+    "src/app/api/community/plans/[planId]/vote/route.ts"
   ]
 }
