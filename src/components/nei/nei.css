@@ -126,6 +126,13 @@
   height: var(--nei-art);
   overflow: hidden;
 }
+/* An older answer still on screen while the new one is asked for (ResourceIndexPane listStale). aria-busy says so at
+   once; the eye is told only after 180 ms, so a typed key whose answer is cached or quick (the debounce alone is
+   125 ms) never blinks the grid, while a slow one still dims. Back to full at once, with no transition. */
+.nei-grid[data-stale] {
+  opacity: 0.45;
+  transition: opacity 120ms ease-out 180ms;
+}
 .nei-skel {
   width: var(--nei-art);
   height: var(--nei-art);

@@ -5,7 +5,12 @@ import { isSafePathSegment, resolveDatasetChildPath } from "@/lib/server/dataset
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const textureRoots = new Set(["rendered", "icons", "atlas", "nei-layouts"]);
+// The other texture roots, when the public handler misses (a file published after the start).
+// The content-named ones, rendered/ and icons/, never reach here: src/proxy.ts sends them to the
+// dataset-files route. A miss or a refusal says no-store, so it is not kept like a file.
+const textureRoots = new Set(["atlas", "nei-layouts"]);
+const IMMUTABLE = "public, max-age=31536000, immutable";
+const uncached = { "Cache-Control": "no-store" };
 
 export async function GET(
   _request: Request,
@@ -13,7 +18,7 @@ export async function GET(
 ) {
   const { versionId, assetPath } = await params;
   if (!isSafePathSegment(versionId) || !isSafeAssetPath(assetPath)) {
-    return NextResponse.json({ error: "Invalid texture path." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid texture path." }, { status: 400, headers: uncached });
   }
 
   // Undefined is a texture that is not there or a link out of the version's directory: both a miss.
@@ -25,12 +30,12 @@ export async function GET(
     const data = await readFile(resolvedFile);
     return new Response(data, {
       headers: {
-        "Cache-Control": "public, max-age=31536000, immutable",
+        "Cache-Control": IMMUTABLE,
         "Content-Type": "image/png",
       },
     });
   } catch {
-    return NextResponse.json({ error: "Texture not found." }, { status: 404 });
+    return NextResponse.json({ error: "Texture not found." }, { status: 404, headers: uncached });
   }
 }
 

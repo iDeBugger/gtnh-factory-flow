@@ -62,6 +62,12 @@ manifest="$local_root/datasets.manifest.json"
 for id in "${ids[@]}"; do
   [ -f "$local_root/$id/recipe-lookup-index.json.gz" ] || fail "$id has no recipe-lookup-index.json.gz: not a built dataset."
 done
+# The export's asset: icon hints must be resolved (resolve-icon-hints.mjs) or each one draws `?`:
+# no icon report, a report that says skipped, or a file still holding "asset: refuses the version.
+for id in "${ids[@]}"; do
+  node "$here/deploy-lib.mjs" icons "$local_root/$id" || fail "$id still carries unresolved icon hints; rebuild it."
+done
+echo "icon hints: resolved in ${ids[*]}"
 listed="$(node -e 'for (const v of JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).versions) console.log(v.id)' "$manifest")"
 for id in $listed; do
   given=0
@@ -72,6 +78,16 @@ for id in $listed; do
 done
 for id in "${ids[@]}"; do
   echo "$listed" | grep -qx "$id" || fail "$id is not in the local manifest."
+done
+# NEI's item order rides in resource-index.json.gz; a rebuild that skipped the client export has none.
+# grep -c reads to the end: grep -q would stop early and fail the pipe under pipefail.
+has_order='gzip -dc "$1" | grep -c "\"resourceOrder\":\[" > /dev/null'
+for id in "${ids[@]}"; do
+  local_order=0
+  bash -c "$has_order" _ "$local_root/$id/resource-index.json.gz" && local_order=1
+  served_order=0
+  remote "f='$root/$id/resource-index.json.gz'; test -f \"\$f\" && gzip -dc \"\$f\" | grep -c '\"resourceOrder\":\[' > /dev/null" && served_order=1
+  node "$here/deploy-lib.mjs" nei-order "$id" "$local_order" "$served_order" || fail "$id would lose its NEI order."
 done
 echo "publishing: ${ids[*]}"
 

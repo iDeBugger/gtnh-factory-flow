@@ -9,10 +9,12 @@
  * public/datasets/gtnh. src/proxy.ts runs this on every request path: a
  * dataset path is refused when it is encoded at all or holds a "." or ".."
  * segment; the index gzips, the shards, the server's content-addressed
- * answers (client/, client-files.ts) and the raw recipes.json go to the
- * dataset-files route, which serves the first three and refuses the raw file;
- * everything else beside the data (textures, oracle reports, stray copies) is
- * still served by the public handler. The gate is one process's view of a
+ * answers (client/, client-files.ts), the content-named textures (textures/
+ * rendered/ and textures/icons/) and the raw recipes.json go to the
+ * dataset-files route, which serves all but the raw file and sets each one's
+ * cache policy itself, `no-store` on a miss; everything else beside the data
+ * (other textures, oracle reports, stray copies) is still served by the public
+ * handler. The gate is one process's view of a
  * path: the raw recipes.json must not exist on the server either.
  */
 
@@ -29,6 +31,9 @@ const INDEX_FILES = new Set([
   "resource-index.json.gz",
 ]);
 const SHARDS_DIRECTORY = "recipes-shards";
+// Named by their bytes, so a hit is kept a year. A header rule by path would give a miss that
+// year too: Next's public handler and a route's own header both lose to a next.config rule.
+const CONTENT_NAMED_TEXTURE_ROOTS = new Set(["rendered", "icons"]);
 
 export type DatasetPathDecision =
   | { kind: "pass" }
@@ -74,6 +79,9 @@ export function decideDatasetPath(rawPathname: string): DatasetPathDecision {
   }
   if (rest.length === 2 && (rest[0] === SHARDS_DIRECTORY || rest[0] === CLIENT_FILES_DIRECTORY)) {
     return { kind: "rewrite", pathname: `${DATASET_FILES_PREFIX}${version}/${rest[0]}/${rest[1]}` };
+  }
+  if (rest.length === 3 && rest[0] === "textures" && CONTENT_NAMED_TEXTURE_ROOTS.has(rest[1] ?? "")) {
+    return { kind: "rewrite", pathname: `${DATASET_FILES_PREFIX}${version}/${rest.join("/")}` };
   }
   return PASS;
 }

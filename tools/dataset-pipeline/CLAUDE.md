@@ -6,17 +6,34 @@ recipe map, NEI layout, catalyst, multiblock config and rendered icon. Node scri
 `normalize-oracle-export.mjs`, `machine-configs.mjs`, `build-resource-index.mjs`,
 `build-recipe-index.mjs` (recipe index, lookup index, 250-recipe shards).
 
-## Rebuild (by hand, in WSL) and publish (from the Mac)
+## Build and publish
 
-1. `~/gtnh-factory-flow` in WSL Ubuntu is a git-less SNAPSHOT: copy changed pipeline
-   scripts into it first or the rebuild runs old code.
-2. Raw exports live at `~/gtnh-factory-flow/.pipeline/raw-export/<id>/oracle-export.json`
-   with `rendered-icons/` beside them; reuse them while the pack version stands. Never
-   export with `GTNH_RENDER_STACK_ICONS=false`: the export stamps icon filenames, and a
-   run without them broke live search.
-3. `~/run-both.sh` (fuller: `~/rebuild-cokeoven.sh`) normalizes, indexes and gzips into
-   `~/gtnh-export/datasets/gtnh/<id>`. 2.9 and 2.8.1 are supported; 2.8.4 is retired.
-4. `~/copy-datasets.sh` copies results into a checkout's `public/datasets/gtnh`.
+Datasets are built only by the repo's command, on a machine with Docker (OrbStack on the Mac):
+
+```bash
+node tools/dataset-pipeline/scripts/build-datasets.mjs all --export   # export both packs, rebuild, install
+node tools/dataset-pipeline/scripts/build-datasets.mjs 2.9            # rebuild 2.9 from its last export
+```
+
+1. Versions: `2.9` (`local-2.9.0-rc-2`), `2.8.1` (`local-2.8.1`), or `all`. The pack table in
+   `build-datasets.mjs` names each pack's client zip, oracle pack and Docker volume. 2.8.4 is retired.
+2. `--export` runs the GTNH client with the oracle in the pipeline image (`docker/Dockerfile`), through
+   `run-gtnh-oracle-export.sh`: the instance unpacks onto its volume (`gtnh-rc2-client-instance`,
+   `gtnh-281-client-instance`), the raw export lands in `.pipeline/datasets/<id>/raw-export/`
+   (`oracle-export.json`, `rendered-icons/`, `machine-data/`), and pack zips, the oracle jar, Gradle and the
+   icon cache stay in `.pipeline/datasets/cache/`. Export once per pack version and after an oracle change;
+   it is the only way to get NEI's item list. Never export with `GTNH_RENDER_STACK_ICONS=false`: the export
+   stamps icon filenames, and a run without them broke live search.
+3. Every run then rebuilds from the raw export in the image (`rebuild-dataset.sh`, the pack's mod jars read
+   from the volume): normalize, icon hints, asset fingerprint, resource index with NEI's order, recipe index
+   and shards, faint fluid icons, gzips. `recipes.json` stays in `.pipeline/datasets/<id>/`; it is never published.
+4. The build is installed into `public/datasets/gtnh/<id>` (`--out` for another root) only when the publish
+   checks pass (`deploy-lib.mjs`: icon hints resolved, and no NEI order lost against the installed copy);
+   the replaced copy moves to `.pipeline/datasets/<id>/replaced/`, and its rendered textures the build lacks are
+   copied in, as a publish adds them: saved plans and the power maps cite names an earlier export drew. Then the
+   manifest is rebuilt. A refused
+   build stays in `.pipeline/datasets/<id>/dataset/` and the command exits 1. Logs:
+   `.pipeline/datasets/<id>/logs/`. Exam: `scripts/build-datasets.test.mjs`.
 5. Publish with `tools/deploy/publish-datasets.sh <target> <id>...` (`docs/deploy.md`, Datasets) into the
    server's `/srv/gtnh/datasets/<id>/`. It keeps this order, and any other way of publishing must too:
    1. Textures first, additively, straight into the served directory: `rsync -a --ignore-existing`. Never
@@ -37,8 +54,6 @@ recipe map, NEI layout, catalyst, multiblock config and rendered icon. Node scri
    3. The script verifies the served manifest, every published gzip's checksum, a texture per version and
       `recipes.json` refused. After a 2.9 publish, regenerate the power maps (`tools/power-machine-icons.mjs`,
       `tools/power-resource-map.mjs`) before the version they cite is retired.
-   The WSL scripts (`~/run-both.sh`, `~/copy-datasets.sh`) live outside the repo: check they never mirror with
-   delete or swap `textures/` before relying on them.
 
 `build-recipe-index.mjs` also writes `recipes.json.gz` from the bytes of `recipes.json`. Every
 dataset gzip goes through `deterministic-gzip.mjs` (level 9, no name, zero mtime, OS byte pinned
@@ -49,10 +64,25 @@ must get a new name. The normalizer stages every rendered icon (item, block, flu
 content-addressed name (`stage-rendered-icons.mjs`): the export's `<slug>-<sha1(stack key)[:12]>.png`
 becomes `<slug>-<sha1(bytes)[:12]>.png`, same length, and the dataset records point at that. A
 rebuild whose pixels did not change keeps every URL; one whose pixels changed moves only those.
-`apply-texture-icons.mjs` (textures/icons) names its files by content too, and
+`apply-texture-icons.mjs` names its files by content too, and
 `reuse-previous-icons.mjs` copies `textures/rendered/` along with the references it reuses.
 Exam: `stage-rendered-icons.test.mjs`. Publishing adds files beside the live ones and never deletes
 old names: a plan's own icon and other stored references keep the name they were saved with.
+
+Icon hints: where the oracle knows a texture's name but draws no pixels it writes
+`asset:<mod>:textures/...` into `iconPath` (`GtnhCalcOracleExporter.aspectIconPath`: the 21 Thaumcraft
+aspects other mods add, GregTech's Radio, Electrum and Magneto among them). A browser cannot load it and
+the app draws `?`. `resolve-icon-hints.mjs <instance root or mods dir> <recipes.json> <out dir>` runs after
+the normalizer and before the index builds (`rebuild-dataset.sh` and `run-gtnh-oracle-export.sh` do). It reads `recipes.json` line by line, so it runs on a dataset of any size, copies each hinted PNG
+out of the mod jars to `textures/rendered/<mod>_<file>-<sha1(bytes)[:12]>.png`, rewrites every copy,
+clears a hint no jar holds (listed, with the missing mod, in `textures/icon-report.json`), and refuses a
+mods directory with no jars rather than clear them all. `apply-texture-icons.mjs` parses the dataset whole
+and skips its name matching above `GTNH_TEXTURE_ICON_MAX_DATASET_BYTES` (450 MB: every real dataset); it
+adds `textureMatching` to the report and never writes a top-level `skipped`. Its own extraction writes
+`textures/<kind>/`, which the textures route does not serve, and it removes `textures/item` and
+`textures/fluid`: keep hints out of it. `publish-datasets.sh` refuses a version with no icon report, one
+that says `skipped`, or any published file holding `"asset:` (`deploy-lib.mjs icons`). Exam:
+`resolve-icon-hints.test.mjs`, `tools/deploy/deploy-lib.test.mjs`.
 
 Every rebuild runs `normalize-fluid-icon-alpha.mjs --rename` after the index builds
 (`generate-dataset.mjs` does), on 2.9 as on 2.8.1, so faint fluids never ship invisible. It
@@ -133,10 +163,49 @@ published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such 
   `buildRecipeInputOverrides`), as on 2.9's shulker box colours and Forestry saplings. Thaumcraft
   wands render no pixels on 2.8.1 (`dropped-icons.json`), so they have no icon there.
 
+## NEI's item list order (NeiItemListExport.java)
+
+- The export's root `neiItemList` is every stack NEI's item panel lists, sorted as the pack's
+  `inventory.itemsort` sorts it (`minecraft, mod, id, default, damage, name` in both packs), one resource key per
+  stack (`item:<id>[@meta]`, `fluid:<name>`, `aspect:thaumcraft:aspect:<tag>`, null where a stack has none), with
+  `status` (`exported`, `failed` with `error`, `not_present`) and the `sort` it used; adapter `nei-item-list`.
+- NEI builds that list only when a world loads and the oracle exports from the main menu, so the export does what the
+  load does with NEI's own code: `NEIClientConfig.bootNEI()`, then a join of the "NEI Plugin Loader" thread (its flag is set before `NEIConfigsLoadedEvent`, whose handlers may still hide items) (plugins hide items and
+  add variants; `ItemInfo` fills the owners the `mod` rule reads), NEI's `getPermutations` per registry item, the
+  registry-order numbering into `ItemSorter`'s `default` rule, `ItemStackSet` for duplicates, `ItemSorter.sort`. It
+  runs last, after every domain, so nothing else sees NEI half booted. Then NEI's collapsible groups, as both NEI
+  versions apply them after the sort (`updateOrdering` and the panel's stable sort by it): every member of a group
+  moves to the group's first member's place, in sorted order, expanded or collapsed (`NeiOrdering.groupOrdered`,
+  exam `NeiOrderingTest`). `-Dgtnh.oracle.neiItemList=false` skips it;
+  `gtnh.oracle.neiBootTimeoutSeconds` (900) bounds the wait.
+- Per pack, by what the classes have, never by a version check: 2.9's NEI (2.8.155-GTNH) has `getPermutations`
+  static on `ItemListLoader` and lists fluids as `neiFluidDisplay` stacks (`StackInfo.isFluidDisplayItem`, mapped to
+  the fluid); 2.8.1's (2.8.19-GTNH) has it on the `ItemList.loadItems` task and lists no fluids. Aspects come from
+  aspectrecipeindex (2.9) or the Thaumcraft NEI plugin (2.8.1) by the plugin's `getAspects` or Thaumcraft's
+  `Aspects` NBT.
+- Client only: the split export's server phase writes `not_present` (`server side`), so the list comes from the
+  client phase (`GTNH_EXPORT_PACK_KIND=client`), whose export is the one normalized last.
+- A failure is logged and leaves `status: "failed"`; the rest of the export is unchanged.
+- The pipeline (`scripts/nei-item-order.mjs`): the normalizer writes `neiItemOrder` (each key once, at its first
+  place, so a resource NEI lists as several NBT stacks takes the smallest index); `build-resource-index.mjs` writes
+  `resourceOrder`, one place per `resourceIndex` record or null where NEI does not list it, and
+  `build-recipe-index.mjs` copies it beside `resourceIndex` in `resource-index.json.gz`. A separate array, never a
+  field per record: a field changes every byte of every `/resources` answer. An export without the list writes
+  neither, and the files come out byte for byte as before. A list whose `sort` does not start with NEI's default
+  (`NEI_DEFAULT_SORT`: the export instance's `inventory.itemsort` was changed) is refused with a WARNING line.
+- The list comes only from the client phase, and the split export skips that phase when the assets are unchanged.
+  So an export without the list carries the order on, as icons are carried: `build-resource-index.mjs` takes it
+  from this version's last build (its `resource-index.json.gz`, before it is overwritten), then from
+  `GTNH_PREVIOUS_DATASET_DIR` (the installed copy under `build-datasets.mjs`; under `generate-dataset.mjs` the dataset it reuses icons from); `GTNH_NEI_ORDER_CARRY=0` turns
+  that off. A dataset left with no order prints `WARNING: this dataset has NO NEI order`, and
+  `publish-datasets.sh` refuses a version that would lose the order its served copy has (`docs/deploy.md`). The app places nulls after every placed record and sorts
+  a dataset with no order by its approximation (`src/lib/search/nei-order.ts`). Exam: `nei-item-order.test.mjs`.
+
 ## Comparing two exports (scripts/oracle-diff.mjs)
 
-- A new export of a pack is checked against the previous one before it replaces it:
-  `node tools/dataset-pipeline/scripts/oracle-diff.mjs <old run>/work/raw-export <new run>/work/raw-export`
+- A new export of a pack is checked against the previous one before its build is published (`--export` keeps the
+  previous raw export as `raw-export.previous`):
+  `node tools/dataset-pipeline/scripts/oracle-diff.mjs .pipeline/datasets/<id>/raw-export.previous .pipeline/datasets/<id>/raw-export`
   (about 12 GB of heap; it re-runs itself with it). Exit 0 means every difference is a known one: record order
   the game fills from hash maps, display names an item rolls each start, and the records each rule in
   `GAME_ROLLED` names. Pixels are not compared (time-driven icons differ every export).

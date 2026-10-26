@@ -849,6 +849,7 @@ export function RecipeBrowser({ onLoadDatasetVersion }: RecipeBrowserProps) {
               searchFlashing={isSearchFlashing}
               activeResource={activeResource}
               onBrowse={browseResource}
+              defaultSort="nei"
               // NEI's field sits at the bottom middle of the screen. On a phone, under a page covering the board and under
               // the recipe search (whose own keys sit there) it is at the column's foot.
               searchAt={isCompact || boardCovered || activeResource ? "bottom" : "dock"}

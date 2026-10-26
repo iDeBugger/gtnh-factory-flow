@@ -23,10 +23,10 @@ export async function GET(
   try {
     const { versionId } = await params;
 
-    // The item list's default sort reads the community ranking and never
-    // waits for it, so start the first sweep at boot rather than on the
-    // first visitor's request. Fire and forget: a stalled database must not
-    // hold up the prewarm.
+    // The Most popular sort reads the community ranking and never waits for
+    // it, so start the first sweep at boot rather than on the first
+    // visitor's request. Fire and forget: a stalled database must not hold
+    // up the prewarm.
     getResourcePopularity();
     await prewarmDatasetVersion(versionId);
 

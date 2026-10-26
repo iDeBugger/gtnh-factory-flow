@@ -6,9 +6,11 @@ import { Readable } from "node:stream";
 export const datasetRoot = path.join(process.cwd(), "public", "datasets", "gtnh");
 
 /**
- * What a served dataset file says about caching, the same for every file the
- * dataset-files route serves: a day, never immutable, because gzips and shards
- * are replaced in place under the same names on a republish.
+ * What a served data file (the index gzips and the shards) says about caching:
+ * a day, never immutable, because they are replaced in place under the same
+ * names on a republish. The content-named textures the dataset-files route also
+ * serves are immutable on a hit instead, since a texture's name changes with its
+ * bytes; any miss is no-store.
  */
 export const DATASET_FILE_CACHE_CONTROL = "public, max-age=86400";
 

@@ -55,7 +55,16 @@ fi
 MOD_AND_COMMUNITY="${MOD_AND_COMMUNITY:-}"
 SITE_URL="${SITE_URL%/}"
 
-step() { printf '\n== deploy: %s\n' "$*"; }
+# Each step ends with its time, so a slow deploy names the slow step.
+step_started=""
+step_done() {
+  if [ -n "$step_started" ]; then printf '   (%ss)\n' "$((SECONDS - step_started))"; fi
+}
+step() {
+  step_done
+  step_started=$SECONDS
+  printf '\n== deploy: %s\n' "$*"
+}
 # Set once release.env names the new tag: a failure after that leaves it
 # there, so any later `compose up` would start the release that failed.
 release_written=0
@@ -91,11 +100,11 @@ compose_cmd() {
 
 wait_healthy() {
   local container="$1" seconds="$2" status=""
-  local until=$((SECONDS + seconds))
+  local started=$SECONDS until=$((SECONDS + seconds))
   while [ "$SECONDS" -lt "$until" ]; do
     status="$(remote "docker inspect -f '{{.State.Health.Status}}' '$container'" 2>/dev/null || true)"
     if [ "$status" = "healthy" ]; then
-      echo "$container is healthy"
+      echo "$container is healthy after $((SECONDS - started))s"
       return 0
     fi
     sleep 3
@@ -140,13 +149,28 @@ if [ -n "$rollback" ]; then
 else
   TAG="$(node "$here/deploy-lib.mjs" build-id)"
   step "3. build $TAG on the server"
+  # One bake for the three images (tools/deploy/docker-bake.hcl): the context
+  # is sent once, without what .dockerignore leaves out, and the stages the
+  # site and live share are built once. It runs from the archive's directory,
+  # since bake reads no path outside its working directory unasked.
+  context_dir="$(mktemp -d)"
+  build_log="$(mktemp)"
+  trap 'rm -rf "$local_compose" "$server_compose" "$context_dir" "$build_log"' EXIT
+  git archive HEAD | tar -x -C "$context_dir" || fail "could not unpack git archive HEAD into $context_dir."
+  # Over ssh the default builder is the server's daemon; a builder chosen
+  # with `docker buildx use` on this Mac would build somewhere else. --load
+  # puts the images in the daemon's image store whatever the builder (a
+  # docker-container builder keeps them in its own cache otherwise).
+  builder=()
+  if [ "$DEPLOY_SSH" != local ]; then builder=(--builder default); fi
+  if ! (cd "$context_dir" && TAG="$TAG" SITE_URL="$SITE_URL" MOD_AND_COMMUNITY="$MOD_AND_COMMUNITY" \
+    docker_remote buildx bake ${builder[@]+"${builder[@]}"} --load -f tools/deploy/docker-bake.hcl --progress=plain >"$build_log" 2>&1); then
+    tail -n 60 "$build_log" >&2
+    fail "building the images for $TAG (the build's last lines are above)."
+  fi
   for image in site live migrate; do
-    echo "building gtnh-$image:$TAG"
-    git archive HEAD | docker_remote build --quiet --target "$image" \
-      --build-arg "NEXT_PUBLIC_SITE_URL=$SITE_URL" \
-      --build-arg "NEXT_PUBLIC_MOD_AND_COMMUNITY=$MOD_AND_COMMUNITY" \
-      --build-arg "GTNH_BUILD_ID=$TAG" \
-      --tag "gtnh-$image:$TAG" - || fail "building gtnh-$image:$TAG"
+    remote "docker image inspect 'gtnh-$image:$TAG' >/dev/null" || fail "the build left no gtnh-$image:$TAG."
+    echo "built gtnh-$image:$TAG"
   done
 fi
 VERSION="${TAG%-*}"
@@ -229,3 +253,4 @@ for image in site live migrate; do
 done
 
 step "done: $TAG is live at $SITE_URL"
+echo "in ${SECONDS}s"

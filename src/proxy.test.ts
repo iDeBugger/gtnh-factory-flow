@@ -104,7 +104,7 @@ describe("the dataset gate in the proxy", () => {
     }
   });
 
-  it("rewrites the index gzips, the shards, the client files and the raw recipes file to the dataset-files route", () => {
+  it("rewrites the index gzips, the shards, the client files, the content-named textures and the raw recipes file to the dataset-files route", () => {
     const gz = get(`/datasets/gtnh/${V}/recipes.json.gz`);
     expect(gz.headers.get("x-middleware-rewrite")).toBe(
       `https://gtnhplanner.com/dataset-files/${V}/recipes.json.gz`,
@@ -117,15 +117,19 @@ describe("the dataset gate in the proxy", () => {
     expect(client.headers.get("x-middleware-rewrite")).toBe(
       `https://gtnhplanner.com/dataset-files/${V}/client/crops.0123456789abcdef0123.json`,
     );
+    const texture = get(`/datasets/gtnh/${V}/textures/rendered/copper-a50d21cdeb41.png`);
+    expect(texture.headers.get("x-middleware-rewrite")).toBe(
+      `https://gtnhplanner.com/dataset-files/${V}/textures/rendered/copper-a50d21cdeb41.png`,
+    );
     const raw = get(`/datasets/gtnh/${V}/recipes.json`);
     expect(raw.headers.get("x-middleware-rewrite")).toBe(
       `https://gtnhplanner.com/dataset-files/${V}/recipes.json`,
     );
   });
 
-  it("passes textures, the manifest and the rest of the site", () => {
+  it("passes the other textures, the manifest and the rest of the site", () => {
     for (const pathname of [
-      `/datasets/gtnh/${V}/textures/rendered/copper-a50d21cdeb41.png`,
+      `/datasets/gtnh/${V}/textures/nei-layouts/x.png`,
       "/datasets/gtnh/datasets.manifest.json",
       "/",
       "/plans",

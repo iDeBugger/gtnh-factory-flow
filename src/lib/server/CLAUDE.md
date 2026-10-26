@@ -31,10 +31,10 @@
   `<APP_VERSION>-<git sha8>` (`-dirty` with uncommitted changes), or `APP_VERSION` with neither. A deploy must
   set `GTNH_BUILD_ID` or build inside a git checkout: with neither, two deploys under one `APP_VERSION` share
   year-immutable answer URLs, and browsers keep the older build's answers. `next.config.ts`
-  imports nothing from `src/` (it reads `version.ts` as text): `next start` loads it again at run time and the site
-  image ships no `src/`. Its own modules sit beside it and import nothing (`security-headers.config.ts`,
-  `body-limits.config.ts`, which `http/request-body.ts` re-exports); the image must copy them with it
-  (`next-config.test.ts` pins it). `datasetCacheHeaders` marks an answer immutable for a
+  imports nothing from `src/` (it reads `version.ts` as text): `next start` and the test suite load it outside a
+  build. Its own modules sit beside it and import nothing (`security-headers.config.ts`, `body-limits.config.ts`,
+  which `http/request-body.ts` re-exports; `next-config.test.ts` pins it). The site image runs the standalone
+  `server.js`, which carries the config serialized at build and reads no config file. `datasetCacheHeaders` marks an answer immutable for a
   year only when both keys are there and the version is this build's; anything else is `no-store`, so no build that
   changes a ranking is served from another build's URL, even under one APP_VERSION. Exam:
   `http/dataset-cache-headers.test.ts`, `browser-loader.test.ts`.
@@ -48,17 +48,25 @@
   sent, so a rewrite alone is bypassed by percent-encoding (`recipes%2Ejson`). The gate is `src/proxy.ts`
   (`decideDatasetPath`, `dataset-path-gate.ts`), which runs on every request path but `/_next/`: under
   `/datasets/gtnh/` (decoded) it refuses a path that is percent-encoded at all or holds a `.` or `..` segment
-  (400 `no-store`), sends the four index gzips, the shards, `client/` and `recipes.json` to
+  (400 `no-store`), sends the four index gzips, the shards, `client/`, the content-named textures
+  (`textures/rendered/<name>.png`, `textures/icons/<name>.png`) and `recipes.json` to
   `src/app/dataset-files/[versionId]/[...assetPath]/route.ts` (a day's cache, ETag, Last-Modified and one byte
-  range on a file; `no-store` on 400 and 404; `recipes.json`, about 2 GB, refused), and lets everything else
-  through to the public handler: textures (`immutable` by `next.config.ts` header rule), `oracle/`, stray copies,
-  at `max-age=0`. The gate is one process's view of a path: the raw `recipes.json` must still not exist on the
+  range on a file, a texture `immutable` for a year; `no-store` on 400 and 404; `recipes.json`, about 2 GB,
+  refused), and lets everything else through to the public handler: the other textures, `oracle/`, stray copies,
+  at `max-age=0` (a texture the handler misses reaches `datasets/gtnh/[versionId]/textures/[...assetPath]/route.ts`,
+  whose miss is `no-store` too). A texture through the route costs about 1-2 ms more per icon than the public
+  handler (a `stat`, two `realpath`s, a stream); that is acceptable only because textures are immutable and kept by
+  the browser and Cloudflare, so profile before routing a hotter path this way. No cache policy is set by a `next.config.ts` header rule: Next applies the rule
+  first and keeps it over the answer's own `Cache-Control` (`send-response.js` adds a header only when absent), so a
+  texture asked for before its publish lands would be a 404 kept a year. With `GTNH_DATASET_BACKEND_URL` a
+  beforeFiles rewrite sends the proxy's texture rewrite on to the backend. The gate is one process's view of a path: the raw `recipes.json` must still not exist on the
   server, and the publish must not copy it (`tools/deploy/publish-datasets.sh` excludes it and checks). It also makes a pipeline invariant: published names stay within
   `[A-Za-z0-9._-]` (`tools/dataset-pipeline/CLAUDE.md`; `rebuild-manifest.mjs` refuses a version that breaks it),
   or the file is unreachable. The dataset-files and textures routes resolve a file with `resolveDatasetChildPath`
   (dataset-static-file.ts): lexically, then by real path against the real version directory, so a symlink in the
   tree never reads outside it (a miss is a 404). Exam: `dataset-path-gate.test.ts`, `proxy.test.ts`,
-  `dataset-files/[versionId]/[...assetPath]/route.test.ts`, `dataset-static-file.test.ts`.
+  `dataset-files/[versionId]/[...assetPath]/route.test.ts`, `datasets/gtnh/[versionId]/textures/[...assetPath]/route.test.ts`,
+  `next-config.test.ts`, `dataset-static-file.test.ts`.
 - The answers every player gets the same (catalog, mobs, crops, recipe-ids, items) are also static files the server
   writes itself (`client-files.ts`, `dataset-client-files.ts`), served at `/datasets/gtnh/<id>/client/<kind>.<20 hex
   of the sha256 of the JSON>.json` but stored outside the dataset tree, which stays the pipeline's bytes and may be
@@ -90,7 +98,8 @@
   `api/datasets/[versionId]/client-files/route.test.ts`, `browser-loader.test.ts`.
 - Every server cache is bounded or index-sized (the Node heap is capped at 3 GB). A slow
   site: check the heap first.
-- The OG card route reads fonts through `process.cwd()` (non-standalone build).
+- The OG card route reads fonts through `process.cwd()`: the site image copies `src/app/fonts` beside the standalone
+  `server.js` (`Dockerfile`).
 - The image optimizer is off (`images.unoptimized` in next.config.ts): nothing uses next/image, and
   `/_next/image` would hand any same-origin PNG (uploads, dataset textures) to sharp. Pictures are served
   by the app's own routes or plain `<img>`; keep it that way.
@@ -139,7 +148,8 @@
   catalog (`queryCatalogResources`, with its blank-list cache) and the browser runs it in a Web Worker
   (`resource-search.worker.ts` over `resource-search-engine.ts`) over the version's `items` client file
   (`getDatasetResourceSearchFile`: the catalog's `resourceIndex` exactly as the route returns its entries, the
-  made/used counts and the crop and bee keys of listed resources, `schemaVersion` 1, which a worker checks; 23 MB of
+  made/used counts, the crop and bee keys of listed resources and NEI's `resourceOrder` when the dataset has a usable
+  one, `schemaVersion` 2; a worker reads 1 and 2 (1 is 2 without an order) and refuses any other; 23 MB of
   JSON, about 2 MB brotli on 2.9). The worker answers with the route's JSON, so the page cannot tell which side
   answered. `browser-loader.ts` starts it on the first typed item query for a version, never on opening a plan or
   for the untyped list a pane shows on opening (one kept server answer), for one version at a time (another
@@ -155,6 +165,14 @@
   `src/lib/search/resource-search-parity.local.test.ts` (the installed 2.9 and 2.8.1: 11 queries each with total,
   the first 120, order and respelling, then 280 sort, kind, source, mod and page combinations). The popularity
   sweep's state is on `globalThis` (`resource-popularity.ts`) so the two routes reading it share one sweep.
+- The item sorts "nei" (As in NEI: match score first, NEI's list order between equal scores and with nothing typed)
+  and "nei-filter" (whatever matches, in NEI's order, unranked) rank by `src/lib/search/nei-order.ts`: the dataset's
+  `resourceOrder` (the oracle's NEI list, `tools/dataset-pipeline/CLAUDE.md`), records NEI does not list after it,
+  and a dataset without one by the approximation (vanilla, mod, registry name, meta, then fluids, then aspects).
+  With text "nei" scores exactly as Best match (match tiers, then the nudge: recipe count and name length) and NEI's
+  order settles only exact ties; "nei-filter" ranks nothing. The
+  rank table (about 70 ms on 2.9) is built by the prewarm (`warmResourceSearch`) and at worker load. Exam: `nei-order.test.ts`,
+  `resource-search-engine.test.ts` "the NEI sorts".
 - A text search matches at most six words and at most two of them under three characters
   (`MAX_SEARCH_TERMS`, `MAX_SHORT_SEARCH_TERMS` in `src/lib/search/text-search.ts`): a word that short cannot use
   the trigram index and walks every recipe. The partial phase (entries with ANY of the words) runs in full on
@@ -198,7 +216,8 @@
     30-57 MB. 128 MB is the smallest that keeps the shards one Blast Furnace browse read for the next (1 ms, 88 ms
     at 64 MB). A request reads at most 4 shards at a time (`SHARD_LOAD_CONCURRENCY`: faster than 6, 8 or all at
     once on a 120-shard browse, with half the read buffers of all at once);
-  - each version keeps at most 24 blank item lists (`BLANK_RESOURCE_SEARCH_KEYS`, about 2 MB each unfiltered);
+  - each version keeps at most 27 blank item lists (`BLANK_RESOURCE_SEARCH_KEYS`, about 2 MB each unfiltered: 8
+    blank orders, as "nei-filter" shares "nei"'s, x 3 kinds, and 3 source filters);
   - hydrated summaries: 8,000 (`GTNH_MAX_HYDRATED_RECIPE_SUMMARIES`), about 50 MB when full.
   `GTNH_PREWARM_FULL_DATASETS=1` reads every shard once but keeps only the last 128 MB of them: it warms the disk,
   not the heap.

@@ -1,8 +1,10 @@
 import type { DatasetResourceIndexEntry } from "@/lib/datasets/types";
 import { BoundedLru } from "@/lib/server/bounded-lru";
+import type { ResourceOrder } from "./nei-order";
 import {
   blankResourceSearchKey,
   buildResourceSearchIndexes,
+  resourceNeiRanks,
   resourceSearchPage,
   searchResources,
   type ResourceSearch,
@@ -17,12 +19,23 @@ import {
  * searches): the resource list exactly as the route returns its entries, and
  * the per-dataset facts the search reads besides it.
  */
-/** The `items` file's format: a change to its shape bumps it, and a worker refuses another. */
-export const RESOURCE_SEARCH_FILE_SCHEMA = 1;
+/**
+ * The `items` file's format: a change to its shape bumps it. 2 added `resourceOrder`.
+ */
+export const RESOURCE_SEARCH_FILE_SCHEMA = 2;
+
+/**
+ * The formats a worker reads. A server answers its own format; a tab loaded before a deploy
+ * can meet the new server's file (an older worker refuses it and asks the API), and a file
+ * of format 1 is format 2 without an order, so this worker reads it.
+ */
+export const READABLE_RESOURCE_SEARCH_FILE_SCHEMAS: ReadonlySet<unknown> = new Set([1, 2]);
 
 export interface ResourceSearchFile {
-  schemaVersion: typeof RESOURCE_SEARCH_FILE_SCHEMA;
+  schemaVersion: 1 | typeof RESOURCE_SEARCH_FILE_SCHEMA;
   resourceIndex: DatasetResourceIndexEntry[];
+  /** NEI's place of each `resourceIndex` record, or null (src/lib/search/nei-order.ts); absent without one. */
+  resourceOrder?: ResourceOrder;
   /** `[kind:id, madeBy, usedBy]` for every listed resource some recipe makes or uses. */
   directionCounts: Array<[key: string, madeBy: number, usedBy: number]>;
   /** The `kind:id` keys a crop or a bee makes, among the listed resources. */
@@ -46,7 +59,9 @@ const KEPT_SEARCHES = 8;
  */
 export function createResourceSearchEngine(file: ResourceSearchFile) {
   const { resourceIndex } = file;
-  const indexes: ResourceSearchIndexes = buildResourceSearchIndexes(resourceIndex);
+  const indexes: ResourceSearchIndexes = buildResourceSearchIndexes(resourceIndex, file.resourceOrder);
+  // The column opens As in NEI: its rank table is part of loading, not of the first query.
+  resourceNeiRanks(resourceIndex, indexes);
   const directionCounts = new Map(
     file.directionCounts.map(([key, madeBy, usedBy]) => [key, { madeBy, usedBy }] as const),
   );
@@ -58,7 +73,7 @@ export function createResourceSearchEngine(file: ResourceSearchFile) {
     KEPT_SEARCHES,
   );
 
-  return function query(request: ResourceSearchRequest) {
+  const query = (request: ResourceSearchRequest) => {
     const blankKey = blankResourceSearchKey(request);
     const searched = blankKey === undefined ? request : { ...request, mod: undefined };
     const key =
@@ -88,4 +103,5 @@ export function createResourceSearchEngine(file: ResourceSearchFile) {
       blankKey !== undefined ? request.mod : undefined,
     );
   };
+  return Object.assign(query, { indexes });
 }
