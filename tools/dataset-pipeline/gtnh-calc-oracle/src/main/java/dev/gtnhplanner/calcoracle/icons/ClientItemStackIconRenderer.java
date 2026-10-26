@@ -519,6 +519,7 @@ public final class ClientItemStackIconRenderer {
             }
             // Item and fluid icons both render with every animation on its first frame.
             IconAnimationFreezer.freeze();
+            MaterialColorFreezer.freeze();
 
             // Icons whose cache file failed its check on an encode thread render now.
             int batch = 0;
@@ -600,6 +601,7 @@ public final class ClientItemStackIconRenderer {
                     @Override
                     public void run() {
                         IconAnimationFreezer.thaw();
+                        MaterialColorFreezer.thaw();
                         pass.cache.close();
                         try {
                             IconColors.write(iconDir());

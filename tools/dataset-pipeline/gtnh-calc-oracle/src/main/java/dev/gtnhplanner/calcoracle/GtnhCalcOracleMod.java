@@ -4,6 +4,7 @@ import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
+import cpw.mods.fml.common.event.FMLLoadCompleteEvent;
 import cpw.mods.fml.common.event.FMLServerStartedEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -28,6 +29,14 @@ public final class GtnhCalcOracleMod {
         LOG.info("GTNH calculation oracle autorun enabled.");
         if (FMLCommonHandler.instance().getSide().isClient()) {
             registerClientAutorunHandler();
+        }
+    }
+
+    /** The material colours icons render with, copied before any client tick moves them (MaterialColorFreezer). */
+    @Mod.EventHandler
+    public void loadComplete(FMLLoadCompleteEvent event) {
+        if (FMLCommonHandler.instance().getSide().isClient()) {
+            dev.gtnhplanner.calcoracle.icons.MaterialColorFreezer.snapshot();
         }
     }
 
