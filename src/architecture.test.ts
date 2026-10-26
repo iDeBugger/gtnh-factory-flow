@@ -1020,59 +1020,125 @@ describe("the layers", () => {
 
   it("refuses a bad file under each data-layer rule", () => {
     // Read from memory through the same parser as the real tree; nothing is written to disk.
+    const services = "src/lib/server/services/arch-fixture.ts";
+    const helper = "src/lib/server/plan-arch-fixture.ts";
+    const clients = "src/lib/server/clients-arch-fixture.ts";
+    const live = "src/live/arch-fixture.ts";
+    const repo = "src/lib/server/repos/arch-fixture.ts";
+    const db = "src/lib/server/db/arch-fixture.ts";
+    const auth = "src/lib/server/auth/arch-fixture.ts";
     const fixtures: Record<string, string> = {
-      "src/lib/server/services/arch-fixture.ts": [
+      [services]: [
         'import { Kysely } from "kysely";',
         'import { getDb, json } from "../db";',
         'import { readJsonBody } from "../http/request-body";',
         'import { openLocalDatabase } from "../local-db/database";',
         'export const rows = () => getDb().selectFrom("community_plans").selectAll();',
       ].join("\n"),
-      "src/live/arch-fixture.ts": 'import { createDbClient } from "@/lib/server/db/client";',
-      "src/lib/server/plan-arch-fixture.ts": [
+      [live]: 'import { createDbClient } from "@/lib/server/db/client";',
+      [helper]: [
         'import * as db from "./db";',
         'export const rows = () => db.getCommunityDb().from("community_plans").select("id");',
       ].join("\n"),
-      "src/lib/server/repos/arch-fixture.ts": [
+      [clients]: [
+        'import pg from "pg";',
+        'import { PostgrestClient } from "@supabase/postgrest-js";',
+        'import { getCommunityDb } from "./db/rest";',
+      ].join("\n"),
+      [repo]: [
         'import { sql } from "kysely";',
         'import { checkRateLimit } from "../limits/rate-limit";',
+        'import { canSeePlan } from "../services/access";',
+        'import type { Viewer } from "../http/viewer";',
+        'import { notifyLive } from "../live-notify";',
+        'import { saltedKey } from "../auth/keys";',
         "export const byColumn = (column: string) => sql`select ${sql.raw(column)}`;",
         "export const named = (column: string) => sql.ref(column);",
+        "export const id = (column: string) => sql.id(column);",
+        "export const literal = (value: string) => sql.lit(value);",
+        "export const table = (name: string) => sql.table(name);",
       ].join("\n"),
-      "src/lib/server/db/arch-fixture.ts": [
+      [db]: [
         'import { sql as text } from "kysely";',
         'import { findPlan } from "../repos/plans";',
         "export const any = (name: string) => text.id(name);",
       ].join("\n"),
-      "src/lib/server/auth/arch-fixture.ts": "export const one = () => sql`select 1`;",
+      [auth]: "export const one = () => sql`select 1`;",
     };
     const bad = new Map(
       Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
     );
-    const services = "src/lib/server/services/arch-fixture.ts";
-    expect(breaks(bad).map(key)).toEqual(
-      expect.arrayContaining([
-        `9|${services}|pkg:kysely`,
-        `10|${services}|src/lib/server/http/request-body.ts`,
-        `10|${services}|src/lib/server/local-db/database.ts`,
-        "5|src/live/arch-fixture.ts|src/lib/server/db/client.ts",
-        "9|src/live/arch-fixture.ts|src/lib/server/db/client.ts",
-        "11|src/lib/server/repos/arch-fixture.ts|src/lib/server/limits/rate-limit.ts",
-        "11|src/lib/server/db/arch-fixture.ts|src/lib/server/repos/plans.ts",
-      ]),
-    );
-    expect(queriesOutsideDataLayer(bad)).toEqual(["src/lib/server/plan-arch-fixture.ts", services]);
-    expect(clientHandleImports(bad)).toEqual([
-      "src/lib/server/plan-arch-fixture.ts: *",
-      `${services}: getDb`,
+    expect(breaks(bad).map(key)).toEqual([
+      `10|${services}|src/lib/server/http/request-body.ts`,
+      `10|${services}|src/lib/server/local-db/database.ts`,
+      `11|${db}|src/lib/server/repos/plans.ts`,
+      `11|${repo}|src/lib/server/auth/keys.ts`,
+      `11|${repo}|src/lib/server/http/viewer.ts`,
+      `11|${repo}|src/lib/server/limits/rate-limit.ts`,
+      `11|${repo}|src/lib/server/live-notify.ts`,
+      `11|${repo}|src/lib/server/services/access.ts`,
+      `5|${live}|src/lib/server/db/client.ts`,
+      `9|${clients}|pkg:@supabase/postgrest-js`,
+      `9|${clients}|pkg:pg`,
+      `9|${clients}|src/lib/server/db/rest.ts`,
+      `9|${services}|pkg:kysely`,
+      `9|${live}|src/lib/server/db/client.ts`,
     ]);
+    expect(queriesOutsideDataLayer(bad)).toEqual([helper, services]);
+    expect(clientHandleImports(bad)).toEqual([`${helper}: *`, `${services}: getDb`]);
     expect(serviceDbNames(bad)).toEqual([`${services}: getDb`, `${services}: json`]);
     expect(sqlOutOfPlace(bad)).toEqual([
-      "src/lib/server/auth/arch-fixture.ts: sql template",
-      "src/lib/server/db/arch-fixture.ts: sql as text",
-      "src/lib/server/db/arch-fixture.ts: sql.id",
-      "src/lib/server/repos/arch-fixture.ts: sql.raw",
-      "src/lib/server/repos/arch-fixture.ts: sql.ref",
+      `${auth}: sql template`,
+      `${db}: sql as text`,
+      `${db}: sql.id`,
+      `${repo}: sql.id`,
+      `${repo}: sql.lit`,
+      `${repo}: sql.raw`,
+      `${repo}: sql.ref`,
+      `${repo}: sql.table`,
     ]);
+  });
+
+  it("passes good files under every data-layer rule", () => {
+    const fixtures: Record<string, string> = {
+      [MIGRATIONS_FILE]: [
+        'import { CompiledQuery, sql } from "kysely";',
+        "export const run = (text: string) => [sql.raw(text), CompiledQuery.raw(text)];",
+      ].join("\n"),
+      "src/lib/server/services/good-fixture.ts": [
+        'import { DbQueryError, withTransaction, type Tx } from "../db";',
+        'import * as plans from "../repos/plans";',
+        'import { makeActorKey } from "../auth/keys";',
+        'import { checkRateLimit } from "../limits/rate-limit";',
+        'import type { Viewer } from "../http/viewer";',
+        'import { parseEntryIcon } from "../community-rows";',
+      ].join("\n"),
+      "src/lib/server/services/config.ts": 'import { isCommunityConfigured } from "../db";',
+      "src/lib/server/repos/good-fixture.ts": [
+        'import { sql } from "kysely";',
+        'import { getDb, json } from "../db";',
+        'import { parseEntryIcon } from "../community-rows";',
+        "export const count = (id: string, ids: string[]) =>",
+        "  getDb()",
+        '    .selectFrom("community_plans")',
+        "    .where(sql`id = ${id} or id in (${sql.join(ids)})`)",
+        '    .select(sql<number>`count(*)`.as("n"));',
+        "export const icon = (value: unknown) => json(value);",
+      ].join("\n"),
+      "src/live/good-fixture.ts": [
+        'import { configureDb } from "@/lib/server/db";',
+        'import { designRole } from "@/lib/server/services/design-role";',
+        'import * as designs from "@/lib/server/repos/designs";',
+      ].join("\n"),
+    };
+    const good = new Map(
+      Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
+    );
+    expect(breaks(good).map(key)).toEqual([]);
+    expect(queriesOutsideDataLayer(good)).toEqual([]);
+    expect(clientHandleImports(good)).toEqual([]);
+    expect(serviceDbNames(good)).toEqual([]);
+    expect(handleReexports(good)).toEqual([]);
+    expect(sqlOutOfPlace(good)).toEqual([]);
   });
 });
