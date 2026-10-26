@@ -611,6 +611,7 @@ const SERVICE_DB_NAMES = new Set([
   "DbQueryError",
   "DatabaseDownError",
   "isDatabaseDown",
+  "isDatabaseError",
   "COMMUNITY_DB_DOWN_MESSAGE",
   "blueprintStorageErrorMessage",
   "communityStorageErrorMessage",

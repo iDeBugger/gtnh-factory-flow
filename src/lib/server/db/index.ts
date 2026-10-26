@@ -26,6 +26,7 @@ export {
   DatabaseDownError,
   DbQueryError,
   isDatabaseDown,
+  isDatabaseError,
   isMissingColumnError,
   libraryStorageErrorMessage,
 } from "./errors";

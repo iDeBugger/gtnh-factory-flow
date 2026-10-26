@@ -17,6 +17,7 @@ import { leaseHeld } from "../cloud-plans";
 import {
   DbQueryError,
   isDatabaseDown,
+  isDatabaseError,
   libraryStorageErrorMessage,
   withTransaction,
   type Tx,
@@ -52,11 +53,6 @@ import { fail, ok, type ServiceResult } from "./result";
  * body); these take a signed-in viewer.
  */
 
-/** A database's own error: a SQLSTATE, as `pg` and PGlite carry it. */
-const hasSqlState = (error: unknown): boolean =>
-  typeof (error as { code?: unknown } | null)?.code === "string" &&
-  /^[0-9A-Z]{5}$/.test((error as { code: string }).code);
-
 /**
  * What a database failure the route answered with its own sentence says: the
  * database-down line, or the sentence (the database's message goes to the
@@ -64,7 +60,7 @@ const hasSqlState = (error: unknown): boolean =>
  */
 function storageFailure(error: unknown, fallback: string): ServiceResult<never> {
   const down = isDatabaseDown(error);
-  if (!down && !(error instanceof DbQueryError) && !hasSqlState(error)) {
+  if (!down && !(error instanceof DbQueryError) && !isDatabaseError(error)) {
     throw error;
   }
   if (!down) {

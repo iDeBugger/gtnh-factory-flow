@@ -85,6 +85,20 @@ export class DatabaseDownError extends Error {
 }
 
 /**
+ * Whether an error is the database's own answer: a five-character SQLSTATE
+ * together with the severity Postgres sends with every error (`pg` and
+ * PGlite both carry it). A Node error code such as EPIPE or EPERM has the
+ * same shape as a SQLSTATE, but no severity, so it is not taken for one.
+ */
+export function isDatabaseError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  const { code, severity } = error as { code?: unknown; severity?: unknown };
+  return typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) && typeof severity === "string";
+}
+
+/**
  * Socket errors that mean the server is gone or unreachable. ENOTFOUND and
  * EAI_AGAIN are a host with no address: compose's DNS has no record for the
  * `postgres` service while its container is stopped or restarting. EPIPE is
