@@ -552,20 +552,47 @@ const HANDLE_MODULES = new Set([
 const HANDLE_NAMES = new Set(["getDb", "getCommunityDb", "createDbClient", "sql", "CompiledQuery"]);
 
 /**
+ * `getDb` or `getCommunityDb` used as a value other than called (`const
+ * handle = getDb`), which could hand the handle on under a new name. Its
+ * declaration and import or export lists are no use.
+ */
+function handleValues(file: SourceFile): string[] {
+  if (!/\bget(Community)?Db\b/.test(file.text)) return [];
+  const found = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node) && (node.text === "getDb" || node.text === "getCommunityDb")) {
+      const parent = node.parent;
+      const used =
+        !(ts.isCallExpression(parent) && parent.expression === node) &&
+        !(ts.isFunctionDeclaration(parent) && parent.name === node) &&
+        !ts.isImportSpecifier(parent) &&
+        !ts.isExportSpecifier(parent) &&
+        !(ts.isPropertyAccessExpression(parent) && parent.name === node) &&
+        !ts.isTypeQueryNode(parent);
+      if (used) found.add(`${node.text} as a value`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(syntaxTree(file));
+  return [...found];
+}
+
+/**
  * Data-layer modules other than the handle modules that export a handle (or
  * `export *`), which would let a service, allowed to import repositories,
- * take one past the db entry's name checks.
+ * take one past the db entry's name checks; and any data-layer module that
+ * uses a handle as a value.
  */
 function handleReexports(graph: Map<string, SourceFile>): string[] {
   return [...graph.values()]
-    .filter(
-      (file) =>
-        isDatabaseLayer(file.path) && !isExempt(file.path) && !HANDLE_MODULES.has(file.path),
-    )
+    .filter((file) => isDatabaseLayer(file.path) && !isExempt(file.path))
     .flatMap((file) =>
-      exportedNames(file)
-        .filter((name) => name === "*" || HANDLE_NAMES.has(name))
-        .map((name) => `${file.path}: ${name}`),
+      [
+        ...(HANDLE_MODULES.has(file.path)
+          ? []
+          : exportedNames(file).filter((name) => name === "*" || HANDLE_NAMES.has(name))),
+        ...handleValues(file),
+      ].map((name) => `${file.path}: ${name}`),
     )
     .sort();
 }
@@ -631,7 +658,7 @@ const inTypeOrImport = (node: ts.Node): boolean =>
  *   and outside db/ any mention of it, and either imported under another name;
  * - `fn(name, ...)` or `fn.agg(name, ...)` with a name that is not a string
  *   literal: Kysely writes a function's name into the SQL text unescaped;
- * - a namespace or dynamic import of kysely, which would reach all of these
+ * - a namespace, import-equals or dynamic import of kysely, which would reach all of these
  *   under other names.
  */
 function sqlWriting(file: SourceFile): { template: boolean; splicing: string[] } {
@@ -643,6 +670,13 @@ function sqlWriting(file: SourceFile): { template: boolean; splicing: string[] }
   const tree = syntaxTree(file);
   const sqlNames = new Set<string>();
   for (const statement of tree.statements) {
+    if (
+      ts.isImportEqualsDeclaration(statement) &&
+      ts.isExternalModuleReference(statement.moduleReference) &&
+      isKysely(statement.moduleReference.expression)
+    ) {
+      splicing.add("kysely import-equals");
+    }
     if (!ts.isImportDeclaration(statement) || !isKysely(statement.moduleSpecifier)) continue;
     const bindings = statement.importClause?.namedBindings;
     if (bindings && ts.isNamespaceImport(bindings)) splicing.add("kysely namespace import");
@@ -907,14 +941,20 @@ describe("the layers", () => {
       [repo("sql")]: 'import { sql } from "kysely";\nexport { sql };',
       [repo("default")]: 'import { getDb } from "../db";\nexport default getDb;',
       [repo("declared")]: "export const sql = 1;\nexport function rows() { return []; }",
+      [repo("alias-const")]: 'import { getDb } from "../db";\nexport const handle = getDb;',
+      [repo("alias-object")]:
+        'import { getCommunityDb } from "../db";\nexport const handles = { rest: getCommunityDb };',
       [repo("fine")]: 'import { getDb } from "../db";\nexport const count = () => getDb();',
     };
     const bad = new Map(
       Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
     );
     expect(handleReexports(bad)).toEqual([
+      `${repo("alias-const")}: getDb as a value`,
+      `${repo("alias-object")}: getCommunityDb as a value`,
       `${repo("declared")}: sql`,
       `${repo("default")}: getDb`,
+      `${repo("default")}: getDb as a value`,
       `${repo("named")}: getDb`,
       `${repo("renamed")}: getCommunityDb`,
       `${repo("sql")}: sql`,
@@ -1008,6 +1048,11 @@ describe("the layers", () => {
       [repo("backtick-import")]: [
         "export const column = async (c: string) => (await import(`kysely`)).sql.raw(c);",
       ].join("\n"),
+      [repo("import-equals")]: [
+        'import kysely = require("kysely");',
+        "const s = kysely.sql;",
+        "export const column = (c: string) => s.raw(c);",
+      ].join("\n"),
       [repo("sql-variable")]: [
         'import { sql } from "kysely";',
         "const s = sql;",
@@ -1071,6 +1116,7 @@ describe("the layers", () => {
       `${repo("dynamic-table")}: dynamic`,
       `${repo("fn-agg")}: fn with a computed name`,
       `${repo("fn")}: fn with a computed name`,
+      `${repo("import-equals")}: kysely import-equals`,
       `${repo("sql-destructured")}: sql used as a value`,
       `${repo("sql-dynamic-import")}: kysely loaded dynamically`,
       `${repo("sql-indexed")}: sql used as a value`,
