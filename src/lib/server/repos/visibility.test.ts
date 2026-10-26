@@ -139,6 +139,27 @@ describe("the SQL rules agree with the service rules", () => {
     }
   });
 
+  it("publicBlueprints is the published blueprints: what anyone reads with the switch on", async () => {
+    await seed();
+    const { db } = testDb();
+    const rows = await db
+      .selectFrom("blueprints")
+      .select(["name", "is_public", "user_id"])
+      .execute();
+    const shelf = await db
+      .selectFrom("blueprints")
+      .select("name")
+      .where(sqlRules.publicBlueprints())
+      .execute();
+    expect(shelf.map((row) => row.name).sort()).toEqual(["own public", "stranger's public"]);
+    expect(shelf.map((row) => row.name).sort()).toEqual(
+      rows
+        .filter((row) => canReadBlueprint(viewers.anonymous!, row, true))
+        .map((row) => row.name)
+        .sort(),
+    );
+  });
+
   it("memberOf finds the member's design and not the other owner's design of the same id", async () => {
     await seed();
     const { db } = testDb();

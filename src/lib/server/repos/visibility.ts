@@ -75,11 +75,16 @@ export const sqlRules = {
       if (viewer.isAdmin || viewer.adminToken) {
         return eb.lit(true);
       }
-      const published = eb("community_plans.is_public", "is distinct from", false);
+      // `canSeePlan` reads a null as published; the column is not null, so
+      // `= true` is the same rule, and the `(is_public, created_at)` index serves it.
+      const published = eb("community_plans.is_public", "=", true);
       return viewer.userId === undefined
         ? published
         : eb.or([published, eb("community_plans.user_id", "=", viewer.userId)]);
     },
+
+  /** The published blueprints: the public shelf. */
+  publicBlueprints: (): Rule<"blueprints"> => (eb) => eb("blueprints.is_public", "=", true),
 
   /**
    * `canReadBlueprint`: the viewer's own, and the public ones while the
