@@ -151,13 +151,15 @@ final class NeiItemListExport {
         Field plugins = config.getDeclaredField("pluginNEIConfigLoaded");
         main.setAccessible(true);
         plugins.setAccessible(true);
+        long deadline = System.currentTimeMillis() + BOOT_TIMEOUT_MS;
         if (plugins.getBoolean(null)) {
+            // A boot that is already past the flag may still be posting NEIConfigsLoadedEvent: wait it out too.
+            NeiOrdering.joinThreadsNamed("NEI Plugin Loader", deadline);
             return;
         }
         if (!main.getBoolean(null)) {
             config.getMethod("bootNEI").invoke(null);
         }
-        long deadline = System.currentTimeMillis() + BOOT_TIMEOUT_MS;
         while (!plugins.getBoolean(null)) {
             if (System.currentTimeMillis() > deadline) {
                 throw new IllegalStateException("NEI plugins did not finish loading in " + BOOT_TIMEOUT_MS / 1000 + " s");
