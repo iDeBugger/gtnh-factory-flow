@@ -1133,7 +1133,7 @@ describe("the layers", () => {
         'import { Kysely } from "kysely";',
         'import { getDb, json } from "../db";',
         'import { readJsonBody } from "../http/request-body";',
-        'import { toWebRequest } from "../http/node-http";',
+        'import { serverErrorResponse } from "../http/error-response";',
         'export const rows = () => getDb().selectFrom("community_plans").selectAll();',
       ].join("\n"),
       [live]: 'import { createDbClient } from "@/lib/server/db/client";',
@@ -1170,7 +1170,7 @@ describe("the layers", () => {
       Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
     );
     expect(breaks(bad).map(key)).toEqual([
-      `10|${services}|src/lib/server/http/node-http.ts`,
+      `10|${services}|src/lib/server/http/error-response.ts`,
       `10|${services}|src/lib/server/http/request-body.ts`,
       `11|${db}|src/lib/server/repos/plans.ts`,
       `11|${repo}|src/lib/server/auth/keys.ts`,
