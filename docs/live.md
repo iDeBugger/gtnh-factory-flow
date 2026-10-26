@@ -276,7 +276,7 @@ $C --user ann --password annpass1 send <doc> '[{"o":"meta","f":{"primaryView":"t
 
 `npm run build:live` bundles the service to `dist-live/live.mjs` (esbuild; packages stay in `node_modules`), run with
 `node dist-live/live.mjs` in the `live` container (`docs/deploy.md`), published on 127.0.0.1:3301. `next build` and `next start` are
-unchanged. Environment: `COMMUNITY_HASH_SALT`, `POSTGREST_URL`, `POSTGREST_SERVICE_TOKEN`, `LIVE_PORT`,
+unchanged. Environment: `COMMUNITY_HASH_SALT`, `DATABASE_URL` (as `gtnh_live`; the service will not start without it), `POSTGREST_URL`, `POSTGREST_SERVICE_TOKEN`, `LIVE_PORT`,
 `LIVE_HOST`, `LIVE_JOURNAL_DIR`, `LIVE_INTERNAL_TOKEN`, `LIVE_ALLOWED_ORIGINS`, `LIVE_TRUSTED_PROXIES` (optional, loopback is always trusted), `LIVE_MAX_ROOMS` (optional, default 500),
 `LIVE_MAX_PLAN_BYTES` (optional, default 64 MB of plan JSON in open rooms), `NODE_ENV=production`. `LOCAL_DB=1` with `NODE_ENV=production` stops both the website and the service at startup. The website
 needs `LIVE_INTERNAL_URL` and `LIVE_INTERNAL_TOKEN` at run time and `NEXT_PUBLIC_LIVE_URL` at build time (unset:
@@ -296,7 +296,8 @@ no live features). The deploy and every variable's value are in `docs/deploy.md`
 
 - `src/lib/live/ops.test.ts` (the vectors), `validate.test.ts`.
 - `src/lib/server/local-db/postgrest.test.ts`: every query shape against real Postgres.
-- `src/app/api/library/cloud-plans.test.ts`: sharing, members, the lease refusal, deletes, search, the notices.
+- `src/app/api/library/cloud-plans.test.ts`: sharing, members, the lease refusal, deletes, search, the notices, saves, creations and deletes arriving at once.
+- `src/live/store-grants.test.ts`: every store call under the live role's grants, and the lease outcomes.
 - `src/live/service.test.ts`: the service in-process with real sockets: two editors converging, reconnects, the
   journal after a crash, refusals, unsharing and deleting, limits, comments, presence, the lease against REST, a lost
   lease, origins, lingering rooms, room caps, members checked in the room's turn and re-read at renewals, upgrade

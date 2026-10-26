@@ -35,6 +35,7 @@ vi.mock("@/lib/server/db", async (importOriginal) => {
   return {
     ...actual,
     isCommunityConfigured: () => storage.configured,
+    isDatabaseConfigured: () => storage.configured,
     getCommunityDb: () => query(),
   };
 });

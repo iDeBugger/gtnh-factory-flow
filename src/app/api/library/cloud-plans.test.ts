@@ -6,6 +6,7 @@ import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions
 import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
 import { resetMemoryTokens } from "@/lib/server/limits/memory-rate";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
+import { LIBRARY_MAX_DESIGNS } from "@/lib/library/sync-types";
 import * as library from "./route";
 import * as design from "./designs/[designId]/route";
 import * as members from "./designs/[designId]/members/route";
@@ -15,13 +16,53 @@ import * as search from "../accounts/search/route";
 import * as meRoute from "../community/auth/me/route";
 
 /**
+ * Holds each answer of a wrapped repository read until `size` of them have
+ * come back, or `waitMs` has passed: two requests that both read before
+ * either writes meet here, so a check-then-write race shows. Reads made
+ * one after another (one transaction at a time) each wait out the timer.
+ */
+const gates = vi.hoisted(() => {
+  type Gate = { arrive(): Promise<void> };
+  const make = (size: number, waitMs = 150): Gate => {
+    let arrived = 0;
+    let open: () => void = () => undefined;
+    const opened = new Promise<void>((resolve) => (open = resolve));
+    return {
+      arrive() {
+        arrived += 1;
+        if (arrived >= size) open();
+        return Promise.race([opened, new Promise<void>((resolve) => setTimeout(resolve, waitMs))]);
+      },
+    };
+  };
+  return { make, read: undefined as Gate | undefined, count: undefined as Gate | undefined };
+});
+
+vi.mock("@/lib/server/repos/designs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/server/repos/designs")>();
+  return {
+    ...actual,
+    read: async (...args: Parameters<typeof actual.read>) => {
+      const answer = await actual.read(...args);
+      await gates.read?.arrive();
+      return answer;
+    },
+    countLive: async (...args: Parameters<typeof actual.countLive>) => {
+      const answer = await actual.countLive(...args);
+      await gates.count?.arrive();
+      return answer;
+    },
+  };
+});
+
+/**
  * Cloud plans over REST, against the local database: sharing a design with
  * other accounts, members reading and saving it, leaving, the live lease
  * refusing plan bodies, deletes dropping members, account search, and the
  * notices the live service is sent.
  */
 
-useTestDb();
+const testDb = useTestDb();
 let notices: Array<{ path: string; auth: string | undefined; body: unknown }> = [];
 let noticeServer: Server;
 const users: Record<string, { id: string; cookie: string }> = {};
@@ -510,6 +551,116 @@ describe("cloud plans over REST", () => {
     expect(await refused.json()).toEqual({
       error: "You can share with 30 people an hour. Try again later.",
     });
+  });
+});
+
+describe("saves, creations and deletes arriving at once", () => {
+  afterEach(() => {
+    gates.read = undefined;
+    gates.count = undefined;
+    clearDbFault();
+    resetDbBreaker();
+  });
+
+  it("two saves racing with newer stamps: one lands, the other is behind", async () => {
+    await makeUser("race_own");
+    await makeUser("race_mem");
+    const designId = "design-race-1";
+    const made = await design.PUT(
+      request("PUT", `/api/library/designs/${designId}`, "race_own", upsertBody("Start", "2026-10-21T10:00:00.000Z")),
+      params({ designId }),
+    );
+    expect(made.status).toBe(200);
+    const shared = await member.PUT(
+      request("PUT", `/api/library/designs/${designId}/members/${users.race_mem!.id}`, "race_own"),
+      params({ designId, userId: users.race_mem!.id }),
+    );
+    expect(shared.status).toBe(200);
+
+    gates.read = gates.make(2);
+    const [byOwner, byMember] = await Promise.all([
+      design.PUT(
+        request("PUT", `/api/library/designs/${designId}`, "race_own", upsertBody("Owner's", "2026-10-21T10:00:02.000Z")),
+        params({ designId }),
+      ),
+      design.PUT(
+        request(
+          "PUT",
+          `/api/library/designs/${designId}?owner=${users.race_own!.id}`,
+          "race_mem",
+          upsertBody("Member's", "2026-10-21T10:00:01.000Z"),
+        ),
+        params({ designId }),
+      ),
+    ]);
+    expect([byOwner.status, byMember.status]).toEqual([200, 200]);
+    const behind = [(await byOwner.json()).behind, (await byMember.json()).behind];
+    expect(behind.filter((value) => value === false)).toHaveLength(1);
+    const { rows } = await testDb().pglite.query<{ name: string }>(
+      "select name from library_designs where user_id = $1 and id = $2",
+      [users.race_own!.id, designId],
+    );
+    expect(rows).toEqual([{ name: "Owner's" }]);
+  });
+
+  it("the cap holds when creations arrive at once", async () => {
+    await makeUser("cap_own");
+    const owner = users.cap_own!.id;
+    await testDb().pglite.query(
+      `insert into library_designs (user_id, id, name, plan)
+       select $1, 'seeded-' || n, 'Seeded', '{}' from generate_series(1, $2::int) as n`,
+      [owner, LIBRARY_MAX_DESIGNS - 4],
+    );
+    gates.count = gates.make(5);
+    const answers = await Promise.all(
+      [1, 2, 3, 4, 5].map((n) =>
+        design.PUT(
+          request("PUT", `/api/library/designs/design-cap-${n}`, "cap_own", upsertBody(`Cap ${n}`, "2026-10-21T11:00:00.000Z")),
+          params({ designId: `design-cap-${n}` }),
+        ),
+      ),
+    );
+    const statuses = answers.map((answer) => answer.status).sort();
+    expect(statuses).toEqual([200, 200, 200, 200, 409]);
+    const refused = answers.find((answer) => answer.status === 409)!;
+    expect(await refused.json()).toEqual({
+      error: `Your plans are full (${LIBRARY_MAX_DESIGNS} designs). Delete some first.`,
+    });
+    const { rows } = await testDb().pglite.query<{ count: number }>(
+      "select count(*)::int as count from library_designs where user_id = $1 and deleted_at is null",
+      [owner],
+    );
+    expect(rows).toEqual([{ count: LIBRARY_MAX_DESIGNS }]);
+  });
+
+  it("a tombstone takes its members in the same write", async () => {
+    await makeUser("tomb_own");
+    await makeUser("tomb_mem");
+    const designId = "design-tomb-1";
+    await design.PUT(
+      request("PUT", `/api/library/designs/${designId}`, "tomb_own", upsertBody("Kept", "2026-10-21T12:00:00.000Z")),
+      params({ designId }),
+    );
+    await member.PUT(
+      request("PUT", `/api/library/designs/${designId}/members/${users.tomb_mem!.id}`, "tomb_own"),
+      params({ designId, userId: users.tomb_mem!.id }),
+    );
+
+    withDbFault(/delete from "library_design_members"/);
+    const deleted = await design.DELETE(
+      request("DELETE", `/api/library/designs/${designId}`, "tomb_own"),
+      params({ designId }),
+    );
+    expect(deleted.status).toBe(500);
+    clearDbFault();
+
+    const { rows } = await testDb().pglite.query<{ deleted_at: string | null }>(
+      "select deleted_at from library_designs where user_id = $1 and id = $2",
+      [users.tomb_own!.id, designId],
+    );
+    expect(rows).toEqual([{ deleted_at: null }]);
+    const memberLibrary = await (await library.GET(request("GET", "/api/library", "tomb_mem"))).json();
+    expect(memberLibrary.shared).toEqual([expect.objectContaining({ id: designId })]);
   });
 });
 

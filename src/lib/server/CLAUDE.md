@@ -108,8 +108,8 @@
 - A route's `catch` answers through `http/error-response.ts`: `serverErrorResponse` gives the route's own fallback
   sentence and logs the error (a database or file system message names tables or the release path); the one
   sentence passed on is `COMMUNITY_DB_DOWN_MESSAGE`. Dataset routes use `datasetErrorResponse`: an unserved id
-  (`DatasetNotFoundError`) is 404 `Dataset not found.`, never the id. `libraryStorageErrorMessage` (the owner's
-  own account) and fixed 4xx copy stay as they are. Exam: `error-response.test.ts`,
+  (`DatasetNotFoundError`) is 404 `Dataset not found.`, never the id. The library's failures answer through
+  `libraryStorageErrorMessage` the same way (the route's sentence, or the database-down line); fixed 4xx copy stays as it is. Exam: `error-response.test.ts`,
   `datasets/[versionId]/catalog/route.test.ts`.
 - Every dataset route except `prewarm`, and `/api/resource-popularity` (the browser item search's popularity map,
   1 unit, outside `/api/datasets/` so an edge rule on that prefix does not cover it), spends an in-memory work
@@ -262,9 +262,11 @@ Checks with no exceptions at all:
   `CompiledQuery` as a value (and outside `db/` at all); a namespace or dynamic import of kysely. A sort column
   comes from a closed map and goes through the builder, never through these.
 
-Accounts and the event log go to Postgres directly (`getDb`, see Local database below); every other repository,
-until its swap, goes to PostgREST. The server and the live service talk to PostgREST at `POSTGREST_URL` through `@supabase/postgrest-js`
-(`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
+Accounts, the event log, the library (designs with the live lease, members, folders) go to Postgres directly
+(`getDb` at `DATABASE_URL`, see Local database below); the live service touches nothing else, so it needs only
+`DATABASE_URL` and refuses to start without it, and `services/config.ts` answers "configured" only with both
+clients set. Every other repository, until its swap, goes to PostgREST at `POSTGREST_URL` through
+`@supabase/postgrest-js` (`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
 which bypasses row security. No anon role exists, so a request without the token is 401. `SUPABASE_URL` and
 `SUPABASE_SERVICE_ROLE_KEY` are not read; the startup checks warn when either is set. Rules:
 - Every request goes through `fetchWithDbTimeout` (20 s). A timeout answers 504 rather than
@@ -454,6 +456,12 @@ which bypasses row security. No anon role exists, so a request without the token
   refuse the design for good, and only the owner's own shelf sorts on it, by their own stamp.
 - While `live_lease_until` is in the future the live service is the plan's only writer: the PUT refuses a plan body
   (409 `{ live: true }`) and its write is conditional on the lease. Metadata still goes through.
+- Each save, creation, share and delete is one transaction (`withTransaction`): a design or folder save reads its row
+  `for update`, so two saves cannot both pass the "behind" check; a new design or folder locks the account row first,
+  so creations at once meet the cap one at a time; a share locks the design row before counting members; a delete
+  tombstones the design and drops its members together. A lease renewal or flush is one statement that also reads
+  the row (locking), so a miss says "gone" or "lost" from the row's newest version. `store-grants.test.ts` runs
+  every `PlanStore` call as `gtnh_live`.
 - `GET /api/library` keeps listing tombstones (clients rely on it never to reuse a deleted id) and adds each design's
   `members` and the `shared` plans, in one extra read when nothing is shared.
 - Deleting a design deletes its member rows (designs are tombstoned, so the foreign key's cascade never fires) and

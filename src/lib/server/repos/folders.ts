@@ -1,8 +1,12 @@
-import { DbQueryError, getCommunityDb, type Tx } from "../db";
+import { getDb, type Tx } from "../db";
 
-/** Library folders: one row per owner and id, tombstoned on delete. */
+/**
+ * Library folders: one row per owner and id, tombstoned on delete.
+ * Repositories take an optional transaction last; a failure throws (a down
+ * database as `DatabaseDownError`).
+ */
 
-const FOLDER_COLUMNS = "id,name,created_at,updated_at,deleted_at";
+const FOLDER_COLUMNS = ["id", "name", "created_at", "updated_at", "deleted_at"] as const;
 
 export interface FolderRow {
   id: string;
@@ -12,78 +16,76 @@ export interface FolderRow {
   deleted_at: string | null;
 }
 
-const db = () => getCommunityDb();
-
-/** The owner's folders, tombstones included. Throws `DbQueryError`. */
-export async function listOwn(userId: string, limit: number, _tx?: Tx): Promise<FolderRow[]> {
-  const { data, error } = await db()
-    .from("library_folders")
+/** The owner's folders, tombstones included. */
+export async function listOwn(userId: string, limit: number, tx?: Tx): Promise<FolderRow[]> {
+  return (tx ?? getDb())
+    .selectFrom("library_folders")
     .select(FOLDER_COLUMNS)
-    .eq("user_id", userId)
-    .limit(limit);
-  if (error) {
-    throw new DbQueryError(error);
-  }
-  return (data ?? []) as FolderRow[];
+    .where("user_id", "=", userId)
+    .limit(limit)
+    .execute();
 }
 
-/** One folder, or undefined. Throws `DbQueryError`. */
+/**
+ * One folder, or undefined. `forUpdate` (inside a transaction) locks the row
+ * until it ends, so two saves of one folder cannot both pass the "behind" check.
+ */
 export async function read(
   userId: string,
   folderId: string,
-  _tx?: Tx,
+  opts: { forUpdate?: boolean } = {},
+  tx?: Tx,
 ): Promise<FolderRow | undefined> {
-  const { data, error } = await db()
-    .from("library_folders")
+  const query = (tx ?? getDb())
+    .selectFrom("library_folders")
     .select(FOLDER_COLUMNS)
-    .eq("user_id", userId)
-    .eq("id", folderId)
-    .maybeSingle();
-  if (error) {
-    throw new DbQueryError(error);
-  }
-  return (data ?? undefined) as FolderRow | undefined;
+    .where("user_id", "=", userId)
+    .where("id", "=", folderId);
+  return (opts.forUpdate ? query.forUpdate() : query).executeTakeFirst();
 }
 
-/** The owner's live folders; a failed count reads as none, as the cap always has. */
-export async function countLive(userId: string, _tx?: Tx): Promise<number> {
-  const { count } = await db()
-    .from("library_folders")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .is("deleted_at", null);
-  return count ?? 0;
+/** The owner's live folders. */
+export async function countLive(userId: string, tx?: Tx): Promise<number> {
+  const row = await (tx ?? getDb())
+    .selectFrom("library_folders")
+    .select((eb) => eb.fn.countAll<number>().as("count"))
+    .where("user_id", "=", userId)
+    .where("deleted_at", "is", null)
+    .executeTakeFirstOrThrow();
+  return Number(row.count);
 }
 
-/** Writes the folder, bringing it back from a tombstone. Throws `DbQueryError`. */
+/** Writes the folder, bringing it back from a tombstone. */
 export async function upsert(
   row: { user_id: string; id: string; name: string; created_at: string; updated_at: string },
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<FolderRow> {
-  const { data, error } = await db()
-    .from("library_folders")
-    .upsert({ ...row, deleted_at: null }, { onConflict: "user_id,id" })
-    .select(FOLDER_COLUMNS)
-    .single();
-  if (error || !data) {
-    throw new DbQueryError(error);
-  }
-  return data as FolderRow;
+  return (tx ?? getDb())
+    .insertInto("library_folders")
+    .values({ ...row, deleted_at: null })
+    .onConflict((oc) =>
+      oc.columns(["user_id", "id"]).doUpdateSet({
+        name: row.name,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        deleted_at: null,
+      }),
+    )
+    .returning(FOLDER_COLUMNS)
+    .executeTakeFirstOrThrow();
 }
 
-/** A tombstone, never a hole. Throws `DbQueryError`. */
+/** A tombstone, never a hole. */
 export async function tombstone(
   userId: string,
   folderId: string,
   now: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<void> {
-  const { error } = await db()
-    .from("library_folders")
-    .update({ deleted_at: now, updated_at: now })
-    .eq("user_id", userId)
-    .eq("id", folderId);
-  if (error) {
-    throw new DbQueryError(error);
-  }
+  await (tx ?? getDb())
+    .updateTable("library_folders")
+    .set({ deleted_at: now, updated_at: now })
+    .where("user_id", "=", userId)
+    .where("id", "=", folderId)
+    .execute();
 }

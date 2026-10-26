@@ -49,4 +49,8 @@ the game is `docs/design/cloud-live.md` in the game's repository: frames and ops
 - `/internal/*` (Bearer `LIVE_INTERNAL_TOKEN`) is for the Next.js routes; Caddy routes only `/live` and `/live/*` here.
 - Production runs the bundle `npm run build:live` makes (`dist-live/live.mjs`, gitignored); development runs the
   sources with tsx (`npm run live`, `npm run dev:local`).
-- Exam: `service.test.ts` (in-process, real sockets, the local database). Run it after any change here.
+- The store (`store.ts`) reaches Postgres directly as `gtnh_live`, which holds only the columns it uses
+  (`tools/deploy/db/app-roles.sql`); a query it gains must work under those grants. `main.ts` refuses to start
+  without `DATABASE_URL`.
+- Exam: `service.test.ts` (in-process, real sockets, the local database), `store-grants.test.ts` (every store call
+  as `gtnh_live`), `main.test.ts`. Run them after any change here.

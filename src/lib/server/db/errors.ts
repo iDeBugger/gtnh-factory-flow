@@ -26,22 +26,14 @@ export function communityStorageErrorMessage(
 }
 
 /**
- * A missing or stale table says so by name: the schema is pasted by hand,
- * and the app has to tell "not set up yet" from "broken".
+ * What the library's sync strip says when a query failed: the database-down
+ * line when it could not be reached, else the route's own sentence. The
+ * schema is the migration runner's, so a missing table is a broken deploy,
+ * not a setup step a player could take, and the database's own message
+ * (table and column names) stays in the log.
  */
-export function libraryStorageErrorMessage(
-  error: { code?: string; message?: string } | null,
-  fallback: string,
-): string {
-  if (error?.code === "PGRST205" || error?.code === "42P01") {
-    return "Plan sync is not set up yet: run supabase/schema.sql in the Supabase SQL editor.";
-  }
-  if (error?.code === "PGRST204" || error?.code === "42703") {
-    return "Plan sync is out of date: re-run the latest supabase/schema.sql in the Supabase SQL editor.";
-  }
-  // Anything else: say what the database said, so the strip's red line
-  // names the cause instead of hiding it behind a fallback.
-  return error?.message ? `${fallback} ${error.message}` : fallback;
+export function libraryStorageErrorMessage(error: unknown, fallback: string): string {
+  return isDatabaseDown(error) ? COMMUNITY_DB_DOWN_MESSAGE : fallback;
 }
 
 /**

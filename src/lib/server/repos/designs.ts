@@ -1,5 +1,6 @@
 import type { LivePlan } from "@/lib/live/ops";
-import { DbQueryError, getCommunityDb, isMissingColumnError, type Tx } from "../db";
+import { getDb, json, type Tx } from "../db";
+import { sqlRules } from "./visibility";
 
 /**
  * Library designs: one row per owner and id, tombstoned on delete, and the
@@ -8,14 +9,33 @@ import { DbQueryError, getCommunityDb, isMissingColumnError, type Tx } from "../
  * its token and skips tombstones, and a REST plan save lands only while the
  * lease is free and clears the token. Every write to `plan`, `seq`,
  * `live_lease_until` and `live_lease_token` in the codebase is in this file.
+ *
+ * Repositories take an optional transaction last; a query runs on it when
+ * one is passed, else on the pool. A failure throws: a down database as
+ * `DatabaseDownError`, a refused statement as the driver's error.
  */
 
 /** Everything the list endpoint returns about a design: no plan. */
-const DESIGN_META_COLUMNS =
-  "id,name,icon,folder_id,closed,favorite,sort_order,community_plan_id,created_at,updated_at,plan_updated_at,deleted_at";
+const DESIGN_META_COLUMNS = [
+  "id",
+  "name",
+  "icon",
+  "folder_id",
+  "closed",
+  "favorite",
+  "sort_order",
+  "community_plan_id",
+  "created_at",
+  "updated_at",
+  "plan_updated_at",
+  "deleted_at",
+] as const;
+
+/** The same columns, named by table, for a query that joins another. */
+const DESIGN_META_REFS = DESIGN_META_COLUMNS.map((column) => `library_designs.${column}` as const);
 
 /** What the live service keeps on a design (supabase/migrations/2026-10-14-cloud-live.sql). */
-const DESIGN_LIVE_COLUMNS = "seq,live_lease_until";
+const DESIGN_LIVE_COLUMNS = ["seq", "live_lease_until"] as const;
 
 export interface DesignRow {
   id: string;
@@ -80,135 +100,127 @@ export type LeaseOutcome =
   /** The design is there, but its lease is no longer this room's. */
   | "lost";
 
-const db = () => getCommunityDb();
+/** An icon as the column takes it: SQL null when there is none, as PostgREST wrote it. */
+const iconParam = (icon: unknown) => (icon === null || icon === undefined ? null : json(icon));
 
-/** The owner's designs, tombstones included, newest edit first. Throws `DbQueryError`. */
-export async function listOwn(userId: string, limit: number, _tx?: Tx): Promise<DesignRow[]> {
-  const { data, error } = await db()
-    .from("library_designs")
+/** The owner's designs, tombstones included, newest edit first. */
+export async function listOwn(userId: string, limit: number, tx?: Tx): Promise<DesignRow[]> {
+  return (tx ?? getDb())
+    .selectFrom("library_designs")
     .select(DESIGN_META_COLUMNS)
-    .eq("user_id", userId)
-    .order("updated_at", { ascending: false })
-    .limit(limit);
-  if (error) {
-    throw new DbQueryError(error);
-  }
-  return (data ?? []) as unknown as DesignRow[];
+    .where("user_id", "=", userId)
+    .orderBy("updated_at", "desc")
+    .limit(limit)
+    .execute();
 }
 
 /**
- * The live designs shared with `memberId`: the rows behind `pairs`, the
- * member's own memberships, and no other owner's design that shares an id
- * with one of them. Throws `DbQueryError`.
+ * The live designs shared with `memberId`: a join on the member's own
+ * memberships, so another owner's design that shares an id with one of them
+ * never comes back.
  */
 export async function sharedWith(
-  _memberId: string,
-  pairs: ReadonlyArray<{ ownerId: string; designId: string }>,
-  _tx?: Tx,
+  memberId: string,
+  tx?: Tx,
 ): Promise<Array<DesignRow & { user_id: string }>> {
-  if (pairs.length === 0) {
-    return [];
-  }
-  const owners = [...new Set(pairs.map((pair) => pair.ownerId))];
-  const ids = [...new Set(pairs.map((pair) => pair.designId))];
-  const wanted = new Set(pairs.map((pair) => `${pair.ownerId}:${pair.designId}`));
-  const { data, error } = await db()
-    .from("library_designs")
-    .select(`user_id,${DESIGN_META_COLUMNS}`)
-    .in("user_id", owners)
-    .in("id", ids)
-    .is("deleted_at", null);
-  if (error) {
-    throw new DbQueryError(error);
-  }
-  return ((data ?? []) as unknown as Array<DesignRow & { user_id: string }>).filter((row) =>
-    wanted.has(`${row.user_id}:${row.id}`),
-  );
+  return (tx ?? getDb())
+    .selectFrom("library_designs")
+    .innerJoin("library_design_members", (join) =>
+      join
+        .onRef("library_design_members.owner_id", "=", "library_designs.user_id")
+        .onRef("library_design_members.design_id", "=", "library_designs.id"),
+    )
+    .select(["library_designs.user_id", ...DESIGN_META_REFS])
+    .where("library_design_members.member_id", "=", memberId)
+    .where("library_designs.user_id", "<>", memberId)
+    .where(sqlRules.notTombstoned())
+    .execute();
 }
 
 /**
- * One design's row, with its live columns and optionally its plan. A
- * database the cloud migration has not reached yet answers without the live
- * columns (`cloudColumns` false), so the library keeps working meanwhile.
- * Throws `DbQueryError`.
+ * One design's row, with its live columns and optionally its plan.
+ * `forUpdate` (inside a transaction) locks the row until it ends, so a save
+ * that read it cannot be passed by another save of the same design.
  */
 export async function read(
   ownerId: string,
   designId: string,
   opts: { withPlan: boolean; forUpdate?: boolean },
-  _tx?: Tx,
-): Promise<{ row: DesignLiveRow | undefined; cloudColumns: boolean }> {
-  const plan = opts.withPlan ? ",plan" : "";
-  const select = (columns: string) =>
-    db()
-      .from("library_designs")
-      .select(columns)
-      .eq("user_id", ownerId)
-      .eq("id", designId)
-      .maybeSingle();
-  const first = await select(`${DESIGN_META_COLUMNS},${DESIGN_LIVE_COLUMNS}${plan}`);
-  if (first.error && isMissingColumnError(first.error)) {
-    const legacy = await select(`${DESIGN_META_COLUMNS}${plan}`);
-    if (legacy.error) {
-      throw new DbQueryError(legacy.error);
-    }
-    return { row: (legacy.data ?? undefined) as DesignLiveRow | undefined, cloudColumns: false };
-  }
-  if (first.error) {
-    throw new DbQueryError(first.error);
-  }
-  return { row: (first.data ?? undefined) as DesignLiveRow | undefined, cloudColumns: true };
+  tx?: Tx,
+): Promise<DesignLiveRow | undefined> {
+  const query = (tx ?? getDb())
+    .selectFrom("library_designs")
+    .select([...DESIGN_META_COLUMNS, ...DESIGN_LIVE_COLUMNS])
+    .$if(opts.withPlan, (q) => q.select("plan"))
+    .where(sqlRules.designKey(ownerId, designId));
+  return (opts.forUpdate ? query.forUpdate() : query).executeTakeFirst();
 }
 
-/** The owner's live (not tombstoned) designs; a failed count reads as none, as the cap always has. */
-export async function countLive(userId: string, _tx?: Tx): Promise<number> {
-  const { count } = await db()
-    .from("library_designs")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .is("deleted_at", null);
-  return count ?? 0;
+/**
+ * Locks the account's row until the transaction ends, so one account's
+ * creations (a design or a folder past the cap check) queue behind each other.
+ */
+export async function lockAccount(userId: string, tx: Tx): Promise<void> {
+  await tx
+    .selectFrom("community_users")
+    .select("id")
+    .where("id", "=", userId)
+    .forUpdate()
+    .execute();
 }
 
-/** A new design; answers its metadata. Throws `DbQueryError`. */
-export async function insert(row: NewDesignRow, _tx?: Tx): Promise<DesignRow> {
-  const { data, error } = await db()
-    .from("library_designs")
-    .insert(row)
-    .select(DESIGN_META_COLUMNS)
-    .single();
-  if (error || !data) {
-    throw new DbQueryError(error);
-  }
-  return data as unknown as DesignRow;
+/** The owner's live (not tombstoned) designs. */
+export async function countLive(userId: string, tx?: Tx): Promise<number> {
+  const row = await (tx ?? getDb())
+    .selectFrom("library_designs")
+    .select((eb) => eb.fn.countAll<number>().as("count"))
+    .where("user_id", "=", userId)
+    .where(sqlRules.notTombstoned())
+    .executeTakeFirstOrThrow();
+  return Number(row.count);
+}
+
+/** A new design; answers its metadata. */
+export async function insert(row: NewDesignRow, tx?: Tx): Promise<DesignRow> {
+  return (tx ?? getDb())
+    .insertInto("library_designs")
+    .values({ ...row, icon: iconParam(row.icon), plan: json(row.plan) })
+    .returning(DESIGN_META_COLUMNS)
+    .executeTakeFirstOrThrow();
+}
+
+/** What a save sets: the patch's columns, jsonb through `json()`, the plan only when it rides. */
+function saveColumns(patch: MemberDesignPatch & Partial<Omit<OwnerDesignPatch, "user_id" | "id">>) {
+  const { plan, icon, ...rest } = patch;
+  return {
+    ...rest,
+    ...("icon" in patch ? { icon: iconParam(icon) } : {}),
+    ...(plan !== undefined ? { plan: json(plan) } : {}),
+  };
 }
 
 /**
  * Writes a save over an existing design. With `requireLeaseFree` (a plan
- * rides and the live columns exist) the write lands only while no live lease
- * is held at `now`, and it clears the token, so a lapsed lease's room cannot
- * write over this plan. Undefined when nothing matched: the live service took
- * the lease since the caller read the row. Throws `DbQueryError`.
+ * rides) the write lands only while no live lease is held at `now`, and it
+ * clears the token, so a lapsed lease's room cannot write over this plan.
+ * Undefined when nothing matched: the live service took the lease since the
+ * caller read the row.
  */
 async function save(
   ownerId: string,
   designId: string,
-  patch: Record<string, unknown>,
+  columns: ReturnType<typeof saveColumns>,
   opts: { requireLeaseFree: boolean; now: string },
+  tx?: Tx,
 ): Promise<DesignRow | undefined> {
-  const row = { ...patch };
-  if (patch.plan !== undefined && opts.requireLeaseFree) {
-    row.live_lease_token = null;
-  }
-  const update = db().from("library_designs").update(row).eq("user_id", ownerId).eq("id", designId);
-  const unleased = opts.requireLeaseFree
-    ? update.or(`live_lease_until.is.null,live_lease_until.lt.${opts.now}`)
-    : update;
-  const { data, error } = await unleased.select(DESIGN_META_COLUMNS).maybeSingle();
-  if (error) {
-    throw new DbQueryError(error);
-  }
-  return (data ?? undefined) as DesignRow | undefined;
+  const clearsToken = columns.plan !== undefined && opts.requireLeaseFree;
+  return (tx ?? getDb())
+    .updateTable("library_designs")
+    .set({ ...columns, ...(clearsToken ? { live_lease_token: null } : {}) })
+    .where(sqlRules.designKey(ownerId, designId))
+    .$if(opts.requireLeaseFree, (q) => q.where(sqlRules.leaseFreeAt(opts.now)))
+    .returning(DESIGN_META_COLUMNS)
+    .executeTakeFirst();
 }
 
 /** The owner's save of an existing design (see `save`). Writing a design brings it back from a tombstone. */
@@ -217,9 +229,11 @@ export function saveAsOwner(
   designId: string,
   patch: OwnerDesignPatch,
   opts: { requireLeaseFree: boolean; now: string },
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<DesignRow | undefined> {
-  return save(ownerId, designId, { ...patch }, opts);
+  // The key names the row; it is never rewritten.
+  const { user_id: _userId, id: _id, ...columns } = patch;
+  return save(ownerId, designId, saveColumns(columns), opts, tx);
 }
 
 /** A member's save: the plan and its name and stamps only (see `save`). */
@@ -228,49 +242,38 @@ export function saveAsMember(
   designId: string,
   patch: MemberDesignPatch,
   opts: { requireLeaseFree: boolean; now: string },
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<DesignRow | undefined> {
-  return save(ownerId, designId, { ...patch }, opts);
+  const { name, updated_at, plan_updated_at, plan } = patch;
+  return save(ownerId, designId, saveColumns({ name, updated_at, plan_updated_at, plan }), opts, tx);
 }
 
-/** A tombstone, never a hole: other devices need to hear about it. The plan goes. Throws `DbQueryError`. */
+/** A tombstone, never a hole: other devices need to hear about it. The plan goes. */
 export async function tombstone(
   ownerId: string,
   designId: string,
   now: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<void> {
-  const { error } = await db()
-    .from("library_designs")
-    .update({ deleted_at: now, updated_at: now, plan: {} })
-    .eq("user_id", ownerId)
-    .eq("id", designId);
-  if (error) {
-    throw new DbQueryError(error);
-  }
-}
-
-function failed(what: string, error: { message?: string } | null): never {
-  throw new Error(`${what}: ${error?.message ?? "no answer"}`);
+  await (tx ?? getDb())
+    .updateTable("library_designs")
+    .set({ deleted_at: now, updated_at: now, plan: json({}) })
+    .where(sqlRules.designKey(ownerId, designId))
+    .execute();
 }
 
 /** The plan's stored size in bytes; undefined when the design is missing or deleted. */
 export async function planBytes(
   ownerId: string,
   designId: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<number | undefined> {
-  const { data, error } = await db()
-    .from("library_designs")
+  const row = await (tx ?? getDb())
+    .selectFrom("library_designs")
     .select("plan_bytes")
-    .eq("user_id", ownerId)
-    .eq("id", designId)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (error) {
-    failed("Reading the plan size failed", error);
-  }
-  const row = data as { plan_bytes: number | string | null } | null;
+    .where(sqlRules.designKey(ownerId, designId))
+    .where(sqlRules.notTombstoned())
+    .executeTakeFirst();
   return row ? Number(row.plan_bytes ?? 0) : undefined;
 }
 
@@ -283,69 +286,91 @@ export async function takeLease(
   designId: string,
   token: string,
   until: Date,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<{ plan: LivePlan; seq: number } | undefined> {
-  const { data, error } = await db()
-    .from("library_designs")
-    .update({ live_lease_until: until.toISOString(), live_lease_token: token })
-    .eq("user_id", ownerId)
-    .eq("id", designId)
-    .is("deleted_at", null)
-    .select("plan,seq")
-    .maybeSingle();
-  if (error) {
-    failed("Taking the lease failed", error);
-  }
-  if (!data) {
+  const row = await (tx ?? getDb())
+    .updateTable("library_designs")
+    .set({ live_lease_until: until.toISOString(), live_lease_token: token })
+    .where(sqlRules.designKey(ownerId, designId))
+    .where(sqlRules.notTombstoned())
+    .returning(["plan", "seq"])
+    .executeTakeFirst();
+  if (!row) {
     return undefined;
   }
-  const row = data as { plan: LivePlan; seq: number | string | null };
-  return { plan: row.plan ?? {}, seq: Number(row.seq ?? 0) };
+  return { plan: (row.plan ?? {}) as LivePlan, seq: Number(row.seq ?? 0) };
 }
 
-/** A conditional write matched nothing: the design went, or the lease is someone else's. */
-async function missed(ownerId: string, designId: string): Promise<LeaseOutcome> {
-  const { data, error } = await db()
-    .from("library_designs")
-    .select("deleted_at")
-    .eq("user_id", ownerId)
-    .eq("id", designId)
-    .maybeSingle();
-  if (error) {
-    failed("Reading the lease failed", error);
+/** What a write conditional on the lease sets. */
+interface LeaseColumns {
+  live_lease_until: string | null;
+  live_lease_token?: string | null;
+  plan?: ReturnType<typeof json>;
+  seq?: number;
+  plan_updated_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * One statement: the write, conditional on the lease being `token`'s and the
+ * design not tombstoned, and the row's state, so a write that matched
+ * nothing says why ("gone": missing or deleted; "lost": another lease). The
+ * state is a locking read, so it is the row's newest version whichever of
+ * the two runs first: a delete that lands while the write waits reads as
+ * "gone", never "lost".
+ */
+async function writeWhileHeld(
+  ownerId: string,
+  designId: string,
+  token: string,
+  columns: LeaseColumns,
+  tx?: Tx,
+): Promise<LeaseOutcome> {
+  const row = await (tx ?? getDb())
+    .with("target", (qc) =>
+      qc
+        .selectFrom("library_designs")
+        .select("deleted_at")
+        .where(sqlRules.designKey(ownerId, designId))
+        .forUpdate(),
+    )
+    .with("done", (qc) =>
+      qc
+        .updateTable("library_designs")
+        .set(columns)
+        .where(sqlRules.designKey(ownerId, designId))
+        .where(sqlRules.leaseHeldBy(token))
+        .where(sqlRules.notTombstoned())
+        .returning("id"),
+    )
+    .selectNoFrom((eb) => [
+      eb.exists(eb.selectFrom("done").select("done.id")).as("written"),
+      eb.exists(eb.selectFrom("target").select("target.deleted_at")).as("present"),
+      eb.selectFrom("target").select("target.deleted_at").as("deleted_at"),
+    ])
+    .executeTakeFirstOrThrow();
+  if (row.written) {
+    return "held";
   }
-  const row = data as { deleted_at: string | null } | null;
-  return !row || row.deleted_at ? "gone" : "lost";
+  return !row.present || row.deleted_at ? "gone" : "lost";
 }
 
 /** Extends the lease, while it is `token`'s. */
-export async function renewLease(
+export function renewLease(
   ownerId: string,
   designId: string,
   token: string,
   until: Date,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<LeaseOutcome> {
-  const { data, error } = await db()
-    .from("library_designs")
-    .update({ live_lease_until: until.toISOString() })
-    .eq("user_id", ownerId)
-    .eq("id", designId)
-    .eq("live_lease_token", token)
-    .is("deleted_at", null)
-    .select("id")
-    .maybeSingle();
-  if (error) {
-    failed("Renewing the lease failed", error);
-  }
-  return data ? "held" : missed(ownerId, designId);
+  return writeWhileHeld(ownerId, designId, token, { live_lease_until: until.toISOString() }, tx);
 }
 
 /**
  * Writes the plan and its seq while the lease is `token`'s, extending it
  * (or ending it: `until` null), stamped `now`.
  */
-export async function flushPlan(
+export function flushPlan(
   ownerId: string,
   designId: string,
   token: string,
@@ -353,28 +378,22 @@ export async function flushPlan(
   seq: number,
   until: Date | null,
   now: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<LeaseOutcome> {
-  const { data, error } = await db()
-    .from("library_designs")
-    .update({
-      plan,
+  return writeWhileHeld(
+    ownerId,
+    designId,
+    token,
+    {
+      plan: json(plan),
       seq,
       plan_updated_at: now,
       updated_at: now,
       live_lease_until: until ? until.toISOString() : null,
       live_lease_token: until ? token : null,
-    })
-    .eq("user_id", ownerId)
-    .eq("id", designId)
-    .eq("live_lease_token", token)
-    .is("deleted_at", null)
-    .select("id")
-    .maybeSingle();
-  if (error) {
-    failed("Saving the plan failed", error);
-  }
-  return data ? "held" : missed(ownerId, designId);
+    },
+    tx,
+  );
 }
 
 /** Ends the lease without writing the plan, when it is still `token`'s. */
@@ -382,15 +401,12 @@ export async function releaseLease(
   ownerId: string,
   designId: string,
   token: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<void> {
-  const { error } = await db()
-    .from("library_designs")
-    .update({ live_lease_until: null, live_lease_token: null })
-    .eq("user_id", ownerId)
-    .eq("id", designId)
-    .eq("live_lease_token", token);
-  if (error) {
-    failed("Releasing the lease failed", error);
-  }
+  await (tx ?? getDb())
+    .updateTable("library_designs")
+    .set({ live_lease_until: null, live_lease_token: null })
+    .where(sqlRules.designKey(ownerId, designId))
+    .where(sqlRules.leaseHeldBy(token))
+    .execute();
 }

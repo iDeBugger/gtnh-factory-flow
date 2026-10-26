@@ -14,7 +14,13 @@ import {
   type SharedDesign,
 } from "@/lib/library/sync-types";
 import { leaseHeld } from "../cloud-plans";
-import { DbQueryError, libraryStorageErrorMessage } from "../db";
+import {
+  DbQueryError,
+  isDatabaseDown,
+  libraryStorageErrorMessage,
+  withTransaction,
+  type Tx,
+} from "../db";
 import { parseEntryIcon } from "../community-rows";
 import type { SignedIn } from "../http/viewer";
 import {
@@ -46,10 +52,23 @@ import { fail, ok, type ServiceResult } from "./result";
  * body); these take a signed-in viewer.
  */
 
-/** What a database failure the route answered with its own sentence says. */
+/** A database's own error: a SQLSTATE, as `pg` and PGlite carry it. */
+const hasSqlState = (error: unknown): boolean =>
+  typeof (error as { code?: unknown } | null)?.code === "string" &&
+  /^[0-9A-Z]{5}$/.test((error as { code: string }).code);
+
+/**
+ * What a database failure the route answered with its own sentence says: the
+ * database-down line, or the sentence (the database's message goes to the
+ * log). Anything else is a bug and is thrown on.
+ */
 function storageFailure(error: unknown, fallback: string): ServiceResult<never> {
-  if (!(error instanceof DbQueryError)) {
+  const down = isDatabaseDown(error);
+  if (!down && !(error instanceof DbQueryError) && !hasSqlState(error)) {
     throw error;
+  }
+  if (!down) {
+    console.error(fallback, error);
   }
   return fail("unavailable", libraryStorageErrorMessage(error, fallback), { status: 500 });
 }
@@ -93,7 +112,7 @@ export async function listLibrary(viewer: SignedIn): Promise<ServiceResult<Libra
   let sharedMembers: designMembers.MemberRow[] = [];
   if (sharedPairs.length > 0) {
     const [sharedRead, membersRead] = await Promise.allSettled([
-      designs.sharedWith(me, sharedPairs),
+      designs.sharedWith(me),
       designMembers.ofDesigns(sharedPairs),
     ]);
     for (const read of [sharedRead, membersRead]) {
@@ -167,7 +186,7 @@ export async function readDesign(
   }
   let row: designs.DesignLiveRow | undefined;
   try {
-    ({ row } = await designs.read(ownerId, designId, { withPlan: true }));
+    row = await designs.read(ownerId, designId, { withPlan: true });
   } catch (error) {
     return storageFailure(error, "The design could not be loaded.");
   }
@@ -244,12 +263,49 @@ export async function saveDesign(
   if (!isOwner && !(await designRole(viewer.userId, ownerId, designId))) {
     return fail("not-found", "Design not found.");
   }
-  let current: designs.DesignLiveRow | undefined;
-  let cloudColumns: boolean;
+  // Checked here, answered in its turn below: the parse is the request's
+  // own work and needs no row lock held while it runs.
+  const parsed = body.plan === undefined ? undefined : factoryProjectSchema.safeParse(body.plan);
+
   try {
-    ({ row: current, cloudColumns } = await designs.read(ownerId, designId, { withPlan: false }));
+    return await withTransaction((tx) =>
+      writeDesign(tx, { viewer, ownerId, designId, name, stamped, parsed, isOwner }),
+    );
   } catch (error) {
     return storageFailure(error, "The design could not be saved.");
+  }
+}
+
+/**
+ * The save's database part, in one transaction: the read locks the row, so
+ * an owner's and a member's save cannot both pass the "behind" check; a new
+ * design locks the account first, so creations arriving at once meet the
+ * cap one at a time. Only `tx` is used in here.
+ */
+async function writeDesign(
+  tx: Tx,
+  save: {
+    viewer: SignedIn;
+    ownerId: string;
+    designId: string;
+    name: string;
+    stamped: Partial<DesignUpsertBody> & {
+      createdAt: string;
+      updatedAt: string;
+      planUpdatedAt: string;
+    };
+    parsed: ReturnType<typeof factoryProjectSchema.safeParse> | undefined;
+    isOwner: boolean;
+  },
+): Promise<ServiceResult<{ design: RemoteDesignMeta; behind: boolean }>> {
+  const { viewer, ownerId, designId, name, stamped, parsed, isOwner } = save;
+  const forUpdate = { withPlan: false, forUpdate: true };
+  let current = await designs.read(ownerId, designId, forUpdate, tx);
+  if (!current && isOwner) {
+    // A new design: wait for this account's other creations, then read
+    // again, since one of them may have been this same design.
+    await designs.lockAccount(viewer.userId, tx);
+    current = await designs.read(ownerId, designId, forUpdate, tx);
   }
   if (!isOwner && (!current || current.deleted_at)) {
     return fail("not-found", "Design not found.");
@@ -257,16 +313,15 @@ export async function saveDesign(
 
   // Another device wrote later than this one: the caller is behind, and its
   // pull will sort it out. Nothing is overwritten.
-  if (current && Date.parse(current.updated_at) > Date.parse(body.updatedAt)) {
+  if (current && Date.parse(current.updated_at) > Date.parse(stamped.updatedAt)) {
     return ok({ design: rowToDesignMeta(current), behind: true });
   }
 
   let plan: unknown;
-  if (body.plan !== undefined) {
+  if (parsed !== undefined) {
     if (current && leaseHeld(current.live_lease_until)) {
       return liveRefusal();
     }
-    const parsed = factoryProjectSchema.safeParse(body.plan);
     if (!parsed.success) {
       return fail("bad-request", "The plan is not valid.");
     }
@@ -275,58 +330,53 @@ export async function saveDesign(
     return fail("bad-request", "A new design needs its plan.");
   }
 
-  if (!current && (await designs.countLive(viewer.userId)) >= LIBRARY_MAX_DESIGNS) {
+  if (!current && (await designs.countLive(viewer.userId, tx)) >= LIBRARY_MAX_DESIGNS) {
     return fail(
       "conflict",
       `Your plans are full (${LIBRARY_MAX_DESIGNS} designs). Delete some first.`,
     );
   }
 
-  try {
-    if (!current) {
-      // An INSERT for a row that does not exist: an upsert forms the insert
-      // row first, and a metadata-only save (no plan) would trip the NOT NULL
-      // on plan before the conflict was ever checked.
-      const inserted = await designs.insert({
-        ...ownerFields(viewer.userId, designId, name, stamped),
-        plan,
-      });
-      return ok({ design: rowToDesignMeta(inserted), behind: false });
-    }
-    // A plan lands only while no live lease is held: the live service may
-    // have taken one since the read above.
-    const opts = {
-      requireLeaseFree: plan !== undefined && cloudColumns,
-      now: new Date().toISOString(),
-    };
-    const written = isOwner
-      ? await designs.saveAsOwner(
-          ownerId,
-          designId,
-          {
-            ...ownerFields(viewer.userId, designId, name, stamped),
-            ...(plan !== undefined ? { plan } : {}),
-          },
-          opts,
-        )
-      : await designs.saveAsMember(
-          ownerId,
-          designId,
-          {
-            name,
-            updated_at: stamped.updatedAt,
-            plan_updated_at: stamped.planUpdatedAt,
-            ...(plan !== undefined ? { plan } : {}),
-          },
-          opts,
-        );
-    if (!written) {
-      return liveRefusal();
-    }
-    return ok({ design: rowToDesignMeta(written), behind: false });
-  } catch (error) {
-    return storageFailure(error, "The design could not be saved.");
+  if (!current) {
+    // An INSERT for a row that does not exist: an upsert forms the insert
+    // row first, and a metadata-only save (no plan) would trip the NOT NULL
+    // on plan before the conflict was ever checked.
+    const inserted = await designs.insert(
+      { ...ownerFields(viewer.userId, designId, name, stamped), plan },
+      tx,
+    );
+    return ok({ design: rowToDesignMeta(inserted), behind: false });
   }
+  // A plan lands only while no live lease is held (the condition stays on
+  // the write, as the live service's own writes keep theirs).
+  const opts = { requireLeaseFree: plan !== undefined, now: new Date().toISOString() };
+  const written = isOwner
+    ? await designs.saveAsOwner(
+        ownerId,
+        designId,
+        {
+          ...ownerFields(viewer.userId, designId, name, stamped),
+          ...(plan !== undefined ? { plan } : {}),
+        },
+        opts,
+        tx,
+      )
+    : await designs.saveAsMember(
+        ownerId,
+        designId,
+        {
+          name,
+          updated_at: stamped.updatedAt,
+          plan_updated_at: stamped.planUpdatedAt,
+          ...(plan !== undefined ? { plan } : {}),
+        },
+        opts,
+        tx,
+      );
+  if (!written) {
+    return liveRefusal();
+  }
+  return ok({ design: rowToDesignMeta(written), behind: false });
 }
 
 /** The fields the owner's save writes, from the body the checks above passed. */
@@ -373,11 +423,14 @@ export async function deleteDesign(
   }
   const now = new Date().toISOString();
   try {
-    await designs.tombstone(viewer.userId, designId, now);
+    // One transaction: a design is never deleted with its members left on it.
+    await withTransaction(async (tx) => {
+      await designs.tombstone(viewer.userId, designId, now, tx);
+      await designMembers.deleteOfDesign(viewer.userId, designId, tx);
+    });
   } catch (error) {
     return storageFailure(error, "The design could not be deleted.");
   }
-  await designMembers.deleteOfDesign(viewer.userId, designId);
   await notifyLive({ kind: "deleted", ownerId: viewer.userId, designId });
   return ok({ ok: true, deletedAt: now });
 }
@@ -393,7 +446,7 @@ export async function listDesignMembers(
   const role = await designRole(viewer.userId, ownerId, designId);
   let row: designs.DesignLiveRow | undefined;
   try {
-    ({ row } = await designs.read(ownerId, designId, { withPlan: false }));
+    row = await designs.read(ownerId, designId, { withPlan: false });
   } catch (error) {
     return storageFailure(error, "The plan's members could not be loaded.");
   }
@@ -439,7 +492,7 @@ export async function addMember(
   }
   let design: designs.DesignLiveRow | undefined;
   try {
-    ({ row: design } = await designs.read(ownerId, designId, { withPlan: false }));
+    design = await designs.read(ownerId, designId, { withPlan: false });
   } catch (error) {
     return storageFailure(error, "The plan could not be shared.");
   }
@@ -466,11 +519,33 @@ export async function addMember(
         `You can share with ${SHARE_ADDS_PER_HOUR} people an hour. Try again later.`,
       );
     }
+    let outcome: "added" | "already" | "gone" | "full";
     try {
-      added = (await designMembers.add(ownerId, designId, userId)) === "added";
+      // The checks above again, in one transaction under the design's row
+      // lock, so shares arriving at once meet the cap one at a time.
+      outcome = await withTransaction(async (tx) => {
+        if (!(await designMembers.lockDesign(ownerId, designId, tx))) {
+          return "gone";
+        }
+        const current = await designMembers.list(ownerId, designId, tx);
+        if (current.some((member) => member.id === userId)) {
+          return "already";
+        }
+        if (current.length >= LIBRARY_MAX_MEMBERS) {
+          return "full";
+        }
+        return designMembers.add(ownerId, designId, userId, tx);
+      });
     } catch (error) {
       return storageFailure(error, "The plan could not be shared.");
     }
+    if (outcome === "gone") {
+      return fail("not-found", "Design not found.");
+    }
+    if (outcome === "full") {
+      return fail("conflict", `A plan can be shared with ${LIBRARY_MAX_MEMBERS} accounts at most.`);
+    }
+    added = outcome === "added";
   }
   const members = await designMembers.list(ownerId, designId);
   await notifyLive({
@@ -539,27 +614,28 @@ export async function saveFolder(
     return fail("bad-request", CLOCK_AHEAD_MESSAGE);
   }
 
-  let current: folders.FolderRow | undefined;
+  const { createdAt, updatedAt } = body;
   try {
-    current = await folders.read(viewer.userId, folderId);
-  } catch (error) {
-    return storageFailure(error, "The folder could not be saved.");
-  }
-  if (current && Date.parse(current.updated_at) > Date.parse(body.updatedAt)) {
-    return ok({ folder: rowToFolder(current), behind: true });
-  }
-  if (!current && (await folders.countLive(viewer.userId)) >= LIBRARY_MAX_FOLDERS) {
-    return fail("conflict", "Too many folders.");
-  }
-  try {
-    const saved = await folders.upsert({
-      user_id: viewer.userId,
-      id: folderId,
-      name,
-      created_at: body.createdAt,
-      updated_at: body.updatedAt,
+    // One transaction, as `saveDesign`: the read locks the folder, and a new
+    // folder locks the account first, so the cap holds against saves at once.
+    return await withTransaction(async (tx): Promise<ServiceResult<{ folder: RemoteFolder; behind: boolean }>> => {
+      let current = await folders.read(viewer.userId, folderId, { forUpdate: true }, tx);
+      if (!current) {
+        await designs.lockAccount(viewer.userId, tx);
+        current = await folders.read(viewer.userId, folderId, { forUpdate: true }, tx);
+      }
+      if (current && Date.parse(current.updated_at) > Date.parse(updatedAt)) {
+        return ok({ folder: rowToFolder(current), behind: true });
+      }
+      if (!current && (await folders.countLive(viewer.userId, tx)) >= LIBRARY_MAX_FOLDERS) {
+        return fail("conflict", "Too many folders.");
+      }
+      const saved = await folders.upsert(
+        { user_id: viewer.userId, id: folderId, name, created_at: createdAt, updated_at: updatedAt },
+        tx,
+      );
+      return ok({ folder: rowToFolder(saved), behind: false });
     });
-    return ok({ folder: rowToFolder(saved), behind: false });
   } catch (error) {
     return storageFailure(error, "The folder could not be saved.");
   }

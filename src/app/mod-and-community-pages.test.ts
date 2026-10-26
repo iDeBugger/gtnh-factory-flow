@@ -25,7 +25,12 @@ function query(): unknown {
 const getCommunityDb = vi.fn(() => query());
 vi.mock("@/lib/server/db", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/server/db")>();
-  return { ...actual, isCommunityConfigured: () => true, getCommunityDb: () => getCommunityDb() };
+  return {
+    ...actual,
+    isCommunityConfigured: () => true,
+    isDatabaseConfigured: () => true,
+    getCommunityDb: () => getCommunityDb(),
+  };
 });
 const getPublicPlanRow = vi.fn(async () => row);
 vi.mock("@/lib/server/services/plan-preview", async (importOriginal) => ({

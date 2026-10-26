@@ -4,10 +4,14 @@ import { PGlite } from "@electric-sql/pglite";
 import { Kysely, PGliteDialect } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as accounts from "../repos/accounts";
+import * as designMembers from "../repos/design-members";
+import * as designs from "../repos/designs";
 import * as events from "../repos/events";
+import * as folders from "../repos/folders";
 import { useDbForTests } from "./index";
 import { applyMigrations, schemaFiles } from "./migrations";
 import type { Database } from "./schema";
+import { DEPLOY_DB_DIR, deploySqlWithoutPsql } from "@/test-support/deploy-sql";
 
 /**
  * The deploy's roles on a database built as the deploy builds it: the schema
@@ -18,16 +22,10 @@ import type { Database } from "./schema";
 
 const OWNER = "11111111-1111-4111-8111-111111111111";
 const MEMBER = "33333333-3333-4333-8333-333333333333";
-const deployDb = path.join(process.cwd(), "tools", "deploy", "db");
+const deployDb = DEPLOY_DB_DIR;
 const ROW_SECURITY_OFF = "2026-10-26-row-security-off.sql";
 
-/** A psql script without its meta-commands and the statements that read a psql variable. */
-function withoutPsql(file: string): string {
-  return readFileSync(path.join(deployDb, file), "utf8")
-    .split("\n")
-    .filter((line) => !line.startsWith("\\") && !line.includes(":'"))
-    .join("\n");
-}
+const withoutPsql = deploySqlWithoutPsql;
 
 let pglite: PGlite;
 
@@ -277,6 +275,74 @@ describe("the database roles", () => {
       });
     } finally {
       useDbForTests(undefined);
+    }
+  });
+
+  it("runs the library repositories as the site role, transactions and row locks included", async () => {
+    const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) });
+    useDbForTests(db);
+    const stamp = "2026-10-26T10:00:00.000Z";
+    try {
+      await as("gtnh_site", async () => {
+        await db.transaction().execute(async (tx) => {
+          await designs.lockAccount(OWNER, tx);
+          expect(await designs.read(OWNER, "d2", { withPlan: false, forUpdate: true }, tx)).toBeUndefined();
+          expect(await designs.countLive(OWNER, tx)).toBeGreaterThan(0);
+          await designs.insert(
+            {
+              user_id: OWNER,
+              id: "d2",
+              name: "Site",
+              icon: null,
+              folder_id: null,
+              closed: false,
+              favorite: false,
+              sort_order: null,
+              community_plan_id: null,
+              created_at: stamp,
+              updated_at: stamp,
+              plan_updated_at: stamp,
+              deleted_at: null,
+              plan: { nodes: [] },
+            },
+            tx,
+          );
+          expect(await designMembers.lockDesign(OWNER, "d2", tx)).toBe(true);
+          expect(await designMembers.add(OWNER, "d2", MEMBER, tx)).toBe("added");
+        });
+        const saved = await designs.saveAsMember(
+          OWNER,
+          "d2",
+          { name: "Renamed", updated_at: stamp, plan_updated_at: stamp, plan: { nodes: [1] } },
+          { requireLeaseFree: true, now: stamp },
+        );
+        expect(saved).toMatchObject({ name: "Renamed" });
+        expect((await designs.listOwn(OWNER, 10)).map((row) => row.id)).toContain("d2");
+        expect((await designs.sharedWith(MEMBER)).map((row) => row.id).sort()).toEqual(["d1", "d2"]);
+        expect(await designMembers.rowsFor(MEMBER)).toHaveLength(2);
+        expect(await designMembers.ofDesigns([{ ownerId: OWNER, designId: "d2" }])).toHaveLength(1);
+        expect(await designMembers.remove(OWNER, "d2", MEMBER)).toBe(true);
+        await db.transaction().execute(async (tx) => {
+          await designs.tombstone(OWNER, "d2", stamp, tx);
+          await designMembers.deleteOfDesign(OWNER, "d2", tx);
+        });
+        await db.transaction().execute(async (tx) => {
+          expect(await folders.read(OWNER, "f1", { forUpdate: true }, tx)).toBeUndefined();
+          expect(await folders.countLive(OWNER, tx)).toBe(0);
+          await folders.upsert(
+            { user_id: OWNER, id: "f1", name: "Folder", created_at: stamp, updated_at: stamp },
+            tx,
+          );
+        });
+        await folders.tombstone(OWNER, "f1", stamp);
+        expect(await folders.listOwn(OWNER, 10)).toEqual([
+          expect.objectContaining({ id: "f1", deleted_at: expect.anything() }),
+        ]);
+      });
+    } finally {
+      useDbForTests(undefined);
+      await pglite.query("delete from library_designs where id = 'd2'");
+      await pglite.query("delete from library_folders where id = 'f1'");
     }
   });
 
