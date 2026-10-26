@@ -9,6 +9,10 @@ modes keep it.
   `spare-model.ts` (leftovers with a choice, most upstream first, stored split first), `rail-layout.ts` (the list as
   items with tops and heights; the component draws only the slice in view), `notices.ts` (the catalogue of the UI spec
   11.2 from the solver's notes). `rail-data.ts` shares one computation per (project, solve).
+- Order: INPUTS, OUTPUTS and INTERNAL go A to Z by name (the resource key breaks a tie), a line at zero in its place;
+  MACHINES go by tier, then name, then the board's card order. Never by a solved number: two resources taken at the
+  same rate from different cards differ only in the solver's last bits, that noise flips with each new target, and the
+  row being set would jump (`rail-model.test.ts`, "keeps every list in one order").
 - Edits go through `rail-actions.ts`: the store's own actions (one undo step each), except a spare's split while its bar
   is in hand (`previewSpare`: re-solves, no history; `endSpareDrag`: one undo step made from the project as it was
   taken, or none if the split did not move). Wheel steps are held on screen and committed once the wheel is still

@@ -210,6 +210,18 @@ function addTo<T>(map: Map<string, T[]>, key: string, value: T): void {
   else map.set(key, [value]);
 }
 
+const names = new Intl.Collator("en", { sensitivity: "base", numeric: true });
+
+/**
+ * A section's lines go A to Z by name, the key breaking a tie, and a line at zero sits in its place too. Never by
+ * amount: two resources a plan takes at the same rate from different cards differ only in the solver's last bits, and
+ * that noise flips with every new target, so a row the player is setting would jump. A changed number never moves a
+ * row.
+ */
+function byName(a: RailLine, b: RailLine): number {
+  return names.compare(a.label, b.label) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+}
+
 interface Look {
   kind: ResourceKind;
   id: string;
@@ -251,6 +263,14 @@ export function buildRailModel(
         ...(upTo ? { upTo } : {}),
       };
     });
+  // By tier, then name, then the board's order of cards: never by a solved number (see `byName`).
+  const cardOrder = new Map(project.nodes.map((node, index) => [node.id, index]));
+  machines.sort(
+    (a, b) =>
+      a.tierIndex - b.tierIndex ||
+      names.compare(a.label, b.label) ||
+      (cardOrder.get(a.nodeId) ?? 0) - (cardOrder.get(b.nodeId) ?? 0),
+  );
   const machineName = new Map(machineEntries.map((entry) => [entry.nodeId, entry.label]));
   const nameOf = (cardId: string): string => {
     const known = machineName.get(cardId);
@@ -402,11 +422,6 @@ export function buildRailModel(
     if (leaves > RAIL_EPS) outputs.push(line(key, leaves, "o"));
     if (Math.min(m, u) > RAIL_EPS) internal.push(line(key, Math.min(m, u), "x"));
   }
-  // Biggest first; equal amounts keep the order the plan met them in (the sort is stable), as the mod lists them.
-  const byAmount = (a: RailLine, b: RailLine) => b.amount - a.amount;
-  inputs.sort(byAmount);
-  outputs.sort(byAmount);
-  internal.sort(byAmount);
   // A resource a card's unwired port takes or makes stays listed at 0, so it can be set from here.
   for (const [lineKey] of openByLine) {
     const key = lineKey.slice(2);
@@ -421,6 +436,9 @@ export function buildRailModel(
   for (const key of productDrawers.keys()) {
     if (!outputs.some((l) => l.key === key)) outputs.push(line(key, 0, "o"));
   }
+  inputs.sort(byName);
+  outputs.sort(byName);
+  internal.sort(byName);
 
   const sum = (pick: (entry: MachineListEntry) => number | undefined) =>
     machineEntries.reduce((total, entry) => total + (pick(entry) ?? 0), 0);
