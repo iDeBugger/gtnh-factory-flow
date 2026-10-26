@@ -245,5 +245,64 @@ describe("the NEI sorts", () => {
       "fluid:molten.steel",
     ]);
   });
-});
 
+  it("put the shorter of equal matches first under As in NEI, then NEI's order; filter only ranks nothing", () => {
+    const record = (kind: string, id: string, displayName: string, recipeCount: number) => ({
+      kind,
+      id,
+      displayName,
+      iconPath: `/x/${id.replace(/[^a-z0-9]/gi, "_")}.png`,
+      recipeCount,
+    });
+    // NEI lists other mods' Electrum items before GT's material, and the aspect's mod first of all.
+    const electrum = [
+      record("item", "enderio:itemitemconduit@3", "Electrum Item Pipe Casing", 5),
+      record("item", "enderio:itempowerconduit@1", "Electrum Energy Conduit", 900),
+      record("item", "gregtech:gt.metaitem.01@11303", "Electrum Ingot", 300),
+      record("item", "gregtech:gt.metaitem.01@2303", "Electrum Dust", 40),
+      record("aspect", "thaumcraft:aspect:electrum", "Electrum", 10),
+    ];
+    const search = createResourceSearchEngine({
+      schemaVersion: 2,
+      resourceIndex: electrum as never,
+      resourceOrder: [1, 2, 4, 3, 0],
+      directionCounts: [],
+      sources: { plants: [], bees: [] },
+    });
+    const ask = (sort: "nei" | "nei-filter") =>
+      ids(search({ query: "electrum", offset: 0, limit: 120, sort }));
+    expect(ask("nei")).toEqual([
+      "aspect:thaumcraft:aspect:electrum",
+      "item:gregtech:gt.metaitem.01@2303",
+      "item:gregtech:gt.metaitem.01@11303",
+      "item:enderio:itempowerconduit@1",
+      "item:enderio:itemitemconduit@3",
+    ]);
+    expect(ask("nei-filter")).toEqual([
+      "aspect:thaumcraft:aspect:electrum",
+      "item:enderio:itemitemconduit@3",
+      "item:enderio:itempowerconduit@1",
+      "item:gregtech:gt.metaitem.01@2303",
+      "item:gregtech:gt.metaitem.01@11303",
+    ]);
+  });
+
+  it("leave names of one length to NEI's order, whatever their recipe counts", () => {
+    const record = (id: string, displayName: string, recipeCount: number) => ({
+      kind: "item",
+      id,
+      displayName,
+      iconPath: `/x/${id.replace(/[^a-z0-9]/gi, "_")}.png`,
+      recipeCount,
+    });
+    const search = createResourceSearchEngine({
+      schemaVersion: 2,
+      resourceIndex: [record("a:x", "Steel Gear", 1), record("a:y", "Steel Bolt", 900)] as never,
+      resourceOrder: [0, 1],
+      directionCounts: [],
+      sources: { plants: [], bees: [] },
+    });
+    expect(ids(search({ query: "steel", offset: 0, limit: 120, sort: "nei" }))).toEqual(["item:a:x", "item:a:y"]);
+    expect(ids(search({ query: "steel", offset: 0, limit: 120, sort: "relevance" }))).toEqual(["item:a:y", "item:a:x"]);
+  });
+});

@@ -66,10 +66,6 @@ const RESOURCE_SORTS = new Set<string>([
   "nei-filter",
 ]);
 
-function isNeiSort(sort: ResourceQuerySort | undefined) {
-  return sort === "nei" || sort === "nei-filter";
-}
-
 /** The most one request answers, and what one without a limit gets. */
 export const RESOURCE_SEARCH_MAX_LIMIT = 120;
 const RESOURCE_SEARCH_DEFAULT_LIMIT = 24;
@@ -218,9 +214,16 @@ export function searchResources(
   },
 ): ResourceSearch {
   const { sourceKeys } = facts;
-  // NEI's order settles equal matches there, so the nudge that settles them for Best match is left out: it would
-  // leave almost no two scores equal.
-  const nudged = !isNeiSort(request.sort);
+  // How equal matches are told apart before the sort. Best match: recipe count and name length. As in NEI: the
+  // shorter name only, so "electrum" puts Electrum Ingot and Dust before Electrum Item Pipe Casing; names of one
+  // length are left equal for NEI's order to settle (recipe count would leave almost no two scores equal). NEI
+  // filter only ranks nothing.
+  const nudge =
+    request.sort === "nei"
+      ? shortNameNudge
+      : request.sort === "nei-filter"
+        ? undefined
+        : resourceRelevanceBias;
   let modCounts = new Map<string, number>();
 
   const resolved = resolveSearchPhases(
@@ -268,7 +271,7 @@ export function searchResources(
         }
         matches.push({
           resourceIndex: resourceIndexNumber,
-          score: score > 0 && nudged ? score + resourceRelevanceBias(resource) : score,
+          score: score > 0 && nudge ? score + nudge(resource) : score,
         });
       }
 
@@ -346,8 +349,12 @@ export function blankResourceSearchKey(request: ResourceSearchRequest): string |
  * count for a little - never enough to outrank an actual better match.
  */
 function resourceRelevanceBias(resource: DatasetResourceIndexEntry): number {
-  const name = resource.displayName ?? resource.id;
-  return Math.log10(1 + (resource.recipeCount ?? 0)) / 10 - name.length / 400;
+  return Math.log10(1 + (resource.recipeCount ?? 0)) / 10 + shortNameNudge(resource);
+}
+
+/** The name-length part of that nudge: the plainer, shorter name first. */
+function shortNameNudge(resource: DatasetResourceIndexEntry): number {
+  return -(resource.displayName ?? resource.id).length / 400;
 }
 
 /** What the search did, for the "showing results for ..." line. */
