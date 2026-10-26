@@ -40,22 +40,19 @@ export async function readSessionAccount(
 
 /**
  * The account a sign-in names, with its hash, or undefined. Exact name:
- * registration is case-sensitive. A failed read also answers undefined, so
- * it reads as a wrong password, never as a sign-in.
+ * registration is case-sensitive. A failed read throws: read as no such
+ * account it would answer a wrong password and spend one of the account's
+ * failures on a database fault.
  */
 export async function readLoginAccount(
   username: string,
   tx?: Tx,
 ): Promise<LoginAccount | undefined> {
-  try {
-    return await (tx ?? getDb())
-      .selectFrom("community_users")
-      .select(["id", "username", "password_hash", "is_admin", "session_epoch"])
-      .where("username", "=", username)
-      .executeTakeFirst();
-  } catch {
-    return undefined;
-  }
+  return (tx ?? getDb())
+    .selectFrom("community_users")
+    .select(["id", "username", "password_hash", "is_admin", "session_epoch"])
+    .where("username", "=", username)
+    .executeTakeFirst();
 }
 
 /** A new account, or "taken" when the name exists. Any other failure throws. */

@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { useTestDb, withDbFault } from "@/test-support/test-db";
+import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
 import { bumpSessionEpoch, forgetSessionUsers } from "@/lib/server/auth/sessions";
 import {
   checkPassword,
@@ -106,6 +106,28 @@ describe("signing in", () => {
     const right = await post(login, "login", { username: "ann_in", password: "ann-password" });
     expect(right.status).toBe(200);
     expect(await whoAmI(cookieOf(right))).toEqual({ username: "ann_in", isAdmin: false });
+  });
+
+  it("answers a failed account lookup with the down line, never a wrong password, and spends no failure", async () => {
+    await post(register, "register", { username: "ann_lookup", password: "ann-password" });
+    const failures = async () =>
+      (
+        await testDb()
+          .db.selectFrom("community_events")
+          .select((eb) => eb.fn.countAll<string>().as("n"))
+          .where("action", "=", "login-fail")
+          .executeTakeFirstOrThrow()
+      ).n;
+    const before = await failures();
+    withDbFault(/from "community_users" where "username"/);
+    const down = await post(login, "login", { username: "ann_lookup", password: "ann-password" });
+    expect(down.status).toBe(500);
+    expect(await down.json()).toEqual({
+      error: "The community database is not responding. Try again in a few minutes.",
+    });
+    expect(down.headers.get("set-cookie")).toBeNull();
+    clearDbFault();
+    expect(await failures()).toBe(before);
   });
 });
 

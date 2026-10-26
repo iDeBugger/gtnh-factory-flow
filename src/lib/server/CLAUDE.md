@@ -427,7 +427,9 @@ Rules:
   and in production when `DATABASE_URL` is not.
 - A failed account lookup throws, never reads as signed out (`loadSessionUser`); accounts are
   cached a minute, as the lookup's promise from before it answers, so forgetting an account mid-read
-  (Sign out everywhere) drops the read too and the old row is never written back. A library answer fails whole
+  (Sign out everywhere) drops the read too and the old row is never written back. A sign-in's lookup throws too
+  (`readLoginAccount`): the route answers the down line, never "Wrong username or password.", and no failure is
+  counted against the account (`auth.test.ts`). A library answer fails whole
   when a sharing read fails: the client removes every shared copy the answer leaves out.
 - Nothing a page needs to render may await a community sweep. `getResourcePopularity`
   answers at once with the last good map (sweep every 6 h, retry after 30 min on failure).
