@@ -88,18 +88,23 @@ export async function readAccess(
   return { authorId: comment.user_id, planOwnerId: plan.user_id };
 }
 
-/** Marks a comment deleted. Throws when the update fails, with the sentence the player reads. */
-export async function softDelete(_planId: string, commentId: string, _tx?: Tx): Promise<boolean> {
+/**
+ * Marks a post's comment deleted: only under that post, so an id paired with
+ * another post's changes nothing. Answers nothing: the service has checked
+ * the comment with `readAccess` first. Throws when the update fails, with the
+ * sentence the player reads.
+ */
+export async function softDelete(planId: string, commentId: string, _tx?: Tx): Promise<void> {
   const { error } = await getCommunityDb()
     .from("community_comments")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("id", commentId);
+    .eq("id", commentId)
+    .eq("plan_id", planId);
   if (error) {
     throw new Error(communityStorageErrorMessage(error, "The comment could not be deleted."), {
       cause: error,
     });
   }
-  return true;
 }
 
 /**

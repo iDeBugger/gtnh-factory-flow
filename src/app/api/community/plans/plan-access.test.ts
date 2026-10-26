@@ -437,6 +437,20 @@ describe("a post's comments", () => {
     }
     expect((await postComment()).status).toBe(200);
   });
+
+  it("deleting a comment under another post's id leaves it in its thread", async () => {
+    const planId = await makePlan("Kept thread", true);
+    const otherId = await makePlan("Other thread", true);
+    const posted = await comments.POST(
+      request("POST", `/api/community/plans/${planId}/comments`, { who: "poster", body: { body: "Stays" } }),
+      params({ planId }),
+    );
+    const { comment: written } = (await posted.json()) as { comment: { id: string } };
+    await commentsRepo.softDelete(otherId, written.id);
+    expect((await commentsRepo.list(planId, 10)).map((row) => row.id)).toEqual([written.id]);
+    await commentsRepo.softDelete(planId, written.id);
+    expect(await commentsRepo.list(planId, 10)).toEqual([]);
+  });
 });
 
 describe("listing posts", () => {
