@@ -59,6 +59,7 @@ export function ResourceIndexPane({
   autoFocus = false,
   searchAt = "top",
   leading,
+  defaultSort = "relevance",
 }: {
   search: string;
   onSearchChange: (value: string) => void;
@@ -70,6 +71,12 @@ export function ResourceIndexPane({
   searchAt?: "top" | "bottom" | "dock" | "none";
   /** Keys at the start of the page row (the column's fold key). */
   leading?: ReactNode;
+  /**
+   * The sort it opens on. The items column is NEI's list and opens "As in NEI"; a picker opens on Best match,
+   * where what was typed matters more than where NEI keeps it. Never Most popular: over an empty popularity map it
+   * is "most ways to make", which opens the list on aspects and Empty Cell.
+   */
+  defaultSort?: ResourceSortMode;
 }) {
   const datasetManifestUrl = useFactoryStore((state) => state.datasetManifestUrl);
   // While a tab's own dataset loads, the other version's items are not listed for it.
@@ -109,7 +116,7 @@ export function ResourceIndexPane({
   const resourceSort =
     chosenSort !== undefined && sortChoices.some((choice) => choice.value === chosenSort)
       ? chosenSort
-      : DEFAULT_RESOURCE_SORT;
+      : defaultSort;
   useEffect(() => {
     if (chosenSort !== undefined && chosenSort !== resourceSort) {
       return deferStateUpdate(() => setChosenSort(undefined));
@@ -338,7 +345,7 @@ export function ResourceIndexPane({
       filter={resourceFilter}
       sort={resourceSort}
       sortChoices={sortChoices}
-      defaultSort={DEFAULT_RESOURCE_SORT}
+      defaultSort={defaultSort}
       onFilter={setResourceFilter}
       onSort={setChosenSort}
     />
@@ -437,13 +444,23 @@ export function neiGridFit(width: number): { columns: number; slot: number } {
 /** One mouse notch is 100 on most platforms, so one notch is one page. */
 const RESOURCE_WHEEL_PAGE_DELTA = 80;
 
-type ResourceSortMode = "relevance" | "popular" | "name" | "mod" | "made" | "uses";
+export type ResourceSortMode =
+  | "nei"
+  | "relevance"
+  | "nei-filter"
+  | "popular"
+  | "name"
+  | "mod"
+  | "made"
+  | "uses";
 
 type ResourceSortChoice = { value: ResourceSortMode; label: string };
 
 /** The sorts the list menu offers, in its order. "popular" only while the popularity map has entries. */
 const RESOURCE_SORT_CHOICES: ReadonlyArray<ResourceSortChoice> = [
+  { value: "nei", label: "As in NEI" },
   { value: "relevance", label: "Best match" },
+  { value: "nei-filter", label: "NEI, filter only" },
   { value: "name", label: "Name A–Z" },
   { value: "mod", label: "By mod" },
   { value: "made", label: "Most ways to make" },
@@ -451,10 +468,6 @@ const RESOURCE_SORT_CHOICES: ReadonlyArray<ResourceSortChoice> = [
   { value: "popular", label: "Most popular" },
 ];
 
-/**
- * Not Most popular: with no popularity it is "most ways to make", which opens the list on aspects and Empty Cell.
- */
-const DEFAULT_RESOURCE_SORT: ResourceSortMode = "relevance";
 
 /**
  * The list's filter: six mutually exclusive answers, because the kind and
@@ -971,6 +984,12 @@ function NeiSearchField({
   );
 }
 
+/** A menu label inside a sentence: its first letter lowered, unless its first word is a name in capitals (NEI). */
+function inSentence(label: string): string {
+  const first = label.split(/[\s,]/, 1)[0] ?? "";
+  return first.length > 1 && first === first.toUpperCase() ? label : label.charAt(0).toLowerCase() + label.slice(1);
+}
+
 /** One menu for what the list shows and how it is sorted, from a key beside the page count. */
 function NeiListMenu({
   filter,
@@ -1000,7 +1019,7 @@ function NeiListMenu({
         aria-label="Show and sort"
         aria-haspopup="menu"
         aria-expanded={anchor !== undefined}
-        title={`Showing ${filterLabel.toLowerCase()}, ${sortLabel.toLowerCase()}`}
+        title={`Showing ${inSentence(filterLabel)}, ${inSentence(sortLabel)}`}
         data-on={changed ? "" : undefined}
         {...{ [MENU_ANCHOR_ATTR]: "" }}
         onClick={(event) => {

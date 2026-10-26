@@ -83,15 +83,31 @@ function sortShown() {
 
 async function sortRows() {
   fireEvent.click(screen.getByLabelText("Show and sort"));
-  const labels = ["Best match", "Name A–Z", "By mod", "Most ways to make", "Most used", "Most popular"];
+  const labels = [
+    "As in NEI",
+    "Best match",
+    "NEI, filter only",
+    "Name A–Z",
+    "By mod",
+    "Most ways to make",
+    "Most used",
+    "Most popular",
+  ];
   await screen.findByText("Best match");
   const shown = labels.filter((label) => screen.queryByText(label) !== null);
   return shown;
 }
 
-function Pane() {
+function Pane({ defaultSort }: { defaultSort?: "nei" }) {
   const [search, setSearch] = useState("");
-  return <ResourceIndexPane search={search} onSearchChange={setSearch} onBrowse={() => {}} />;
+  return (
+    <ResourceIndexPane
+      search={search}
+      onSearchChange={setSearch}
+      onBrowse={() => {}}
+      defaultSort={defaultSort}
+    />
+  );
 }
 
 describe("ResourceIndexPane", () => {
@@ -210,5 +226,26 @@ describe("ResourceIndexPane", () => {
     await act(async () => refreshResourcePopularityOffer());
     await act(async () => {});
     expect(sortShown()).toBe("Showing everything, best match");
+  });
+
+  it("opens the items column As in NEI and offers both NEI sorts, Most popular last", async () => {
+    popularityCount = 3;
+    render(<Pane defaultSort="nei" />);
+    await screen.findByLabelText("Stone");
+    expect(lastSort()).toBe("nei");
+    expect(sortShown()).toBe("Showing everything, as in NEI");
+    await act(async () => refreshResourcePopularityOffer());
+    expect(await sortRows()).toEqual([
+      "As in NEI",
+      "Best match",
+      "NEI, filter only",
+      "Name A–Z",
+      "By mod",
+      "Most ways to make",
+      "Most used",
+      "Most popular",
+    ]);
+    fireEvent.click(screen.getByText("NEI, filter only"));
+    await waitFor(() => expect(lastSort()).toBe("nei-filter"));
   });
 });

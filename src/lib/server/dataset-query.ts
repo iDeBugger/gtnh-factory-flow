@@ -743,13 +743,14 @@ export async function queryCatalogResources(
  * How many blank item lists each loaded version keeps. One holds every match
  * of its kind, sort and source, never narrowed to a mod (a mod view filters
  * the un-modded list): about 2 MB on 2.9. Unbounded, every kind, sort and
- * source alone came to about 130 MB per version. 24 covers every sort of every
- * kind (21) and a few source filters, at most about 50 MB per version, and the
- * key space (3 kinds x 7 sorts x 3 sources) is too small for any request shape
+ * source alone came to about 130 MB per version. 27 covers every sort of every
+ * kind (8 blank orders: the 9 sorts, "nei-filter" sharing "nei"'s list, x 3
+ * kinds = 24) and 3 source filters, at most about 56 MB per version, and the
+ * key space (3 kinds x 8 orders x 3 sources) is too small for any request shape
  * to evict lists faster than real use. An evicted list is recomputed in 20-400
  * ms (the unfiltered ones are the slow ones).
  */
-export const BLANK_RESOURCE_SEARCH_KEYS = 24;
+export const BLANK_RESOURCE_SEARCH_KEYS = 27;
 
 export function createBlankResourceSearchCache<V>(): BoundedLru<string, V> {
   return new BoundedLru(BLANK_RESOURCE_SEARCH_KEYS);

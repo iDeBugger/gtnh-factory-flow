@@ -167,6 +167,8 @@ published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such 
   the fluid); 2.8.1's (2.8.19-GTNH) has it on the `ItemList.loadItems` task and lists no fluids. Aspects come from
   aspectrecipeindex (2.9) or the Thaumcraft NEI plugin (2.8.1) by the plugin's `getAspects` or Thaumcraft's
   `Aspects` NBT.
+- Client only: the split export's server phase writes `not_present` (`server side`), so the list comes from the
+  client phase (`GTNH_EXPORT_PACK_KIND=client`), whose export is the one normalized last.
 - A failure is logged and leaves `status: "failed"`; the rest of the export is unchanged.
 - The pipeline (`scripts/nei-item-order.mjs`): the normalizer writes `neiItemOrder` (each key once, at its first
   place, so a resource NEI lists as several NBT stacks takes the smallest index); `build-resource-index.mjs` writes

@@ -45,7 +45,17 @@ const manifestPath = path.join(root, "public", "datasets", "gtnh", "datasets.man
 
 type Baseline = Record<string, { checksum: string; hashes: Record<string, string> }>;
 
-const SORTS: ResourceQuerySort[] = ["relevance", "name", "mod", "recipes", "made", "uses", "popular"];
+const SORTS: ResourceQuerySort[] = [
+  "relevance",
+  "name",
+  "mod",
+  "recipes",
+  "made",
+  "uses",
+  "popular",
+  "nei",
+  "nei-filter",
+];
 // Fixed and unchanging, so the blank-list cache reuses its answer the way it does
 // between two popularity sweeps.
 const POPULARITY = new Map<string, number>([
@@ -123,7 +133,7 @@ function requestSet(versionId: string): Request[] {
     );
   }
   for (const query of ["steel", "plate", "oak log", "vaccum", "oaklog", "gt", "x", "ab", "steel plate"]) {
-    for (const sort of ["relevance", "name", "made"] as const) {
+    for (const sort of ["relevance", "name", "made", "nei", "nei-filter"] as const) {
       add(`resources query=${query} sort=${sort}`, () =>
         queryDatasetResources(versionId, { query, offset: 0, limit: 24, sort }),
       );

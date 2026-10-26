@@ -36,6 +36,8 @@ const SORTS: ResourceQuerySort[] = [
   "made",
   "uses",
   "popular",
+  "nei",
+  "nei-filter",
 ];
 const POPULARITY = new Map<string, number>([
   ["item:gregtech:gt.metaitem.01@11305", 50],

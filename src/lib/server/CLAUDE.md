@@ -165,6 +165,13 @@
   `src/lib/search/resource-search-parity.local.test.ts` (the installed 2.9 and 2.8.1: 11 queries each with total,
   the first 120, order and respelling, then 280 sort, kind, source, mod and page combinations). The popularity
   sweep's state is on `globalThis` (`resource-popularity.ts`) so the two routes reading it share one sweep.
+- The item sorts "nei" (As in NEI: match score first, NEI's list order between equal scores and with nothing typed)
+  and "nei-filter" (whatever matches, in NEI's order, unranked) rank by `src/lib/search/nei-order.ts`: the dataset's
+  `resourceOrder` (the oracle's NEI list, `tools/dataset-pipeline/CLAUDE.md`), records NEI does not list after it,
+  and a dataset without one by the approximation (vanilla, mod, registry name, meta, then fluids, then aspects).
+  They leave out Best match's nudge (recipe count, name length), which would leave almost no two scores equal. The
+  ranks are made once per loaded list, on the first NEI sort. Exam: `nei-order.test.ts`,
+  `resource-search-engine.test.ts` "the NEI sorts".
 - A text search matches at most six words and at most two of them under three characters
   (`MAX_SEARCH_TERMS`, `MAX_SHORT_SEARCH_TERMS` in `src/lib/search/text-search.ts`): a word that short cannot use
   the trigram index and walks every recipe. The partial phase (entries with ANY of the words) runs in full on
@@ -208,7 +215,8 @@
     30-57 MB. 128 MB is the smallest that keeps the shards one Blast Furnace browse read for the next (1 ms, 88 ms
     at 64 MB). A request reads at most 4 shards at a time (`SHARD_LOAD_CONCURRENCY`: faster than 6, 8 or all at
     once on a 120-shard browse, with half the read buffers of all at once);
-  - each version keeps at most 24 blank item lists (`BLANK_RESOURCE_SEARCH_KEYS`, about 2 MB each unfiltered);
+  - each version keeps at most 27 blank item lists (`BLANK_RESOURCE_SEARCH_KEYS`, about 2 MB each unfiltered: 8
+    blank orders, as "nei-filter" shares "nei"'s, x 3 kinds, and 3 source filters);
   - hydrated summaries: 8,000 (`GTNH_MAX_HYDRATED_RECIPE_SUMMARIES`), about 50 MB when full.
   `GTNH_PREWARM_FULL_DATASETS=1` reads every shard once but keeps only the last 128 MB of them: it warms the disk,
   not the heap.

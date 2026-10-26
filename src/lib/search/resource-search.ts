@@ -35,7 +35,11 @@ export type ResourceQuerySort =
   | "recipes"
   | "made"
   | "uses"
-  | "popular";
+  | "popular"
+  /** As in NEI: best matches first, NEI's list order between equal matches and with nothing typed. */
+  | "nei"
+  /** NEI's own search: whatever matches, in NEI's list order, unranked. */
+  | "nei-filter";
 
 export type ResourceSourceFilter = "plants" | "bees";
 
@@ -51,7 +55,20 @@ export interface ResourceSearchRequest {
   popularity?: Map<string, number>;
 }
 
-const RESOURCE_SORTS = new Set<string>(["name", "mod", "recipes", "made", "uses", "popular"]);
+const RESOURCE_SORTS = new Set<string>([
+  "name",
+  "mod",
+  "recipes",
+  "made",
+  "uses",
+  "popular",
+  "nei",
+  "nei-filter",
+]);
+
+function isNeiSort(sort: ResourceQuerySort | undefined) {
+  return sort === "nei" || sort === "nei-filter";
+}
 
 /** The most one request answers, and what one without a limit gets. */
 export const RESOURCE_SEARCH_MAX_LIMIT = 120;
@@ -201,6 +218,9 @@ export function searchResources(
   },
 ): ResourceSearch {
   const { sourceKeys } = facts;
+  // NEI's order settles equal matches there, so the nudge that settles them for Best match is left out: it would
+  // leave almost no two scores equal.
+  const nudged = !isNeiSort(request.sort);
   let modCounts = new Map<string, number>();
 
   const resolved = resolveSearchPhases(
@@ -248,7 +268,7 @@ export function searchResources(
         }
         matches.push({
           resourceIndex: resourceIndexNumber,
-          score: score > 0 ? score + resourceRelevanceBias(resource) : score,
+          score: score > 0 && nudged ? score + resourceRelevanceBias(resource) : score,
         });
       }
 
@@ -263,6 +283,7 @@ export function searchResources(
     request.sort ?? "relevance",
     facts.directionCounts,
     request.popularity,
+    () => resourceNeiRanks(resourceIndex, indexes),
   );
   return { matches, modCounts, resolved };
 }
@@ -310,8 +331,10 @@ export function resourceSearchPage(
  * out of what is kept.
  */
 export function blankResourceSearchKey(request: ResourceSearchRequest): string | undefined {
+  // With nothing typed every score is 0, so "nei-filter" is "nei" and shares its list.
+  const sort = request.sort === "nei-filter" ? "nei" : (request.sort ?? "relevance");
   return request.query.trim() === ""
-    ? JSON.stringify([request.kind ?? "", request.sort ?? "relevance", request.source ?? null])
+    ? JSON.stringify([request.kind ?? "", sort, request.source ?? null])
     : undefined;
 }
 
@@ -340,7 +363,8 @@ function sortResourceMatches(
   matches: Array<{ resourceIndex: number; score: number }>,
   sort: ResourceQuerySort,
   directionCounts: ResourceDirectionCounts,
-  popularity?: Map<string, number>,
+  popularity: Map<string, number> | undefined,
+  neiRanks: () => Int32Array,
 ) {
   const nameOf = (match: { resourceIndex: number }) => {
     const resource = resourceIndex[match.resourceIndex];
@@ -360,6 +384,16 @@ function sortResourceMatches(
     );
   };
 
+  if (sort === "nei" || sort === "nei-filter") {
+    const ranks = neiRanks();
+    if (sort === "nei-filter") {
+      return [...matches].sort((left, right) => ranks[left.resourceIndex]! - ranks[right.resourceIndex]!);
+    }
+    return [...matches].sort(
+      (left, right) =>
+        right.score - left.score || ranks[left.resourceIndex]! - ranks[right.resourceIndex]!,
+    );
+  }
   if (sort === "name") {
     return [...matches].sort((left, right) => nameOf(left).localeCompare(nameOf(right)));
   }

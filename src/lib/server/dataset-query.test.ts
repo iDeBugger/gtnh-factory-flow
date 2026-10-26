@@ -550,15 +550,15 @@ describe("the bounded dataset caches", () => {
     }
   });
 
-  it("keep 24 blank item lists per version, the least recently read out first", () => {
-    expect(BLANK_RESOURCE_SEARCH_KEYS).toBe(24);
+  it("keep 27 blank item lists per version, the least recently read out first", () => {
+    expect(BLANK_RESOURCE_SEARCH_KEYS).toBe(27);
     const cache = createBlankResourceSearchCache<number>();
-    for (let key = 0; key < 24; key += 1) {
+    for (let key = 0; key < 27; key += 1) {
       cache.set(`list-${key}`, key);
     }
     expect(cache.get("list-0")).toBe(0);
-    cache.set("list-24", 24);
-    expect(cache.count).toBe(24);
+    cache.set("list-27", 27);
+    expect(cache.count).toBe(27);
     expect(cache.get("list-1")).toBeUndefined();
     expect(cache.get("list-0")).toBe(0);
   });
