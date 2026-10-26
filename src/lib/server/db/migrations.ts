@@ -154,10 +154,11 @@ function stringEnd(text: string, at: number, backslashEscapes: boolean): number 
  * The file's text with every comment, string literal, quoted name and
  * dollar-quoted body blanked, read left to right in one pass as Postgres's
  * lexer does: what opens first wins, so an apostrophe inside a `--` comment
- * opens no string and a `--` inside a string starts no comment. Plain strings
- * double `''`; `E'...'` strings also escape with a backslash, and so does a
- * part continued from one; block comments nest. An unterminated literal runs
- * to the end, as Postgres would refuse it.
+ * opens no string and a `--` inside a string starts no comment. A `--`
+ * comment ends at a line feed or a carriage return. Plain strings double
+ * `''`; `E'...'` strings also escape with a backslash, and so does a part
+ * continued from one; block comments nest. An unterminated literal runs to
+ * the end, as Postgres would refuse it.
  */
 export function blankLiterals(text: string): string {
   let out = "";
@@ -168,8 +169,7 @@ export function blankLiterals(text: string): string {
     const c = text[i];
     const next = text[i + 1];
     if (c === "-" && next === "-") {
-      const end = text.indexOf("\n", i);
-      i = end === -1 ? n : end;
+      while (i < n && text[i] !== "\n" && text[i] !== "\r") i += 1;
       out += " ";
     } else if (c === "/" && next === "*") {
       let depth = 1;

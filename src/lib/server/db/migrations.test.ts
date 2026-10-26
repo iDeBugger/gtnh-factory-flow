@@ -261,6 +261,13 @@ describe("the migration runner", () => {
     expect(blankLiterals("select 'a\\'; commit")).toBe("select  ; commit");
   });
 
+  it("ends a -- comment at a carriage return, as Postgres does", () => {
+    expect(() => checkMigrationText("0002-bad.sql", "-- note\rcommit;")).toThrow(
+      /holds no begin, commit, rollback or savepoint/,
+    );
+    expect(blankLiterals("-- a\rb; -- c\r\nd")).toBe(" \rb;  \r\nd");
+  });
+
   it("reads a string continued over a line break in the first part's mode", () => {
     const transaction = /holds no begin, commit, rollback or savepoint/;
     // The continued part of an E-string keeps its backslash escapes.
