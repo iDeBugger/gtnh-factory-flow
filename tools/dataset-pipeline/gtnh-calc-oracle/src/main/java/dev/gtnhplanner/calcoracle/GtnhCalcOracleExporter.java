@@ -98,6 +98,10 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
         domains.add(exportMobDrops(adapters));
         domains.add(new MiningExportImpl().exportMining(adapters, this));
         Map<String, Map<String, Object>> machineData = exportMachineData();
+        // Last: it boots NEI's plugins, which nothing above may see half loaded.
+        Map<String, Object> neiItemList = Boolean.parseBoolean(System.getProperty("gtnh.oracle.neiItemList", "true"))
+            ? new NeiItemListExport(this).export(adapters)
+            : null;
 
         Map<String, Object> root = map();
         root.put("schemaVersion", Integer.valueOf(1));
@@ -111,6 +115,7 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
 
         int recipeCount = countRecipes(domains);
         root.put("recipeCount", Integer.valueOf(recipeCount));
+        putIfPresent(root, "neiItemList", neiItemList);
 
         File outputDir = new File(System.getProperty("gtnh.oracle.outputDir", "GTNH-Calc-Oracle"));
         if (!outputDir.isDirectory() && !outputDir.mkdirs()) {

@@ -149,6 +149,26 @@ published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such 
   `buildRecipeInputOverrides`), as on 2.9's shulker box colours and Forestry saplings. Thaumcraft
   wands render no pixels on 2.8.1 (`dropped-icons.json`), so they have no icon there.
 
+## NEI's item list order (NeiItemListExport.java)
+
+- The export's root `neiItemList` is every stack NEI's item panel lists, sorted as the pack's
+  `inventory.itemsort` sorts it (`minecraft, mod, id, default, damage, name` in both packs), one resource key per
+  stack (`item:<id>[@meta]`, `fluid:<name>`, `aspect:thaumcraft:aspect:<tag>`, null where a stack has none), with
+  `status` (`exported`, `failed` with `error`, `not_present`) and the `sort` it used; adapter `nei-item-list`.
+- NEI builds that list only when a world loads and the oracle exports from the main menu, so the export does what the
+  load does with NEI's own code: `NEIClientConfig.bootNEI()` and a wait for the plugin thread (plugins hide items and
+  add variants; `ItemInfo` fills the owners the `mod` rule reads), NEI's `getPermutations` per registry item, the
+  registry-order numbering into `ItemSorter`'s `default` rule, `ItemStackSet` for duplicates, `ItemSorter.sort`. It
+  runs last, after every domain, so nothing else sees NEI half booted. Collapsible groups are not applied: a group
+  stands where its first stack stands. `-Dgtnh.oracle.neiItemList=false` skips it;
+  `gtnh.oracle.neiBootTimeoutSeconds` (900) bounds the wait.
+- Per pack, by what the classes have, never by a version check: 2.9's NEI (2.8.155-GTNH) has `getPermutations`
+  static on `ItemListLoader` and lists fluids as `neiFluidDisplay` stacks (`StackInfo.isFluidDisplayItem`, mapped to
+  the fluid); 2.8.1's (2.8.19-GTNH) has it on the `ItemList.loadItems` task and lists no fluids. Aspects come from
+  aspectrecipeindex (2.9) or the Thaumcraft NEI plugin (2.8.1) by the plugin's `getAspects` or Thaumcraft's
+  `Aspects` NBT.
+- A failure is logged and leaves `status: "failed"`; the rest of the export is unchanged.
+
 ## Comparing two exports (scripts/oracle-diff.mjs)
 
 - A new export of a pack is checked against the previous one before it replaces it:
