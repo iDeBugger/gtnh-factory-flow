@@ -318,7 +318,28 @@ export async function resolveIconHints({ modsRoot, datasetPath, outDir, log = co
     await fs.rename(partialPath, datasetPath);
   }
 
+  // A re-run on a resolved dataset finds no hints. Its report would list nothing, so the one the
+  // first run wrote is kept: it is the record of which files came from which jars, and it holds
+  // the textureMatching apply-texture-icons merged in. Otherwise the fields this step does not
+  // own are merged as apply-texture-icons merges them, minus a top-level `skipped`, which the
+  // publish refuses.
+  const reportPath = path.join(textureDir, "icon-report.json");
+  let previous = {};
+  try {
+    previous = JSON.parse(await fs.readFile(reportPath, "utf8"));
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+  }
+  if (hints.size === 0 && previous.textureHints) {
+    log(`Icon hints for ${datasetVersionId}: none left; kept the existing icon report.`);
+    return previous;
+  }
+  delete previous.skipped;
+  delete previous.reason;
   const report = {
+    ...previous,
     schemaVersion: 1,
     datasetVersionId,
     generatedAt: new Date().toISOString(),
@@ -333,7 +354,7 @@ export async function resolveIconHints({ modsRoot, datasetPath, outDir, log = co
     },
   };
   await fs.mkdir(textureDir, { recursive: true });
-  await fs.writeFile(path.join(textureDir, "icon-report.json"), `${JSON.stringify(report, null, 2)}\n`);
+  await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`);
 
   log(
     `Icon hints for ${datasetVersionId}: ${resolved.length} of ${hints.size} resolved from ${jarCount} jars (${replaced} copies), ${cleared} copies cleared.`,

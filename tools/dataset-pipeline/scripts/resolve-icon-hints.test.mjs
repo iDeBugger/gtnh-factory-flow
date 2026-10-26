@@ -204,8 +204,9 @@ describe("resolveIconHints", () => {
     await resolveIconHints({ modsRoot: second.instance, datasetPath: second.datasetPath, outDir: second.outDir, log: () => {} });
     expect(fs.readFileSync(first.datasetPath, "utf8")).toBe(fs.readFileSync(second.datasetPath, "utf8"));
     // A second pass over a resolved dataset finds nothing left to do.
-    const again = await resolveIconHints({ modsRoot: first.instance, datasetPath: first.datasetPath, outDir: first.outDir, log: () => {} });
-    expect(again.textureHints.hints).toBe(0);
+    const datasetBefore = fs.readFileSync(first.datasetPath, "utf8");
+    await resolveIconHints({ modsRoot: first.instance, datasetPath: first.datasetPath, outDir: first.outDir, log: () => {} });
+    expect(fs.readFileSync(first.datasetPath, "utf8")).toBe(datasetBefore);
   });
 
   it("refuses to clear every hint for want of the mods directory", async () => {
@@ -215,6 +216,21 @@ describe("resolveIconHints", () => {
       resolveIconHints({ modsRoot: instance, datasetPath, outDir, log: () => {} }),
     ).rejects.toThrow(/No mod jars under/);
     expect(fs.readFileSync(datasetPath, "utf8")).toBe(before);
+  });
+
+  it("keeps the first run's report when a re-run finds no hints", async () => {
+    const { instance, outDir, datasetPath } = await buildFixture();
+    await resolveIconHints({ modsRoot: instance, datasetPath, outDir, log: () => {} });
+    execFileSync("node", [applyTextureIconsPath, instance, datasetPath, outDir], {
+      env: { ...process.env, GTNH_TEXTURE_ICON_MAX_DATASET_BYTES: "1" },
+      stdio: "pipe",
+    });
+    const reportPath = path.join(outDir, "textures", "icon-report.json");
+    const before = fs.readFileSync(reportPath, "utf8");
+    const again = await resolveIconHints({ modsRoot: instance, datasetPath, outDir, log: () => {} });
+    expect(fs.readFileSync(reportPath, "utf8")).toBe(before);
+    expect(again.textureHints.resolved).toHaveLength(2);
+    expect(again.textureMatching.skipped).toBe(true);
   });
 
   it("keeps its report when apply-texture-icons skips a dataset over its size limit", async () => {
