@@ -61,7 +61,9 @@ import * as publish from "./[blueprintId]/publish/route";
 import * as vote from "./[blueprintId]/vote/route";
 import * as download from "./[blueprintId]/download/route";
 
-const context = { params: Promise.resolve({ blueprintId: "bp-1" }) };
+// A well-formed id: a malformed one is answered before any query.
+const BLUEPRINT_ID = "0b6f7c1e-3d2a-4e5f-8a9b-1c2d3e4f5a6b";
+const context = { params: Promise.resolve({ blueprintId: BLUEPRINT_ID }) };
 const ann = { id: "ann-id", username: "ann" };
 
 function get(url: string): Request {
@@ -84,9 +86,9 @@ describe("blueprints with the setting unset", () => {
     sessionUser.mockReturnValue(ann);
     const answers = [
       await list.GET(get("/api/blueprints?scope=public")),
-      await publish.POST(post("/api/blueprints/bp-1/publish", { publish: true }), context),
-      await vote.POST(post("/api/blueprints/bp-1/vote", { deviceId: "d", value: 1 }), context),
-      await download.POST(post("/api/blueprints/bp-1/download", {}), context),
+      await publish.POST(post(`/api/blueprints/${BLUEPRINT_ID}/publish`, { publish: true }), context),
+      await vote.POST(post(`/api/blueprints/${BLUEPRINT_ID}/vote`, { deviceId: "d", value: 1 }), context),
+      await download.POST(post(`/api/blueprints/${BLUEPRINT_ID}/download`, {}), context),
     ];
     for (const answer of answers) {
       expect(answer.status).toBe(404);
@@ -131,12 +133,12 @@ describe("blueprints with the setting unset", () => {
 
   it("finds only the reader's own blueprint by id, never someone else's published one", async () => {
     sessionUser.mockReturnValue(ann);
-    await one.GET(get("/api/blueprints/bp-1"), context);
+    await one.GET(get(`/api/blueprints/${BLUEPRINT_ID}`), context);
     expect(calls).toContainEqual(["or", [`user_id.eq.${ann.id}`]]);
 
     calls.length = 0;
     sessionUser.mockReturnValue(undefined);
-    const stranger = await one.GET(get("/api/blueprints/bp-1"), context);
+    const stranger = await one.GET(get(`/api/blueprints/${BLUEPRINT_ID}`), context);
     expect(stranger.status).toBe(404);
     expect(calls).toEqual([]);
   });
@@ -152,7 +154,7 @@ describe("blueprints with the setting on", () => {
 
     calls.length = 0;
     sessionUser.mockReturnValue(ann);
-    await one.GET(get("/api/blueprints/bp-1"), context);
+    await one.GET(get(`/api/blueprints/${BLUEPRINT_ID}`), context);
     expect(calls).toContainEqual(["or", [`is_public.eq.true,user_id.eq.${ann.id}`]]);
   });
 
@@ -177,9 +179,9 @@ describe("blueprints with the setting on", () => {
   it("reaches publishing, voting and placing", async () => {
     sessionUser.mockReturnValue(ann);
     const answers = [
-      await publish.POST(post("/api/blueprints/bp-1/publish", { publish: true }), context),
-      await vote.POST(post("/api/blueprints/bp-1/vote", { deviceId: "d", value: 1 }), context),
-      await download.POST(post("/api/blueprints/bp-1/download", {}), context),
+      await publish.POST(post(`/api/blueprints/${BLUEPRINT_ID}/publish`, { publish: true }), context),
+      await vote.POST(post(`/api/blueprints/${BLUEPRINT_ID}/vote`, { deviceId: "d", value: 1 }), context),
+      await download.POST(post(`/api/blueprints/${BLUEPRINT_ID}/download`, {}), context),
     ];
     for (const answer of answers) {
       expect(await answer.json()).not.toEqual({ error: "Not found" });
