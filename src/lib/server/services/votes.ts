@@ -14,10 +14,11 @@ import { fail, ok, type ServiceResult } from "./result";
 export type { VoteTarget } from "../repos/votes";
 
 /**
- * Anonymous votes one address may cast or switch on one post in a day. The anonymous voter key is the browser's device id, which a
- * script can make up freely, so without this one address casts a vote per
- * made-up id. Accounts are keyed by account and exempt: a household behind
- * one address can each vote signed in.
+ * Anonymous votes one address may cast or switch on one post in a day. The
+ * anonymous voter key is the browser's device id, which a script can make up
+ * freely, so without this one address casts a vote per made-up id. Accounts
+ * are keyed by account and exempt: a household behind one address can each
+ * vote signed in.
  */
 export const VOTES_PER_ADDRESS_PER_PLAN_PER_DAY = 3;
 /** What the next anonymous voter behind that address is told: a shared network, not haste. */

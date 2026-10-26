@@ -16,9 +16,9 @@ const UTC_TIMESTAMP = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)\+0
 /**
  * A `timestamptz` as JSON spells it: `2026-10-25 17:33:50.431+00` becomes
  * `2026-10-25T17:33:50.431+00:00`, fraction digits as Postgres printed them.
- * Every session runs in UTC (`dbSettings`; each PGlite sets it when it opens), so any other
- * offset means a session that skipped that setting: it throws rather than
- * answer a time a client would read in the wrong zone.
+ * Every session runs in UTC (`dbSettings`; each PGlite sets it when it
+ * opens), so any other offset means a session that skipped that setting: it
+ * throws rather than answer a time a client would read in the wrong zone.
  */
 export function toJsonTimestamp(text: string): string {
   const match = UTC_TIMESTAMP.exec(text);
