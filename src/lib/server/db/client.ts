@@ -23,18 +23,32 @@ const typeParsers: pg.CustomTypesConfig = {
     pg.types.getTypeParser(oid, format)) as pg.CustomTypesConfig["getTypeParser"],
 };
 
+/**
+ * Listens for every connection the pool holds, idle or in use. A connection
+ * the server drops (a restart, the idle-in-transaction timeout) emits
+ * `error`; unheard, Node raises it as an uncaught exception, which ends the
+ * live service. The pool only listens while a connection is idle, so each one
+ * gets its own listener as it connects. The work holding it then fails as
+ * down, and the pool discards it on release and connects afresh next time.
+ */
+export function hearConnectionErrors(pool: pg.Pool, label: string): void {
+  pool.on("error", (error) => {
+    console.error(`[${label}] idle connection lost: ${error.message}`);
+  });
+  pool.on("connect", (client) => {
+    client.on("error", (error) => {
+      console.error(`[${label}] connection lost: ${error.message}`);
+    });
+  });
+}
+
 export function createDbClient(service: DbService, env: DbEnv): DirectDbClient {
   const settings = dbSettings(service, env);
   if (!settings.connectionString) {
     throw new Error("The database is not configured: set DATABASE_URL");
   }
   const pool = new pg.Pool({ ...settings, types: typeParsers });
-  // An idle connection the server drops (a restart, a network blip) reports
-  // here; unheard, it would end the process. The pool discards the
-  // connection and opens a fresh one on the next query.
-  pool.on("error", (error) => {
-    console.error(`[db] idle connection lost: ${error.message}`);
-  });
+  hearConnectionErrors(pool, "db");
   const db = new Kysely<Database>({
     dialect: new GuardedDialect(new PostgresDialect({ pool })),
   });

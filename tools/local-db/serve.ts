@@ -35,6 +35,7 @@ import { createServer } from "node:http";
 import path from "node:path";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import pg from "pg";
+import { hearConnectionErrors } from "../../src/lib/server/db/client";
 import { applyMigrations } from "../../src/lib/server/db/migrations";
 import { DB_TYPE_PARSERS } from "../../src/lib/server/db/parsers";
 import { openLocalDatabase } from "../../src/lib/server/local-db/database";
@@ -65,7 +66,7 @@ async function servePostgres(url: string): Promise<Served> {
         pg.types.getTypeParser(oid, format)) as pg.CustomTypesConfig["getTypeParser"],
     },
   });
-  pool.on("error", (error) => console.error(`[local-db] idle connection lost: ${error.message}`));
+  hearConnectionErrors(pool, "local-db");
   const until = Date.now() + 90_000;
   for (;;) {
     try {
