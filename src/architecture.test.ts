@@ -447,7 +447,7 @@ function namesImported(file: SourceFile, target: string): string[] {
     const isImport = ts.isImportDeclaration(statement);
     if (!isImport && !ts.isExportDeclaration(statement)) continue;
     const specifier = statement.moduleSpecifier;
-    if (!specifier || !ts.isStringLiteral(specifier)) continue;
+    if (!specifier || !ts.isStringLiteralLike(specifier)) continue;
     if (resolveSpecifier(path.join(ROOT, file.path), specifier.text) !== target) continue;
     if (isImport) {
       const clause = statement.importClause;
@@ -479,7 +479,7 @@ function namesImported(file: SourceFile, target: string): string[] {
         (callee.kind === ts.SyntaxKind.ImportKeyword ||
           (ts.isIdentifier(callee) && callee.text === "require")) &&
         loaded &&
-        ts.isStringLiteral(loaded) &&
+        ts.isStringLiteralLike(loaded) &&
         resolveSpecifier(path.join(ROOT, file.path), loaded.text) === target
       ) {
         names.push("import()");
@@ -609,7 +609,7 @@ function serviceDbNames(graph: Map<string, SourceFile>): string[] {
 const SPLICING_CALLS = new Set(["raw", "ref", "id", "lit", "table"]);
 
 const isKysely = (specifier: ts.Node): boolean =>
-  ts.isStringLiteral(specifier) && /^kysely(\/|$)/.test(specifier.text);
+  ts.isStringLiteralLike(specifier) && /^kysely(\/|$)/.test(specifier.text);
 
 /** A name used as a type, or named in an import: no value reaches SQL through it. */
 const inTypeOrImport = (node: ts.Node): boolean =>
@@ -959,6 +959,8 @@ describe("the layers", () => {
         "  return getDb();",
         "};",
       ].join("\n"),
+      "src/lib/server/services/backtick-fixture.ts":
+        "export const handle = async () => (await import(`../db`)).getDb();",
       "src/lib/server/services/require-fixture.ts":
         'export const handle = () => require("../db").getDb();',
       "src/lib/server/import-fixture.ts":
@@ -969,10 +971,12 @@ describe("the layers", () => {
     );
     expect(clientHandleImports(bad)).toEqual([
       "src/lib/server/import-fixture.ts: import()",
+      "src/lib/server/services/backtick-fixture.ts: import()",
       "src/lib/server/services/import-fixture.ts: import()",
       "src/lib/server/services/require-fixture.ts: import()",
     ]);
     expect(serviceDbNames(bad)).toEqual([
+      "src/lib/server/services/backtick-fixture.ts: import()",
       "src/lib/server/services/import-fixture.ts: import()",
       "src/lib/server/services/require-fixture.ts: import()",
     ]);
@@ -1000,6 +1004,9 @@ describe("the layers", () => {
       [repo("dynamic-table")]: [
         'import { getDb } from "../db";',
         'export const table = (t: string) => getDb()["dynamic"].table(t);',
+      ].join("\n"),
+      [repo("backtick-import")]: [
+        "export const column = async (c: string) => (await import(`kysely`)).sql.raw(c);",
       ].join("\n"),
       [repo("sql-variable")]: [
         'import { sql } from "kysely";',
@@ -1056,6 +1063,8 @@ describe("the layers", () => {
     );
     expect(sqlOutOfPlace(bad)).toEqual([
       "src/lib/server/db/compiled-alias.ts: CompiledQuery as CQ",
+      `${repo("backtick-import")}: kysely loaded dynamically`,
+      `${repo("backtick-import")}: sql.raw`,
       `${repo("compiled")}: CompiledQuery`,
       `${repo("dynamic-destructured")}: dynamic`,
       `${repo("dynamic-ref")}: dynamic`,
