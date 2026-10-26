@@ -11,6 +11,8 @@ import * as designs from "../repos/designs";
 import * as events from "../repos/events";
 import * as folders from "../repos/folders";
 import * as plans from "../repos/plans";
+import * as popularity from "../repos/popularity";
+import { PLAN_SUMMARY_FIELDS } from "../community-rows";
 import * as votes from "../repos/votes";
 import { useDbForTests, withTransaction } from "./index";
 import { applyMigrations, schemaFiles } from "./migrations";
@@ -571,6 +573,31 @@ describe("the database roles", () => {
       if (blueprintId) {
         await pglite.query("delete from blueprints where id = $1", [blueprintId]);
       }
+    }
+  });
+
+  it("runs the by-score read and the popularity sweep's page as the site role", async () => {
+    const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) });
+    useDbForTests(db);
+    const posted = await pglite.query<{ id: string }>(
+      `insert into community_plans (user_id, author_name, name, plan, outputs, uploader_key)
+       values ($1, 'owner', 'Ranked', '{"nodes":[]}', '[{"kind":"item","resourceId":"steel"}]', 'test') returning id`,
+      [OWNER],
+    );
+    const id = posted.rows[0]!.id;
+    try {
+      await as("gtnh_site", async () => {
+        const links = await plans.publicByScore<Record<string, unknown>>(10, plans.PLAN_LINK_FIELDS);
+        expect(links.map((row) => Object.keys(row).sort())).toEqual([["created_at", "id", "updated_at"]]);
+        expect(links[0]!.id).toBe(id);
+        expect(await plans.publicByScore(10, PLAN_SUMMARY_FIELDS)).toMatchObject([{ id, name: "Ranked" }]);
+        expect(await popularity.publicPlanPage(0, 10)).toEqual([
+          { plan: { nodes: [] }, outputs: [{ kind: "item", resourceId: "steel" }] },
+        ]);
+      });
+    } finally {
+      useDbForTests(undefined);
+      await pglite.query("delete from community_plans where id = $1", [id]);
     }
   });
 

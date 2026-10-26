@@ -45,9 +45,6 @@ export const PLAN_SUMMARY_FIELDS = [
   "last_activity_at",
 ] as const;
 
-/** The same columns as a PostgREST select list. */
-export const PLAN_SUMMARY_COLUMNS = PLAN_SUMMARY_FIELDS.join(",");
-
 export interface PlanRow {
   id: string;
   name: string;

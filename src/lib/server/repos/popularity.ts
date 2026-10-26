@@ -1,9 +1,10 @@
-import { getCommunityDb, type Tx } from "../db";
+import { getDb, type Tx } from "../db";
+import { sqlRules } from "./visibility";
 
 /**
  * The popularity sweep's read of the public posts (`community_plans`): the
  * plan jsonb and the boundary outputs, page by page. Scoring them is
- * `resource-popularity.ts`'s job.
+ * `services/resource-popularity.ts`'s job.
  */
 
 export interface PopularityPlanRow {
@@ -20,17 +21,14 @@ export interface PopularityPlanRow {
 export async function publicPlanPage(
   offset: number,
   limit: number,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<PopularityPlanRow[]> {
-  // The null branch is dead (the column is not null) and goes with the direct client.
-  const { data, error } = await getCommunityDb()
-    .from("community_plans")
-    .select("plan, outputs")
-    .or("is_public.eq.true,is_public.is.null")
-    .order("id", { ascending: true })
-    .range(offset, offset + limit - 1);
-  if (error) {
-    throw new Error(error.message || "Reading the public posts failed.", { cause: error });
-  }
-  return (data ?? []) as PopularityPlanRow[];
+  return (tx ?? getDb())
+    .selectFrom("community_plans")
+    .select(["plan", "outputs"])
+    .where(sqlRules.publicPlans())
+    .orderBy("id", "asc")
+    .limit(limit)
+    .offset(offset)
+    .execute();
 }

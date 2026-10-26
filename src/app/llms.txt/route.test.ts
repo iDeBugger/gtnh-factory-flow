@@ -10,7 +10,6 @@ const rows = [
   },
 ];
 
-vi.mock("@/lib/server/community-rows", () => ({ PLAN_SUMMARY_COLUMNS: "*" }));
 vi.mock("@/lib/server/services/config", () => ({ isDatabaseConfigured: () => true }));
 vi.mock("@/lib/server/services/community-plans", () => ({
   publicPlansByScore: async () => rows,

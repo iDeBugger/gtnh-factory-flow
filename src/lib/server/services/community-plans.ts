@@ -14,7 +14,7 @@ import { APP_VERSION } from "@/lib/version";
 import { makeActorKey, makeVoterKey } from "../auth/keys";
 import {
   parseEntryIcon,
-  PLAN_SUMMARY_COLUMNS,
+  PLAN_SUMMARY_FIELDS,
   rowToPlanSummary,
   type PlanRow,
 } from "../community-rows";
@@ -123,8 +123,8 @@ export interface PlanLinkRow {
  * caller cannot pass a list whose rows do not match the type it gets back.
  */
 const BY_SCORE_COLUMNS = {
-  summary: PLAN_SUMMARY_COLUMNS,
-  links: "id,created_at,updated_at",
+  summary: PLAN_SUMMARY_FIELDS,
+  links: plans.PLAN_LINK_FIELDS,
 } as const;
 
 /** The rows each by-score column list reads. */

@@ -1,8 +1,8 @@
 import type { Expression, ExpressionBuilder, SqlBool } from "kysely";
 import type { PlanSearch } from "@/lib/community/search-query";
 import type { EntryIcon, PlanResourceStat } from "@/lib/community/types";
-import { getCommunityDb, getDb, json, type Database, type Tx } from "../db";
-import { PLAN_SUMMARY_FIELDS, type PLAN_SUMMARY_COLUMNS, type PlanRow } from "../community-rows";
+import { getDb, json, type Database, type Tx } from "../db";
+import { PLAN_SUMMARY_FIELDS, type PlanRow } from "../community-rows";
 import { searchConditions } from "./search";
 import { sqlRules, type VisibilityViewer } from "./visibility";
 
@@ -383,25 +383,24 @@ export async function takeDownload(
     .executeTakeFirst();
 }
 
-/** The column sets a by-score read of the public posts can ask for. */
-export type PublicByScoreColumns = typeof PLAN_SUMMARY_COLUMNS | "id,created_at,updated_at";
+/** The columns a link to a post needs: its id and dates. */
+export const PLAN_LINK_FIELDS = ["id", "created_at", "updated_at"] as const;
+
+/** The column lists a by-score read of the public posts can ask for. */
+export type PublicByScoreColumns = typeof PLAN_SUMMARY_FIELDS | typeof PLAN_LINK_FIELDS;
 
 /** The public posts, best first, up to `limit`. Throws when the database does not answer. */
 export async function publicByScore<Row>(
   limit: number,
   columns: PublicByScoreColumns,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<Row[]> {
-  // The null branch is dead (the column is not null) and goes with the direct client.
-  const { data, error } = await getCommunityDb()
-    .from("community_plans")
+  return (tx ?? getDb())
+    .selectFrom("community_plans")
     .select(columns)
-    .or("is_public.eq.true,is_public.is.null")
-    .order("score", { ascending: false })
+    .where(sqlRules.publicPlans())
+    .orderBy("score", "desc")
     .limit(limit)
-    .returns<Row[]>();
-  if (error) {
-    throw new Error(error.message || "Reading the public posts failed.", { cause: error });
-  }
-  return data ?? [];
+    .$castTo<Row>()
+    .execute();
 }

@@ -262,10 +262,11 @@ Checks with no exceptions at all:
   `CompiledQuery` as a value (and outside `db/` at all); a namespace or dynamic import of kysely. A sort column
   comes from a closed map and goes through the builder, never through these.
 
-Accounts, the event log, the library (designs with the live lease, members, folders), community posts, their
-comments, blueprints and the votes on posts and blueprints go to Postgres directly (`getDb` at `DATABASE_URL`, see
-Local database below); the live service's queries are all among these, and it refuses to start without
-`DATABASE_URL`; `services/config.ts` answers "configured" only with both clients set. Community posts (`repos/plans.ts`,
+Every repository goes to Postgres directly (`getDb` at `DATABASE_URL`, see Local database below): accounts, the event
+log, the library (designs with the live lease, members, folders), community posts, their comments, blueprints, the
+votes on posts and blueprints, and the reads of the public posts by the popularity sweep, the sitemap and
+llms.txt. The live service's queries are all among these, and it refuses to start without `DATABASE_URL`;
+`services/config.ts` answers "configured" only with both clients set. Community posts (`repos/plans.ts`,
 `repos/comments.ts`; exam `plan-access.test.ts`, the Postgres cases in `services/community-plans-postgres.test.ts`):
 - The list's page and its `total` are two statements over one condition, run on one read-only `repeatable read`
   snapshot (`withTransaction(work, { readSnapshot: true })`): the total never disagrees with the rows, and a page
@@ -290,8 +291,8 @@ Local database below); the live service's queries are all among these, and it re
 - A blueprint download (`repos/blueprints.takeDownload`) is one `update ... returning` with the public rule in
   its `where`; its author's own download adds nothing (a `case` on `user_id`), so concurrent downloads all land
   and an author never inflates the count. Exam `blueprints/vote.test.ts`, `services/blueprints-postgres.test.ts`.
-Every other repository, until its swap, goes to PostgREST at `POSTGREST_URL` through `@supabase/postgrest-js`
-(`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
+No repository reads PostgREST any more; its client stays configured until it goes with the stand-in. It reaches
+PostgREST at `POSTGREST_URL` through `@supabase/postgrest-js` (`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
 which bypasses row security. No anon role exists, so a request without the token is 401. `SUPABASE_URL` and
 `SUPABASE_SERVICE_ROLE_KEY` are not read; the startup checks warn when either is set. Rules:
 - Every request goes through `fetchWithDbTimeout` (20 s). A timeout answers 504 rather than
