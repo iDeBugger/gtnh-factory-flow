@@ -92,8 +92,23 @@ export class DatabaseDownError extends Error {
   }
 }
 
-/** Socket errors that mean the server is gone or unreachable. */
-const DOWN_SOCKET_CODES = new Set(["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "EHOSTUNREACH"]);
+/**
+ * Socket errors that mean the server is gone or unreachable. ENOTFOUND and
+ * EAI_AGAIN are a host with no address: compose's DNS has no record for the
+ * `postgres` service while its container is stopped or restarting. EPIPE is
+ * a write on a socket the server just closed.
+ */
+const DOWN_SOCKET_CODES = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "EPIPE",
+  "ECONNABORTED",
+]);
 /**
  * SQLSTATEs that mean the server stopped the work or has no room for it:
  * 57014 a statement timeout or cancel, 57P01..57P03 a shutdown or a server

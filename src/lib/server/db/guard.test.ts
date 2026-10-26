@@ -21,8 +21,22 @@ const testDb = useTestDb();
 
 const withCode = (code: string) => Object.assign(new Error(`failed ${code}`), { code });
 
-/** A dialect whose every query fails with whatever `answer` returns (or succeeds when it returns nothing). */
-function fakeDialect(answer: () => Error | undefined) {
+/** Postgres's SQL, with one connection at a time as PGlite has: Kysely then locks the connection. */
+class SingleConnectionAdapter extends PostgresAdapter {
+  override get supportsMultipleConnections(): boolean {
+    return false;
+  }
+}
+
+/**
+ * A dialect whose every query fails with whatever `answer` returns (or
+ * succeeds when it returns nothing), and whose connection attempt fails with
+ * whatever `connect` returns.
+ */
+function fakeDialect(
+  answer: () => Error | undefined,
+  options: { connect?: () => Error | undefined; singleConnection?: boolean } = {},
+) {
   const calls = { acquired: 0, queries: 0 };
   const connection: DatabaseConnection = {
     async executeQuery<R>(): Promise<QueryResult<R>> {
@@ -39,6 +53,8 @@ function fakeDialect(answer: () => Error | undefined) {
     init: async () => undefined,
     acquireConnection: async () => {
       calls.acquired += 1;
+      const error = options.connect?.();
+      if (error) throw error;
       return connection;
     },
     beginTransaction: async () => undefined,
@@ -50,7 +66,8 @@ function fakeDialect(answer: () => Error | undefined) {
   const dialect: Dialect = {
     createDriver: () => driver,
     createQueryCompiler: () => new PostgresQueryCompiler(),
-    createAdapter: () => new PostgresAdapter(),
+    createAdapter: () =>
+      options.singleConnection ? new SingleConnectionAdapter() : new PostgresAdapter(),
     createIntrospector: (db) => new PostgresIntrospector(db),
   };
   return { calls, db: new Kysely<Database>({ dialect: new GuardedDialect(dialect) }) };
@@ -66,7 +83,19 @@ afterEach(() => {
 
 describe("the direct client's guard", () => {
   it("counts only down errors", () => {
-    for (const code of ["ECONNREFUSED", "ECONNRESET", "57014", "57P01", "53300", "08006"]) {
+    for (const code of [
+      "ECONNREFUSED",
+      "ECONNRESET",
+      "ENOTFOUND",
+      "EAI_AGAIN",
+      "ENETUNREACH",
+      "EPIPE",
+      "ECONNABORTED",
+      "57014",
+      "57P01",
+      "53300",
+      "08006",
+    ]) {
       expect(isDatabaseDown(withCode(code)), code).toBe(true);
     }
     expect(isDatabaseDown(new Error("Query read timeout"))).toBe(true);
@@ -110,6 +139,45 @@ describe("the direct client's guard", () => {
       await expect(ping(db)).rejects.toBeInstanceOf(DatabaseDownError);
     }
     expect(dbBreakerOpen()).toBe(false);
+  });
+
+  it("counts a connection that cannot be made as down, and holds nothing after it", async () => {
+    let connect: Error | undefined = withCode("ENOTFOUND");
+    const { db } = fakeDialect(() => undefined, { connect: () => connect, singleConnection: true });
+    for (let i = 0; i < DB_BREAKER_FAILURES; i += 1) {
+      const error = await ping(db).catch((thrown: unknown) => thrown);
+      expect(error).toBeInstanceOf(DatabaseDownError);
+      expect((error as DatabaseDownError).cause).toMatchObject({ code: "ENOTFOUND" });
+    }
+    expect(dbBreakerOpen()).toBe(true);
+    resetDbBreaker();
+
+    // The pool's connect timeout, then a connection: Kysely's lock was freed each time.
+    connect = new Error("timeout exceeded when trying to connect");
+    await expect(ping(db)).rejects.toBeInstanceOf(DatabaseDownError);
+    await expect(
+      db.transaction().execute((tx) => tx.selectFrom("community_users").select("id").execute()),
+    ).rejects.toBeInstanceOf(DatabaseDownError);
+    connect = undefined;
+    await expect(ping(db)).resolves.toMatchObject({ rows: [] });
+  });
+
+  it("a connection refused for another reason is no answer: it neither counts nor resets", async () => {
+    let failing = true;
+    let connect: Error | undefined;
+    const { db } = fakeDialect(() => (failing ? withCode("ECONNRESET") : undefined), {
+      connect: () => connect,
+    });
+    for (let i = 0; i < DB_BREAKER_FAILURES - 1; i += 1) {
+      await expect(ping(db)).rejects.toBeInstanceOf(DatabaseDownError);
+    }
+    connect = withCode("28P01");
+    await expect(ping(db)).rejects.toMatchObject({ code: "28P01" });
+    expect(dbBreakerOpen()).toBe(false);
+    connect = undefined;
+    await expect(ping(db)).rejects.toBeInstanceOf(DatabaseDownError);
+    expect(dbBreakerOpen()).toBe(true);
+    failing = false;
   });
 
   it("passes a refused query on as it is, and never counts it", async () => {

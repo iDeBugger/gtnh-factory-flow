@@ -45,10 +45,16 @@ function faultFor(sql: string, parameters: readonly unknown[]): Error | undefine
   return (globalThis as WithFault)[FAULT]?.(sql, parameters);
 }
 
-/** Records the outcome and gives back what to throw: a down error as `DatabaseDownError`. */
-function settle(error: unknown, record = true): unknown {
+/**
+ * Records the outcome and gives back what to throw: a down error as
+ * `DatabaseDownError`. `record` says which outcomes count: every one for a
+ * query (a refusal is an answer, so it closes the count), only a down one for
+ * a connection attempt (a refused login answers no query), none for a
+ * rollback (it follows a failure already counted).
+ */
+function settle(error: unknown, record: "all" | "down" | "none" = "all"): unknown {
   const down = isDatabaseDown(error);
-  if (record) {
+  if (record === "all" || (record === "down" && down)) {
     recordDbOutcome(down);
   }
   return down && !(error instanceof DatabaseDownError) ? new DatabaseDownError(error) : error;
@@ -122,8 +128,8 @@ class GuardedDriver implements Driver {
     try {
       return new GuardedConnection(await this.inner.acquireConnection(options));
     } catch (error) {
-      // The pool's connect timeout or a refused socket.
-      return new FailedConnection(settle(error));
+      // The pool's connect timeout, a refused socket, an unknown host, or a refused login.
+      return new FailedConnection(settle(error, "down"));
     }
   }
 
@@ -160,8 +166,7 @@ class GuardedDriver implements Driver {
     try {
       await this.inner.rollbackTransaction(unwrap(connection));
     } catch (error) {
-      // A rollback follows the failure that was already counted.
-      throw settle(error, false);
+      throw settle(error, "none");
     }
   }
 
