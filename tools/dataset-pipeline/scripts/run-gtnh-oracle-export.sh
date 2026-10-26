@@ -22,6 +22,8 @@ export GTNH_EXPORT_MAX_RUNTIME_RESTARTS="${GTNH_EXPORT_MAX_RUNTIME_RESTARTS:-2}"
 export GTNH_PACK_CACHE_DIR="${GTNH_PACK_CACHE_DIR:-}"
 export GTNH_ORACLE_BUILD_CACHE_DIR="${GTNH_ORACLE_BUILD_CACHE_DIR:-}"
 export GTNH_CLIENT_RUNTIME_CACHE_DIR="${GTNH_CLIENT_RUNTIME_CACHE_DIR:-}"
+# false stops after the raw export: build-datasets.mjs runs the normalizer and the rest itself.
+export GTNH_EXPORT_POSTPROCESS="${GTNH_EXPORT_POSTPROCESS:-true}"
 
 mkdir -p "$GTNH_DATASET_OUT_DIR" "$GTNH_RAW_EXPORT_DIR" "$GTNH_INSTANCE_DIR"
 
@@ -344,6 +346,10 @@ if [[ -d "$oracle_output_dir/machine-data" ]]; then
   echo "Machine data: $(ls "$GTNH_RAW_EXPORT_DIR/machine-data" | tr '\n' ' ')"
 else
   echo "GTNH calculation oracle wrote no machine-data/ under $oracle_output_dir" >&2
+fi
+if [[ "$GTNH_EXPORT_POSTPROCESS" != "true" ]]; then
+  echo "Raw export written to $GTNH_RAW_EXPORT_DIR; post-processing left to the caller"
+  exit 0
 fi
 echo "Normalizing oracle export into dataset recipes.json"
 node tools/dataset-pipeline/scripts/normalize-oracle-export.mjs "$raw_oracle_json" "$GTNH_DATASET_OUT_DIR/recipes.json"
