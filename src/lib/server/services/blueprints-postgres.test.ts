@@ -1,13 +1,15 @@
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { BLUEPRINT_MAX_PER_USER } from "@/lib/blueprints/types";
+import aluminaLine from "@/components/flow/__fixtures__/alumina-line-shared-reactor.json";
 import { closeDb, resetDbBreaker, useDbForTests } from "../db";
 import { createDbClient, type DirectDbClient } from "../db/client";
 import { applyMigrations } from "../db/migrations";
-import type { Viewer } from "../http/viewer";
-import { downloadBlueprint } from "./blueprints";
+import type { SignedIn, Viewer } from "../http/viewer";
+import { downloadBlueprint, saveBlueprint } from "./blueprints";
 
 /**
- * Blueprint downloads on a real Postgres, where each request runs on a
+ * Blueprint saves and downloads on a real Postgres, where each request runs on a
  * connection of its own (on PGlite statements never overlap). Runs only
  * with GTNH_TEST_POSTGRES_URL naming a server this test may make and drop a
  * database on, for example a throwaway container:
@@ -39,7 +41,7 @@ async function storedDownloads(blueprintId: string): Promise<number> {
   return rows[0]!.downloads;
 }
 
-describe.skipIf(!serverUrl)("blueprint downloads on Postgres", () => {
+describe.skipIf(!serverUrl)("blueprints on Postgres", () => {
   beforeAll(async () => {
     admin = new pg.Client({ connectionString: serverUrl });
     await admin.connect();
@@ -85,4 +87,40 @@ describe.skipIf(!serverUrl)("blueprint downloads on Postgres", () => {
     expect(answers.every((answer) => answer.ok)).toBe(true);
     expect(await storedDownloads(blueprintId)).toBe(10);
   });
+
+  it("holds the cap when twenty saves arrive at once with one place left", async () => {
+    const saver = await client!.pool.query<{ id: string }>(
+      "insert into community_users (username, password_hash) values ('saver', 'h') returning id",
+    );
+    const viewer: SignedIn = { userId: saver.rows[0]!.id, username: "saver", isAdmin: false, adminToken: false };
+    await client!.pool.query(
+      `insert into blueprints (user_id, name, payload)
+       select $1, 'Held ' || n, '{"nodes":[]}' from generate_series(1, $2::int) as n`,
+      [viewer.userId, BLUEPRINT_MAX_PER_USER - 1],
+    );
+    const payload = {
+      nodes: aluminaLine.nodes,
+      storages: aluminaLine.storages ?? [],
+      annotations: [],
+      pockets: [],
+      edges: aluminaLine.edges ?? [],
+      recipes: aluminaLine.recipes,
+    };
+    const answers = await Promise.all(
+      Array.from({ length: 20 }, (_, n) => saveBlueprint(viewer, { name: `Race ${n}`, payload })),
+    );
+    const failures = answers.filter((answer) => !answer.ok);
+    expect(answers.length - failures.length).toBe(1);
+    for (const failure of failures) {
+      expect(failure).toMatchObject({
+        ok: false,
+        error: { kind: "conflict", message: `Your blueprints are full (${BLUEPRINT_MAX_PER_USER}). Delete some first.` },
+      });
+    }
+    const { rows } = await client!.pool.query<{ count: string }>(
+      "select count(*) from blueprints where user_id = $1",
+      [viewer.userId],
+    );
+    expect(Number(rows[0]!.count)).toBe(BLUEPRINT_MAX_PER_USER);
+  }, 60_000);
 });

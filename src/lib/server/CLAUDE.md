@@ -293,6 +293,11 @@ cutover removes. Community posts (`repos/plans.ts`,
   `blueprints/vote.test.ts`. A row taken down since the access read answers the route's 404.
 Blueprints (`repos/blueprints.ts`, `services/blueprints.ts`; exam `blueprints/route.test.ts`,
 `blueprints/vote.test.ts`, the Postgres cases in `services/blueprints-postgres.test.ts`):
+- A save is one transaction: the account row's lock (`accounts.lockAccount`, `for no key update`, as a new design
+  takes it), the count, then the insert, so saves at once meet the cap (`BLUEPRINT_MAX_PER_USER`) one at a time; a
+  failed count throws and answers the save's sentence, never reads as none. PGlite never overlaps transactions, so
+  `blueprints/route.test.ts` pins the statement order and `services/blueprints-postgres.test.ts` races 20 saves for
+  the last place on Postgres.
 - A download (`repos/blueprints.takeDownload`) is one `update ... returning` with the public rule in its `where`;
   its author's own download adds nothing (a `case` on `user_id`), so concurrent downloads all land and an author
   never inflates the count.
@@ -477,7 +482,7 @@ Rules:
   (409 `{ live: true }`) and its write is conditional on the lease. Metadata still goes through.
 - Each save, creation, share and delete is one transaction (`withTransaction`): a design or folder save reads its row
   `for update`, so two saves cannot both pass the "behind" check; a new design or folder locks the account row first
-  (`for no key update`, which foreign-key checks never wait for), so creations at once meet the cap one at a time; a
+  (`accounts.lockAccount`, `for no key update`, which foreign-key checks never wait for), so creations at once meet the cap one at a time; a
   share locks the design row before counting members; a delete tombstones the design and drops its members together. A
   lease renewal or flush is one statement that also reads the row (locking), so a miss says "gone" or "lost" from the
   row's newest version. `store-grants.test.ts` runs every `PlanStore` call as `gtnh_live`. PGlite runs one transaction

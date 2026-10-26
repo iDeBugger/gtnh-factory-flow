@@ -291,7 +291,7 @@ describe("the database roles", () => {
     try {
       await as("gtnh_site", async () => {
         await db.transaction().execute(async (tx) => {
-          await designs.lockAccount(OWNER, tx);
+          await accounts.lockAccount(OWNER, tx);
           expect(await designs.read(OWNER, "d2", { withPlan: false, forUpdate: true }, tx)).toBeUndefined();
           expect(await designs.countLive(OWNER, tx)).toBeGreaterThan(0);
           await designs.insert(

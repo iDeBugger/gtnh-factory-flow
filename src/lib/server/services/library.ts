@@ -33,7 +33,7 @@ import {
 } from "../library";
 import { checkRateLimit } from "../limits/rate-limit";
 import { notifyLive } from "../live-notify";
-import { accountExists, usernamesFor } from "../repos/accounts";
+import { accountExists, lockAccount, usernamesFor } from "../repos/accounts";
 import * as designMembers from "../repos/design-members";
 import * as designs from "../repos/designs";
 import * as folders from "../repos/folders";
@@ -303,7 +303,7 @@ async function writeDesign(
   if (!current && isOwner) {
     // A new design: wait for this account's other creations, then read
     // again, since one of them may have been this same design.
-    await designs.lockAccount(viewer.userId, tx);
+    await lockAccount(viewer.userId, tx);
     current = await designs.read(ownerId, designId, forUpdate, tx);
   }
   if (!isOwner && (!current || current.deleted_at)) {
@@ -620,7 +620,7 @@ export async function saveFolder(
     return await withTransaction(async (tx): Promise<ServiceResult<{ folder: RemoteFolder; behind: boolean }>> => {
       let current = await folders.read(viewer.userId, folderId, { forUpdate: true }, tx);
       if (!current) {
-        await designs.lockAccount(viewer.userId, tx);
+        await lockAccount(viewer.userId, tx);
         current = await folders.read(viewer.userId, folderId, { forUpdate: true }, tx);
       }
       if (current && Date.parse(current.updated_at) > Date.parse(updatedAt)) {

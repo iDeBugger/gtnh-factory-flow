@@ -12,7 +12,7 @@ import { sqlRules, type VisibilityViewer } from "./visibility";
  * must hold inside one statement (a read by id, the download counter) they
  * apply its SQL form (`repos/visibility.ts`). Repositories take an optional
  * transaction last. A failed read or write throws (a down database as
- * `DatabaseDownError`); `countOwn` alone reads a failure as none.
+ * `DatabaseDownError`).
  */
 
 /** A blueprint row with the payload it places. */
@@ -112,18 +112,14 @@ export async function listPublic(query: BlueprintListQuery, tx?: Tx): Promise<Bl
   return builder.limit(query.limit).offset(query.offset).$castTo<BlueprintRow>().execute();
 }
 
-/** How many blueprints the account holds. A failed count reads as none: the insert after it answers the failure. */
+/** How many blueprints the account holds. A failed count throws: read as none it would let a save past the cap. */
 export async function countOwn(userId: string, tx?: Tx): Promise<number> {
-  try {
-    const row = await (tx ?? getDb())
-      .selectFrom("blueprints")
-      .select((eb) => eb.fn.countAll<number>().as("count"))
-      .where("user_id", "=", userId)
-      .executeTakeFirstOrThrow();
-    return Number(row.count);
-  } catch {
-    return 0;
-  }
+  const row = await (tx ?? getDb())
+    .selectFrom("blueprints")
+    .select((eb) => eb.fn.countAll<number>().as("count"))
+    .where("user_id", "=", userId)
+    .executeTakeFirstOrThrow();
+  return Number(row.count);
 }
 
 /** Stores a new blueprint and answers its summary row. */

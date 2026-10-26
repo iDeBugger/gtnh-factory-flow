@@ -6,7 +6,7 @@ import { closeDb, resetDbBreaker, useDbForTests } from "../db";
 import { createDbClient, type DirectDbClient } from "../db/client";
 import { applyMigrations } from "../db/migrations";
 import type { SignedIn } from "../http/viewer";
-import * as designs from "../repos/designs";
+import * as accounts from "../repos/accounts";
 import { saveDesign } from "./library";
 
 /**
@@ -114,7 +114,7 @@ describe.skipIf(!serverUrl)("the library on Postgres", () => {
     let locked: () => void = () => undefined;
     const lockTaken = new Promise<void>((resolve) => (locked = resolve));
     const creation = client!.db.transaction().execute(async (tx) => {
-      await designs.lockAccount(viewer.userId, tx);
+      await accounts.lockAccount(viewer.userId, tx);
       locked();
       await held;
     });

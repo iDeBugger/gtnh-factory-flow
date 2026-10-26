@@ -19,9 +19,10 @@ import {
   rowToBlueprintSummary,
 } from "../blueprints";
 import { parseEntryIcon } from "../community-rows";
-import { isDatabaseDown, isDatabaseError, storageErrorMessage } from "../db";
+import { isDatabaseDown, isDatabaseError, storageErrorMessage, withTransaction } from "../db";
 import type { SignedIn, Viewer } from "../http/viewer";
 import { checkRateLimit } from "../limits/rate-limit";
+import * as accounts from "../repos/accounts";
 import * as blueprints from "../repos/blueprints";
 import { canReadBlueprint, isUuid } from "./access";
 import { fail, ok, type ServiceResult } from "./result";
@@ -227,7 +228,11 @@ function readContent(body: BlueprintBody): ServiceResult<blueprints.BlueprintCon
   });
 }
 
-/** Saves a new blueprint to the account, up to `BLUEPRINT_MAX_PER_USER`. */
+/**
+ * Saves a new blueprint to the account, up to `BLUEPRINT_MAX_PER_USER`. The
+ * count and the insert are one transaction after the account's row lock, so
+ * saves at once meet the cap one at a time and never pass it together.
+ */
 export async function saveBlueprint(
   viewer: SignedIn,
   body: BlueprintBody,
@@ -242,22 +247,30 @@ export async function saveBlueprint(
     return content;
   }
 
-  if ((await blueprints.countOwn(viewer.userId)) >= BLUEPRINT_MAX_PER_USER) {
-    return fail("conflict", `Your blueprints are full (${BLUEPRINT_MAX_PER_USER}). Delete some first.`);
-  }
-
   let row;
   try {
-    row = await blueprints.insert({
-      user_id: viewer.userId,
-      name,
-      ...content.value,
-      tags,
-      tags_text: tags.join(" "),
-      icon: parseEntryIcon(body.icon),
+    row = await withTransaction(async (tx) => {
+      await accounts.lockAccount(viewer.userId, tx);
+      if ((await blueprints.countOwn(viewer.userId, tx)) >= BLUEPRINT_MAX_PER_USER) {
+        return undefined;
+      }
+      return blueprints.insert(
+        {
+          user_id: viewer.userId,
+          name,
+          ...content.value,
+          tags,
+          tags_text: tags.join(" "),
+          icon: parseEntryIcon(body.icon),
+        },
+        tx,
+      );
     });
   } catch (error) {
     return storageFailure(error, "Blueprint could not be saved.");
+  }
+  if (!row) {
+    return fail("conflict", `Your blueprints are full (${BLUEPRINT_MAX_PER_USER}). Delete some first.`);
   }
   return ok({ blueprint: rowToBlueprintSummary(row, viewer.userId) });
 }

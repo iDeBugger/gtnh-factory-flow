@@ -3,7 +3,8 @@ import { setDbFaultForTests } from "@/lib/server/db/guard";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 import { oversizeRequest } from "@/test-support/request-bodies";
 import { clearDbFault, useTestDb } from "@/test-support/test-db";
-import { PUBLIC_BLUEPRINT_PAGE_SIZE } from "@/lib/blueprints/types";
+import { BLUEPRINT_MAX_PER_USER, PUBLIC_BLUEPRINT_PAGE_SIZE } from "@/lib/blueprints/types";
+import aluminaLine from "@/components/flow/__fixtures__/alumina-line-shared-reactor.json";
 import { json } from "@/lib/server/db";
 import * as blueprintsRepo from "@/lib/server/repos/blueprints";
 
@@ -311,5 +312,98 @@ describe("the public shelf against the database", () => {
     expect(second).toMatchObject({ hasMore: false });
     expect(second.names).toHaveLength(3);
     expect(new Set([...first.names, ...second.names]).size).toBe(PUBLIC_BLUEPRINT_PAGE_SIZE + 3);
+  });
+});
+
+describe("saving a blueprint", () => {
+  withModAndCommunityUnset();
+
+  const saver = { id: "b0000000-0000-4000-8000-0000000000b2", username: "bea" };
+  const payload = {
+    nodes: aluminaLine.nodes,
+    storages: aluminaLine.storages ?? [],
+    annotations: [],
+    pockets: [],
+    edges: aluminaLine.edges ?? [],
+    recipes: aluminaLine.recipes,
+  };
+  const save = (name: string) =>
+    list.POST(post("/api/blueprints", { name, payload, tags: [], needs: [], outputs: [] }));
+  const held = async () =>
+    Number(
+      (
+        await testDb()
+          .db.selectFrom("blueprints")
+          .select((eb) => eb.fn.countAll<number>().as("count"))
+          .where("user_id", "=", saver.id)
+          .executeTakeFirstOrThrow()
+      ).count,
+    );
+
+  beforeAll(async () => {
+    await testDb()
+      .db.insertInto("community_users")
+      .values({ id: saver.id, username: saver.username, password_hash: "x:y" })
+      .execute();
+  });
+
+  beforeEach(async () => {
+    await testDb().db.deleteFrom("blueprints").where("user_id", "=", saver.id).execute();
+    calls.length = 0;
+    sessionUser.mockReturnValue(saver);
+  });
+
+  it("locks its account, then counts and inserts, so saves at once meet the cap one at a time", async () => {
+    const response = await save("Locked");
+    expect(response.status).toBe(200);
+    const statements = calls.map((call) => call.sql);
+    const lock = statements.findIndex((text) =>
+      /^select "id" from "community_users" where "id" = \$1 for no key update$/.test(text),
+    );
+    const count = statements.findIndex((text) => /^select count\(\*\) as "count" from "blueprints"/.test(text));
+    const insert = statements.findIndex((text) => /^insert into "blueprints"/.test(text));
+    expect(lock, statements.join("\n")).toBeGreaterThanOrEqual(0);
+    expect(count).toBeGreaterThan(lock);
+    expect(insert).toBeGreaterThan(count);
+    expect(calls[lock]!.parameters).toEqual([saver.id]);
+    expect(await held()).toBe(1);
+  });
+
+  it("refuses a save past the cap and stores nothing", async () => {
+    await testDb()
+      .db.insertInto("blueprints")
+      .values(
+        Array.from({ length: BLUEPRINT_MAX_PER_USER }, (_, i) => ({
+          user_id: saver.id,
+          name: `Held ${i}`,
+          payload: json({ nodes: [] }),
+        })),
+      )
+      .execute();
+    const response = await save("One too many");
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: `Your blueprints are full (${BLUEPRINT_MAX_PER_USER}). Delete some first.`,
+    });
+    expect(await held()).toBe(BLUEPRINT_MAX_PER_USER);
+  });
+
+  it("answers a failed count with the save's sentence and stores nothing, never reading it as none", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      setDbFaultForTests((text) =>
+        /^select count\(\*\) as "count" from "blueprints"/.test(text)
+          ? Object.assign(new Error("count refused"), { code: "XX000", severity: "ERROR" })
+          : undefined,
+      );
+      const refused = await save("Uncounted");
+      expect(refused.status).toBe(500);
+      expect(await refused.json()).toEqual({ error: "Blueprint could not be saved." });
+      expect(logged).toHaveBeenCalled();
+      clearDbFault();
+      expect(await held()).toBe(0);
+    } finally {
+      logged.mockRestore();
+    }
   });
 });
