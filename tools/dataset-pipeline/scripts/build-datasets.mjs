@@ -7,9 +7,10 @@
 // raw export from the last --export in the work dir is rebuilt. Then rebuild-dataset.sh, in the
 // image: normalize, icon hints, NEI order, indexes, faint fluids, gzips. A build the publish
 // checks would refuse (deploy-lib.mjs: unresolved icon hints, a lost NEI order) is not installed;
-// one that passes replaces <out>/<id> and the manifest is rebuilt.
+// one that passes replaces <out>/<id>, keeping the rendered textures it lacks, and the manifest
+// is rebuilt.
 import { spawn } from "node:child_process";
-import { createWriteStream, existsSync, readFileSync } from "node:fs";
+import { constants as fsConstants, createWriteStream, existsSync, readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -139,9 +140,32 @@ export async function installBuilt({ builtDir, outDir, id, replacedDir, allowLos
   await fs.rm(replacedDir, { recursive: true, force: true });
   if (existsSync(installedDir)) {
     await move(installedDir, replacedDir);
+    await keepRenderedTextures(replacedDir, builtDir);
   }
   await move(builtDir, installedDir);
   return [];
+}
+
+/**
+ * Copies every rendered texture of `fromDir` that `toDir` lacks, as publishing adds textures
+ * beside the served ones: saved plans and the power maps (src/lib/power/data) cite names an
+ * earlier export drew, and a content name never changes its bytes. Returns the count copied.
+ */
+export async function keepRenderedTextures(fromDir, toDir) {
+  const from = path.join(fromDir, "textures", "rendered");
+  const to = path.join(toDir, "textures", "rendered");
+  if (!existsSync(from)) {
+    return 0;
+  }
+  await fs.mkdir(to, { recursive: true });
+  const present = new Set(await fs.readdir(to));
+  let copied = 0;
+  for (const name of await fs.readdir(from)) {
+    if (present.has(name)) continue;
+    await fs.copyFile(path.join(from, name), path.join(to, name), fsConstants.COPYFILE_FICLONE);
+    copied += 1;
+  }
+  return copied;
 }
 
 async function move(from, to) {

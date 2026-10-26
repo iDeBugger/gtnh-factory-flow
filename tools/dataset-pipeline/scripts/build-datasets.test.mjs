@@ -75,6 +75,26 @@ describe("build-datasets install", () => {
     expect(fs.existsSync(built)).toBe(false);
   });
 
+  it("keeps the rendered textures the replaced copy has and the build lacks, as a publish does", async () => {
+    const root = tempDir();
+    const out = path.join(root, "out");
+    const old = writeVersion(path.join(out, "local-2.8.1"), { marker: "old" });
+    fs.mkdirSync(path.join(old, "textures", "rendered"));
+    fs.writeFileSync(path.join(old, "textures", "rendered", "hammer-aaaaaaaaaaaa.png"), "old hammer");
+    fs.writeFileSync(path.join(old, "textures", "rendered", "stone-bbbbbbbbbbbb.png"), "stone");
+    const built = writeVersion(path.join(root, "dataset"));
+    fs.mkdirSync(path.join(built, "textures", "rendered"));
+    fs.writeFileSync(path.join(built, "textures", "rendered", "hammer-cccccccccccc.png"), "new hammer");
+    fs.writeFileSync(path.join(built, "textures", "rendered", "stone-bbbbbbbbbbbb.png"), "stone");
+    const problems = await installBuilt({ builtDir: built, outDir: out, id: "local-2.8.1", replacedDir: path.join(root, "replaced") });
+    expect(problems).toEqual([]);
+    expect(fs.readdirSync(path.join(out, "local-2.8.1", "textures", "rendered")).sort()).toEqual([
+      "hammer-aaaaaaaaaaaa.png",
+      "hammer-cccccccccccc.png",
+      "stone-bbbbbbbbbbbb.png",
+    ]);
+  });
+
   it("refuses a build whose icon hints are unresolved and leaves the installed copy alone", async () => {
     const root = tempDir();
     const out = path.join(root, "out");

@@ -29,7 +29,9 @@ node tools/dataset-pipeline/scripts/build-datasets.mjs 2.9            # rebuild 
    and shards, faint fluid icons, gzips. `recipes.json` stays in `.pipeline/datasets/<id>/`; it is never published.
 4. The build is installed into `public/datasets/gtnh/<id>` (`--out` for another root) only when the publish
    checks pass (`deploy-lib.mjs`: icon hints resolved, and no NEI order lost against the installed copy);
-   the replaced copy moves to `.pipeline/datasets/<id>/replaced/`. Then the manifest is rebuilt. A refused
+   the replaced copy moves to `.pipeline/datasets/<id>/replaced/`, and its rendered textures the build lacks are
+   copied in, as a publish adds them: saved plans and the power maps cite names an earlier export drew. Then the
+   manifest is rebuilt. A refused
    build stays in `.pipeline/datasets/<id>/dataset/` and the command exits 1. Logs:
    `.pipeline/datasets/<id>/logs/`. Exam: `scripts/build-datasets.test.mjs`.
 5. Publish with `tools/deploy/publish-datasets.sh <target> <id>...` (`docs/deploy.md`, Datasets) into the
