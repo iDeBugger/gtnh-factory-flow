@@ -27,7 +27,12 @@ export function toJsonTimestamp(text: string): string {
   return `${match[1]}T${match[2]}+00:00`;
 }
 
-/** OID to parser: `timestamptz` (1184) as JSON text, `bigint` (20) as a number, as PostgREST answered both. */
+/**
+ * OID to parser: `timestamptz` (1184) as JSON text, `bigint` (20) as a number,
+ * as PostgREST answered both. Scalars only: an array of either (`timestamptz[]`
+ * 1185, `bigint[]` 1016, as `array_agg` returns) reads differently on the two
+ * drivers until its own OID is added here.
+ */
 export const DB_TYPE_PARSERS: Record<number, (text: string) => unknown> = {
   1184: toJsonTimestamp,
   20: Number,

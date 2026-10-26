@@ -404,7 +404,8 @@ which bypasses row security. No anon role exists, so a request without the token
 - `npm run dev:local` gives both processes `DATABASE_URL=postgres://postgres@127.0.0.1:54330/postgres`: the compose
   file's pinned `postgres` image in the container `gtnh-local-db` when Docker answers (the stand-in then runs over it),
   else PGlite's socket, whose multiplexer is not isolated under concurrent queries (`tools/local-db/serve.ts` has the
-  probe). `LOCAL_DB_PGLITE=1` forces PGlite.
+  probe). `LOCAL_DB_PGLITE=1` forces PGlite. The container's volume and `scratch/local-db/pgdata` are two separate
+  databases, so switching between them shows different accounts and designs.
 - The stand-in covers the query shapes this code sends (filters, or-trees, counts, single, upserts). Files are not in
   the database: `npm run dev:local` keeps them in `scratch/local-db/files` (the file store below).
   A new shape (an embed, an rpc) needs it added there and a case in `postgrest-cases.ts`, which `postgrest.test.ts`
