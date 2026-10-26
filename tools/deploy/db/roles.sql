@@ -21,5 +21,11 @@ grant service_role to authenticator;
 -- Read from the environment, never from psql's command line: a container's
 -- argv shows in the host's process list to every local account. Used outside
 -- a dollar quote, where psql variables are expanded.
+-- In its own transaction with statement logging off: a failing statement is
+-- logged with its text by default, which here would be the password.
+begin;
+set local log_min_error_statement = panic;
+set local log_statement = 'none';
 \getenv authenticator_password POSTGREST_AUTHENTICATOR_PASSWORD
 alter role authenticator with password :'authenticator_password';
+commit;

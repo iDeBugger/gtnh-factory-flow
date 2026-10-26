@@ -34,6 +34,11 @@ alter role gtnh_live nosuperuser nocreatedb nocreaterole noreplication nobypassr
 -- backslash or read a psql variable, so its roles stay nologin). The
 -- passwords come from the environment, never psql's command line: a
 -- container's argv shows in the host's process list to every local account.
+-- A failing statement is logged with its text by default
+-- (log_min_error_statement = error), which here would be the password:
+-- for the rest of this transaction no statement text reaches the log.
+set local log_min_error_statement = panic;
+set local log_statement = 'none';
 \getenv site_password GTNH_SITE_DB_PASSWORD
 \getenv live_password GTNH_LIVE_DB_PASSWORD
 alter role gtnh_site with login password :'site_password';

@@ -259,6 +259,26 @@ describe("the database roles", () => {
     });
   });
 
+  it("sets every password with statement logging off for its transaction", () => {
+    // A failing statement is logged with its text by default, password included.
+    // PGlite has no server log to read; tools/deploy/db/*.sql were checked on the
+    // compose's postgres image: a failed alter role leaves no STATEMENT line.
+    for (const file of ["roles.sql", "app-roles.sql"]) {
+      const lines = readFileSync(path.join(deployDb, file), "utf8").split("\n");
+      const passwordLines = lines.flatMap((line, at) => (/password :'/.test(line) ? [at] : []));
+      expect(passwordLines.length, file).toBeGreaterThan(0);
+      for (const at of passwordLines) {
+        const before = lines.slice(0, at);
+        const begin = before.findLastIndex((line) => /^begin;/.test(line));
+        const commit = before.findLastIndex((line) => /^commit;/.test(line));
+        expect(begin, `${file}:${at + 1} is inside a transaction`).toBeGreaterThan(commit);
+        const opened = before.slice(begin);
+        expect(opened, `${file}:${at + 1}`).toContain("set local log_min_error_statement = panic;");
+        expect(opened, `${file}:${at + 1}`).toContain("set local log_statement = 'none';");
+      }
+    }
+  });
+
   it("refuses to turn row security off where Supabase's API roles exist", async () => {
     const migration = readFileSync(
       path.join(process.cwd(), "supabase", "migrations", ROW_SECURITY_OFF),
