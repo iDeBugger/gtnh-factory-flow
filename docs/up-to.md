@@ -13,13 +13,12 @@ A card's machine count has one of three rules:
   Up to.
 - **Up to N** (the default for a set count): `solvePin = N`. The machines run as hard as the rest of the plan lets
   them, never above N. No forced flow (a gate: material brought in or sent out at a wired port with no drawer) makes
-  up what they cannot do; they slow down instead, as in the game. It is old Build mode inside the one solver.
+  up what they cannot do; they slow down instead, as in the game.
 - **Exactly N**: `solvePin = N`, `solvePinExact: true`. Today's pin: N machines flat out, the rest solved around them,
   any gap shown as a forced flow.
 
 A custom rate card's pin is always exact (its dial). A fluid tank has no pin. Every saved pin without the flag reads as
-Up to, so every plan, old Build plans included (`plan/convert.ts` pins each card at its built count), becomes Up to with
-no rewrite. There is no notice about it (the owner, 2026-10-17).
+Up to, with no rewrite and no notice.
 
 ## How it reaches the engine
 
@@ -62,9 +61,9 @@ the shortfall and names the Up to card that holds it back (`limitingNodes`, note
 After the trades are settled and held (or, on the fast path, with every gate closed), before least flow:
 
 - Let `u_i` = pool i's machine time over its capacity, in [0, 1].
-- **Stage A, everything runs**: maximise the sum of `u_i`; call it S. (Old Build's first stage: a fed machine with
+- **Stage A, everything runs**: maximise the sum of `u_i`; call it S. (A fed machine with
   somewhere to put its output never idles.)
-- **Stage B, fairness**: progressive max-min over the `u_i` with the sum held at S (old Build's round-robin split).
+- **Stage B, fairness**: progressive max-min over the `u_i` with the sum held at S (the game's round-robin split).
   Each round maximises the least level z of the pools not yet frozen. A pool is frozen at z only when a probe proves it
   cannot go higher (maximise its own `u` with every unfrozen pool at least z); a pool the round's own point already
   shows above z is a certificate that it can, and is not probed. Repeat until every pool is frozen.
@@ -81,17 +80,17 @@ that cannot rise past rounding is held at exactly nothing (as `heldAt` closes a 
 
 ### Drawers and buffers: the player's own end
 
-With Up to pools a drawer on a wired port is the player's own end, as in old Build: a source drawer is supply, a
+With Up to pools a drawer on a wired port is the player's own end: a source drawer is supply, a
 product, byproduct or trash drawer a sink. Its ports are no trade level (`levels()`, which the alternatives also rank
 by), so the trades settle and hold only forced flow, and the push uses the drawers freely. After the push, two held
-stages pick among the pushed points (`settleDrawers`): the least drawn from source drawers (old Build's "recycle before
+stages pick among the pushed points (`settleDrawers`): the least drawn from source drawers ("recycle before
 importing"), then the least put into sink drawers ("ship before banking"). The read-out probes the trades and bands
 without these stages (`committedTrades`): they are tie-breaks, not limits. On the fast path only the forced crossings
 are closed.
 
 ### Buffers
 
-With Up to pools a BUFFER drawer with rule ANY is a bank, as old Build's overflow buffer was: each maker port linked to it
+With Up to pools a BUFFER drawer with rule ANY is a bank: each maker port linked to it
 may put into it what its takers do not take (`SolveContext.bankPorts`). That crossing is the buffer's: never a forced
 flow (`gatedSinks`), never a gate for the trades or the alternatives' swaps, outside the guard, and as little as it can
 be in the sink stage, after the push has shipped all it can to the takers. `DrawerReadout.banked` gives each such
@@ -107,7 +106,7 @@ balancer computes the same bank and needs no change for it.
 ### The read-out (`SolutionView.upTo`)
 
 At the committed point, under one counted budget per island (`readoutBudget`: 96 models, or 8 per Up to pool when that
-is more; work never time). The reasons are old Build's (`node-verdict.ts`): what a card's inputs allow is weighed against
+is more; work never time). The reasons: what a card's inputs allow is weighed against
 what its outputs allow, and a card at full speed is a bottleneck when someone downstream goes short of what it makes.
 The pools below their capacity are read first, in pool order, then those at it.
 
@@ -120,7 +119,7 @@ The pools below their capacity are read first, in pool order, then those at it.
   - `disposal < capable` (the outputs strictly tighter): **CLOGGED** (at zero: **UNUSED**). `port` is the first output
     whose free sink alone (every input fed) raises it, the others that do `tied`.
   - else, when `capable` is below its capacity and feeding its inputs (every output free) raises it: **STARVED**, the
-    input story first as in old Build. `port` is the first input whose free supply alone (every output free) raises it,
+    input story first. `port` is the first input whose free supply alone (every output free) raises it,
     the others that do `tied`. When only several together do, `port` is the first of them in machine, then port order,
     and `tied` the rest (CLOGGED likewise). `upstream`: the Up to pools making that input that are FULL or BOTTLENECK.
   - else **LIMITED**.
@@ -142,7 +141,7 @@ Islands: each island's read-out is its own; `solvePlan` concatenates them, sorte
 
 ### Loops (`SolutionView.upToLoops`)
 
-Old Build's dead loop and clog lock (`death-spiral.ts`, `clog-lock.ts`), found once every pool's reason is known, a pure
+The dead loop and the clog lock, found once every pool's reason is known, a pure
 graph over the read-out and the model's networks (no LP, no budget). A pool blames the Up to pools on the wire network of
 its `port` and `tied` ports: a STARVED pool those that make what it is short of, a CLOGGED or UNUSED pool those that take
 what it cannot get rid of. A ring is a strongly connected part of that relation (a pool blaming itself counts) whose
@@ -151,7 +150,7 @@ members all stand still (every machine within the solve's dust of zero, as UNUSE
 - **DEAD_LOOP**: every member STARVED and standing still. A recycling loop nothing feeds; the fix is to feed it.
 - **CLOG_LOCK**: every member UNUSED (CLOGGED standing still). Frozen by its own surplus; the fix is a drawer.
 
-Standing still is the test, as in old Build: a ring that loses material every lap winds down to zero when nothing
+Standing still is the test: a ring that loses material every lap winds down to zero when nothing
 feeds it, so a ring that runs at all is fed from outside and held back by that feed, which its members' STARVED already
 says (the `fed ring` fixture: a ring fed a quarter of what it could take runs at half its counts and is no ring).
 
@@ -185,11 +184,3 @@ floors on `Trades`, `Enumerator.evaluateSupport`, `DrawerRelaxation` naming the 
 `Node.machineCountFixed` stays "a count is set", a new `machineCountExact` says Exactly; `MachineGroup.pinned` likewise.
 Plans carry `solvePinExact` both ways (`FfPlanParser`, `FfCards`, `PlanExport`, `cloud/map`). The parity scenarios and
 the corpus are re-dumped once both sides agree; until then the website's parity scenarios pin Exactly.
-
-## Checking it against old Build
-
-Old Build plans (the v3 fixtures) are solved twice: by the old Build engine still in the tree (`equations-core.ts`,
-`node-verdict.ts`) and by the plan solver after `openAsPlan`. Every card's utilisation and its reason should agree
-(BOTTLENECK = bottleneck, STARVED = starved or blocked, CLOGGED = clogged or clog lock, UNUSED = unused, FULL =
-full). Known differences come from what the two treat differently: an unwired port stops a machine in old Build and
-is a free end here.

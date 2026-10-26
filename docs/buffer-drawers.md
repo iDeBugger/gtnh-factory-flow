@@ -62,8 +62,8 @@ Everything downstream is unchanged and simply sees more wires:
 - Mod: `Drawer` gains `takers` (a list of links, Gson field, empty for every other kind) and the kind `BUFFER`. An older
   build reading a buffer finds an unknown kind, reads it as a product (`sanitize`) and drops the takers.
 - Website: nothing new in the schema. A buffer is a `FactoryStorage` with wires in and out (as it always was); its rule
-  is the storage's `targetMode` and `targetPerSecond` (positive), which the old boards ignored on a buffer. `bufferMode`
-  (overflow, strict, ratio) means nothing in one mode and is left as it is; a ratio buffer's shares are not applied.
+  is the storage's `targetMode` and `targetPerSecond` (positive). A plan's old `bufferMode` and ratio shares are not
+  part of the schema and are dropped on parse.
 - Between them (`importer/FfConverter`, `library/PlanExport`; website plan JSON): a buffer storage imports as a buffer
   drawer, its feeder wires as links and its taker wires as takers, its rule from `targetMode`/`targetPerSecond`; a buffer
   drawer posts as a storage with a wire from each maker's port and a wire to each user's port. Wires between two

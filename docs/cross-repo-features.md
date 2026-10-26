@@ -40,7 +40,6 @@ website at `docs/cross-repo-features.md`; change both together.
 | Answer to the board | `ui/BoardSession` (`tickBoard`, `extraFlows`, `buildTotals`), `ui/drawer/DrawerModel` | `adapter/answer.ts` (`readAnswer`), `adapter/finalize.ts` |
 | Data model | `data/flowchart/Graph`, `Node`, `Drawer`, `Edge` | `lib/model/types.ts` (`FactoryProject`, `FactoryNode`, `FactoryStorage`, `FactoryEdge`) |
 | Saves | `data/flowchart/Serializer` (Gson over the classes; `sanitize()` repairs) | `lib/model/schemas.ts` (zod), `project-normalize.ts`, `store/` |
-| Old plans on open | (none: one mode always) | `lib/solver/plan/convert.ts` (`convertBuildToPlan`, `planClipboard`), `to-plan.ts` |
 | Plan JSON in | `importer/FfPlanParser` (JSON to `FfPlan`), `FfConverter`, `FfDrawers` | native |
 | Plan JSON out | `library/PlanExport` (checked by `PlanExportTest` against the website's schema) | native |
 | Card | `ui/card/RecipeCard`, `CardPaint`, `CardLayout`, `CardModel` | `components/flow/clean/CleanCard.tsx`, `clean-model.ts` |
@@ -82,13 +81,12 @@ Times are what buffer drawers took (about 4 hours end to end, half of it discove
    default and make an older build degrade, never crash), the `Graph` methods, and a save round trip test. Website:
    usually nothing new in the schema when the plan JSON can already say it; otherwise `schemas.ts`, `types.ts` and
    `project-normalize.ts` in one commit with a round trip test.
-6. **Website adapter and conversion (30 min).** `adapter/model.ts` builds the new input; `adapter/answer.ts` reads the
-   new answer back into wire flows, drawer results and plan extras; `convert.ts` decides what old plans become. Run
+6. **Website adapter (30 min).** `adapter/model.ts` builds the new input; `adapter/answer.ts` reads the
+   new answer back into wire flows, drawer results and plan extras. Run
    `adapter/parity.test.ts`: if the mod's dumps were made before the feature, normalise in the test and also solve the
    new shape against the goldens.
 7. **Plan JSON both ways (30 min).** Mod `importer/` (parser record, converter, rules) and `library/PlanExport`; a
-   round trip test (`LibraryRoundTripTest`: export with the test `World`, import with `FakeGame`). A flag the website
-   already writes (here `planMode`) can say which plans the new rule is live in.
+   round trip test (`LibraryRoundTripTest`: export with the test `World`, import with `FakeGame`).
 8. **Website UI (35 min), then mod UI (45 min).** Colours as tokens computed with the float32 mix in both
    (`Hyb.mix` / `mixHex`), never typed by eye; the CSS test pins them. Tips word for word the same. Look for every
    place that branches on the old set of kinds: the mod's `getLinks()`/`linksInputs()` callers (about 40) and the
@@ -108,7 +106,7 @@ Times are what buffer drawers took (about 4 hours end to end, half of it discove
   plan, and solves it against the mod's golden. A feature that changes the shape of the input must normalise one side
   in that test and say why.
 - **Plan JSON:** the mod's round trip (export, import, same board) and `PlanExportTest` (the export passes the
-  website's schema); on the website, the schema round trip in `convert.test.ts`.
+  website's schema); on the website, the schema round trip in `plan-mode-schema.test.ts`.
 - **On screen:** Playwright on the website with the corpus case as a plan reproduces the golden's counts and the
   drawer's figure (`window.__ccStore.getState().setProject(...)`, then the design tab, then Fit). In the mod, `mc.sh`
   with a plan made through `call` and a `shot`.
@@ -126,9 +124,8 @@ Times are what buffer drawers took (about 4 hours end to end, half of it discove
   that are the same in every snapshot (`ModelData.bufferEdgeId`). The website's ids are plain strings.
 - Optional in TypeScript, always present in Java: `DrawerIn.takers` is `takers?:` on the website and an empty list in
   the mod, so the JSON omits it when empty and both readers default it.
-- One rule written three times: buffers were joined into wires in the mod's importer (`FfConverter.expandBuffers`), the
-  website's adapter (`adapter/buffers.ts`) and the website's conversion (`convert.ts`, also `planClipboard`). Change all
-  three, or the planners disagree on the same plan.
+- One rule written twice: buffers are joined into wires in the mod's importer (`FfConverter.expandBuffers`) and the
+  website's adapter (`adapter/buffers.ts`). Change both, or the planners disagree on the same plan.
 - The website shows a welcome page over the board: click the design tab before screenshots.
 - Never launch the game while the owner is playing; `mc.sh idle` needs a running game to answer.
 

@@ -2,30 +2,19 @@
 
 Doctrine: if it would fail in the game, it fails in the planner; otherwise everything
 runs. A fed machine with somewhere to put its output never idles. Nothing comes from
-nowhere or goes nowhere except through a source, a drawer or trash. Longer version:
-`docs/solver-equations.md`.
+nowhere or goes nowhere except through a source, a drawer or trash.
 
-## Two LPs
+## The books
 
-`throughput.ts` is the entry. Build and Solve/Pool answer different questions:
+`throughput.ts` is the entry. Every card gets its nameplate report first (overclock, parallels, power stall,
+runtime tables); then the plan solver (`plan/`, `planSolve`) sizes the plan from its pins, port rates and drawer
+rules and writes every rate at the solved scale. The graph it reads is `solveGraph` (`hatch-supply.ts`): shared
+machines as one hidden node per recipe section, then the private hatch supplies. Anything that walks the solved
+graph asks `solveGraph(project)` first.
 
-- BUILD (counts are given): every act, edge flow and total comes from `equations-core.ts`
-  (behind `EQUATION_BOOKS`). Stage chain, each optimum locked before the next: max total
-  act; max-min fairness over acts (the game's round-robin); recycle before import; ship
-  before banking; min total flow (determinism). No "product purpose" or "least machinery"
-  stage: both idled machines the game would run. Equal-fill rows make co-consumers of one
-  output port fill at the same rate (what kills a tapped break-even ring; only
-  output-side figures may exempt a consumer). Power stalls are pinned to act 0 in the LP.
-- SOLVE and POOL (counts are the unknowns): `solve-mode.ts` (`solveSolveMode`, finished by
-  `finalizeSolveModeResult`). Targets ARE rows here. Objective: least machinery, then
-  least imports, fill and flow. No fairness, equal-fill or stall pinning.
-- The iterative engine (`equilibrium.ts`) still runs and supplies the DIAGNOSIS
-  (capability, clog names, "one wire fixes it"). If an LP fails, the old books stand; a
-  solve failure degrades, never crashes. Balance dust snaps at 1e-5 relative
-  (`balances.ts`).
 - Engines: `lp-engine.ts` uses HiGHS (WASM) when loaded, else the homegrown simplex
-  (`simplex.ts`). Big or slow boards solve in a worker (`src/store/solve-books.ts`);
-  nothing that size may run on the main thread.
+  (`simplex.ts`). The plan solver runs integer programs, which only HiGHS does, so the books solve in the worker
+  whenever there is one (`src/store/solve-books.ts`).
 - The answer a player sees is counted work, never a clock. The one clock is the server's: `setLpSolveDefaults`
   (`timeLimitSeconds` -> HiGHS `time_limit`, a stopped solve throws `LpTimeLimitError` and never falls back to the
   simplex, and `runModel` tries no other HiGHS setting after it: one model, one time limit) and `withLpDeadline` in
@@ -34,50 +23,19 @@ nowhere or goes nowhere except through a source, a drawer or trash. Longer versi
   never set them. Exams: `lp-engine-limits.test.ts`, `plan/lp-deadline.test.ts`, `plan/lp-time-limit.test.ts`.
 - Plan solver dust (`plan/validate.ts` `dustScales`) is judged per network, never over the whole point: a
   reactor's billions of EU a second must not zero a 0.03/s item wire (the answer then fails its own check).
-- Node rates in results are FULL SPEED; actual = nameplate x `min(1, max(0, utilization))`.
-- Only synchronous solves write `lastSolveDurationMs` in `solve-books.ts`; worker timings
-  never un-slow a plan.
-  "A big plan lags every edit": look first for a diagnosis running on the main thread.
-- Exams: `equations-doctrine.test.ts`, `simplex.test.ts`. The tick simulator
-  (`src/lib/solver-lab/simulate.ts`) is the independent "what the game does" oracle.
+- Node rates in results are FULL SPEED; actual = nameplate x `min(1, max(0, utilization))`. Balance dust snaps at
+  1e-5 relative (`balances.ts`).
+- A power-stalled card is flagged (`powerStalled`, its warning) with its nameplate shape kept; the card's power
+  cell says why.
+- Exams: the plan corpus and parity (`plan/__fixtures__/golden.test.ts`, `plan/parity/scenarios.test.ts`,
+  `plan/adapter/parity.test.ts`), `simplex.test.ts`.
 
-## Modes
-
-- Build (both flags off): you set machines, counts, wires; the board reports.
-  Solve (`solveMode`): you type product rates; counts are solved. Pool (`solveMode` +
-  `poolMode`): no wires; one shared pool per resource.
-- Setup rules are gone: `getSetupRules` answers every plan the same
-  (no free inputs or outputs). Tests needing an open boundary call `closeBoundaries`.
-- Pool (`pool-mode.ts`, `expandPool`): hidden drawers and wires are added before the
-  solve so the ordinary rules apply unchanged. Feeders + takers = a buffer (strict under
-  Match, so intermediates balance; overflow under Ignore), feeders only = product drain,
-  takers only = import source. Anything that walks the
-  graph asks `getPoolProject(project)` first. Cell/fluid pairs bridge through a hidden
-  free Tank using Canner-fetched litres (`poolCellRatios`), only from a side something feeds.
-- Production groups (Pool only; Build and wired Solve ignore them): `productionGroupId` on
-  nodes and storages, the tree in `productionGroups`, rules in `poolResourceRules` (root)
-  and each group's `resourceRules`. Ignore is stored as `import` at the root, `share` in a
-  group. Children resolve first, and a parent rule cannot undo a child's match.
-  - Match (default): in a group, materials made and used there balance locally and
-    one-sided ones reach the parent; at the root, anything nobody makes is imported.
-    Pool Solve balances intermediates exactly, so a fixed input drives the chain.
-  - Ignore: in a group, both sides pass to the parent; at the root, imports and surplus
-    are allowed. It is permission to import: machinery is minimized first, so an unpinned
-    producer may idle (pin its count).
-  - Legacy scoped targets and direct outside-supply rules still load, labelled and editable.
-  - Exams: `production-groups.test.ts` (solver and store), `input-driven-chain.test.ts`.
-
-## Drawers and targets
+## Drawers and rules
 
 - `model/storage-target.ts` is the one interpretation of `targetPerSecond` / `targetMode`
-  (at-least, exact, ignore, at-most), shared by wired Solve and Pool. At most is a
-  ceiling, not a demand. Build keeps settings dormant.
-- Buffer modes: overflow banks surplus (Build's default); strict clogs (wired Solve's
-  default for intermediates, see `effectiveBufferMode`); ratio splits by weights on both
-  sides with a Setup output share (`storage-ratios.ts` here and in model/). Pool ignores
-  manual ratio splits.
-- Plan mode (`plan/`): a buffer wired only to cards is a BUFFER drawer (`DrawerIn.takers`), its rule a product's
-  on what passes through (`docs/buffer-drawers.md`); `adapter/buffers.ts` joins only buffers wired to another drawer.
+  (at-least, exact, ignore, at-most). At most is a ceiling, not a demand.
+- A buffer wired only to cards is a BUFFER drawer (`DrawerIn.takers`), its rule a product's on what passes through
+  (`docs/buffer-drawers.md`); `adapter/buffers.ts` joins only buffers wired to another drawer.
   The solver change mirrors the mod's line for line; adding any feature to both: `docs/cross-repo-features.md`.
 - An unconverted card (`FactoryNode.unconverted`, a section's `extraRecipes[i].unconverted`) is out of the solve
   (`missing-recipe`, a warning), even if its recipe id resolves. Every wire of it is the plan's edge: `buildPlanModel`
@@ -85,33 +43,18 @@ nowhere or goes nowhere except through a source, a drawer or trash. Longer versi
   makers. A source or product drawer wired only to it is left out. Exams: `plan/adapter/unconverted.test.ts`.
 - Drain drawers cycle product / byproduct / trash. Trash is free disposal with its books
   voided (`applyTrashedOutputBalances`). Old trash-can nodes convert on load.
-- In Build, targets are display arithmetic; in Solve and Pool they are LP rows.
+- A loose drawer (`poolSide`, unwired) keeps the side it was made on until a wire says.
 
 ## Coupling and verdicts
 
-The verdict and ring-diagnosis code lives in `src/components/flow/` (`node-verdict.ts`,
-`death-spiral.ts`, `clog-lock.ts`, `bare-slots.ts`).
+The verdict code lives in `src/components/flow/` (`node-verdict.ts`, `bare-slots.ts`). A card reads off,
+without a recipe, UNWIRED (a slot with no wire, every bare slot marked), running or not needed; why a plan cannot
+be met is the plan solver's to say (its notices and readouts), never the card's.
 
-- Shared machines: `expandSharedMachines` stands each extra section up as a hidden node;
-  the ONLY coupling is a time row (`listSharedMachineGroups`): sections' acts sum to at
-  most one. A section held by that row reads BUSY (`findBusySharer`).
+- Shared machines: `expandSharedMachines` stands each extra section up as a hidden node; the sections share one
+  machine's time.
 - No wire crosses forms: a cell meets its fluid in a visible fluid tank card, a machine step like any other
   (`model/cell-wires.ts` turns an older plan's loose cell wires into tanks before the solver sees them).
-- Ring diagnoses (`death-spiral.ts`, `clog-lock.ts`) stand down for an unfinished setup
-  (a member with no power or a bare slot, `bare-slots.ts`). A card whose takers have all
-  stopped reads CLOGGED naming them; a stopped taker's ask is never a deficit.
-- A jammed second output reads CLOGGED naming the taker, never BOTTLENECK. A feeder of a
-  backed-up machine reads on demand; held-taker checks are relative to the asking card, or
-  loops go circular. Every diagnosis treats "stopped by its own setup" as the end.
-
-## Debugging the diagnosis engine (equilibrium.ts)
-
-- Split pull across unequal feeders by saturate-and-reoffer, never need / edge count.
-- Never feed the settlement back into capability, demand or disposal mid-descent; damping
-  breaks boards.
-- Dead-loop tells: capability 1 plus a clog cascade = wrongly zeroed; 0 = truly dead.
-- A hungry machine idle under a full buffer: dump the stage LP and check residuals first.
-- Pool's hidden cell-fluid Tank is sized at 1000 machines; larger breaks the LP's range.
 
 ## Machine math
 

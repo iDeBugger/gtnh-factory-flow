@@ -1,6 +1,6 @@
 # App UI (src/components)
 
-The board has its own notes in `flow/CLAUDE.md`, the Pool worksheet in `pool/CLAUDE.md`.
+The board has its own notes in `flow/CLAUDE.md`.
 
 ## Interface scale: two pixel spaces
 
@@ -76,10 +76,10 @@ The board has its own notes in `flow/CLAUDE.md`, the Pool worksheet in `pool/CLA
   stencil's conditions stay); a browse inside the open search keeps it, closing drops it. With an empty stencil and no
   name typed nothing is asked: the machine is the one tab and the page asks for an item on Takes or Makes. Exam:
   `RecipeBrowser.pin.test.tsx`.
-## Inspector and panels
+## Side columns
 
-- Right resource column 234 shell px, left items panel 256 (classic boards and the phone's drawers; fixed).
-- A plan board's two side columns (the overview, the items list; swapped by Settings, Item browser) are resizable and
+- The phone's drawers: the overview 234 shell px, the items 256 (fixed).
+- The desktop's two side columns (the overview, the items list; swapped by Settings, Item browser) are resizable and
   give way to the board. A handle on each column's board-side edge (`PanelHandle`: drag, double-click for the default,
   arrow keys) sets its width, kept per device (`overviewWidth` 336 by default, 224 to 480; `itemsWidth` 256, 108 to 420,
   which is three item columns). Widths are shell px and the pointer is real px: divide by `getUiScale()`. The grid is
@@ -105,10 +105,6 @@ The board has its own notes in `flow/CLAUDE.md`, the Pool worksheet in `pool/CLA
   Welcome, the stencil, the board menu) goes through `queryRecipeDatasetResources`, which asks the browser's search
   worker once it is ready and the server otherwise (`src/lib/server/CLAUDE.md`, item search in the browser); no
   component calls either directly. Every `MinecraftTooltip` and title tooltip wears `.mc-tip`.
-  Keep virtual-list row heights in sync with the CSS (`inspector/panel.css`).
-- Resources show Raw or Net, switched in the first section header (Raw by default). In
-  Solve, drawer rate rows hang under their resource like files in a folder
-  (`BoundaryDrawers` in `inspector/flow-sections.ts`).
 - The machine list is one row per CARD, never merged (`buildMachineList` in
   `src/lib/model/machine-list.ts`).
 - Power display (EU/t or amps at a tier) and rate units are view dials read through
@@ -129,8 +125,7 @@ The board has its own notes in `flow/CLAUDE.md`, the Pool worksheet in `pool/CLA
   point the pointer has reached, so a panel that opens away from the pointer can be
   walked to. `fadeKeep` names the element a menu hangs from.
 - Tooltips never keep themselves open: `pointer-events-none`, close as soon as the
-  pointer leaves the control. Above-card tooltips anchor to their control when no card
-  exists (the Pool worksheet).
+  pointer leaves the control.
 - React's wheel handlers are passive: a control that adjusts on wheel needs a native
   non-passive listener to `preventDefault` the page scroll.
 - Every control that changes a value on the wheel asks `wheelChangesValues()`

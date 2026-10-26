@@ -11,12 +11,12 @@ make and edit them one way (the right-click menu), and a plan round-trips betwee
 | `text` (sticky note) | yes: Add sticky note | yes | its own menu: write, colour, text size, delete |
 | `box` | yes: Add box | yes | menu: colour, fill, border, marks, delete; drag, resize |
 | `arrow` | yes: Add arrow | yes | menu: colour, thickness, heads, delete; drag, reshape |
-| `zone` (polygon outline) | **no** (the website's pencil tool still draws one on a classic board) | yes, as it came | colour, fill, border, marks, delete in the same menu; move; resize by its bottom right corner (the outline scales) |
+| `zone` (polygon outline) | **no** | yes, as it came | colour, fill, border, marks, delete in the same menu; move; resize by its bottom right corner (the outline scales) |
 | `image` | no | **no** | nothing: pictures are no longer supported |
 
 **Pictures.** An image annotation is not drawn, not selectable, and nothing offers to add one in either planner. The
-data is kept so a plan loses nothing on a round trip: the website leaves it in `project.annotations` untouched (plan
-boards filter it out of the nodes they draw; classic boards are unchanged); the mod imports it as a `Note` of kind
+data is kept so a plan loses nothing on a round trip: the website leaves it in `project.annotations` untouched (the
+board filters it out of the nodes it draws); the mod imports it as a `Note` of kind
 `image` that has no widget, skips it in select-all and marquee, and writes it back on export (`PlanExport.note`). The
 mod's picture download (`ImageCache`) and the picture panel are gone.
 

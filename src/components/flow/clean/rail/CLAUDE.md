@@ -1,9 +1,8 @@
 # The overview rail and the notices bar (src/components/flow/clean/rail)
 
-The mod's `OverviewRail`, `SpareBar`, `SparePopup` and `NoticeBar` on the website, for plan-mode boards
-(`project.planMode`). A column LEFT of the board (between the item browser and the board; it folds to a 26 px
-strip, kept per device in `rail-view.ts`). On those boards the right-hand `InspectorPanel` steps aside; the old
-modes keep it.
+The mod's `OverviewRail`, `SpareBar`, `SparePopup` and `NoticeBar` on the website. A column LEFT of the board
+(between the item browser and the board, or right of it where Settings put the items left; it folds to a 26 px
+strip, kept per device in `rail-view.ts`).
 
 - Data is pure and tested: `rail-model.ts` (totals, setters, open ports, machines from `buildMachineList`),
   `spare-model.ts` (leftovers with a choice, most upstream first, stored split first), `rail-layout.ts` (the list as
@@ -27,9 +26,8 @@ modes keep it.
 - Rows hang `data-resource-row`; hovering one sets `hoveredFlowResourceKey` (the board lights the resource), a spare's
   place sets `hoveredFlowScope` on its ports. Controls stop their clicks so the row (walk to the next card that makes or
   uses the resource) never sees them.
-- `NoticeBar.tsx`: `PlanNoticeSwitch` is mounted in the board's notice corner and shows the plan-mode bar
-  (`PlanBoardOverlays`: notices, `SparePopupHost`, `RailTipHost`) or the classic notices. `flashNotice` puts a
-  transient sentence on top for 7 s.
+- `NoticeBar.tsx`: `PlanTopNotices` mounts the board's notices (`PlanBoardOverlays`: notices, `SparePopupHost`,
+  `RailTipHost`). `flashNotice` puts a transient sentence on top for 7 s.
 - `rail-tip.tsx` is the rail's own 800 ms rest-wait tooltip; swap it for the board's shared one (WP6) when that lands.
 - Fonts live on spans and divs, never on a `<button>` (globals.css forces `font: inherit` on buttons); every control
   is a `div role=button`. State hangs on data attributes.

@@ -1,12 +1,12 @@
 # Sticky notes (src/components/flow/clean/note)
 
-The mod's sticky note (`ui/note/NoteCard`) on plan boards (`project.planMode`). A note is the website's
+The mod's sticky note (`ui/note/NoteCard`) on the board. A note is the website's
 text annotation (`kind: "text"`, `colorTag`, `fontSize`), so import, export and posts are unchanged.
 
-- `AnnotationSwitch` is what FactoryFlow registers as `annotationNode`: on a plan board a text annotation is
-  `StickyNote`, a box, zone or arrow `CleanDrawing`, a picture nothing; classic boards keep the classic `AnnotationNode`.
-- `visibleAnnotations` (used where FactoryFlow builds its nodes): a plan board drops picture annotations (kept in the data
-  untouched). The plan board has no pencil menu or image key; image paste and drop do nothing.
+- `AnnotationSwitch` is what FactoryFlow registers as `annotationNode`: a text annotation is `StickyNote`, a box,
+  zone or arrow `CleanDrawing`, a picture nothing.
+- `visibleAnnotations` (used where FactoryFlow builds its nodes): the board drops picture annotations (kept in the data
+  untouched). The board has no pencil menu or image key; a file dropped on it opens as a plan.
 - `note-model.ts` is pure and tested: the mod's colours (`notePalette`, from `GT_NODE_COLORS` swatches), parts under the
   pointer, key rects (fixed screen size via `--board-zoom`), wrapping, `neededHeight`. Chrome sizes are the mod's, one to one
   (the board places and sizes everything as the mod does).
@@ -22,7 +22,7 @@ text annotation (`kind: "text"`, `colorTag`, `fontSize`), so import, export and 
 ## Drawn annotations (box, zone, arrow)
 
 Designed once for both planners: `docs/annotations.md` (the mod has the same file). `AnnotationSwitch` sends them to
-`CleanDrawing` on a plan board: flat, square, 2 px line, sizes the mod's one to one (`drawing-look.ts`, tested). Made and edited from the board's right-click menu (`BoardContextMenu`: Add sticky note, Add box, Add arrow;
+`CleanDrawing`: flat, square, 2 px line, sizes the mod's one to one (`drawing-look.ts`, tested). Made and edited from the board's right-click menu (`BoardContextMenu`: Add sticky note, Add box, Add arrow;
 right-click a drawing for `AnnotationMenu`: Colour, Fill, Border, Marks, or Thickness, Heads, Delete). A box moves by
 its border strips and resizes by React Flow's corner handles and outer edge bands (`drawing.css`); an arrow moves by its
 line and is reshaped by its two end handles (`CleanDrawing`'s `Arrow`, pointer capture, board space through

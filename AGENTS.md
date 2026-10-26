@@ -11,9 +11,8 @@ before changing that area; it names the tests that pin its behaviour.
 | Area | Notes |
 |---|---|
 | Board: cards, drawers, boards, wires, routing, arrange, board perf | `src/components/flow/CLAUDE.md` |
-| App UI: interface scale, compact mode, recipe search, inspector, sounds | `src/components/CLAUDE.md` |
-| Pool worksheet | `src/components/pool/CLAUDE.md` |
-| Solver: LP books, Build/Solve/Pool, drawers, shared machines, verdicts | `src/lib/solver/CLAUDE.md` |
+| App UI: interface scale, compact mode, recipe search, side columns, sounds | `src/components/CLAUDE.md` |
+| Solver: the plan solver, drawers, shared machines, verdicts | `src/lib/solver/CLAUDE.md` |
 | Machine math: overclocks, parallels, curated machine table, special machines | `src/lib/machines/CLAUDE.md` |
 | Domain model: resources, cells vs fluids, oredict context, sections, boards | `src/lib/model/CLAUDE.md` |
 | Power generation | `src/lib/power/CLAUDE.md` |
@@ -23,8 +22,8 @@ before changing that area; it names the tests that pin its behaviour.
 | Dataset pipeline: export, normalize, rebuild, publish | `tools/dataset-pipeline/CLAUDE.md` |
 | Deploy: Docker images, compose stack, deploy and dataset publish scripts | `docs/deploy.md` |
 
-Longer references, read on demand: `docs/solver-equations.md` (solver doctrine),
-`docs/power-planner-math.md` (the decoded power workbook), `docs/COMMUNITY.md`.
+Longer references, read on demand: `docs/power-planner-math.md` (the decoded power workbook),
+`docs/COMMUNITY.md`.
 
 ## Commands
 

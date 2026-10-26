@@ -9,7 +9,7 @@ Where things are:
 - Website: worktree `C:\Users\jack\ff-upto`, branch `up-to-card` (local, not pushed), version 4.1.0.
 - Mod: worktree `C:\Users\jack\gp-ut-data`, branch `up-to-mod` (local, not pushed). It already has the pin data, the
   solver port (checked answer for answer by `UpToParityTest`), the card's count and foot bar, port tiles and the well,
-  reason outlines, the circuit badge, the count's own sounds and old Build targets kept display only.
+  reason outlines, the circuit badge and the count's own sounds.
 
 ## Solver
 
@@ -110,14 +110,12 @@ overview, the settings and an Exactly pin.
 - Left as they are: names when zoomed out (the mod labels cards beside them as it labels drawers; the website's own
   version is on its branch `up-to-ui`, 51f5fea1, not reviewed yet); a card wired to itself (the website's router hooks
   it off the near edge, the mod routes round the card: an older router difference, not Up to); the website's amber mark
-  on an output its dataset lists alternatives for (a game recipe's output is one item); the website's notice when an old
-  Build plan opens (the mod converts on import, without one); the overview's row size (the mod's fits GTNH's GUI
+  on an output its dataset lists alternatives for (a game recipe's output is one item); the overview's row size (the mod's fits GTNH's GUI
   scale); NEI's list against the website's items column.
 
 ## Done in both (for reference)
 
-- The rule (Any, Up to, Exactly) and its data, every old pin read as Up to, old Build plans converted to Up to with
-  their targets kept display only.
+- The rule (Any, Up to, Exactly) and its data, every old pin read as Up to.
 - The solver: guard, push, drawers and Up to buffers as the player's own ends, the read-out (capable/disposal reasons,
   the starved-upstream bottleneck, wants), checked against the website on 67 plans.
 - The card: what runs and what is set under the machine, the rule menu, the foot bar with its striped run-on, tiles of

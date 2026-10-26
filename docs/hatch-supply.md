@@ -54,13 +54,13 @@ source. Each included structure accepts ordinary `InputHatch`:
 
 ## Solver
 
-After shared recipes and pools expand, `expandHatchSupplies` adds a private
+After shared recipes expand, `expandHatchSupplies` (through `solveGraph`) adds a private
 source drawer per selected fluid and solve node. It replaces incoming edges
 only in that temporary graph. Saved wires survive and work again when disabled.
-The source cannot feed another machine or leak into the shared pool. Consumption
+The source cannot feed another machine. Consumption
 rates remain visible; hatch production balances them locally and is not an import.
 Expansion caches preserve identity when graph diagnoses re-read or re-solve it.
 No extra hatch cards or count estimates are added to the board or machine list.
 
-`hatch-supply.test.ts` exercises Build, Solve, Pool, shared sections, repeated
+`hatch-supply.test.ts` exercises the plan solve, shared sections, repeated
 expansion, strict fluid matching, machine changes, save/reload and wire survival.

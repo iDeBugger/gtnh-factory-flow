@@ -15,14 +15,13 @@ Types, Zod schemas, resource keys, recipe rules, and the load funnel
   each other's wires.
 - Older plans carry loose cell wires (`edge.crossForm`: the Canner's litres per cell).
   `convertLooseCellWires` (cell-wires.ts) makes each a tank card between its two ends where
-  a plan lands: the funnel, `applyLiveOps`, a paste, Pool's bridges. Ids come from the wire,
-  so two screens write the same tank. Parsers (`keepMode`) leave them for the landing,
+  a plan lands: the funnel, `applyLiveOps`, a paste. Ids come from the wire,
+  so two screens write the same tank. Parsers (`keepCellWires`) leave them for the landing,
   which says so (`planNotice`). Exam: `cell-wires.test.ts` (numbers recorded from the old
   hidden tank).
 - Never auto-convert at a guessed 1000 L per cell: it hid a real machine, its empty cells
   and its power.
-- `isFluidEquivalentToFilledCell` (name-tolerant) is shared by search and Pool's cell
-  pairs. It converts nothing.
+- `isFluidEquivalentToFilledCell` (name-tolerant) is used by search. It converts nothing.
 - `dropCrossFormConnections` compares KINDS only, never ids (slots legitimately carry ids
   the edge does not). It lets `crossForm` wires through for the conversion.
 
@@ -69,15 +68,13 @@ Types, Zod schemas, resource keys, recipe rules, and the load funnel
 ## Boards and lists
 
 - `board-windows.ts` (`computeBoardLevelView`) decides what the canvas shows: the root plus
-  every open board, recursively. `board-paper.ts` picks papers (`pickBoardPaper`,
-  `paperForBoardId`). `flattenBoards` surfaces members where their frames stood.
-- `machine-list.ts` (`buildMachineList`): one row per card. Build counts the card's
-  `machineCount`; Solve / Pool sum its sections' required machines, fractions kept.
+  every open group, recursively.
+- `machine-list.ts` (`buildMachineList`): one row per card, counting its sections' solved machines, fractions kept.
   Order: tier, then EU/t biggest first on `rate-order.ts`'s key (rounded to 9 significant
   digits, so float noise does not swap two cards, short of the two edges `rate-order.ts`
   names), then name, then card order.
 - `rate-order.ts` (`sortByRate`, `compareByRate`, `rateOrderKey`): the order of every list of
-  rates a plan shows: on the plan-mode board (overview, group summary card, machine list,
+  rates a plan shows: on the board (overview, group summary card, machine list,
   boundary lists) and in plan stats (export image, identity drawer, community card). Biggest first on the rate rounded to 9 significant digits (a sort key,
   so the sort stays transitive), ties by the name the list prints A to Z, then key. The file
   names the two rare edges no fixed key avoids.
@@ -102,7 +99,7 @@ Types, Zod schemas, resource keys, recipe rules, and the load funnel
 ## The load funnel (project-normalize.ts)
 
 `normalizeLoadedProject` snaps positions to the grid and migrates legacy shapes (trash
-cans to trash drawers, stored setup rules dropped, unratioed cross-form wires and overrides
+cans to trash drawers, unratioed cross-form wires and overrides
 dropped, loose cell wires to tank cards, stored recipe bodies on multi-amp maps restamped at the amp tier as the
 pipeline stamps it: `amp-map-stamp.ts`, for a card the landing refresh does not re-find). Unknown keys
 are stripped by the Zod schema on import, paste and server paths, not here; IndexedDB

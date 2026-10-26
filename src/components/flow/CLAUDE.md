@@ -1,8 +1,7 @@
 # The board (src/components/flow)
 
-`FactoryFlow.tsx` hosts the React Flow canvas. `RecipeNode.tsx` is the machine card,
-`StorageNode.tsx` the drawer, `BoardNode.tsx` / `PocketNode.tsx` an open / minimized
-board, `grid-edge-router.ts` the wire router. Auto-arrange lives in
+`FactoryFlow.tsx` hosts the React Flow canvas. The cards, drawers, groups and notes are the clean ones (`clean/`,
+its own notes); the node data types are in `board-node-types.ts`; `grid-edge-router.ts` is the wire router. Auto-arrange lives in
 `src/lib/board-arrange*.ts`, the grid constants in `src/lib/board-grid.ts`.
 
 ## Performance invariants
@@ -67,7 +66,7 @@ The board must stay smooth with 100+ cards on weak PCs.
   The machine menu lists the intersection of the sections' handlers
   (`getSharedMachineHandlers`; model rules in `src/lib/model/CLAUDE.md`).
 
-## Drawers (StorageNode)
+## Drawers (clean/drawer)
 
 - A one-port machine card, 6x4 cells: a title bar (move grip, board menu, never starts a
   wire) and a port chip that answers exactly like a port row (`usePortRowBrowse`). Keep
@@ -76,44 +75,32 @@ The board must stay smooth with 100+ cards on weak PCs.
   wiring handle (z 30) and under the delete and side keys (z 41). It never reaches past the drawer: a drawer drawn
   after a card right above it would take that card's presses. The bar's tip rides `.cd` (zoomed out, the whole drawer
   shows it).
-- Solve mode: source and product drawers show a rule row, a rule button (Any / At least /
-  Exactly / At most) and a sunken rate box (`RuleInput`, `useRateRule`, `setStorageRule`). A buffer has none: it passes
-  what its users take, and the adapter sends it as Any whatever it stores (`docs/buffer-drawers.md`).
-  Any is `targetMode: "ignore"` or no number. Pool's table uses the same `RuleButton`
-  in its "table" dress (`rate-rule.tsx`).
+- Source and product drawers show a rule (Any / At least / Exactly / At most) and a rate (`useRateRule`,
+  `setStorageRule`). A buffer has none: it passes what its users take, and the adapter sends it as Any whatever it
+  stores (`docs/buffer-drawers.md`). Any is `targetMode: "ignore"` or no number.
 - A buffer's spills (Up to makers making more than its users take, `plan.spills`) are the makers' forced rows; the
   buffer only totals them on a small Forced out tile left of its figure (`.cd-forced`; the drawer grows a cell wider
   by it, and routing and arrange read the measured size). Hovering any tile of a spill, or a maker's row, lights every tile of that
   spill and nothing else (`clean/interaction/spill-hover.ts`, a store of its own).
 - The side key (`.cd-flip`, the delete key's twin at the top right, on hover) makes an input drawer an output one or
   the reverse (`flipStorageSide`): its wires come off and its rate goes, and its declared `poolSide` keeps it on the
-  board unwired. Never on a buffer. Buffer modes: overflow (banks
-  surplus), strict (clogs), ratio (percent splits edited in `StorageRatioEditor.tsx`, a
-  non-modal panel; branch percentages ride the wires near the drawer).
-- Traps: `.storage-chip-text` must not set a z-index; drawer content is not clipped so
-  lists can open past the edge; open lists carry `data-tooltip-stop`.
-- Exams: `StorageRuleInput.test.tsx`, `../inspector/DrawerTargetRow.test.tsx`.
+  board unwired. Never on a buffer.
+- Traps: drawer content is not clipped so lists can open past the edge; open lists carry `data-tooltip-stop`.
+- Exams: `clean/drawer/drawer-model.test.ts`.
 
-## Boards (containers)
+## Groups (containers)
 
-- A board is a `FactoryPocket`: open (`expanded` + `size`, a window frame) or minimized
-  (a summary card). There is no other container.
-- A minimized board is a summary, not a machine: no ports, nothing wires to it. Its
-  figures come from the plan-wide solve (`computePocketSummaries`): Needs / Makes (members
-  netted, wires ignored, full speed) and Coming in / Going out (actual crossings), with
-  no row cap (`pocketCardHeight` sizes it). Do not build a per-board scoped solve.
-- Open boards: members are React Flow children with frame-relative positions. A card
-  wholly inside a frame on drop joins it (deepest wins); dragged clear, it leaves.
-  Frames never grow to swallow a drop.
-- Nothing solid overlaps and nothing straddles a wall: `board-placement.ts` runs live
-  while dragging (blockers computed once at drag start). Held cards whose board is also
-  held are passengers (`dragPassengersRef`), or they would move twice.
-- Nothing sits in two boards: `wrapSelectionInBoard` refuses, `selectionCanWrap` hides
-  the button. `dissolvePocket` removes the frame and keeps the cards.
-- Paper: `pocket.theme` (dark papers only); boards without one use `paperForBoardId`.
-  Floors paint in `BoardFloors` (one portal at z -4); chrome sits at 15, between wires (10)
-  and cards (20). Live marching dashes are off; `boardChromeOccluders` only cuts board
-  chrome out of the export capture.
+- A group is a `FactoryPocket`: open (`expanded` + `size`, a frame) or collapsed (a summary card). There is no
+  other container. The rules are `docs/groups.md` and `clean/group/`.
+- A collapsed group is a summary, not a machine: no ports, nothing wires to it. Its figures come from the plan-wide
+  solve (`computeGroupSummaries`). Do not build a per-group scoped solve. Arrange sizes it before it is measured
+  (`pocketCardHeight`).
+- Open groups: members are React Flow children with frame-relative positions. A card joins the group its centre is
+  let go over, and the frame grows to hold it; a carried group keeps its parent. Held cards whose group is also held
+  are passengers (`dragPassengersRef`), or they would move twice.
+- Nothing solid overlaps: `board-placement.ts` runs live while dragging (blockers computed once at drag start).
+- Floors paint in `BoardFloors` (one portal at z -4, `GroupFloor`); the frame sits between wires (10) and cards
+  (20). `boardChromeOccluders` only cuts the frame out of the export capture.
 - Every `NodeToolbar` goes through `CameraNodeToolbar` and wears `nopan`; the scroll
   camera otherwise applies the pan twice and a press starts a pan.
 
@@ -132,8 +119,7 @@ The board must stay smooth with 100+ cards on weak PCs.
   outside the border, never the nearest (`cardRimDocks`, which Arrange's judge uses too), and `stubDepth` draws the wire on to the border: clean
   drawers and cards come in 10 px sizes and group members can sit half a cell off, and a dock inside the card
   loses the whole side or draws the wire from under it. Wire width follows flow
-  (`laneWidthForHeat`) and wires sit under cards. No rate labels on wires, except
-  ratio-drawer percentages. One drawn wire per material between two cards
+  (`laneWidthForHeat`) and wires sit under cards. No rate labels on wires. One drawn wire per material between two cards
   (`channelEdgeIdsByRepresentative`).
 - Frames are routing obstacles but invisible to wire gestures. Wires inside a board pay to
   leave it (`costOutsideHome`); wires leaving pay per px spent inside (`costInsideExempt`).
@@ -175,17 +161,13 @@ The board must stay smooth with 100+ cards on weak PCs.
   it (`defaultPrevented`). Exam: `board-delete-key.test.ts`.
 - One right-click menu, `BoardContextMenu.tsx`. A control with its own right click calls
   `preventDefault`; board handlers skip prevented events.
-- Calm mode is session-only and never stored: a stored flag once stranded players with no
-  way to turn it off.
+- Calm mode and the glance view are session-only and never stored (`board-view.ts`): the image export borrows them
+  for one capture, and the board has no switch for either.
 - No `fitView` prop: it fires after the plan loads and overwrites the restored camera.
   The app frames the camera itself wherever it puts cards on the board. Each design's
   camera is stored per browser (`src/lib/designs/design-camera.ts`), never in the plan.
-- Toolbars fold by BOARD width using measured widths (`toolbar-fold.ts`; re-measure after
-  adding a key), never onto a second line. `BOARD_TOOL_SCALE = 0.8`.
 - Touch gestures are native capture-phase listeners (`board-touch-gestures.ts`). On compact
   screens a card drags only while selected.
-- The help sheet (`BoardHelp.tsx`) is a computed layout of 280px cards hung from
-  `data-help-anchor` rings; no per-card offsets.
 - Checklist mode is presentation only; wires keep full routes in an invisible hit layer,
   and middle mouse and wheel still reach the camera.
 - Animate values and routes through `board-motion.tsx`, never ad-hoc CSS transitions or

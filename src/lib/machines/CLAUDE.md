@@ -171,8 +171,6 @@ computes in float: replicate it.
   keep legacy `coilTier` loading.
 - Disable tier controls a handler ignores. Manual/instant crafting tables are not timed
   machines; with no duration they are instant, never a fake `0 EU / 1s`.
-- Keep knob captions short (`CAPTIONS` in `SettingTile.tsx`); tiles are 96px minimum and
-  truncate.
 - A recipe's special value means different things per map; never read it as heat
   globally. Multiblock-ness comes from the exported `multiblock` flag, the source class or
   a "Controller Block" tooltip line (`machine-configs.mjs`), never from the map.

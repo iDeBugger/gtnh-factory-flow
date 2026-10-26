@@ -151,16 +151,12 @@ Every save goes through `persistCanvas` in design-store.ts:
 `browseResource`, `browseBack` / `browseForward`, `recipeBrowserMachinePin`,
 `beginRecipeRefactor` live in factory-store; the rules are in `src/components/CLAUDE.md`.
 
-## One mode
+## Landing
 
-There is one board mode, plan mode. Every plan lands through the store (`markHydratedProject`,
-`loadViewedProject`, `setProject`), and `normalizeLoadedProject` ends in `openAsPlan`
-(`src/lib/solver/plan/to-plan.ts`): Build and Solve plans by `convertBuildToPlan`, Pool plans wired per resource first
-(`pool-to-plan.ts`, with a `planNotice` for the player). The parsers (JSON, plan links, community posts) keep the saved
-mode on purpose, so the one conversion at landing can also say what it lost. A load never writes: storage keeps the old
-shape until the player's first edit saves the converted plan (both `planMode` and `solveMode` are written, so older
-builds open it as Solve). Tests of the old Build/Solve/Pool code call `allowLegacyModesForTests()`.
-Server stats convert the same way (`normalizeLoadedProject` in the community routes).
+Every plan lands through the store (`markHydratedProject`, `loadViewedProject`, `setProject`), and
+`normalizeLoadedProject` migrates older shapes on the way in. The parsers (JSON, plan links, community posts) leave
+loose cell wires for the landing (`keepCellWires`), which turns them into tank cards and says so (`planNotice`). A load
+never writes: storage keeps the old shape until the player's first edit saves the migrated plan.
 ## Live plans (live-session.ts)
 
 All of it is off unless `NEXT_PUBLIC_LIVE_URL` is set (`isLiveConfigured`, read by its literal name so Next.js
@@ -174,7 +170,7 @@ changes nothing until then. Architecture and protocol: `docs/live.md`.
 - THE FUNNEL. Every project change not made `quietly` (`live-edit-gate.ts`) is a person's edit: the plan before and
   after are shaped (`src/lib/live/live-shape.ts`) and diffed into a batch in the client engine (confirmed +
   pending). Shaping leaves out what is not a person's doing: `metadata` (stamps, the owner's post link), `name` (the
-  account row's), `view` (each person's dressing), `poolCellRatios` (fetched) and GregTech `runtimeCalculation`
+  account row's), `view` (each person's dressing) and GregTech `runtimeCalculation`
   tables. Landing a plan, the recipe refresh, fetched data, a community link and applied remote ops are quiet. A
   new store action that writes derived data into the project must be quiet too, or every client sends it. The recipe
   refresh re-keys a game card's recipe (`gtnhplanner:<card>`) to the dataset's on this screen only, so an edit
@@ -184,13 +180,11 @@ changes nothing until then. Architecture and protocol: `docs/live.md`.
   and only that lands, through `applyLiveOps` (same objects for untouched things, re-solved like any edit). It is the
   same design changing, never an arriving plan: the "every arriving plan opens as a NEW design" rule is untouched
   (opening a shared plan the first time is the arrival, `openSharedDesign`).
-- ONE MODE. A live plan lands through `applyLiveOps`, not the loading funnel, so that action converts a plan not in
-  plan mode yet (an older build's, or the game's, which writes Solve plans) as every landing plan is
-  (`normalizeLoadedProjectWithNotice`) and hands the before and after back; the session sends the conversion as an
-  edit undo never takes back (`localOps(..., { undoable: false })`). The load-never-writes rule does not hold here:
-  a conversion kept on one screen would read everyone else's edits against a different plan. A plan already in plan
-  mode converts only its loose cell wires (to tank cards, `convertCellWiresWithNotice`), never the whole funnel, which
-  would move the game's own things.
+- CELL WIRES. A live plan lands through `applyLiveOps`, not the loading funnel, so that action turns a live plan's
+  loose cell wires into tank cards (`convertCellWiresWithNotice`) and hands the before and after back; the session
+  sends the change as an edit undo never takes back (`localOps(..., { undoable: false })`). The load-never-writes rule
+  does not hold here: a change kept on one screen would read everyone else's edits against a different plan. Only the
+  cell wires convert, never the whole funnel, which would move the game's own things.
 - UNDO on a live plan applies the recorded inverses of this person's own edits (`LiveClientState.undo`), sent as a
   new batch. `withProjectHistory` keeps no snapshots while a live handler is set, and entering or leaving live empties
   the snapshot history: a snapshot restored over a live plan would wipe everyone else's edits. Undo buttons and their
