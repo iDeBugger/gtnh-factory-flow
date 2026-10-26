@@ -62,6 +62,14 @@ final class NeiOrdering {
     }
 
     /**
+     * Sorts as ItemSorter.sort does (List.sort with its comparator) but lets a failure through:
+     * ItemSorter.sort catches and only logs it, which would leave the list in registry order.
+     */
+    static <T> void sortOrFail(List<T> items, Comparator<? super T> comparator) {
+        Collections.sort(items, comparator);
+    }
+
+    /**
      * Waits for every live thread of that name to end, until the deadline. NEI's plugin loader
      * sets pluginNEIConfigLoaded before it posts NEIConfigsLoadedEvent, whose handlers may still
      * hide items or add variants; the list is read only once the thread is done.

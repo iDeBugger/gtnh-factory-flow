@@ -4,7 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -30,6 +32,17 @@ class NeiOrderingTest {
     void leavesAListWithNoGroupsAsSorted() throws Exception {
         List<String> sorted = Arrays.asList("-/b", "-/a", "-/c");
         assertEquals(sorted, NeiOrdering.groupOrdered(sorted, NeiOrderingTest::group));
+    }
+
+    @Test
+    void letsASortFailureThrough() {
+        List<String> items = new ArrayList<String>(Arrays.asList("a", "b", "c"));
+        assertThrows(IllegalStateException.class, () -> NeiOrdering.sortOrFail(items, new Comparator<String>() {
+            @Override
+            public int compare(String left, String right) {
+                throw new IllegalStateException("display name");
+            }
+        }));
     }
 
     @Test

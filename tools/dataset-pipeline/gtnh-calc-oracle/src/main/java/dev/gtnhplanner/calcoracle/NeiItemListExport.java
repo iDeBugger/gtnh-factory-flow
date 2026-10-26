@@ -73,7 +73,12 @@ final class NeiItemListExport {
             bootNei(config);
             List<ItemStack> sortedItems = gatherItems();
             Class<?> sorter = Class.forName("codechicken.nei.ItemSorter");
-            sorter.getMethod("sort", List.class).invoke(null, sortedItems);
+            // ItemSorter.instance with List.sort, as ItemSorter.sort does, but a failure reaches the catch below:
+            // ItemSorter.sort only logs it and would leave the list in registry order, exported as sorted.
+            @SuppressWarnings("unchecked")
+            java.util.Comparator<ItemStack> comparator =
+                (java.util.Comparator<ItemStack>) sorter.getField("instance").get(null);
+            NeiOrdering.sortOrFail(sortedItems, comparator);
             List<ItemStack> items = groupOrdered(sortedItems);
             Object sortList = sorter.getField("list").get(null);
             String sortString = String.valueOf(sorter.getMethod("getSaveString", List.class).invoke(null, sortList));
@@ -167,7 +172,9 @@ final class NeiItemListExport {
     /**
      * NEI's gatherItems: each registry item's permutations, numbered in registry order into
      * ItemSorter's ordering (the "default" rule), duplicates dropped by ItemStackSet. An item
-     * whose permutations throw is left out, as NEI removes it.
+     * whose permutations throw is left out, as NEI removes it. Of two equal stacks the first in
+     * registry order is kept; 2.8.19's NEI dedupes inside a parallel stream, so which one it keeps
+     * there is down to timing, and only stacks two items both list can differ.
      */
     @SuppressWarnings("unchecked")
     private List<ItemStack> gatherItems() throws Exception {
