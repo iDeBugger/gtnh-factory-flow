@@ -186,8 +186,6 @@ export function buildScenario(s: Scenario): { project: FactoryProject; placement
     schemaVersion: PROJECT_SCHEMA_VERSION,
     id: s.name,
     name: s.name,
-    solveMode: true,
-    planMode: true,
     recipes,
     nodes,
     storages,

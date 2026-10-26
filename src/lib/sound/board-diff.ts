@@ -34,7 +34,6 @@ interface DrawerShot {
   rate: number;
   rule: string;
   role: string;
-  buffer: string;
   rest: string;
 }
 
@@ -70,7 +69,6 @@ const SKIP = new Set([
   "extraRecipes",
   "targetPerSecond",
   "targetMode",
-  "bufferMode",
   "drainMode",
 ]);
 
@@ -100,7 +98,6 @@ export function snapshotBoard(project: FactoryProject): BoardShot {
       rate: storage.targetMode === "ignore" ? 0 : Math.abs(storage.targetPerSecond ?? 0),
       rule: storage.targetMode ?? "",
       role: storage.drainMode ?? "",
-      buffer: storage.bufferMode ?? "overflow",
       rest: restOf(storage),
     });
   }
@@ -146,7 +143,6 @@ const COILS = [
 
 /** The mod's drawer rules in order (`Drawer.Rule`: ANY, AT_LEAST, EXACTLY, AT_MOST). */
 const RULES = ["ignore", "at-least", "exact", "at-most"];
-const BUFFERS = ["overflow", "strict", "ratio"];
 
 export const wireSound = (kind: ResourceKind | undefined): SfxName =>
   kind === "power" ? "wire.power" : kind === "fluid" ? "wire.fluid" : "wire.item";
@@ -234,8 +230,6 @@ export function soundForDiff(prev: BoardShot, next: BoardShot): DiffSound | unde
       return { name: drawer.rate > 0 ? "board.pin" : "board.unpin", settles: true };
     if (drawer.role !== was.role)
       return { name: "board.adjust", pitch: step(drawer.role === "" ? 0 : 1, 0.9, 1.12) };
-    if (drawer.buffer !== was.buffer)
-      return { name: "board.adjust", pitch: step(BUFFERS.indexOf(drawer.buffer), 0.9, 1.12) };
     if (drawer.rest !== was.rest) return { name: "board.adjust" };
   }
   for (const [id, note] of next.notes) {
@@ -256,7 +250,7 @@ export function boardFingerprint(project: FactoryProject): string {
       `${id}:${c.pin}:${c.exact}:${c.ports}:${c.tier}:${c.hatchTier}:${c.coil}:${c.sections}:${c.rest}`,
   );
   const drawers = [...shot.drawers].map(
-    ([id, d]) => `${id}:${d.rate}:${d.rule}:${d.role}:${d.buffer}:${d.rest}`,
+    ([id, d]) => `${id}:${d.rate}:${d.rule}:${d.role}:${d.rest}`,
   );
   return [
     cards.sort().join("\n"),

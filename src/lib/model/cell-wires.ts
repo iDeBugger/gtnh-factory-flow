@@ -136,7 +136,7 @@ export function convertLooseCellWires<Plan extends PlanParts>(project: Plan): { 
 
     const wireKind = edge.resourceKind;
     const farKind: ResourceKind = far.kind;
-    const { waypoints: _route, ratioInputWeight, ...rest } = plain;
+    const { waypoints: _route, ...rest } = plain;
     void _route;
     // The wire the player drew still leaves its port with its own resource; it now ends at the tank.
     edges.push({
@@ -156,7 +156,6 @@ export function convertLooseCellWires<Plan extends PlanParts>(project: Plan): { 
       resourceKind: farKind,
       resourceId: far.resourceId,
       ...(targetFace.displayName ? { label: targetFace.displayName } : {}),
-      ...(ratioInputWeight !== undefined ? { ratioInputWeight } : {}),
     });
     if (checked.has(edge.id)) checkedAdd.push(outId);
     converted += 1;

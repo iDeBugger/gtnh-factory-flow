@@ -13,7 +13,6 @@ import type { LiveOp, LivePlan, LiveThing } from "./ops";
  * - `name`: the design's name is the account row's, changed through the
  *   library, never as a plan edit.
  * - `view`: how each person dresses the board.
- * - `poolCellRatios`: fetched from the Canner's recipes by every client.
  * - `gameVersion`: set when the plan is made and never edited; a live
  *   service built before the field would refuse it as a meta op.
  * - GregTech recipes' `runtimeCalculation` tables: the dataset puts them back
@@ -23,7 +22,7 @@ import type { LiveOp, LivePlan, LiveThing } from "./ops";
  * leaves its shape the same object and the diff skips it without comparing.
  */
 
-const DROPPED_FIELDS = ["metadata", "name", "view", "poolCellRatios", "gameVersion"] as const;
+const DROPPED_FIELDS = ["metadata", "name", "view", "gameVersion"] as const;
 
 const shapedPlans = new WeakMap<object, LivePlan>();
 const shapedRecipeLists = new WeakMap<object, unknown[]>();

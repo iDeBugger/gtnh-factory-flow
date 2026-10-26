@@ -94,7 +94,6 @@ describe("Neutron Activator height", () => {
       nodes: [node("100")],
       edges: [],
       fuelProfiles: [],
-      setupRules: { freeInputs: true, freeOutputs: true },
     };
     const restored = normalizeLoadedProject(
       factoryProjectSchema.parse(JSON.parse(JSON.stringify(project))),

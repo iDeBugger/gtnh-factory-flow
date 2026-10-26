@@ -372,13 +372,6 @@ export const recipeSchema = z.object({
     .optional(),
 });
 
-export const targetRateSchema = z.object({
-  kind: resourceKindSchema,
-  resourceId: z.string().min(1),
-  amountPerSecond: z.number().positive("Target rate must be greater than zero"),
-  displayName: z.string().optional(),
-});
-
 // A recipe a version conversion could not find; display only, so every field is bounded.
 const unconvertedRecipeSchema = z.object({
   fromGameVersion: z.string().trim().min(1).max(32),
@@ -389,7 +382,6 @@ const unconvertedRecipeSchema = z.object({
 });
 
 export const factoryNodeSchema = z.object({
-  productionGroupId: z.string().min(1).optional(),
   id: z.string().min(1),
   recipeId: z.string().min(1),
   colorTag: factoryNodeColorTagSchema.optional(),
@@ -458,7 +450,6 @@ export const factoryNodeSchema = z.object({
     .record(z.string().min(1).max(512), z.number().positive().finite())
     .refine((rates) => Object.keys(rates).length <= 256, "Too many port rates.")
     .optional(),
-  targetOutput: targetRateSchema.optional(),
   enabled: z.boolean(),
   pocketId: z.string().min(1).optional(),
   position: z.object({
@@ -469,7 +460,6 @@ export const factoryNodeSchema = z.object({
 });
 
 export const factoryStorageSchema = z.object({
-  productionGroupId: z.string().min(1).optional(),
   id: z.string().min(1),
   kind: resourceKindSchema,
   resourceId: z.string().min(1),
@@ -481,15 +471,11 @@ export const factoryStorageSchema = z.object({
   capacity: z.number().positive().optional(),
   // Absent means `product` (the pulling one), as on legacy plans.
   drainMode: z.enum(["product", "byproduct", "trash"]).optional(),
-  // Absent means `overflow` in Build and `strict` in Solve (effectiveBufferMode).
-  bufferMode: z.enum(["overflow", "strict", "ratio"]).optional(),
-  ratioExportPercent: z.number().min(0).max(100).optional(),
-  // Pool mode: which side of the shared pool an unwired drawer sits on.
+  // Which side a loose (unwired) drawer sits on.
   poolSide: z.enum(["source", "drain"]).optional(),
-  // Solve mode's requirement on a product drawer; absent = unconstrained.
+  // The drawer's rate and its rule; absent = unconstrained.
   targetPerSecond: z.number().finite().optional(),
   targetMode: z.enum(["at-least", "at-most", "exact", "ignore"]).optional(),
-  poolTargetMode: z.enum(["at-least", "exact", "ignore"]).optional(),
   pocketId: z.string().min(1).optional(),
   position: z.object({
     x: z.number(),
@@ -580,8 +566,6 @@ export const factoryEdgeSchema = z.object({
   resourceId: z.string().min(1),
   label: z.string().optional(),
   ratePerSecond: z.number().positive().optional(),
-  ratioWeight: z.number().nonnegative().optional(),
-  ratioInputWeight: z.number().nonnegative().optional(),
   waypoints: z.array(z.object({ x: z.number(), y: z.number() })).optional(),
   // An older build's loose cell wire, turned into a fluid tank on landing; see FactoryEdge.crossForm.
   crossForm: z.object({ litresPerCell: z.number().positive() }).optional(),
@@ -748,6 +732,7 @@ export const planTaskCommentSchema = z.object({
   text: z.string().min(1).max(PLAN_TASK_LIMITS.commentTextLength),
 });
 
+/** The live protocol still names this collection (`live/ops.ts`), so a live batch can be checked against it. */
 export const productionGroupSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -756,8 +741,6 @@ export const productionGroupSchema = z.object({
 });
 
 export const factoryProjectSchema = z.object({
-  productionGroups: z.array(productionGroupSchema).optional(),
-  poolResourceRules: z.record(z.string(), z.enum(["share", "import"])).optional(),
   checklist: z.object({ cards: z.array(z.string()), edges: z.array(z.string()) }).optional(),
   schemaVersion: z.literal(PROJECT_SCHEMA_VERSION),
   // The game version family; absent reads as 2.9. Any other value is kept as
@@ -773,22 +756,6 @@ export const factoryProjectSchema = z.object({
   description: z.string().optional(),
   icon: entryIconSchema.optional(),
   view: planViewStateSchema.optional(),
-  targetRate: targetRateSchema.optional(),
-  // Legacy setup rules: still parsed so old JSON validates, dropped on load.
-  setupRules: z
-    .object({
-      freeInputs: z.boolean().optional(),
-      freeOutputs: z.boolean().optional(),
-    })
-    .optional(),
-  // Legacy sketch mode, dropped on load.
-  assumeBoundaries: z.boolean().optional(),
-  // Solve mode: product amounts are the question, machine counts the answer.
-  solveMode: z.boolean().optional(),
-  // Pool mode: every resource is shared, no wires needed.
-  poolMode: z.boolean().optional(),
-  // Plan mode: the merged board (implies solveMode).
-  planMode: z.boolean().optional(),
   // Plan mode's stored leftover splits: leftover key -> bearer key -> share.
   spareShares: z
     .record(
@@ -804,8 +771,6 @@ export const factoryProjectSchema = z.object({
     .record(z.string().min(1).max(256), z.array(z.string().min(1).max(128)).max(64))
     .refine((pins) => Object.keys(pins).length <= 512, "Too many pinned machines.")
     .optional(),
-  // Pool mode's cell-to-fluid ratios, litres per filled cell by cell id.
-  poolCellRatios: z.record(z.string(), z.number().positive()).optional(),
   recipes: z.array(recipeSchema),
   nodes: z.array(factoryNodeSchema),
   storages: z.array(factoryStorageSchema).optional().default([]),
@@ -841,7 +806,6 @@ export const factoryProjectSchema = z.object({
 export const boardSelectionPayloadSchema = z.object({
   // The game version the cards were copied on; absent (saved before payloads carried one) reads 2.9.
   gameVersion: factoryProjectSchema.shape.gameVersion,
-  productionGroups: factoryProjectSchema.shape.productionGroups,
   nodes: z.array(factoryNodeSchema),
   storages: z.array(factoryStorageSchema),
   annotations: z.array(factoryAnnotationSchema),

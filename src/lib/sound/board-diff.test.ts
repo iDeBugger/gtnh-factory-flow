@@ -132,7 +132,7 @@ describe("soundForDiff", () => {
     expect(sound(lv, hv)).toEqual({ name: "dial.tier", pitch: tierPitch(3) });
   });
 
-  it("adjusts a setting, pitching a drawer's rule and kind by their rung", () => {
+  it("adjusts a setting, pitching a drawer's rule by its rung", () => {
     expect(
       name(
         project({ nodes: [node("a")] }),
@@ -142,8 +142,6 @@ describe("soundForDiff", () => {
     const any = project({ storages: [drawer("s", { targetMode: "ignore" })] });
     const exact = project({ storages: [drawer("s", { targetMode: "exact" })] });
     expect(sound(any, exact)?.pitch).toBeCloseTo(0.9 * 1.12 * 1.12, 9);
-    const strict = project({ storages: [drawer("s", { bufferMode: "strict" })] });
-    expect(sound(project({ storages: [drawer("s")] }), strict)?.pitch).toBeCloseTo(0.9 * 1.12, 9);
   });
 
   it("opens and closes a board", () => {

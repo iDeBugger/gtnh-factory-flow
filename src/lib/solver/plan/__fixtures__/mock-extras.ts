@@ -196,8 +196,6 @@ function build(spec: MockSpec): MockPlan {
     id: spec.id,
     name: spec.name,
     description: spec.description,
-    solveMode: true,
-    planMode: true,
     recipes,
     nodes,
     storages,

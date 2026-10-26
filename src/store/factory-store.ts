@@ -1727,7 +1727,6 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
         nodes: [],
         storages: [],
         edges: [],
-        targetRate: undefined,
       });
 
       return withProjectHistory(state, {
@@ -6105,7 +6104,7 @@ function withStorageTargetMode(
 ): FactoryProject | undefined {
   if (!project.storages?.some((storage) => storage.id === storageId)) return undefined;
   return { ...project, storages: project.storages?.map((storage) =>
-    storage.id === storageId ? { ...storage, targetMode, poolTargetMode: undefined } : storage) };
+    storage.id === storageId ? { ...storage, targetMode } : storage) };
 }
 
 function touchProject(project: FactoryProject): FactoryProject {

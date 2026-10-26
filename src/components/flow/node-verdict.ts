@@ -10,7 +10,6 @@ import type {
 import { isBeeSpeciesInput, isFreeRecipeInput, isOreDictionaryResource, isRecipeInputConsumed, makeResourceKey, resourceLabel } from "@/lib/model";
 import { solveGraph } from "@/lib/solver/hatch-supply";
 import { findBareSlots } from "./bare-slots";
-import { isCustomRateRecipe } from "@/lib/model/custom-rate";
 import { collectTrashNodeIds } from "@/lib/model/trash";
 import { describeStorage, getStorageRoles } from "@/lib/model/storage-role";
 import { makeResourceHandleId, sectionHandleId } from "./resource-handles";
@@ -45,15 +44,6 @@ export interface NodeVerdict {
 /** Half a percent: below this, converged solver states are just float noise. */
 const VERDICT_EPSILON = 0.005;
 const RATE_EPSILON = 1e-6;
-/**
- * A shortfall is real only against the size of the ask: LP flows carry solver
- * dust proportional to board scale (balances.ts snaps at 1e-5 relative), which
- * on huge flows would otherwise read as a tiny BOTTLENECK.
- */
-const SHORTFALL_RELATIVE_EPSILON = 1e-5;
-function isMaterialShortfall(missing: number, reference: number): boolean {
-  return missing > Math.max(RATE_EPSILON, Math.abs(reference) * SHORTFALL_RELATIVE_EPSILON);
-}
 
 function clamp01(value: number | undefined, fallback: number): number {
   if (value === undefined || !Number.isFinite(value)) {
@@ -205,174 +195,6 @@ function isMachineAbleToRun(nodeResult: NodeThroughputResult | undefined): boole
 }
 
 /**
- * The machines behind one output port, through any buffers on the way.
- * Absent when a drain drawer or an overflow buffer sits on the route: those
- * absorb a surplus, so nothing on that port can be holding the card.
- */
-function machineTakersBehindOutput(
-  project: FactoryProject,
-  edges: ProjectEdge[],
-): Set<string> | undefined {
-  const { storageById, nodeById: nodeIds } = boardLookups(project);
-  const outgoingBy = outgoingByNode(project);
-  const takers = new Set<string>();
-  const seen = new Set<string>();
-  let absorbed = false;
-  const walk = (edgesOut: ProjectEdge[]) => {
-    for (const edge of edgesOut) {
-      const storage = storageById.get(edge.target);
-      if (storage) {
-        const isDrain = (outgoingBy.get(storage.id) ?? []).length === 0;
-        if (isDrain || (storage.bufferMode ?? "overflow") === "overflow") {
-          absorbed = true;
-          return;
-        }
-        if (!seen.has(storage.id)) {
-          seen.add(storage.id);
-          walk(outgoingBy.get(storage.id) ?? []);
-        }
-      } else if (nodeIds.has(edge.target)) {
-        takers.add(edge.target);
-      }
-    }
-  };
-  walk(edges);
-  return absorbed ? undefined : takers;
-}
-
-const boardLookupsCache = new WeakMap<
-  FactoryProject,
-  {
-    recipeById: Map<string, Recipe>;
-    nodeById: Map<string, FactoryProject["nodes"][number]>;
-    storageById: Map<string, NonNullable<FactoryProject["storages"]>[number]>;
-  }
->();
-function boardLookups(project: FactoryProject) {
-  let cached = boardLookupsCache.get(project);
-  if (!cached) {
-    cached = {
-      recipeById: new Map(project.recipes.map((entry) => [entry.id, entry])),
-      nodeById: new Map(project.nodes.map((entry) => [entry.id, entry])),
-      storageById: new Map((project.storages ?? []).map((entry) => [entry.id, entry])),
-    };
-    boardLookupsCache.set(project, cached);
-  }
-  return cached;
-}
-
-/**
- * Whether a machine is held by its OWN output side, so what it asks of an
- * input is not hunger a feeder can answer: feed it more and it still cannot
- * get rid of what it makes. The deficit reader must know both ways this
- * happens, or it crowns the feeder BOTTLENECK while the jam sits further down:
- *
- * - The solver's disposal figure binds below what the inputs allow.
- * - The held-output clog the verdict itself reads (findHeldOutputClog): the
- *   card runs below what its inputs and asks allow, and a wired output that
- *   only machines take, none of them short on it, ships less than the card
- *   would make. The solver's disposal misses this when another output's
- *   taker begs at nameplate and lifts the card's demand to 100%.
- *
- * Asked recursively of the takers on that output, so a chain of held cards
- * reads held all the way up. The asking card, and any card met again round a
- * loop, counts as not held for the length of the question: inside a ring
- * every member is held by the next, and excusing the asker's own taker would
- * cut the trail short of the machine that sets the ring's pace. Memoized per
- * (project, result) and asker.
- */
-const heldByOwnOutputCache = new WeakMap<
-  FactoryProject,
-  { result: ThroughputResult; byAsker: Map<string, Map<string, boolean>> }
->();
-function isHeldByOwnOutput(
-  project: FactoryProject,
-  result: ThroughputResult,
-  nodeId: string,
-  askerId: string,
-): boolean {
-  let cached = heldByOwnOutputCache.get(project);
-  if (!cached || cached.result !== result) {
-    cached = { result, byAsker: new Map() };
-    heldByOwnOutputCache.set(project, cached);
-  }
-  let held = cached.byAsker.get(askerId);
-  if (!held) {
-    held = new Map([[askerId, false]]);
-    cached.byAsker.set(askerId, held);
-  }
-  const known = held.get(nodeId);
-  if (known !== undefined) {
-    return known;
-  }
-  held.set(nodeId, false);
-  const answer = computeHeldByOwnOutput(project, result, nodeId, askerId);
-  held.set(nodeId, answer);
-  return answer;
-}
-
-function computeHeldByOwnOutput(
-  project: FactoryProject,
-  result: ThroughputResult,
-  nodeId: string,
-  askerId: string,
-): boolean {
-  const nodeResult = result.nodes[nodeId];
-  if (!nodeResult) {
-    return false;
-  }
-  const utilization = clamp01(nodeResult.utilization, 0);
-  const capable = clamp01(nodeResult.capableUtilization, 1);
-  const demand = clamp01(nodeResult.demandUtilization, utilization);
-  const disposal = clamp01(nodeResult.disposalUtilization, 1);
-  if (disposal < 1 - VERDICT_EPSILON && disposal < capable - VERDICT_EPSILON) {
-    return true;
-  }
-  const wanted = Math.min(1, capable, Math.max(demand, utilization));
-  if (utilization >= wanted - VERDICT_EPSILON) {
-    return false;
-  }
-  const outgoing = outgoingByNode(project).get(nodeId) ?? [];
-  for (const [key, flow] of Object.entries(nodeResult.outputs)) {
-    if (flow.amountPerSecond <= RATE_EPSILON || flow.kind === "power") {
-      continue;
-    }
-    const edges = outgoing.filter(
-      (edge) => makeResourceKey(edge.resourceKind, edge.resourceId) === key,
-    );
-    if (edges.length === 0) {
-      continue;
-    }
-    const takers = machineTakersBehindOutput(project, edges);
-    if (!takers || takers.size === 0) {
-      continue;
-    }
-    let taken = 0;
-    let hungry = false;
-    for (const edge of edges) {
-      const edgeResult = result.edges[edge.id];
-      const transferred = edgeResult?.transferredPerSecond ?? 0;
-      taken += transferred;
-      const ask = honestEdgeAskPerSecond(edgeResult, result.nodes[edge.target], edge);
-      if (
-        isMaterialShortfall(ask - transferred, ask) &&
-        !isHeldByOwnOutput(project, result, edge.target, askerId)
-      ) {
-        hungry = true;
-      }
-    }
-    if (hungry) {
-      continue;
-    }
-    const made = flow.amountPerSecond * wanted;
-    if (isMaterialShortfall(made - taken, made)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
  * What ONE inbound line can honestly deliver, buffers included. Call this
  * rather than bare honestEdgeAvailablePerSecond: that defaults a buffer
  * source to Infinity, and without its fourth argument every buffer-fed input
@@ -423,26 +245,6 @@ export function honestEdgeAvailablePerSecond(
     return Math.max(allocated, edgeResult.sourceCapacityPerSecond);
   }
   return allocated;
-}
-
-const edgeIndexCache = new WeakMap<
-  FactoryProject,
-  { incoming: Map<string, ProjectEdge[]>; outgoing: Map<string, ProjectEdge[]> }
->();
-function edgeIndex(project: FactoryProject) {
-  let cached = edgeIndexCache.get(project);
-  if (!cached) {
-    cached = { incoming: new Map(), outgoing: new Map() };
-    for (const edge of project.edges) {
-      cached.incoming.set(edge.target, [...(cached.incoming.get(edge.target) ?? []), edge]);
-      cached.outgoing.set(edge.source, [...(cached.outgoing.get(edge.source) ?? []), edge]);
-    }
-    edgeIndexCache.set(project, cached);
-  }
-  return cached;
-}
-function outgoingByNode(project: FactoryProject): Map<string, ProjectEdge[]> {
-  return edgeIndex(project).outgoing;
 }
 
 /** How many outgoing lines each source has per resource — the sole-outlet test. */

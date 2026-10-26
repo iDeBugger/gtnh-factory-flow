@@ -453,13 +453,6 @@ export interface Recipe {
   };
 }
 
-export interface TargetRate {
-  kind: ResourceKind;
-  resourceId: ResourceId;
-  amountPerSecond: number;
-  displayName?: string;
-}
-
 /** Which way a custom rate card faces: it makes the resource, or it drinks it. */
 export type CustomRateMode = "supply" | "request";
 
@@ -487,8 +480,6 @@ export interface FactoryNodeRecipeSection {
 }
 
 export interface FactoryNode {
-  /** Pool production scope, independent of canvas boards and shared recipes. */
-  productionGroupId?: string;
   id: string;
   recipeId: string;
   colorTag?: FactoryNodeColorTag;
@@ -567,7 +558,6 @@ export interface FactoryNode {
    * nothing reads it outside plan mode.
    */
   portRates?: Record<string, number>;
-  targetOutput?: TargetRate;
   enabled: boolean;
   /** The board (pocket) this card lives in; absent = the root board. */
   pocketId?: string;
@@ -595,44 +585,22 @@ export interface FactoryNode {
  */
 export type StorageDrainMode = "product" | "byproduct" | "trash";
 
-/**
- * How a BUFFER treats a surplus. `overflow` (the Build default) banks what its
- * takers leave at a visible rate, so the feeder never clogs, like a real chest.
- * `strict` passes through only what is pulled and hands the surplus back to
- * the feeder as a clog. `ratio` splits incoming and outgoing flows by fixed
- * shares, banking only `ratioExportPercent`. Solve defaults to strict unless a
- * mode is set. No mode runs the tank net-negative: a buffer never invents supply.
- */
-export type StorageBufferMode = "overflow" | "strict" | "ratio";
-
 export interface FactoryStorage {
-  productionGroupId?: string;
   id: string;
   kind: ResourceKind;
   resourceId: ResourceId;
   /** Drains only; absent means `product`. See StorageDrainMode. */
   drainMode?: StorageDrainMode;
   /**
-   * Shared boundary target: negative for fresh input, positive for output.
-   * Source editors on the board show the magnitude; Pool shows the sign.
-   * Ignored in Build and on buffer/byproduct/trash drawers; a product with
-   * no number is unconstrained (byproduct-shaped) so flipping the mode never
-   * errors a board.
+   * The drawer's rate: negative for fresh input, positive for output. The board shows the magnitude. Ignored on
+   * buffer, byproduct and trash drawers; a product with no number is unconstrained (byproduct-shaped).
    */
   targetPerSecond?: number;
-  /** Shared Solve/Pool rate rule. Build retains the settings without enforcing them. */
+  /** The drawer's rate rule. */
   targetMode?: "at-least" | "at-most" | "exact" | "ignore";
-  /** Legacy Pool rule, read when targetMode is absent. */
-  poolTargetMode?: "at-least" | "exact" | "ignore";
-  /** Buffers only; absent means `overflow` in Build, `strict` in Solve. See StorageBufferMode. */
-  bufferMode?: StorageBufferMode;
-  /** Ratio mode's unwired surplus share, 0–100; absent means no export. */
-  ratioExportPercent?: number;
   /**
-   * Which side of the POOL this drawer sits on when it has no wires of its
-   * own (`FactoryProject.poolMode`): a `source` feeds the pool, a `drain`
-   * takes from it (its `drainMode` still says product, byproduct or trash).
-   * Ignored while the drawer has wires, and outside pool mode.
+   * Which side a loose drawer (no wires of its own, `addPoolStorage`) sits on: a `source` feeds the plan, a `drain`
+   * takes from it (its `drainMode` still says product, byproduct or trash). Ignored while the drawer has wires.
    */
   poolSide?: "source" | "drain";
   colorTag?: FactoryNodeColorTag;
@@ -800,10 +768,6 @@ export interface FactoryEdge {
   resourceId: ResourceId;
   label?: string;
   ratePerSecond?: number;
-  /** Relative parts leaving a ratio buffer; absent is one, zero closes this branch. */
-  ratioWeight?: number;
-  /** Independent relative share entering a ratio buffer; absent is one. */
-  ratioInputWeight?: number;
   /**
    * A loose cell wire from an older build: the edge's own resource is what
    * leaves the source (the filled CELL or the FLUID), its target handle names
@@ -854,34 +818,7 @@ export interface PlanViewState {
   rightPanelOpen?: boolean;
 }
 
-/**
- * Legacy per-plan boundary rules. Every plan gets the same answer from
- * `getSetupRules` (setup-rules.ts): closed inputs and outputs. A stored value
- * is dropped on load; the type remains so old JSON parses and callers can
- * still ask.
- *
- * When on, a free rule acts like a virtual source/product drawer on every
- * slot inside the solve, never on the board.
- */
-export interface SetupRules {
-  /** An input short of stock takes the rest from off the board. */
-  freeInputs?: boolean;
-  /** Output with nowhere to go leaves the board instead of clogging. */
-  freeOutputs?: boolean;
-}
-
-/** Share skips this scope's match; import permits external supply here. */
-export type PoolResourceRule = "share" | "import";
-export interface ProductionGroup {
-  id: string;
-  name: string;
-  parentId?: string;
-  resourceRules?: Record<string, PoolResourceRule>;
-}
-
 export interface FactoryProject {
-  productionGroups?: ProductionGroup[];
-  poolResourceRules?: Record<string, PoolResourceRule>;
   /** Construction progress; never changes production. */
   checklist?: { cards: string[]; edges: string[] };
   schemaVersion: typeof PROJECT_SCHEMA_VERSION;
@@ -901,33 +838,6 @@ export interface FactoryProject {
   icon?: EntryIcon;
   /** Only shared setups carry this; see PlanViewState. */
   view?: PlanViewState;
-  targetRate?: TargetRate;
-  /** Legacy; dropped on load. See SetupRules. */
-  setupRules?: SetupRules;
-  /**
-   * SOLVE MODE: machine counts become the answer instead of the question.
-   * Product drawers' typed amounts (`FactoryStorage.targetPerSecond`) are the
-   * constraints, and every card reports the fractional machine count the
-   * targets require (`theoreticalMachinesRequired`) in place of usage and
-   * verdicts. Part of the plan JSON so a shared setup opens in the mode it
-   * was authored in.
-   */
-  solveMode?: boolean;
-  /**
-   * POOL MODE: machines share resource pools and ignore saved wires.
-   * Production groups resolve local materials first; unmatched or shared ports
-   * reach the parent. The factory imports materials with no producer; an
-   * explicit outside-supply rule permits imports alongside local production.
-   * Surplus banks, and product drawers carry targets. Implies solve mode.
-   */
-  poolMode?: boolean;
-  /**
-   * PLAN MODE: the merged board. Pins, port rates and drawer rules in;
-   * counts and forced flows out. Always written together with
-   * `solveMode: true`, so a build that does not know the key opens the plan
-   * in Solve mode.
-   */
-  planMode?: boolean;
   /**
    * Plan mode's stored leftover splits: leftover key -> bearer key -> share
    * (0..1, summing to 1 per leftover). Unitless, so a split survives the plan
@@ -939,16 +849,6 @@ export interface FactoryProject {
    * strip chips. A machine absent here shows its defaults (the coil on a heat recipe).
    */
   settingPins?: Record<string, string[]>;
-  /**
-   * Pool mode's cell-to-fluid bridges: litres one filled cell holds, keyed
-   * by the cell item id, read from the Canner's own recipes (never
-   * guessed) and fetched for every cell/fluid pair the plan's slots name.
-   * A pair with no ratio here is not bridged. Stored so a shared plan
-   * solves the same everywhere without a lookup.
-   */
-  poolCellRatios?: Record<string, number>;
-  /** LEGACY sketch-mode flag: dropped on load, nothing writes it. */
-  assumeBoundaries?: boolean;
   recipes: Recipe[];
   nodes: FactoryNode[];
   storages?: FactoryStorage[];
@@ -1167,50 +1067,7 @@ export interface ThroughputResult {
    * lands. See `src/store/solve-books.ts`.
    */
   stale?: boolean;
-  /**
-   * The clog-lock diagnosis, when the solve that made these books also ran
-   * it. Its vent solve is a second, expensive LP, so the solve worker
-   * computes it beside the books and `findClogLocks` serves it from here.
-   */
-  clogLocks?: ClogLockIndex;
   /** Plan mode only: forced flows, leftovers, unneeded and unanchored parts. */
   plan?: PlanSolveExtras;
 }
 
-export interface ClogLockVent {
-  nodeId: string;
-  /** The culprit machine's display name, so a victim's card can say where
-   * to act without the player hunting the board. */
-  machineName: string;
-  resourceKey: ResourceKey;
-  resourceName: string;
-  /** What must leave through this port per second for the group to run. */
-  perSecond: number;
-}
-
-export interface ClogLock {
-  /** Stable id: the smallest member node id. Survives re-solves. */
-  id: string;
-  /** Every frozen card the jam holds, machines and pass-through drawers. */
-  nodeIds: string[];
-  /** Machine members only - what the copy counts. */
-  machineIds: string[];
-  /**
-   * The machines whose surplus needs the drawer - the only cards that flash,
-   * ordered WORST FIRST so the notice's "Show me" walks them by severity.
-   * A jam can hold half a board, so members are not all marked: victims keep
-   * the verdict, vent sites carry the ring.
-   */
-  ventNodeIds: string[];
-  /** The wires carrying a vented surplus out of a vent site - the ones the
-   * drawer tees into. Only these breathe, never the whole web. */
-  edgeIds: string[];
-  /** The surpluses that need a home, largest first. */
-  vents: ClogLockVent[];
-}
-
-export interface ClogLockIndex {
-  byNode: Map<string, ClogLock>;
-  byEdge: Map<string, ClogLock>;
-  locks: ClogLock[];
-}

@@ -3,12 +3,10 @@ import { parseFactoryProjectJson, serializeFactoryProject } from "@/lib/import-e
 import { decodePlanCode, encodePlanCode } from "@/lib/import-export/plan-code";
 import { mockLeftovers } from "@/lib/solver/plan/__fixtures__/mock-extras";
 import { boardSelectionPayloadSchema, factoryNodeSchema, factoryProjectSchema } from "./schemas";
-import { normalizeLoadedProject } from "./project-normalize";
 import type { FactoryProject } from "./types";
 
 /**
- * Plan mode's new persisted fields (`planMode`, `spareShares`, node
- * `portRates`) must survive every path a project takes: the schemas strip
+ * The plan's persisted fields (`spareShares`, node `portRates`) must survive every path a project takes: the schemas strip
  * unknown keys, so an undeclared field silently disappears on that path.
  */
 
@@ -23,8 +21,6 @@ function planProject(): FactoryProject {
 }
 
 function expectFields(project: FactoryProject) {
-  expect(project.planMode).toBe(true);
-  expect(project.solveMode).toBe(true);
   expect(project.spareShares).toEqual(mockLeftovers.project.spareShares);
   expect(project.nodes[0]!.portRates).toEqual(NODE_RATES);
   expect(project.nodes[1]!.portRates).toBeUndefined();
@@ -57,7 +53,6 @@ describe("plan mode fields survive every path", () => {
   it("blueprint and clipboard payloads carry a card's port rates", () => {
     const project = planProject();
     const parsed = boardSelectionPayloadSchema.parse({
-      productionGroups: [],
       nodes: project.nodes,
       storages: project.storages ?? [],
       annotations: [],
@@ -68,24 +63,10 @@ describe("plan mode fields survive every path", () => {
     expect(parsed.nodes[0]!.portRates).toEqual(NODE_RATES);
   });
 
-  it("loading a plan-mode project that lost solveMode puts it back, and drops pool", () => {
-    const loaded = normalizeLoadedProject({ ...planProject(), solveMode: undefined, poolMode: true });
-    expect(loaded.solveMode).toBe(true);
-    expect(loaded.poolMode).toBeUndefined();
-    expect(loaded.planMode).toBe(true);
-    // A project not in plan mode is untouched.
-    // A pool project is converted: there is one mode.
-    const classic = normalizeLoadedProject({ ...planProject(), planMode: undefined, poolMode: true });
-    expect(classic.poolMode).toBeUndefined();
-    expect(classic.planMode).toBe(true);
-  });
-
   it("keeps the old shape: a project without the fields parses without them", () => {
-    const { planMode: _p, spareShares: _s, ...old } = planProject();
-    void _p;
+    const { spareShares: _s, ...old } = planProject();
     void _s;
     const parsed = factoryProjectSchema.parse(JSON.parse(JSON.stringify(old)));
-    expect(parsed.planMode).toBeUndefined();
     expect(parsed.spareShares).toBeUndefined();
   });
 });

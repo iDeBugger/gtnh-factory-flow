@@ -12,7 +12,7 @@ const target = { kind: "pane" as const, x: 10, y: 10, flow: { x: 300, y: 200 } }
 describe("the empty-board menu", () => {
   it("offers the annotations and the background, and adds a box where it was opened", () => {
     useFactoryStore.setState((s) => ({
-      project: { ...s.project, planMode: true, annotations: [] },
+      project: { ...s.project, annotations: [] },
     }));
     const onClose = vi.fn();
     render(<BoardContextMenu target={target} onClose={onClose} />);

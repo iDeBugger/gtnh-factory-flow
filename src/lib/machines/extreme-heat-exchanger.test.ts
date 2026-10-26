@@ -111,7 +111,7 @@ describe("Extreme Heat Exchanger", () => {
   it("takes 20 machines for 36M L/hr of helium plasma", () => {
     // The player's board: 36M L/hr of plasma read as one machine at 100%.
     const result = calculateThroughput(
-      heliumBoard({ solveMode: true }, 36_000_000 / HOUR),
+      heliumBoard({}, 36_000_000 / HOUR),
       { generatedAt: "fixed" },
     );
     const ehe = result.nodes["ehe"]!;

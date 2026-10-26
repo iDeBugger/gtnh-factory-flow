@@ -100,7 +100,6 @@ function plan(gameVersion: string | undefined, recipes: Recipe[], nodes: Factory
     ...(gameVersion ? { gameVersion } : {}),
     id: `plan-${gameVersion ?? "old"}`,
     name: "Silicon line",
-    planMode: true,
     recipes,
     nodes,
     edges,

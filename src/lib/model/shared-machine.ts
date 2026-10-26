@@ -99,14 +99,12 @@ export function sectionNodeView(node: FactoryNode, section: number): FactoryNode
     extraRecipes: _extras,
     solvePin: _pin,
     solvePinExact: _exact,
-    targetOutput: _target,
     unconverted: _unconverted,
     ...rest
   } = node;
   void _extras;
   void _pin;
   void _exact;
-  void _target;
   void _unconverted;
   // The unconverted marker is per section: section 0's belongs to the card's own recipe, never to this one.
   return {

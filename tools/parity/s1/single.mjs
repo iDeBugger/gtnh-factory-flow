@@ -8,7 +8,7 @@ const r = await page.evaluate((id) => {
   const n = st.lastResult?.nodes?.[id];
   const card = document.querySelector(`.react-flow__node[data-id="${id}"]`);
   return {
-    planMode: st.project.planMode, util: n?.utilization, need: n?.theoreticalMachinesRequired,
+    util: n?.utilization, need: n?.theoreticalMachinesRequired,
     ins: n && Object.values(n.inputs).map((f) => f.amountPerSecond), plan: st.lastResult?.plan,
     text: card?.innerText, rail: document.querySelector(".rail, [class*=rail]")?.innerText?.slice(0, 1500),
   };

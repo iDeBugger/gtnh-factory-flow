@@ -218,14 +218,6 @@ export function buildUsageLimitChain(
     );
   }
 
-  if (node.targetOutput) {
-    const key = makeResourceKey(node.targetOutput.kind, node.targetOutput.resourceId);
-    wantedByOutput.set(
-      key,
-      Math.max(wantedByOutput.get(key) ?? 0, node.targetOutput.amountPerSecond),
-    );
-  }
-
   // The most-wanted output is the one that drives the machine, mirroring the
   // solver's selectLimitingOutput.
   let demandEntry: UsageLimitEntry | undefined;

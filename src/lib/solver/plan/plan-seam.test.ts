@@ -15,8 +15,6 @@ describe("mock plan results", () => {
   it("are shaped like the adapter's output", () => {
     for (const mock of mockPlans) {
       const { project, result } = mock;
-      expect(project.planMode).toBe(true);
-      expect(project.solveMode).toBe(true);
       expect(result.plan).toBeDefined();
       for (const node of project.nodes) {
         expect(result.nodes[node.id], node.id).toBeDefined();

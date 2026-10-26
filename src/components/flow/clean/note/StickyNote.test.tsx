@@ -60,10 +60,10 @@ function props(annotation: FactoryAnnotation, selected = false): NodeProps<Stick
   } as unknown as NodeProps<StickyNoteFlowNode>;
 }
 
-function load(annotations: FactoryAnnotation[], planMode = true) {
+function load(annotations: FactoryAnnotation[]) {
   act(() => {
     const project = useFactoryStore.getState().project;
-    useFactoryStore.setState({ project: { ...project, planMode, annotations } });
+    useFactoryStore.setState({ project: { ...project, annotations } });
   });
 }
 
@@ -230,7 +230,7 @@ describe("StickyNote", () => {
 
 describe("AnnotationSwitch", () => {
   const mount = (annotation: FactoryAnnotation) => {
-    load([annotation], true);
+    load([annotation]);
     return render(
       <ReactFlowProvider>
         <AnnotationSwitch {...(props(annotation) as unknown as Parameters<typeof AnnotationSwitch>[0])} />

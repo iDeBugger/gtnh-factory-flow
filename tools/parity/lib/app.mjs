@@ -36,7 +36,7 @@ export async function freshProject(page) {
     const S = window.__ccStore;
     const st = S.getState();
     S.setState({
-      project: { ...st.project, nodes: [], storages: [], edges: [], recipes: [], planMode: true, solveMode: true },
+      project: { ...st.project, nodes: [], storages: [], edges: [], recipes: [] },
     });
   });
 }

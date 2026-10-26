@@ -24,7 +24,6 @@ describe("pastePayloadIntoPlan", () => {
       gameVersion: "2.8.1",
       id: "plan-281",
       name: "plan",
-      planMode: true,
       fuelProfiles: [],
       recipes: [],
       nodes: [],

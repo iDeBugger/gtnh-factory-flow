@@ -100,8 +100,6 @@ export function phenolPlan(perSecond: number, options: PhenolPlanOptions = {}): 
     schemaVersion: PROJECT_SCHEMA_VERSION,
     id: "phenol",
     name: "Phenol",
-    solveMode: true,
-    planMode: true,
     recipes: [PHENOL_RECIPE, vinyl],
     nodes: [
       phenolCard("phenol", PHENOL_RECIPE.id, 0),

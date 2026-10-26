@@ -100,12 +100,11 @@ describe("power as a resource", () => {
     expect(result.unconsumedOutputs.some((b) => b.kind === "power")).toBe(false);
   });
 
-  it("solve mode: a typed EU amount solves the generator count and its fuel", () => {
+  it("a typed EU amount solves the generator count and its fuel", () => {
     // 640 EU/s per generator (32 EU/t); asking for 1600 EU/s (80 EU/t)
     // wants x2.5 generators drinking 25 fuel/s.
     const result = calculateThroughput(
       project({
-        solveMode: true,
         recipes: [generatorRecipe("gen", 640)],
         nodes: [node("g", "gen")],
         storages: [
@@ -121,7 +120,7 @@ describe("power as a resource", () => {
     expect(result.resources["fluid:fuel"]!.consumedPerSecond).toBeCloseTo(25, 4);
   });
 
-  it("solve mode: an unwired EU port does not pin a generator another target needs", () => {
+  it("an unwired EU port does not pin a generator another target needs", () => {
     // The generator also makes a material byproduct a target wants; its
     // bare EU port must not zero it in the solve either.
     const recipe = {
@@ -133,7 +132,6 @@ describe("power as a resource", () => {
     };
     const result = calculateThroughput(
       project({
-        solveMode: true,
         recipes: [recipe],
         nodes: [node("g", "gen")],
         storages: [

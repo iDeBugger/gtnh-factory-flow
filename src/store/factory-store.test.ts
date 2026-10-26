@@ -2512,11 +2512,6 @@ function createRatioOptimizationProject(): FactoryProject {
       makeNode("dust-source", "dust-source-recipe", 0),
       {
         ...makeNode("plate-target", "plate-target-recipe", 240),
-        targetOutput: {
-          kind: "item",
-          resourceId: "plate",
-          amountPerSecond: 10,
-        },
       },
     ],
     storages: [],
@@ -2565,11 +2560,6 @@ function createCyclicRatioProject(): FactoryProject {
     nodes: [
       {
         ...makeNode("cycle-a", "cycle-a-recipe", 0),
-        targetOutput: {
-          kind: "item",
-          resourceId: "x",
-          amountPerSecond: 2,
-        },
       },
       makeNode("cycle-b", "cycle-b-recipe", 240),
     ],
@@ -2657,11 +2647,6 @@ function createStorageBusCycleProject(): FactoryProject {
     nodes: [
       {
         ...makeNode("bus-cycle-a", "cycle-a-recipe", 0),
-        targetOutput: {
-          kind: "item",
-          resourceId: "x",
-          amountPerSecond: 2,
-        },
       },
       makeNode("bus-cycle-b", "cycle-b-recipe", 240),
     ],
@@ -2743,11 +2728,6 @@ function createSmallCyclicBottleneckProject(): FactoryProject {
       makeNode("small-cycle-source", "small-cycle-source-recipe", 0),
       {
         ...makeNode("small-cycle-return", "small-cycle-return-recipe", 240),
-        targetOutput: {
-          kind: "item",
-          resourceId: "seed",
-          amountPerSecond: 50.2,
-        },
       },
     ],
     storages: [],
@@ -2921,11 +2901,6 @@ function createAmplifyingCycleProject(): FactoryProject {
     nodes: [
       {
         ...makeNode("amplifying-a", "amplifying-a-recipe", 0),
-        targetOutput: {
-          kind: "item",
-          resourceId: "a",
-          amountPerSecond: 10,
-        },
       },
       makeNode("amplifying-b", "amplifying-b-recipe", 240),
     ],
@@ -2958,11 +2933,6 @@ function createAcyclicStorageBusProject(): FactoryProject {
       makeNode("bus-source", "dust-source-recipe", 0),
       {
         ...makeNode("bus-target", "plate-target-recipe", 240),
-        targetOutput: {
-          kind: "item",
-          resourceId: "plate",
-          amountPerSecond: 10,
-        },
       },
     ],
     storages: [
@@ -3000,11 +2970,6 @@ function createRecipeChainWithStorageSinkProject(): FactoryProject {
       makeNode("sink-source", "dust-source-recipe", 0),
       {
         ...makeNode("sink-target", "plate-target-recipe", 240),
-        targetOutput: {
-          kind: "item",
-          resourceId: "plate",
-          amountPerSecond: 10,
-        },
       },
     ],
     storages: [{ id: "dust-sink", kind: "item", resourceId: "dust", position: { x: 120, y: 120 } }],
@@ -3073,11 +3038,6 @@ function createSplitStorageInputOptimizationProject(): FactoryProject {
       makeNode("direct-source", "direct-source-recipe", 160),
       {
         ...makeNode("consumer", "consumer-recipe", 320),
-        targetOutput: {
-          kind: "item",
-          resourceId: "plate",
-          amountPerSecond: 1,
-        },
       },
     ],
     storages: [
@@ -3154,19 +3114,9 @@ function createMultiOutputSplitInputOptimizationProject(): FactoryProject {
       makeNode("source", "source-recipe", 0),
       {
         ...makeNode("item-consumer", "item-consumer-recipe", 220),
-        targetOutput: {
-          kind: "item",
-          resourceId: "plate",
-          amountPerSecond: 1,
-        },
       },
       {
         ...makeNode("fluid-consumer", "fluid-consumer-recipe", 440),
-        targetOutput: {
-          kind: "fluid",
-          resourceId: "light",
-          amountPerSecond: 1000,
-        },
       },
     ],
     storages: [{ id: "oil-tank", kind: "fluid", resourceId: "oil", position: { x: 260, y: 120 } }],
@@ -3721,11 +3671,6 @@ function createDirectAndIndirectStorageOutputProject(): FactoryProject {
       makeNode("fluid-extractor", "fluid-extractor-recipe", 240),
       {
         ...makeNode("distillation-tower", "distillation-tower-recipe", 520),
-        targetOutput: {
-          kind: "fluid",
-          resourceId: "benzene",
-          amountPerSecond: 1,
-        },
       },
     ],
     storages: [
@@ -4626,7 +4571,6 @@ describe("the active dataset follows the open plan", () => {
     id,
     name: id,
     ...(gameVersion ? { gameVersion } : {}),
-    planMode: true,
     fuelProfiles: [],
     recipes: [datasetRecipe("on-board", gameVersion === "2.8.1" ? "local-2.8.1" : "local-2.9.0-rc-2")],
     nodes: [{ id: "n1", recipeId: "on-board", position: { x: 0, y: 0 }, machineCount: 1, parallel: 1, overclockTier: "LV", enabled: true }],
@@ -4828,7 +4772,6 @@ describe("pasting across game versions", () => {
     id: `plan-${gameVersion ?? "old"}`,
     name: "plan",
     ...(gameVersion ? { gameVersion } : {}),
-    planMode: true,
     fuelProfiles: [],
     recipes: [recipe(datasetVersionId)],
     nodes: [{ id: "n1", recipeId: recipe(datasetVersionId).id, position: { x: 0, y: 0 }, machineCount: 1, parallel: 1, overclockTier: "LV", enabled: true }],

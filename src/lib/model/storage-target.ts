@@ -12,15 +12,13 @@ export function isInputRate(
   return role === "source" || (role === undefined && storage.poolSide === "source");
 }
 
-/** Legacy negative Pool goals were exact even when an old output rule remained saved. */
+/** A drawer's rule; with none set, an input's rate is exact and an output's at least. */
 export function storageTargetMode(
-  storage: Pick<FactoryStorage, "targetMode" | "poolTargetMode" | "targetPerSecond" | "poolSide">,
+  storage: Pick<FactoryStorage, "targetMode" | "targetPerSecond" | "poolSide">,
   role?: StorageRole,
 ): TargetMode {
   if (storage.targetMode) return storage.targetMode;
-  if (storage.poolTargetMode === "ignore") return "ignore";
-  if (isInputRate(storage, role)) return "exact";
-  return storage.poolTargetMode ?? "at-least";
+  return isInputRate(storage, role) ? "exact" : "at-least";
 }
 
 export function hasStorageTarget(storage: FactoryStorage, role?: StorageRole): boolean {

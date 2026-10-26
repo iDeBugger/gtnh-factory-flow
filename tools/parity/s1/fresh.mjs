@@ -7,7 +7,7 @@ await page.waitForFunction(() => window.__ccStore?.getState().dataset, null, { t
 await page.waitForTimeout(1500);
 const body = await page.evaluate(() => document.body.innerText.slice(0, 800));
 console.log(body);
-const st = await page.evaluate(() => { const p = window.__ccStore.getState().project; return { planMode: p.planMode, solveMode: p.solveMode, nodes: p.nodes.length, name: p.name }; });
+const st = await page.evaluate(() => { const p = window.__ccStore.getState().project; return { nodes: p.nodes.length, name: p.name }; });
 console.log(st);
 await page.screenshot({ path: "tools/parity/s1/fresh.png" });
 await browser.close();

@@ -361,7 +361,6 @@ describe("posting to the community", () => {
         "utf8",
       ),
     ) as FactoryProject;
-    expect(plan.planMode).toBe(true);
     statsBudget.ms = 0;
     try {
       takeLpCount();

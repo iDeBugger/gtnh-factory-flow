@@ -38,7 +38,7 @@ export function expandBuffers(project: FactoryProject): BufferFreeGraph {
   const storages = project.storages ?? [];
   const covers = new Map<string, string[]>(project.edges.map((edge) => [edge.id, [edge.id]]));
   const removed: string[] = [];
-  const roles = getStorageRoles({ ...project, poolMode: undefined });
+  const roles = getStorageRoles(project);
   const storageIds = new Set(storages.map((storage) => storage.id));
   const joins = storages.filter(
     (storage) => roles.get(storage.id) === "buffer" && !keepsBuffer(storage.id, project.edges, storageIds),

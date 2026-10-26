@@ -48,8 +48,6 @@ function plan(): FactoryProject {
     name: "Unconverted",
     fuelProfiles: [],
     gameVersion: "2.9",
-    planMode: true,
-    solveMode: true,
     recipes: [
       {
         id: "ore-source",

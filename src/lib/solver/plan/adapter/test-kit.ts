@@ -84,8 +84,6 @@ export function project(parts: {
     schemaVersion: PROJECT_SCHEMA_VERSION,
     id: "p",
     name: "p",
-    solveMode: true,
-    planMode: true,
     recipes: parts.recipes,
     nodes: parts.nodes,
     storages: parts.storages ?? [],

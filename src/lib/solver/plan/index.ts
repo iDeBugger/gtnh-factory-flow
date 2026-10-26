@@ -10,10 +10,9 @@ export type { PlanHelpers, PlanSolveArgs, PlanUnit } from "./adapter/args";
 export { getSolveCore, setSolveCore, type SolveCore } from "./adapter/engine";
 
 /**
- * The plan-mode entry, called from the dispatch seam in `calculateThroughput`
- * for a project with `planMode`: the adapter turns the expanded project into
- * the solver core's input and the core's answer back into books
- * (`adapter/`). A core that throws is a failed solve, never a crash.
+ * The plan solver's entry, called from `calculateThroughput`: the adapter turns the expanded project into the
+ * solver core's input and the core's answer back into books (`adapter/`). A core that throws is a failed solve,
+ * never a crash.
  */
 export function planSolve(args: PlanSolveArgs): ThroughputResult {
   return planSolveAdapter(args);

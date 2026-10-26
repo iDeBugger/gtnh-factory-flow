@@ -159,7 +159,6 @@ export function buildPlanModel(args: PlanSolveArgs): PlanModel {
     ...project,
     edges: flat.edges,
     storages: flat.storages,
-    poolMode: undefined,
   });
 
   // ---- machines ----------------------------------------------------------

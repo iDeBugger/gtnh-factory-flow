@@ -1,5 +1,4 @@
 import { restampAmpMapMinimums } from "./amp-map-stamp";
-import { normalizeProductionGroups } from "./production-groups";
 import { normalizeFullFarms } from "./full-farms";
 import { normalizeProjectHatchInputs } from "@/lib/solver/hatch-input";
 import type { FactoryProject } from "./types";
@@ -45,19 +44,11 @@ export function normalizeLoadedProjectWithNotice(
   notice?: PlanNotice;
 } {
   if (options?.keepCellWires) {
-    return { project: asPlan(normalizeLegacyProject(project)) };
+    return { project: normalizeLegacyProject(project) };
   }
   // Cell wires first, so the passes after them see ordinary wires.
   const wired = convertLooseCellWires(project);
-  return { project: asPlan(normalizeLegacyProject(wired.project)), notice: cellWireNotice(wired.converted) };
-}
-
-/** Every plan opens on the plan board. */
-function asPlan(project: FactoryProject): FactoryProject {
-  if (project.planMode && project.solveMode && !project.poolMode) {
-    return project;
-  }
-  return { ...project, planMode: true, solveMode: true, poolMode: undefined };
+  return { project: normalizeLegacyProject(wired.project), notice: cellWireNotice(wired.converted) };
 }
 
 /**
@@ -84,7 +75,6 @@ function cellWireNotice(tanks: number): PlanNotice | undefined {
 
 function normalizeLegacyProject(project: FactoryProject): FactoryProject {
   const gameVersion = planGameVersion(project);
-  project = normalizeProductionGroups(project);
   project = repairWiredInputOverrides(project);
   return normalizeProjectHatchInputs(
     snapProjectToGrid(
@@ -104,7 +94,7 @@ function normalizeLegacyProject(project: FactoryProject): FactoryProject {
                       normalizeProjectFuelProfiles(
                         normalizeFullFarms(
                           restampAmpMapMinimums(
-                            renameOpvTier(adoptSetupRules(requireSolveForPool(project))),
+                            renameOpvTier(project),
                             gameVersion,
                           ),
                         ),
@@ -223,19 +213,6 @@ function dropImpossibleEnergyHatchTypes(project: FactoryProject): FactoryProject
     return rest;
   });
   return changed ? { ...project, nodes } : project;
-}
-
-/**
- * Drops the legacy `setupRules` and sketch-mode `assumeBoundaries` fields so
- * nothing carries them forward. The board's modes replace them, and
- * `getSetupRules` answers the same for every plan regardless.
- */
-function adoptSetupRules(project: FactoryProject): FactoryProject {
-  if (project.assumeBoundaries === undefined && project.setupRules === undefined) {
-    return project;
-  }
-  const { assumeBoundaries: _legacy, setupRules: _rules, ...rest } = project;
-  return rest;
 }
 
 /**
@@ -471,16 +448,5 @@ function snapProjectToGrid(project: FactoryProject): FactoryProject {
         : undefined),
     })),
   };
-}
-
-/**
- * Pool mode implies solve mode: a plan that says pool without solve (hand-
- * edited or legacy) opens with solve mode on, as the store keeps them.
- */
-function requireSolveForPool(project: FactoryProject): FactoryProject {
-  if (project.poolMode && !project.solveMode) {
-    return { ...project, solveMode: true };
-  }
-  return project;
 }
 

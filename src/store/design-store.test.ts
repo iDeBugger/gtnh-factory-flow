@@ -546,7 +546,7 @@ describe("the game version a design is for", () => {
 
   it("an IndexedDB record with no field opens as 2.9 and is not rewritten on load", async () => {
     useFactoryStore.getState().markHydratedProject(createEmptyProject());
-    const old: DesignRecord = { ...summary("old"), project: { ...createEmptyProject(), planMode: true, solveMode: true } };
+    const old: DesignRecord = { ...summary("old"), project: createEmptyProject() };
     const other: DesignRecord = { ...summary("other"), project: { ...createEmptyProject(), gameVersion: "2.8.1" } };
     const stored = versionedLibrary(old, other);
     const raw = JSON.stringify(stored.get("old"));

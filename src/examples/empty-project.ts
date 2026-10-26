@@ -24,16 +24,14 @@ export function createEmptyProject(): FactoryProject {
 }
 
 /**
- * A brand-new design. There is one mode, so it starts in plan mode, with both
- * flags as plan mode always carries solve mode (an older build opens it as
- * Solve). `createEmptyProject` stays the unmoded blank for code that builds
- * scratch projects (blueprint stats, tests).
+ * A brand-new design. `createEmptyProject` stays the blank for code that builds scratch projects (blueprint stats,
+ * tests).
  *
  * The game version is stamped only when given: a plan with none reads as 2.9,
  * so a caller that does not choose writes nothing it did not mean.
  */
 export function createNewProject(gameVersion?: GameVersion): FactoryProject {
-  const project: FactoryProject = { ...createEmptyProject(), planMode: true, solveMode: true };
+  const project: FactoryProject = createEmptyProject();
   if (gameVersion) {
     project.gameVersion = gameVersion;
   }

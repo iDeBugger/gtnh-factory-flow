@@ -48,8 +48,6 @@ function loosePlan(emptying: boolean, pin: "maker" | "taker", litresPerCell = 10
     schemaVersion: PROJECT_SCHEMA_VERSION,
     id: "loose",
     name: "loose",
-    solveMode: true,
-    planMode: true,
     recipes: emptying ? [FILLER, DRINKER] : [PUMP, EATER],
     nodes: [
       node("maker", emptying ? "fill" : "pump", { position: { x: 0, y: 0 }, ...(pin === "maker" ? { solvePin: 1 } : {}) }),
