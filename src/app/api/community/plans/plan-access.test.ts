@@ -24,6 +24,8 @@ import * as comments from "./[planId]/comments/route";
 import * as download from "./[planId]/download/route";
 import * as plansRepo from "@/lib/server/repos/plans";
 import * as commentsRepo from "@/lib/server/repos/comments";
+import * as eventsRepo from "@/lib/server/repos/events";
+import * as comment from "./[planId]/comments/[commentId]/route";
 import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
 import * as images from "../images/[month]/[name]/route";
 
@@ -517,31 +519,70 @@ describe("a malformed post id", () => {
   withModAndCommunityOn();
 
   it("is not found, not an error, and sends no query", async () => {
-    const spies = [plansRepo, commentsRepo].flatMap((module) =>
+    vi.stubEnv("COMMUNITY_ADMIN_TOKEN", "plan-access-admin-token");
+    // The rate-limit reads too: view and comment check the id before their pace.
+    const spies = [plansRepo, commentsRepo, eventsRepo].flatMap((module) =>
       Object.entries(module)
         .filter(([, value]) => typeof value === "function")
         .map(([name]) => vi.spyOn(module as Record<string, (...args: unknown[]) => unknown>, name)),
     );
     try {
       const planId = "not-a-uuid";
-      const answers = await Promise.all([
-        plan.GET(request("GET", `/api/community/plans/${planId}`), params({ planId })),
-        view.POST(request("POST", `/api/community/plans/${planId}/view`), params({ planId })),
-        download.POST(request("POST", `/api/community/plans/${planId}/download`), params({ planId })),
-        comments.GET(request("GET", `/api/community/plans/${planId}/comments`), params({ planId })),
+      const base = `/api/community/plans/${planId}`;
+      const form = new FormData();
+      form.set("image", new Blob([PNG as BlobPart], { type: "image/png" }), "board.png");
+      const planAnswers = await Promise.all([
+        plan.GET(request("GET", base), params({ planId })),
+        plan.PUT(request("PUT", base, { who: "owner", body: { isPublic: true } }), params({ planId })),
+        plan.DELETE(request("DELETE", base, { who: "owner" }), params({ planId })),
+        plan.DELETE(
+          request("DELETE", base, { headers: { "x-admin-token": "plan-access-admin-token" } }),
+          params({ planId }),
+        ),
+        view.POST(request("POST", `${base}/view`), params({ planId })),
+        download.POST(request("POST", `${base}/download`), params({ planId })),
+        preview.POST(
+          new Request(`http://localhost${base}/preview`, {
+            method: "POST",
+            headers: { "x-client-ip": nextAddress(), cookie: users.owner!.cookie },
+            body: form,
+          }),
+          params({ planId }),
+        ),
+        comments.GET(request("GET", `${base}/comments`), params({ planId })),
+        comments.POST(request("POST", `${base}/comments`, { who: "poster", body: { body: "Hi" } }), params({ planId })),
       ]);
-      for (const answer of answers) {
+      for (const answer of planAnswers) {
         expect(answer.status).toBe(404);
         expect(await answer.json()).toEqual({ error: "Plan not found." });
+      }
+      const pictures = await preview.GET(request("GET", `${base}/preview`), params({ planId }));
+      expect(pictures.status).toBe(404);
+      expect(await pictures.json()).toEqual({ error: "No preview." });
+      const commentId = randomUUID();
+      for (const ids of [
+        { planId, commentId },
+        { planId: randomUUID(), commentId: "not-a-uuid" },
+      ]) {
+        const gone = await comment.DELETE(
+          request("DELETE", `/api/community/plans/${ids.planId}/comments/${ids.commentId}`, { who: "poster" }),
+          params(ids),
+        );
+        expect(gone.status).toBe(404);
+        expect(await gone.json()).toEqual({ error: "Comment not found." });
       }
       for (const spy of spies) {
         expect(spy, spy.getMockName()).not.toHaveBeenCalled();
       }
-      // The spies see the service's reads: a well-formed id is looked up.
+      // The spies see the service's reads: a well-formed id is looked up, and
+      // its view spends a share of the pace.
       const missing = randomUUID();
       const gone = await plan.GET(request("GET", `/api/community/plans/${missing}`), params({ planId: missing }));
       expect(gone.status).toBe(404);
       expect(vi.mocked(plansRepo.readSummary)).toHaveBeenCalledWith(missing);
+      const unseen = await view.POST(request("POST", `/api/community/plans/${missing}/view`), params({ planId: missing }));
+      expect(unseen.status).toBe(404);
+      expect(vi.mocked(eventsRepo.countSince)).toHaveBeenCalled();
     } finally {
       for (const spy of spies) {
         spy.mockRestore();
