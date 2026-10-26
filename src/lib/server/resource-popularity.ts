@@ -23,8 +23,8 @@ import { getCommunityDb, isCommunityConfigured } from "@/lib/server/community";
  * Keys are `${kind}:${id}`, the dataset catalog's shape. With the database
  * unconfigured (local dev) the map is empty.
  *
- * THE ITEM LIST NEVER WAITS FOR IT: "Most popular" is the items column's
- * default sort, and the sweep reads every public plan's jsonb, so a stalled
+ * THE ITEM LIST NEVER WAITS FOR IT: "Most popular" is one of the items
+ * column's sorts, and the sweep reads every public plan's jsonb, so a stalled
  * database must not hang item list requests. `getResourcePopularity` answers
  * at once with the last good map (empty before the first sweep) and starts a
  * background sweep when one is due; the prewarm endpoint starts the first.

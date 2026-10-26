@@ -32,8 +32,8 @@ beforeEach(() => {
 });
 
 it("answers at once while the sweep is still out, instead of waiting on the database", async () => {
-  // 2026-09-24: Supabase stalled and every item list request sat ~90 s
-  // behind the sweep, because "Most popular" is the default sort.
+  // A stalled database must not hold an item list request behind the sweep:
+  // every popular-sorted list asks for the map.
   let land!: (value: { data: unknown[]; error: null }) => void;
   db.page.mockReturnValue(new Promise((resolve) => (land = resolve)));
 

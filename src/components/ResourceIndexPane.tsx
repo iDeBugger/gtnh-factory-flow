@@ -27,6 +27,7 @@ import { activeVersionServesPlan, unservedPlanVersion } from "@/lib/datasets/dat
 import { recipesNotOnSiteText } from "@/lib/datasets/new-plan-version";
 import { POWER_EU_CLAUSE_ID } from "@/lib/power/power-search";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
+import { useResourcePopularityOffered } from "@/lib/datasets/resource-popularity-offer";
 import { isEchoOfTouch } from "@/lib/pointer-kind";
 import { isFromBrowseMenu, useBrowseMenu } from "./browse-menu";
 import { ChromeMenu, chromeAnchorOf, MENU_ANCHOR_ATTR, type ChromeAnchor } from "./chrome/ChromeMenu";
@@ -96,10 +97,25 @@ export function ResourceIndexPane({
   const [resourceResults, setResourceResults] = useState<IndexedResource[]>([]);
   const [resourceTotal, setResourceTotal] = useState(0);
   const [resourceMod, setResourceMod] = useState("");
-  // Popular is the resting default: with nothing typed it shows what players
-  // actually build. A typed query still ranks name relevance first server-side,
-  // so the sort only decides the untyped list and ties.
-  const [resourceSort, setResourceSort] = useState<ResourceSortMode>("popular");
+  // The sort the player picked, if any. Only a sort on offer counts: Most popular is offered only while the
+  // popularity map has entries, and a pick that is no longer offered gives way to the default and is forgotten,
+  // so it cannot come back on its own.
+  const popularityOffered = useResourcePopularityOffered();
+  const sortChoices = useMemo(
+    () => RESOURCE_SORT_CHOICES.filter((choice) => choice.value !== "popular" || popularityOffered),
+    [popularityOffered],
+  );
+  const [chosenSort, setChosenSort] = useState<ResourceSortMode>();
+  const resourceSort =
+    chosenSort !== undefined && sortChoices.some((choice) => choice.value === chosenSort)
+      ? chosenSort
+      : DEFAULT_RESOURCE_SORT;
+  useEffect(() => {
+    if (chosenSort !== undefined && chosenSort !== resourceSort) {
+      return deferStateUpdate(() => setChosenSort(undefined));
+    }
+    return undefined;
+  }, [chosenSort, resourceSort]);
   const [resourceFilter, setResourceFilter] = useState<ResourceFilterMode>("all");
   const [resourceMods, setResourceMods] = useState<Array<{ id: string; count: number }>>([]);
   const [resourceSearchOutcome, setResourceSearchOutcome] = useState<SearchOutcome>(EXACT_SEARCH);
@@ -321,8 +337,10 @@ export function ResourceIndexPane({
     <NeiListMenu
       filter={resourceFilter}
       sort={resourceSort}
+      sortChoices={sortChoices}
+      defaultSort={DEFAULT_RESOURCE_SORT}
       onFilter={setResourceFilter}
-      onSort={setResourceSort}
+      onSort={setChosenSort}
     />
   );
   return (
@@ -421,14 +439,22 @@ const RESOURCE_WHEEL_PAGE_DELTA = 80;
 
 type ResourceSortMode = "relevance" | "popular" | "name" | "mod" | "made" | "uses";
 
-const RESOURCE_SORT_CHOICES: ReadonlyArray<{ value: ResourceSortMode; label: string }> = [
-  { value: "popular", label: "Most popular" },
+type ResourceSortChoice = { value: ResourceSortMode; label: string };
+
+/** The sorts the list menu offers, in its order. "popular" only while the popularity map has entries. */
+const RESOURCE_SORT_CHOICES: ReadonlyArray<ResourceSortChoice> = [
   { value: "relevance", label: "Best match" },
   { value: "name", label: "Name A–Z" },
   { value: "mod", label: "By mod" },
   { value: "made", label: "Most ways to make" },
   { value: "uses", label: "Most used" },
+  { value: "popular", label: "Most popular" },
 ];
+
+/**
+ * Not Most popular: with no popularity it is "most ways to make", which opens the list on aspects and Empty Cell.
+ */
+const DEFAULT_RESOURCE_SORT: ResourceSortMode = "relevance";
 
 /**
  * The list's filter: six mutually exclusive answers, because the kind and
@@ -949,19 +975,23 @@ function NeiSearchField({
 function NeiListMenu({
   filter,
   sort,
+  sortChoices,
+  defaultSort,
   onFilter,
   onSort,
 }: {
   filter: ResourceFilterMode;
   sort: ResourceSortMode;
+  sortChoices: ReadonlyArray<ResourceSortChoice>;
+  defaultSort: ResourceSortMode;
   onFilter: (filter: ResourceFilterMode) => void;
   onSort: (sort: ResourceSortMode) => void;
 }) {
   const [anchor, setAnchor] = useState<ChromeAnchor>();
   const close = useCallback(() => setAnchor(undefined), []);
-  const changed = filter !== "all" || sort !== "popular";
+  const changed = filter !== "all" || sort !== defaultSort;
   const filterLabel = RESOURCE_FILTER_CHOICES.find((choice) => choice.mode === filter)?.title ?? filter;
-  const sortLabel = RESOURCE_SORT_CHOICES.find((choice) => choice.value === sort)?.label ?? sort;
+  const sortLabel = sortChoices.find((choice) => choice.value === sort)?.label ?? sort;
   return (
     <>
       <button
@@ -996,7 +1026,7 @@ function NeiListMenu({
               current: filter === choice.mode,
               onSelect: () => onFilter(choice.mode),
             })),
-            ...RESOURCE_SORT_CHOICES.map((choice, index) => ({
+            ...sortChoices.map((choice, index) => ({
               label: choice.label,
               detail: index === 0 ? "Sort" : undefined,
               ruleAbove: index === 0,

@@ -6,6 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatasetManifest, DatasetVersion, RecipeDataset } from "@/lib/datasets/types";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
 import { useFactoryStore } from "@/store/factory-store";
+import { queryRecipeDatasetResources } from "@/lib/datasets/browser-loader";
+import {
+  refreshResourcePopularityOffer,
+  resetResourcePopularityOfferForTests,
+} from "@/lib/datasets/resource-popularity-offer";
 import { ResourceIndexPane } from "./ResourceIndexPane";
 
 const datasetVersion: DatasetVersion = {
@@ -64,6 +69,26 @@ async function release(query: string) {
   await act(async () => entries.forEach((entry) => entry.resolve()));
 }
 
+/** The popularity map's size the count route answers. */
+let popularityCount = 0;
+
+function lastSort() {
+  const calls = vi.mocked(queryRecipeDatasetResources).mock.calls;
+  return (calls.at(-1)?.[2] as { sort?: string } | undefined)?.sort;
+}
+
+function sortShown() {
+  return screen.getByLabelText("Show and sort").getAttribute("title");
+}
+
+async function sortRows() {
+  fireEvent.click(screen.getByLabelText("Show and sort"));
+  const labels = ["Best match", "Name A–Z", "By mod", "Most ways to make", "Most used", "Most popular"];
+  await screen.findByText("Best match");
+  const shown = labels.filter((label) => screen.queryByText(label) !== null);
+  return shown;
+}
+
 function Pane() {
   const [search, setSearch] = useState("");
   return <ResourceIndexPane search={search} onSearchChange={setSearch} onBrowse={() => {}} />;
@@ -78,6 +103,18 @@ describe("ResourceIndexPane", () => {
   });
 
   beforeEach(() => {
+    vi.mocked(queryRecipeDatasetResources).mockClear();
+    resetResourcePopularityOfferForTests();
+    popularityCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (String(url).startsWith("/api/resource-popularity?count=1")) {
+          return new Response(JSON.stringify({ count: popularityCount }), { status: 200 });
+        }
+        return new Response("{}", { status: 404 });
+      }),
+    );
     class TestResizeObserver {
       observe() {}
       unobserve() {}
@@ -136,5 +173,42 @@ describe("ResourceIndexPane", () => {
     const fresh = screen.getByRole("listbox", { name: "Resource results" });
     expect(fresh.getAttribute("aria-busy")).toBeNull();
     expect(fresh.hasAttribute("data-stale")).toBe(false);
+  });
+
+  it("opens on Best match, never Most popular, and offers Most popular only over a non-empty map", async () => {
+    render(<Pane />);
+    await screen.findByLabelText("Stone");
+    expect(lastSort()).toBe("relevance");
+    expect(await sortRows()).not.toContain("Most popular");
+    cleanup();
+
+    resetResourcePopularityOfferForTests();
+    popularityCount = 3;
+    render(<Pane />);
+    await screen.findByLabelText("Stone");
+    expect(lastSort()).toBe("relevance");
+    await act(async () => refreshResourcePopularityOffer());
+    expect(await sortRows()).toContain("Most popular");
+  });
+
+  it("gives up a picked Most popular for the default once the map empties, and does not take it back", async () => {
+    popularityCount = 3;
+    render(<Pane />);
+    await screen.findByLabelText("Stone");
+    await act(async () => refreshResourcePopularityOffer());
+    fireEvent.click(screen.getByLabelText("Show and sort"));
+    fireEvent.click(await screen.findByText("Most popular"));
+    await waitFor(() => expect(lastSort()).toBe("popular"));
+
+    expect(sortShown()).toBe("Showing everything, most popular");
+
+    popularityCount = 0;
+    await act(async () => refreshResourcePopularityOffer());
+    await waitFor(() => expect(sortShown()).toBe("Showing everything, best match"));
+
+    popularityCount = 3;
+    await act(async () => refreshResourcePopularityOffer());
+    await act(async () => {});
+    expect(sortShown()).toBe("Showing everything, best match");
   });
 });
