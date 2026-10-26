@@ -1,5 +1,6 @@
 package dev.gtnhplanner.calcoracle;
 
+import cpw.mods.fml.common.FMLCommonHandler;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
@@ -50,6 +51,14 @@ final class NeiItemListExport {
     Map<String, Object> export(List<Map<String, Object>> adapters) {
         long started = System.currentTimeMillis();
         Map<String, Object> out = new LinkedHashMap<String, Object>();
+        // NEI's item panel is client code: a dedicated server export (the split export's server phase) has no list,
+        // and loading NEI's client config there would reach for client classes.
+        if (!FMLCommonHandler.instance().getSide().isClient()) {
+            out.put("status", "not_present");
+            out.put("reason", "server side");
+            adapters.add(exporter.adapter("nei-item-list", "not_present", false, 0, 0, started, "server side"));
+            return out;
+        }
         Class<?> config;
         try {
             config = Class.forName("codechicken.nei.NEIClientConfig");
