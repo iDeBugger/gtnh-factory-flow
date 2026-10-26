@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAccountId } from "@/lib/live/protocol";
 import { requestedOwner } from "@/lib/server/cloud-plans";
-import { serverErrorResponse } from "@/lib/server/http/error-response";
+import { answeringErrors } from "@/lib/server/http/error-response";
 import { serviceResponse } from "@/lib/server/http/service-response";
 import { isSignedIn, readViewer } from "@/lib/server/http/viewer";
 import { isLibraryId } from "@/lib/server/library";
@@ -49,32 +49,30 @@ async function prepare(request: Request, context: RouteContext) {
 }
 
 /** Shares the plan with an account (owner only). Sharing again is a no-op. */
-export async function PUT(request: Request, context: RouteContext) {
-  const ready = await prepare(request, context);
-  if (!ready.ok) {
-    return ready.response;
-  }
-  const { viewer, ownerId, designId, userId } = ready;
-  try {
+export const PUT = answeringErrors(
+  "The plan could not be shared.",
+  async (request: Request, context: RouteContext) => {
+    const ready = await prepare(request, context);
+    if (!ready.ok) {
+      return ready.response;
+    }
+    const { viewer, ownerId, designId, userId } = ready;
     return serviceResponse(await addMember(viewer, ownerId, designId, userId), (shared) => shared);
-  } catch (error) {
-    return serverErrorResponse(error, "The plan could not be shared.");
-  }
-}
+  },
+);
 
 /** Stops sharing with an account: the owner removing anyone, or a member leaving. */
-export async function DELETE(request: Request, context: RouteContext) {
-  const ready = await prepare(request, context);
-  if (!ready.ok) {
-    return ready.response;
-  }
-  const { viewer, ownerId, designId, userId } = ready;
-  try {
+export const DELETE = answeringErrors(
+  "Sharing could not be changed.",
+  async (request: Request, context: RouteContext) => {
+    const ready = await prepare(request, context);
+    if (!ready.ok) {
+      return ready.response;
+    }
+    const { viewer, ownerId, designId, userId } = ready;
     return serviceResponse(
       await removeMember(viewer, ownerId, designId, userId),
       (shared) => shared,
     );
-  } catch (error) {
-    return serverErrorResponse(error, "Sharing could not be changed.");
-  }
-}
+  },
+);

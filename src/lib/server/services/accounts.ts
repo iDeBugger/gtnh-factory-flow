@@ -9,6 +9,7 @@ import { bumpSessionEpoch, makeSessionToken } from "../auth/sessions";
 import { notifyLive } from "../live-notify";
 import type { Viewer } from "../http/viewer";
 import { checkRateLimit, countEvents, recordEvents, serially } from "../limits/rate-limit";
+import { storageErrorMessage } from "../db";
 import { takeMemoryToken } from "../limits/memory-rate";
 import * as accounts from "../repos/accounts";
 import { fail, ok, type ServiceResult } from "./result";
@@ -174,7 +175,9 @@ export async function searchAccounts(
   }
   try {
     return ok(await accounts.searchByPrefix(prefix, viewer.userId));
-  } catch {
-    return fail("unavailable", "Accounts could not be searched.", { status: 500 });
+  } catch (error) {
+    return fail("unavailable", storageErrorMessage(error, "Accounts could not be searched."), {
+      status: 500,
+    });
   }
 }

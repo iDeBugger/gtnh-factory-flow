@@ -119,7 +119,11 @@
   sentence passed on is `COMMUNITY_DB_DOWN_MESSAGE`. Dataset routes use `datasetErrorResponse`: an unserved id
   (`DatasetNotFoundError`) is 404 `Dataset not found.`, never the id. The library's and blueprints' failures answer
   through `storageErrorMessage` the same way (the route's sentence, or the database-down line); fixed 4xx copy stays
-  as it is. Exam: `error-response.test.ts`, `datasets/[versionId]/catalog/route.test.ts`.
+  as it is. The library, folder, member, blueprint and account-search handlers are wrapped in `answeringErrors`:
+  the account lookup (`readViewer`) and the rate limit run before any service's own catch, so a throw from
+  either answers the route's sentence or the down line with `no-store`, never an empty 500.
+  Exam: `error-response.test.ts`, `datasets/[versionId]/catalog/route.test.ts`, `library/cloud-plans.test.ts`
+  ("when the database fails a read").
 - Every dataset route except `prewarm`, and `/api/resource-popularity` (the browser item search's popularity map,
   1 unit, outside `/api/datasets/` so an edge rule on that prefix does not cover it), spends an in-memory work
   budget per client address (`limits/dataset-rate.ts`):

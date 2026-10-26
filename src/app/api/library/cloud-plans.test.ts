@@ -15,6 +15,8 @@ import * as member from "./designs/[designId]/members/[userId]/route";
 import * as folder from "./folders/[folderId]/route";
 import * as search from "../accounts/search/route";
 import * as meRoute from "../community/auth/me/route";
+import * as blueprintList from "../blueprints/route";
+import * as blueprintOne from "../blueprints/[blueprintId]/route";
 
 /**
  * Holds each answer of a wrapped repository read until `size` of them have
@@ -776,6 +778,18 @@ describe("the locks each write takes", () => {
   });
 });
 
+const DOWN = { error: "The community database is not responding. Try again in a few minutes." };
+
+/** Every answer is the down line, a 500 no cache keeps. */
+async function expectDown(answers: Array<[string, Promise<Response>]>) {
+  for (const [name, pending] of answers) {
+    const answer = await pending;
+    expect(answer.status, name).toBe(500);
+    expect(answer.headers.get("cache-control"), name).toBe("no-store");
+    expect(await answer.json(), name).toEqual(DOWN);
+  }
+}
+
 describe("when the database fails a read", () => {
   /** The test database, failing every query or request that names `table` as a stalled database does. */
   function failing(table: string) {
@@ -811,9 +825,9 @@ describe("when the database fails a read", () => {
 
   it("says it cannot tell who is signed in, never that nobody is", async () => {
     failing("community_users");
-    await expect(library.GET(request("GET", "/api/library", "dan"))).rejects.toThrow(
-      "The community database is not responding",
-    );
+    const answer = await library.GET(request("GET", "/api/library", "dan"));
+    expect(answer.status).toBe(500);
+    expect(await answer.json()).toEqual(DOWN);
     const me = await meRoute.GET(request("GET", "/api/community/auth/me", "dan"));
     expect(me.status).toBe(503);
     expect(await me.json()).toEqual({
@@ -829,5 +843,163 @@ describe("when the database fails a read", () => {
       }),
     );
     expect(await gone.json()).toEqual({ user: null });
+  });
+
+  it("answers the down line on every library, blueprint and search route once the account cache expired", async () => {
+    const designId = "design-outage-2";
+    const folderId = "folder-outage-2";
+    const blueprintId = "0b6f7c1e-3d2a-4e5f-8a9b-1c2d3e4f5a6b";
+    const shareTo = users.dan!.id;
+    failing("community_users");
+    await expectDown([
+      ["library", library.GET(request("GET", "/api/library", "carol"))],
+      [
+        "design GET",
+        design.GET(
+          request("GET", `/api/library/designs/${designId}`, "carol"),
+          params({ designId }),
+        ),
+      ],
+      [
+        "design PUT",
+        design.PUT(
+          request(
+            "PUT",
+            `/api/library/designs/${designId}`,
+            "carol",
+            upsertBody("Tin", "2026-10-19T11:00:00.000Z"),
+          ),
+          params({ designId }),
+        ),
+      ],
+      [
+        "design DELETE",
+        design.DELETE(
+          request("DELETE", `/api/library/designs/${designId}`, "carol"),
+          params({ designId }),
+        ),
+      ],
+      [
+        "members",
+        members.GET(
+          request("GET", `/api/library/designs/${designId}/members`, "carol"),
+          params({ designId }),
+        ),
+      ],
+      [
+        "share",
+        member.PUT(
+          request("PUT", `/api/library/designs/${designId}/members/${shareTo}`, "carol"),
+          params({ designId, userId: shareTo }),
+        ),
+      ],
+      [
+        "unshare",
+        member.DELETE(
+          request("DELETE", `/api/library/designs/${designId}/members/${shareTo}`, "carol"),
+          params({ designId, userId: shareTo }),
+        ),
+      ],
+      [
+        "folder PUT",
+        folder.PUT(
+          request("PUT", `/api/library/folders/${folderId}`, "carol", {
+            name: "F",
+            createdAt: "2026-10-19T11:00:00.000Z",
+            updatedAt: "2026-10-19T11:00:00.000Z",
+          }),
+          params({ folderId }),
+        ),
+      ],
+      [
+        "folder DELETE",
+        folder.DELETE(
+          request("DELETE", `/api/library/folders/${folderId}`, "carol"),
+          params({ folderId }),
+        ),
+      ],
+    ]);
+    await expectDown([
+      ["blueprints", blueprintList.GET(request("GET", "/api/blueprints", "carol"))],
+      [
+        "blueprint POST",
+        blueprintList.POST(request("POST", "/api/blueprints", "carol", { name: "B" })),
+      ],
+      [
+        "blueprint GET",
+        blueprintOne.GET(
+          request("GET", `/api/blueprints/${blueprintId}`, "carol"),
+          params({ blueprintId }),
+        ),
+      ],
+      [
+        "blueprint PUT",
+        blueprintOne.PUT(
+          request("PUT", `/api/blueprints/${blueprintId}`, "carol", { name: "B" }),
+          params({ blueprintId }),
+        ),
+      ],
+      [
+        "blueprint DELETE",
+        blueprintOne.DELETE(
+          request("DELETE", `/api/blueprints/${blueprintId}`, "carol"),
+          params({ blueprintId }),
+        ),
+      ],
+    ]);
+    await expectDown([
+      ["search", search.GET(request("GET", "/api/accounts/search?q=da", "carol"))],
+    ]);
+  });
+
+  it("answers the down line when the rate limit cannot be read or recorded", async () => {
+    const designId = "design-outage-3";
+    const folderId = "folder-outage-3";
+    const blueprintId = "0b6f7c1e-3d2a-4e5f-8a9b-1c2d3e4f5a6c";
+    const shareTo = users.dan!.id;
+    failing("community_events");
+    await expectDown([
+      [
+        "design PUT",
+        design.PUT(
+          request(
+            "PUT",
+            `/api/library/designs/${designId}`,
+            "carol",
+            upsertBody("Tin", "2026-10-19T11:00:00.000Z"),
+          ),
+          params({ designId }),
+        ),
+      ],
+      [
+        "share",
+        member.PUT(
+          request("PUT", `/api/library/designs/${designId}/members/${shareTo}`, "carol"),
+          params({ designId, userId: shareTo }),
+        ),
+      ],
+      [
+        "folder PUT",
+        folder.PUT(
+          request("PUT", `/api/library/folders/${folderId}`, "carol", {
+            name: "F",
+            createdAt: "2026-10-19T11:00:00.000Z",
+            updatedAt: "2026-10-19T11:00:00.000Z",
+          }),
+          params({ folderId }),
+        ),
+      ],
+      [
+        "blueprint POST",
+        blueprintList.POST(request("POST", "/api/blueprints", "carol", { name: "B" })),
+      ],
+      [
+        "blueprint PUT",
+        blueprintOne.PUT(
+          request("PUT", `/api/blueprints/${blueprintId}`, "carol", { name: "B" }),
+          params({ blueprintId }),
+        ),
+      ],
+    ]);
   });
 });

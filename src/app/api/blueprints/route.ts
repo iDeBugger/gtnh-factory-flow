@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { BLUEPRINT_BODY_MAX_BYTES } from "@/lib/blueprints/types";
 import { readJsonCapped } from "@/lib/server/http/request-body";
+import { answeringErrors } from "@/lib/server/http/error-response";
 import { serviceResponse } from "@/lib/server/http/service-response";
 import { isSignedIn, readViewer } from "@/lib/server/http/viewer";
 import {
@@ -19,7 +20,7 @@ export const dynamic = "force-dynamic";
  * a request for one is answered as a route that does not exist, never with
  * the caller's own list.
  */
-export async function GET(request: Request) {
+export const GET = answeringErrors("Blueprints could not be loaded.", async (request: Request) => {
   if (new URL(request.url).searchParams.get("scope") === "public") {
     return NextResponse.json({ error: "There is no public blueprint list." }, { status: 404 });
   }
@@ -28,10 +29,10 @@ export async function GET(request: Request) {
   }
   const viewer = await readViewer(request);
   return serviceResponse(await listBlueprints(viewer), (value) => value);
-}
+});
 
 /** Saves a new blueprint to the signed-in account (`saveBlueprint`). */
-export async function POST(request: Request) {
+export const POST = answeringErrors("Blueprint could not be saved.", async (request: Request) => {
   if (!isDatabaseConfigured()) {
     return NextResponse.json({ error: "Cloud storage is not configured." }, { status: 503 });
   }
@@ -52,4 +53,4 @@ export async function POST(request: Request) {
   }
   const body = (read.value ?? {}) as BlueprintBody;
   return serviceResponse(await saveBlueprint(viewer, body), (value) => value);
-}
+});

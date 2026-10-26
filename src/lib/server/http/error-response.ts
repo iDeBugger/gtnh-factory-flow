@@ -26,6 +26,26 @@ export function serverErrorResponse(
   return NextResponse.json({ error: fallback }, { status, headers: init.headers });
 }
 
+/**
+ * A route handler that answers its own throw: `serverErrorResponse` with the
+ * route's sentence and `Cache-Control: no-store`, so an outage reads as the
+ * database-down line rather than an empty 500. A signed-in request reads its
+ * account and spends its rate limit before any service's own catch, and
+ * either fails while the database is down; this is the one place both meet.
+ */
+export function answeringErrors<A extends unknown[]>(
+  fallback: string,
+  handler: (...args: A) => Promise<Response>,
+): (...args: A) => Promise<Response> {
+  return async (...args) => {
+    try {
+      return await handler(...args);
+    } catch (error) {
+      return serverErrorResponse(error, fallback, { headers: { "Cache-Control": "no-store" } });
+    }
+  };
+}
+
 /** A dataset route's `catch`: an unserved dataset id is a 404 with a fixed sentence, anything else as above. */
 export function datasetErrorResponse(
   error: unknown,
