@@ -206,10 +206,10 @@ export async function loginCommunityUser(
   return parseJsonOrThrow<CommunityUser>(response);
 }
 
-/** Signs out of this browser; `everywhere` also ends every other session of the account. */
 /** A sign-out everywhere the server refused: its message is the server's own sentence, or the fixed one when it sent none. */
 export class SignOutEverywhereError extends Error {}
 
+/** Signs out of this browser; `everywhere` also ends every other session of the account. */
 export async function logoutCommunityUser(options: { everywhere?: boolean } = {}): Promise<void> {
   const response = await fetch("/api/community/auth/logout", {
     method: "POST",
