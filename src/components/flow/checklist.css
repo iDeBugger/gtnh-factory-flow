@@ -21,8 +21,8 @@
   opacity: 0.3 !important;
 }
 /* WHAT A CLICK WILL MARK, in green, and nothing else: the port glow and the
-   card's own hover states are off while the checklist is on (RecipeNode's
-   checklistLocked). A card wears the outline; a wire lights its own hit
+   card's own hover states are off while the checklist is on
+   (`checklistLocked`). A card wears the outline; a wire lights its own hit
    target, which lies over the drawn line. */
 .checklist-active .react-flow__node:hover {
   outline: 3px solid #86efac;

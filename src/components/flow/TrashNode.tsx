@@ -247,7 +247,7 @@ function TrashNodeComponent({ data, selected }: NodeProps<TrashFlowNode>) {
 
 // Position props change every drag frame; the component only reads `data` and
 // `selected`, so comparing exactly those keeps the card from re-rendering
-// while its wrapper is translated (see RecipeNode for the long version).
+// while its wrapper is translated.
 export const TrashNode = memo(
   TrashNodeComponent,
   (previous, next) => previous.data === next.data && previous.selected === next.selected,

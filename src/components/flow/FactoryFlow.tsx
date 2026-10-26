@@ -1943,7 +1943,7 @@ export function FactoryFlow() {
           recipesById.get(node.recipeId) ??
           getMissingRecipePlaceholder(node.recipeId);
         // Trash cans get their own compact card; a distinct node TYPE (not a
-        // branch inside RecipeNode) so the hook order of the big machine card
+        // branch inside the recipe card) so the hook order of the big machine card
         // never depends on what recipe a node holds.
         if (isTrashRecipe(recipe)) {
           return {

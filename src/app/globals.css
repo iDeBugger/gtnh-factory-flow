@@ -1040,46 +1040,9 @@ html:not([data-app-font="minecraft"]) [class*="[text-shadow:"] {
    some. Semantic colours (binding input, hungry plug, tier badge, delete
    red) are fixed values, not tokens, so they never depend on paint. */
 
-/* ===== Node verdict strip + port rails ===================================
-   A card has exactly one reason, and everything wrong on that card is painted
-   in that reason's colour. The ladder is how much it costs, not how big the
-   number is:
-
-     fine        plain ink   every asker got what it asked for
-     starved     muted gold  inputs are short and nobody is waiting
-     blocked     amber       inputs are short and somebody IS waiting
-     bottleneck  red         inputs are fine, it just can't keep up: act here
-
-   Gold sits BELOW amber: on a dark panel yellow is the brightest hue, so the
-   quiet state is desaturated and dimmed, not lightened. */
-:root {
-  --rail-bar-track: #3c3c3c;
-  --rail-bar-ok: #3fae5c;
-  --rail-bar-bad: #cf3333;
-  --rail-bar-hot: #e09b17;
-  --rail-bar-calm: #7b8b9c;
-  /* Port states are washes behind a slot, so they sit just off the panel face
-     rather than being pale tints of the hue. */
-  --port-hot-bg: #57451b;
-  --port-hot-edge: #c99b2e;
-  --port-fed-bg: #1f4a28;
-  --port-fed-edge: #4cae62;
-  --verdict-starved-ink: #b3ae76;
-  --verdict-blocked-ink: #e0a63a;
-  --verdict-bottleneck-ink: #e05252;
-  /* Clogged sits in the blues, off the warm alert ramp entirely: a full pipe
-     is a FACT about the plan, not a fault in it, and any amber or red would
-     put it on the to-do list beside the two states that really are. */
-  --verdict-clogged-ink: #6fb2d6;
-  /* UNWIRED is deliberately NOT a hue. Every hue on the board is taken and
-     grades how wrong something is; unwired means "not finished yet". So it is
-     achromatic chalk white and carries by MOVEMENT (see unwired-breathe). */
-  --verdict-unwired-ink: #eef2f8;
-}
-
 /* A drawer's SILHOUETTE and COLOUR both name its role, because they fail
- * differently: colour (ROLE_TINTS in StorageNode.tsx: red source, green
- * product and byproduct, steel buffer and trash) reads at any distance, and
+ * differently: colour (red source, green product and byproduct, steel buffer
+ * and trash) reads at any distance, and
  * shape survives the glance step and calm mode. The item's colour lives in
  * its icon, not the frame.
  *
@@ -1456,23 +1419,7 @@ html:not([data-app-font="minecraft"]) [class*="[text-shadow:"] {
 /* ===== Calm colours (the presentation toggle) ============================
    One class on the board root steps every STATUS colour down to steel; the
    words and marks stay. Interaction colours (selection, flow-scope, drop
-   wash) are left alone.
-
-   The indicator variables are overridden at the board root because they
-   resolve to :root constants; the verdict inks are re-pointed on the card
-   shell, where the per-card --mc-ink (set inline by paint) is in scope. */
-.factory-flow-board--calm {
-  --rail-bar-ok: #7b8b9c;
-  --rail-bar-bad: #7b8b9c;
-  --rail-bar-hot: #7b8b9c;
-  --port-hot-bg: var(--mc-71);
-  --port-hot-edge: var(--mc-47);
-  --port-fed-bg: var(--mc-71);
-  --port-fed-edge: var(--mc-47);
-}
-
-/* On a painted card --mc-71 above is that card's own neutral, because its
-   ramp is declared on the same element. */
+   wash) are left alone. */
 
 /* Editing chrome (delete/clone on drawer, tank and trash headers) hides in a
    presentation. The recipe card's head buttons, footer and dials are gated
