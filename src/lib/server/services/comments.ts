@@ -105,8 +105,8 @@ export async function addComment(
   if (!text || text.length > COMMUNITY_COMMENT_MAX_LENGTH) {
     return fail("bad-request", `A comment runs 1 to ${COMMUNITY_COMMENT_MAX_LENGTH} characters.`);
   }
-  // A post taken down since `commentAccess` read it fails the insert's
-  // foreign key: an error, as before the lock.
+  // A post taken down since `commentAccess` read it is gone here too: the
+  // insert's foreign key fails.
   const row = await withTransaction(async (tx) => {
     await plans.lockPost(planId, tx);
     const written = await comments.insert(
