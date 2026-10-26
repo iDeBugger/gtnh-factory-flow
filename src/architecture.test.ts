@@ -629,13 +629,15 @@ const inTypeOrImport = (node: ts.Node): boolean =>
  *   `table` take any string as an identifier;
  * - `CompiledQuery` as a value (`CompiledQuery.raw` runs a string as SQL),
  *   and outside db/ any mention of it;
+ * - `fn(name, ...)` or `fn.agg(name, ...)` with a name that is not a string
+ *   literal: Kysely writes a function's name into the SQL text unescaped;
  * - a namespace or dynamic import of kysely, which would reach all of these
  *   under other names.
  */
 function sqlWriting(file: SourceFile): { template: boolean; splicing: string[] } {
   const splicing = new Set<string>();
   let template = false;
-  if (!/\bsql\b|\bdynamic\b|\bCompiledQuery\b|kysely/.test(file.text)) {
+  if (!/\bsql\b|\bdynamic\b|\bCompiledQuery\b|kysely|\bfn\b/.test(file.text)) {
     return { template, splicing: [] };
   }
   const tree = syntaxTree(file);
@@ -668,6 +670,20 @@ function sqlWriting(file: SourceFile): { template: boolean; splicing: string[] }
         namedSql(callee.expression)
       ) {
         splicing.add(`sql.${callee.name.text}`);
+      }
+      // `eb.fn(...)`, `({ fn }) => fn(...)` in the data layer, and `.agg` on either; `vi.fn` is a mock.
+      const isFn = (node: ts.Expression): boolean =>
+        (ts.isPropertyAccessExpression(node) &&
+          node.name.text === "fn" &&
+          !(ts.isIdentifier(node.expression) && node.expression.text === "vi")) ||
+        (ts.isIdentifier(node) && node.text === "fn" && isDatabaseLayer(file.path));
+      const named =
+        isFn(callee) ||
+        (ts.isPropertyAccessExpression(callee) &&
+          callee.name.text === "agg" &&
+          isFn(callee.expression));
+      if (named && !(node.arguments[0] && ts.isStringLiteralLike(node.arguments[0]))) {
+        splicing.add("fn with a computed name");
       }
       const loaded = node.arguments[0];
       if (
@@ -1005,6 +1021,23 @@ describe("the layers", () => {
         "  return text.raw(c);",
         "};",
       ].join("\n"),
+      [repo("fn")]: [
+        'import { getDb } from "../db";',
+        "export const total = (name: string) =>",
+        '  getDb().selectFrom("t").select((eb) => [eb.fn(name, ["a"]).as("x")]);',
+      ].join("\n"),
+      [repo("fn-agg")]: [
+        'import { getDb } from "../db";',
+        "export const total = (name: string) =>",
+        '  getDb().selectFrom("t").select(({ fn }) => [fn.agg(name, ["a"]).as("x")]);',
+      ].join("\n"),
+      [repo("fn-literal")]: [
+        'import { getDb } from "../db";',
+        "export const total = () =>",
+        "  getDb()",
+        '    .selectFrom("t")',
+        '    .select(({ fn }) => [fn("lower", ["a"]).as("x"), fn.agg("sum", ["b"]).as("y"), fn.count("c").as("z")]);',
+      ].join("\n"),
       "src/lib/server/db/compiled-as-type.ts": [
         'import type { CompiledQuery } from "kysely";',
         "export const size = (query: CompiledQuery) => query.sql.length;",
@@ -1018,6 +1051,8 @@ describe("the layers", () => {
       `${repo("dynamic-destructured")}: dynamic`,
       `${repo("dynamic-ref")}: dynamic`,
       `${repo("dynamic-table")}: dynamic`,
+      `${repo("fn-agg")}: fn with a computed name`,
+      `${repo("fn")}: fn with a computed name`,
       `${repo("sql-destructured")}: sql used as a value`,
       `${repo("sql-dynamic-import")}: kysely loaded dynamically`,
       `${repo("sql-indexed")}: sql used as a value`,
