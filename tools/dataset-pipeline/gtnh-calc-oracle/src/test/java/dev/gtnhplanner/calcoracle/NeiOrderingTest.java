@@ -1,9 +1,12 @@
 package dev.gtnhplanner.calcoracle;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.Test;
 
@@ -27,5 +30,36 @@ class NeiOrderingTest {
     void leavesAListWithNoGroupsAsSorted() throws Exception {
         List<String> sorted = Arrays.asList("-/b", "-/a", "-/c");
         assertEquals(sorted, NeiOrdering.groupOrdered(sorted, NeiOrderingTest::group));
+    }
+
+    @Test
+    void waitsForTheNamedThreadToEnd() throws Exception {
+        AtomicBoolean done = new AtomicBoolean(false);
+        Thread loader = new Thread(() -> {
+            try {
+                Thread.sleep(300L);
+            } catch (InterruptedException ignored) {
+            }
+            done.set(true);
+        }, "NEI Plugin Loader");
+        loader.start();
+        NeiOrdering.joinThreadsNamed("NEI Plugin Loader", System.currentTimeMillis() + 10_000L);
+        assertFalse(loader.isAlive());
+        assertEquals(true, done.get());
+    }
+
+    @Test
+    void givesUpAtTheDeadline() throws Exception {
+        Thread loader = new Thread(() -> {
+            try {
+                Thread.sleep(5_000L);
+            } catch (InterruptedException ignored) {
+            }
+        }, "NEI Plugin Loader");
+        loader.setDaemon(true);
+        loader.start();
+        assertThrows(IllegalStateException.class,
+            () -> NeiOrdering.joinThreadsNamed("NEI Plugin Loader", System.currentTimeMillis() + 100L));
+        loader.interrupt();
     }
 }

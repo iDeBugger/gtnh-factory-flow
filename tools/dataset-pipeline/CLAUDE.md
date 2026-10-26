@@ -156,7 +156,7 @@ published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such 
   stack (`item:<id>[@meta]`, `fluid:<name>`, `aspect:thaumcraft:aspect:<tag>`, null where a stack has none), with
   `status` (`exported`, `failed` with `error`, `not_present`) and the `sort` it used; adapter `nei-item-list`.
 - NEI builds that list only when a world loads and the oracle exports from the main menu, so the export does what the
-  load does with NEI's own code: `NEIClientConfig.bootNEI()` and a wait for the plugin thread (plugins hide items and
+  load does with NEI's own code: `NEIClientConfig.bootNEI()`, then a join of the "NEI Plugin Loader" thread (its flag is set before `NEIConfigsLoadedEvent`, whose handlers may still hide items) (plugins hide items and
   add variants; `ItemInfo` fills the owners the `mod` rule reads), NEI's `getPermutations` per registry item, the
   registry-order numbering into `ItemSorter`'s `default` rule, `ItemStackSet` for duplicates, `ItemSorter.sort`. It
   runs last, after every domain, so nothing else sees NEI half booted. Then NEI's collapsible groups, as both NEI

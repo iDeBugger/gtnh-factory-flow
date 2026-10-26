@@ -140,7 +140,7 @@ final class NeiItemListExport {
         });
     }
 
-    /** NEI's boot as a world load runs it, then the plugin thread's end (it sets pluginNEIConfigLoaded last). */
+    /** NEI's boot as a world load runs it, then the end of NEI's plugin loader thread. */
     private void bootNei(Class<?> config) throws Exception {
         Field main = config.getDeclaredField("mainNEIConfigLoaded");
         Field plugins = config.getDeclaredField("pluginNEIConfigLoaded");
@@ -159,6 +159,9 @@ final class NeiItemListExport {
             }
             Thread.sleep(250L);
         }
+        // The flag is set before NEIConfigsLoadedEvent is posted, and that event's handlers may still change
+        // what NEI hides and lists: read nothing until the loader thread itself has ended.
+        NeiOrdering.joinThreadsNamed("NEI Plugin Loader", deadline);
     }
 
     /**

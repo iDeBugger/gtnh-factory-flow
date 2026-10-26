@@ -60,4 +60,25 @@ final class NeiOrdering {
         }
         return ordered;
     }
+
+    /**
+     * Waits for every live thread of that name to end, until the deadline. NEI's plugin loader
+     * sets pluginNEIConfigLoaded before it posts NEIConfigsLoadedEvent, whose handlers may still
+     * hide items or add variants; the list is read only once the thread is done.
+     */
+    static void joinThreadsNamed(String name, long deadlineMillis) throws InterruptedException {
+        for (Thread thread : Thread.getAllStackTraces().keySet()) {
+            if (!name.equals(thread.getName()) || thread == Thread.currentThread()) {
+                continue;
+            }
+            long left = deadlineMillis - System.currentTimeMillis();
+            if (left <= 0) {
+                throw new IllegalStateException(name + " did not finish in time");
+            }
+            thread.join(left);
+            if (thread.isAlive()) {
+                throw new IllegalStateException(name + " did not finish in time");
+            }
+        }
+    }
 }
