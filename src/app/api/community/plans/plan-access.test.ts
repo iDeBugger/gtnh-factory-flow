@@ -914,7 +914,7 @@ describe("a malformed post id", () => {
         .filter(([, value]) => typeof value === "function")
         .map(([name]) => vi.spyOn(module as Record<string, (...args: unknown[]) => unknown>, name));
     const querySpies = [plansRepo, commentsRepo, votesRepo].flatMap(spyOnAll);
-    // The rate-limit reads too: view and comment check the id before their pace.
+    // The rate-limit reads too: view, comment and vote check the id before their pace.
     const spies = [...querySpies, ...spyOnAll(eventsRepo)];
     try {
       const planId = "not-a-uuid";
@@ -941,6 +941,7 @@ describe("a malformed post id", () => {
         ),
         comments.GET(request("GET", `${base}/comments`), params({ planId })),
         comments.POST(request("POST", `${base}/comments`, { who: "poster", body: { body: "Hi" } }), params({ planId })),
+        vote.POST(request("POST", `${base}/vote`, { body: { deviceId: "device-1", value: 1 } }), params({ planId })),
       ]);
       for (const answer of planAnswers) {
         expect(answer.status).toBe(404);
@@ -964,18 +965,6 @@ describe("a malformed post id", () => {
       for (const spy of spies) {
         expect(spy, spy.getMockName()).not.toHaveBeenCalled();
       }
-      // A vote spends its share of the address's pace first, so probing ids
-      // stays limited, and then reads no post and no vote.
-      const voted = await vote.POST(
-        request("POST", `${base}/vote`, { body: { deviceId: "device-1", value: 1 } }),
-        params({ planId }),
-      );
-      expect(voted.status).toBe(404);
-      expect(await voted.json()).toEqual({ error: "Plan not found." });
-      expect(vi.mocked(eventsRepo.countSince)).toHaveBeenCalled();
-      for (const spy of querySpies) {
-        expect(spy, spy.getMockName()).not.toHaveBeenCalled();
-      }
       // The spies see the service's reads: a well-formed id is looked up, and
       // its view spends a share of the pace.
       const missing = randomUUID();
@@ -985,6 +974,15 @@ describe("a malformed post id", () => {
       const unseen = await view.POST(request("POST", `/api/community/plans/${missing}/view`), params({ planId: missing }));
       expect(unseen.status).toBe(404);
       expect(vi.mocked(eventsRepo.countSince)).toHaveBeenCalled();
+      vi.mocked(eventsRepo.countSince).mockClear();
+      const unvoted = await vote.POST(
+        request("POST", `/api/community/plans/${missing}/vote`, { body: { deviceId: "device-1", value: 1 } }),
+        params({ planId: missing }),
+      );
+      expect(unvoted.status).toBe(404);
+      expect(await unvoted.json()).toEqual({ error: "Plan not found." });
+      expect(vi.mocked(eventsRepo.countSince)).toHaveBeenCalled();
+      expect(vi.mocked(plansRepo.readAccess)).toHaveBeenCalledWith(missing);
     } finally {
       for (const spy of spies) {
         spy.mockRestore();
