@@ -4,16 +4,15 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { forgetSessionUsers } from "@/lib/server/auth/sessions";
 import { useDbForTests } from "@/lib/server/db";
 import { GuardedDialect } from "@/lib/server/db/guard";
-import { applyMigrations } from "@/lib/server/db/migrations";
+import { applyMigrations, dbDir, ensureRoles, sqlRunner } from "@/lib/server/db/migrations";
 import type { Database } from "@/lib/server/db/schema";
-import { deploySqlWithoutPsql } from "@/test-support/deploy-sql";
 import { databasePlanStore } from "./store";
 
 /**
  * The live store's own statements under the live service's database role
- * (`gtnh_live`, `tools/deploy/db/app-roles.sql`): every `PlanStore` method
- * runs with only the column grants the role holds, and the lease answers
- * as the rooms expect.
+ * (`gtnh_live`, `db/grants.sql`): every `PlanStore` method runs with only
+ * the column grants the role holds, and the lease answers as the rooms
+ * expect.
  */
 
 const OWNER = "11111111-1111-4111-8111-111111111111";
@@ -50,8 +49,8 @@ async function row(designId: string) {
 
 beforeAll(async () => {
   pglite = new PGlite();
-  await applyMigrations(pglite);
-  await pglite.exec(deploySqlWithoutPsql("app-roles.sql"));
+  await applyMigrations(sqlRunner(pglite), dbDir());
+  await ensureRoles(sqlRunner(pglite), {}, dbDir());
   await pglite.query(
     "insert into community_users (id, username, password_hash, session_epoch) values ($1, 'owner', 'h', 3), ($2, 'member', 'h', 0), ($3, 'stranger', 'h', 0)",
     [OWNER, MEMBER, STRANGER],

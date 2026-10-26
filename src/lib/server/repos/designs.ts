@@ -34,7 +34,7 @@ const DESIGN_META_COLUMNS = [
 /** The same columns, named by table, for a query that joins another. */
 const DESIGN_META_REFS = DESIGN_META_COLUMNS.map((column) => `library_designs.${column}` as const);
 
-/** What the live service keeps on a design (supabase/migrations/2026-10-14-cloud-live.sql). */
+/** What the live service keeps on a design (its live columns in db/migrations/0001-baseline.sql). */
 const DESIGN_LIVE_COLUMNS = ["seq", "live_lease_until"] as const;
 
 export interface DesignRow {

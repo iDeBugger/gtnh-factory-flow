@@ -29,10 +29,6 @@ const EXCEPTIONS: Record<string, string> = {
   "tools/deploy/deploy.sh": "waits for the stack's postgrest service",
   "tools/deploy/service-token.mjs": "signs the stack's PostgREST token",
   "tools/deploy/service-token.test.mjs": "pins that token",
-  // The deploy's role scripts still make PostgREST's roles until the migration runner replaces them.
-  "tools/deploy/db/roles.sql": "PostgREST's roles",
-  "tools/deploy/db/migrate.sh": "applies PostgREST's roles",
-  "src/lib/server/db/db-roles.test.ts": "pins the roles roles.sql makes",
 };
 
 function filesUnder(dir: string): string[] {

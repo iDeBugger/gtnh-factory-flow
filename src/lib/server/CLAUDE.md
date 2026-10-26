@@ -321,8 +321,8 @@ Rules:
 - `community_events` keeps 31 days (`EVENTS_KEPT_DAYS`; the longest window read is 30): `recordEvents` deletes older
   rows once an hour per process, oldest first in batches of `PRUNE_BATCH_ROWS` until one comes back short or
   `PRUNE_BUDGET_MS` (2 s) has gone (so a backlog drains fast yet never holds a request past the statement timeout;
-  the rest waits an hour), over the `created_at` index (migration
-  `2026-10-25-community-events-created-at.sql`, mirrored in `schema.sql`), and a failed prune never fails a save. Exam:
+  the rest waits an hour), over the `created_at` index (`community_events_created_at_idx`), and a failed prune never
+  fails a save. Exam:
   `community-events.test.ts`.
 
 ## Sessions and secrets (auth/)
@@ -338,9 +338,9 @@ Rules:
   `getSessionUser` refuses a token whose epoch differs from the row's. "Sign out everywhere" (`POST
   /api/community/auth/logout` with `{ everywhere: true }`) sets the row's epoch to now (`bumpSessionEpoch`), forgets
   the cached account and tells the live service (`notifyLive` signed-out). A three-part token from before epochs
-  reads as epoch 0 and stays good until it expires or the account signs out everywhere. The migration
-  `supabase/migrations/2026-10-24-session-epoch.sql` must be applied before a build that reads the column is
-  deployed: the account lookup selects it, and without it every signed-in request answers 503. Exam:
+  reads as epoch 0 and stays good until it expires or the account signs out everywhere. The column is in
+  `db/migrations/0001-baseline.sql`; the account lookup selects it, so a database without it answers 503 to every
+  signed-in request. Exam:
   `session.test.ts`, `app/api/community/auth/auth.test.ts`.
 - Every database-backed limit counts then records, so `checkRateLimit` runs one at a time per key and action
   (`serially`); a burst for one key is counted one by one. The site is one process, which is what makes the
@@ -456,14 +456,19 @@ Rules:
   `db/settings.ts`. Values parse the same on `pg` and PGlite (`DB_TYPE_PARSERS`: timestamptz as Postgres's JSON
   text, bigint as a number); a jsonb column takes only `json(value)`. Row types are generated (`npm run db:types`,
   `db/schema.test.ts` fails while `db/schema.ts` is stale).
-- Tests open an in-memory PGlite per file, built by `applyMigrations` from `supabase/`, with `useTestDb()`
+- The schema is `db/migrations/NNNN-words.sql`, applied once each by the runner (`db/migrations.ts`,
+  `tools/db/migrate.ts`; docs/deploy.md, Migrations). A change is a new file, never an edit to an applied one (the
+  runner refuses a changed file by name); a new table gets its grants in `db/grants.sql` in the same commit; then
+  `npm run db:types`. Exam: `db/migrations.test.ts`, `db/db-roles.test.ts`.
+- Tests open an in-memory PGlite per file, built by `applyMigrations` from `db/`, with `useTestDb()`
   (`src/test-support/test-db.ts`), and fail queries with `withDbFault`.
 - `npm run dev:local` gives Next and the live service `DATABASE_URL=postgres://postgres@127.0.0.1:54330/postgres`,
   served by `tools/local-db/serve.ts`: the compose file's pinned `postgres` image in the container `gtnh-local-db`
   when Docker answers (serve.ts applies the migrations to it), else PGlite on disk (`scratch/local-db/pgdata`) behind
   its socket, whose multiplexer is not isolated under concurrent queries (serve.ts has the probe).
   `LOCAL_DB_PGLITE=1` forces PGlite. The container's volume and `scratch/local-db/pgdata` are two separate
-  databases, so switching between them shows different accounts and designs. serve.ts's control listener on
+  databases, so switching between them shows different accounts and designs. A local database with tables but no
+  migration ledger is refused, and serve.ts names what to remove to start it fresh. serve.ts's control listener on
   127.0.0.1:54329 answers `/__local-db/ready` and `/__local-db/shutdown` only. Files are not in the database:
   `npm run dev:local` keeps them in `scratch/local-db/files` (the file store below).
 

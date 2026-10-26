@@ -28,8 +28,8 @@ live service and a file store, all started for you.
 
 A deployed stack runs Postgres and PostgREST beside the site (`docs/deploy.md`):
 
-1. `supabase/schema.sql` and every migration are applied on each deploy by the
-   migrate image.
+1. The migrate image applies each new migration in `db/migrations/` once, on
+   each deploy.
 2. The site reads `POSTGREST_URL` and `POSTGREST_SERVICE_TOKEN` (a JWT for the
    `service_role`, made with `tools/deploy/service-token.mjs`), and keeps
    uploaded pictures in `FILE_STORE_DIR`.

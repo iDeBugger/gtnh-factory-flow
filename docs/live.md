@@ -20,11 +20,11 @@ this file is the website's side of it.
 | Test client | `tools/live/test-client.mjs` | a headless client for all of the above |
 | The editor | `src/store/live-session.ts`, `src/lib/live/live-*.ts`, `src/components/live/`, `src/components/tasks/` | the open design live: edits, undo, offline, presence, sharing, task boards (below) |
 
-A cloud plan is a `library_designs` row, addressed everywhere as `<ownerId>:<designId>` (the doc key). The schema
-additions are `supabase/migrations/2026-10-14-cloud-live.sql`: `seq` (edit batches applied), `live_lease_until` and
-`live_lease_token` (the lease), and `library_design_members`; and `2026-10-24-live-plan-bytes.sql`: `plan_bytes`, the
-plan's stored size, which the service reads before opening a plan to budget its room (without the column every plan
-being opened is budgeted at the 3 MB limit, which caps how many can open at the same moment).
+A cloud plan is a `library_designs` row, addressed everywhere as `<ownerId>:<designId>` (the doc key). Its live
+columns (`db/migrations/0001-baseline.sql`) are `seq` (edit batches applied), `live_lease_until` and
+`live_lease_token` (the lease), and `plan_bytes`, the plan's stored size, which the service reads before opening a
+plan to budget its room (without it every plan being opened would be budgeted at the 3 MB limit, which caps how
+many can open at the same moment); its members are rows of `library_design_members`.
 
 ## How an edit travels
 

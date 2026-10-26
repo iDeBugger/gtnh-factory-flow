@@ -13,8 +13,6 @@
 
 # Node 24 as CI. Pinned by digest: a tag can be moved, a digest cannot.
 ARG NODE_IMAGE=node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
-# The same image as the database's (tools/deploy/docker-compose.yml), for psql.
-ARG POSTGRES_IMAGE=postgres:17.10-bookworm@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f
 
 FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
@@ -43,6 +41,7 @@ RUN NEXT_PUBLIC_SITE_URL="$NEXT_PUBLIC_SITE_URL" \
     NEXT_TELEMETRY_DISABLED=1 \
     npm run build \
  && npm run build:live \
+ && npm run build:db \
  && npm prune --omit=dev --no-audit --no-fund \
  && rm -rf .next/cache
 
@@ -111,13 +110,14 @@ EXPOSE 3001
 CMD ["node", "dist-live/live.mjs"]
 
 # The database's setup, run once per deploy (`docker compose run --rm
-# migrate`): the SQL travels in the image, so the server needs no checkout.
-FROM ${POSTGRES_IMAGE} AS migrate
+# migrate`): the migration runner, bundled with `pg` inside so the image
+# needs no node_modules, and the SQL it applies (db/), so the server needs no
+# checkout.
+FROM ${NODE_IMAGE} AS migrate
 ARG GTNH_BUILD_ID
-COPY supabase/schema.sql /deploy/schema.sql
-COPY supabase/migrations/ /deploy/migrations/
-COPY tools/deploy/db/ /deploy/db/
-RUN chmod -R a+rX,go-w /deploy && chmod 0755 /deploy/db/migrate.sh
+COPY --from=build /app/dist-db/migrate.mjs /deploy/migrate.mjs
+COPY db/ /deploy/db/
+RUN chmod -R a+rX,go-w /deploy
 LABEL org.gtnh.build=$GTNH_BUILD_ID
-USER postgres
-CMD ["sh", "/deploy/db/migrate.sh"]
+USER node
+CMD ["node", "/deploy/migrate.mjs", "/deploy/db"]

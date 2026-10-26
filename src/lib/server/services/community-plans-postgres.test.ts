@@ -2,7 +2,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { closeDb, resetDbBreaker, useDbForTests, withTransaction } from "../db";
 import { createDbClient, type DirectDbClient } from "../db/client";
-import { applyMigrations } from "../db/migrations";
+import { applyMigrations, dbDir, sqlRunner } from "../db/migrations";
 import type { SignedIn, Viewer } from "../http/viewer";
 import * as plans from "../repos/plans";
 import { addComment } from "./comments";
@@ -51,7 +51,7 @@ describe.skipIf(!serverUrl)("community posts on Postgres", () => {
     url.pathname = `/${database}`;
     const setup = new pg.Client({ connectionString: url.toString() });
     await setup.connect();
-    await applyMigrations({ exec: (text) => setup.query(text) });
+    await applyMigrations(sqlRunner(setup), dbDir());
     const { rows } = await setup.query<{ id: string }>(
       "insert into community_users (username, password_hash) values ('racer', 'h') returning id",
     );

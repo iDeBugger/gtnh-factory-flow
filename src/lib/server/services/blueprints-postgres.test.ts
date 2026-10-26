@@ -4,7 +4,7 @@ import { BLUEPRINT_MAX_PER_USER } from "@/lib/blueprints/types";
 import aluminaLine from "@/components/flow/__fixtures__/alumina-line-shared-reactor.json";
 import { closeDb, resetDbBreaker, useDbForTests } from "../db";
 import { createDbClient, type DirectDbClient } from "../db/client";
-import { applyMigrations } from "../db/migrations";
+import { applyMigrations, dbDir, sqlRunner } from "../db/migrations";
 import type { SignedIn } from "../http/viewer";
 import { saveBlueprint } from "./blueprints";
 
@@ -32,7 +32,7 @@ describe.skipIf(!serverUrl)("blueprints on Postgres", () => {
     url.pathname = `/${database}`;
     const setup = new pg.Client({ connectionString: url.toString() });
     await setup.connect();
-    await applyMigrations({ exec: (text) => setup.query(text) });
+    await applyMigrations(sqlRunner(setup), dbDir());
     await setup.end();
     client = createDbClient("site", { DATABASE_URL: url.toString(), DATABASE_POOL_MAX: "12" });
     useDbForTests(client.db);

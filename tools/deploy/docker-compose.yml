@@ -69,7 +69,7 @@ services:
       PGUSER: postgres
       PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set}
       POSTGREST_AUTHENTICATOR_PASSWORD: ${POSTGREST_AUTHENTICATOR_PASSWORD:?POSTGREST_AUTHENTICATOR_PASSWORD is not set}
-      # The site's and the live service's logins (tools/deploy/db/app-roles.sql).
+      # The site's and the live service's logins (ensureRoles, db/grants.sql).
       GTNH_SITE_DB_PASSWORD: ${GTNH_SITE_DB_PASSWORD:?GTNH_SITE_DB_PASSWORD is not set}
       GTNH_LIVE_DB_PASSWORD: ${GTNH_LIVE_DB_PASSWORD:?GTNH_LIVE_DB_PASSWORD is not set}
     networks:

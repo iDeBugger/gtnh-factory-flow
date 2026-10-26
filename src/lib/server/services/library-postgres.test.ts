@@ -4,7 +4,7 @@ import { LIBRARY_MAX_DESIGNS } from "@/lib/library/sync-types";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
 import { closeDb, resetDbBreaker, useDbForTests } from "../db";
 import { createDbClient, type DirectDbClient } from "../db/client";
-import { applyMigrations } from "../db/migrations";
+import { applyMigrations, dbDir, sqlRunner } from "../db/migrations";
 import type { SignedIn } from "../http/viewer";
 import * as accounts from "../repos/accounts";
 import { saveDesign } from "./library";
@@ -55,7 +55,7 @@ describe.skipIf(!serverUrl)("the library on Postgres", () => {
     url.pathname = `/${database}`;
     const setup = new pg.Client({ connectionString: url.toString() });
     await setup.connect();
-    await applyMigrations({ exec: (text) => setup.query(text) });
+    await applyMigrations(sqlRunner(setup), dbDir());
     const { rows } = await setup.query<{ id: string }>(
       "insert into community_users (username, password_hash) values ('racer', 'h') returning id",
     );

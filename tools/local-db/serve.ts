@@ -37,8 +37,12 @@ import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import pg from "pg";
-import { hearConnectionErrors } from "../../src/lib/server/db/client";
-import { applyMigrations } from "../../src/lib/server/db/migrations";
+import {
+  applyMigrations,
+  dbDir,
+  MigrationError,
+  sqlRunner,
+} from "../../src/lib/server/db/migrations";
 import { DB_TYPE_PARSERS } from "../../src/lib/server/db/parsers";
 
 interface Served {
@@ -48,24 +52,49 @@ interface Served {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function announce(name: string): void {
+  console.log(`[local-db] migrate: ${name}`);
+}
+
+/** A database the runner refuses for having no ledger says how to start it fresh. */
+function withResetHint(error: unknown, what: string): unknown {
+  if (error instanceof MigrationError && /not set up by the migration runner/.test(error.message)) {
+    return new Error(`${error.message}. Development data only: remove ${what} and start again.`, {
+      cause: error,
+    });
+  }
+  return error;
+}
+
 /** A real Postgres: the migrations, once it takes connections (a fresh container initialises first). */
 async function servePostgres(url: string): Promise<Served> {
-  const pool = new pg.Pool({ connectionString: url, max: 1, application_name: "gtnh-local-db" });
-  hearConnectionErrors(pool, "local-db");
   const until = Date.now() + 90_000;
   for (;;) {
+    // One session: the runner's lock and each file's transaction belong to it.
+    const client = new pg.Client({ connectionString: url, application_name: "gtnh-local-db" });
+    client.on("error", (error) => console.error(`[local-db] connection lost: ${error.message}`));
     try {
-      await pool.query("select 1");
-      break;
+      await client.connect();
     } catch (error) {
+      await client.end().catch(() => undefined);
       if (Date.now() > until) {
         throw error;
       }
       await sleep(500);
+      continue;
     }
+    try {
+      await applyMigrations(sqlRunner(client), dbDir(), { onApplied: announce });
+    } catch (error) {
+      throw withResetHint(
+        error,
+        "the container's volume (docker rm -f gtnh-local-db; docker volume rm gtnh-local-db)",
+      );
+    } finally {
+      await client.end();
+    }
+    break;
   }
-  await applyMigrations({ exec: (text) => pool.query(text) });
-  await pool.end();
   return { describe: `Postgres at ${url}`, close: async () => undefined };
 }
 
@@ -75,7 +104,12 @@ async function servePglite(dir: string, pgPort: number): Promise<Served> {
   const db = new PGlite({ dataDir: dir, parsers: DB_TYPE_PARSERS });
   // The timestamp parser reads UTC only, as every pool session runs.
   await db.exec("set time zone 'UTC'");
-  await applyMigrations(db);
+  try {
+    await applyMigrations(sqlRunner(db), dbDir(), { onApplied: announce });
+  } catch (error) {
+    await db.close();
+    throw withResetHint(error, dir);
+  }
   const socket = new PGLiteSocketServer({ db, host: "127.0.0.1", port: pgPort, maxConnections: 4 });
   await socket.start();
   return {

@@ -17,7 +17,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
-import { applyMigrations } from "../../src/lib/server/db/migrations";
+import { applyMigrations, dbDir, sqlRunner } from "../../src/lib/server/db/migrations";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const SCHEMA_TYPES_FILE = path.join(ROOT, "src", "lib", "server", "db", "schema.ts");
@@ -160,7 +160,7 @@ export async function readSchemaTypes(db: PGlite): Promise<string> {
 export async function generateSchemaTypes(): Promise<string> {
   const db = new PGlite();
   try {
-    await applyMigrations(db, path.join(ROOT, "supabase"));
+    await applyMigrations(sqlRunner(db), dbDir(ROOT));
     return await readSchemaTypes(db);
   } finally {
     await db.close();

@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll } from "vitest";
 import { forgetSessionUsers } from "@/lib/server/auth/sessions";
 import { resetDbBreaker, useDbForTests } from "@/lib/server/db";
 import { GuardedDialect, setDbFaultForTests } from "@/lib/server/db/guard";
-import { applyMigrations } from "@/lib/server/db/migrations";
+import { applyMigrations, dbDir, sqlRunner } from "@/lib/server/db/migrations";
 import { DB_TYPE_PARSERS } from "@/lib/server/db/parsers";
 import type { Database } from "@/lib/server/db/schema";
 
@@ -45,7 +45,7 @@ export function useTestDb(): () => TestDb {
     const pglite = new PGlite({ parsers: DB_TYPE_PARSERS });
     // The timestamp parser reads UTC only, as every pool session runs.
     await pglite.exec("set time zone 'UTC'");
-    await applyMigrations(pglite);
+    await applyMigrations(sqlRunner(pglite), dbDir());
     const db = new Kysely<Database>({
       dialect: new GuardedDialect(new PGliteDialect({ pglite })),
     });

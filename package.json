@@ -22,7 +22,9 @@
     "format:check": "prettier --check .",
     "predev": "node tools/copy-highs-wasm.mjs",
     "prebuild": "node tools/copy-highs-wasm.mjs",
-    "db:types": "tsx tools/db/generate-types.ts"
+    "db:types": "tsx tools/db/generate-types.ts",
+    "db:migrate": "tsx tools/db/migrate.ts",
+    "build:db": "esbuild tools/db/migrate.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist-db/migrate.mjs --log-level=warning --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\""
   },
   "dependencies": {
     "@xyflow/react": "^12.10.2",

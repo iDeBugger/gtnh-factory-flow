@@ -184,30 +184,32 @@ role's `gtnh_trusted_proxies` and here.
 
 ## Migrations
 
-`supabase/schema.sql` and every file in `supabase/migrations/` are additive and idempotent, and the migrate image
-applies all of them on every deploy (`tools/deploy/db/migrate.sh`): `db/roles.sql` (`service_role` nologin
-bypassrls, `authenticator` login noinherit with the configured password), `schema.sql`, the migrations in name
-order, `db/grants.sql` (everything in `public` to `service_role`, also by default), `db/app-roles.sql`, then
-`notify pgrst, 'reload schema'`. Passwords reach psql through the environment (`\getenv`), never its command
-line, which shows in the host's process list. There is no anon role, so a PostgREST request without the token
-is 401.
+The migrate image runs the migration runner (`tools/db/migrate.ts`, bundled with `pg` inside to
+`dist-db/migrate.mjs` by `npm run build:db`) over the image's copy of `db/`, on every deploy. Under an advisory
+lock it applies each file in `db/migrations/` (`NNNN-words.sql`, numbered from 0001 with no gaps) that the ledger
+`schema_migrations` does not hold, each in its own transaction, and records its sha256. An applied file that has
+changed is refused by name: a schema change is always a new file. A database whose `public` schema holds tables
+but no ledger is refused ("this database was not set up by the migration runner"), and so is one that has
+Supabase's `anon` or `authenticated` role, where row security is what keeps tables off the public API key. It
+prints `migrate: <file>` for each file it applies and `migrate: done`; a rerun prints only `migrate: done`.
+`npm run db:migrate` runs the same from a checkout (`PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`).
 
-`db/app-roles.sql` makes the two logins the direct client uses (`DATABASE_URL`, built by compose), and revokes and
-grants their rights again in one transaction on every run, so a grant the file drops is gone after the next deploy:
+`0001-baseline.sql` is the whole schema for a fresh database. Then, every run, the runner makes the two logins the
+direct client uses (`DATABASE_URL`, built by compose) with the passwords from `GTNH_SITE_DB_PASSWORD` and
+`GTNH_LIVE_DB_PASSWORD`, and applies `db/grants.sql`, which revokes and grants their rights again in the same
+transaction, so a grant the file drops is gone after the next deploy. A password reaches the server only as a
+bound parameter, with statement, duration and parameter logging off for that transaction, and is never printed:
 
-- `gtnh_site`: select, insert, update and delete on every app table and usage on the sequences; no DDL, no
-  truncate. Neither role may create temporary tables (`temporary` is revoked from `public`).
+- `gtnh_site`: select, insert, update and delete on every app table and usage on the sequences; nothing on the
+  ledger, no DDL, no truncate. Neither role may create temporary tables (`temporary` is revoked from `public`).
 - `gtnh_live`: the columns the live store uses: select `id, username, is_admin, session_epoch` on
   `community_users`; select on `library_design_members`; select `user_id, id, plan, seq, plan_bytes, deleted_at,
   live_lease_until, live_lease_token` and update `plan, seq, plan_updated_at, updated_at, live_lease_until,
   live_lease_token` on `library_designs`. Nothing else.
 
-Row security is off (`migrations/2026-10-26-row-security-off.sql`): with no policies it would hide every row from
-these roles, and who may see which rows is the server's rules (`src/lib/server/services/access.ts`). PostgREST's
-`service_role` bypasses it either way. That migration refuses a database that has Supabase's `anon` or
-`authenticated` role, where row security is what keeps the tables off the public API. `db-roles.test.ts` pins
-the grants. A new migration must survive a second run, as the local database also loads every file on every
-open; a new table needs its line in `app-roles.sql`, or `db-roles.test.ts` fails.
+Row security is off: with no policies it would hide every row from these roles, and who may see which rows is the
+server's rules (`src/lib/server/services/access.ts`). `db-roles.test.ts` pins the grants and `migrations.test.ts`
+the runner; a new table needs its line in `db/grants.sql`, or `db-roles.test.ts` fails.
 
 ## Datasets
 

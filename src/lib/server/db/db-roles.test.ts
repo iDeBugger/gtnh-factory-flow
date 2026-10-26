@@ -15,25 +15,28 @@ import * as popularity from "../repos/popularity";
 import { PLAN_SUMMARY_FIELDS } from "../community-rows";
 import * as votes from "../repos/votes";
 import { useDbForTests, withTransaction } from "./index";
-import { applyMigrations, schemaFiles } from "./migrations";
+import {
+  applyMigrations,
+  dbDir,
+  ensureRoles,
+  migrationFiles,
+  sqlRunner,
+  type RunSql,
+} from "./migrations";
 import type { Database } from "./schema";
-import { DEPLOY_DB_DIR, deploySqlWithoutPsql } from "@/test-support/deploy-sql";
 
 /**
- * The deploy's roles on a database built as the deploy builds it: the schema
- * and migrations, PostgREST's roles and grants, then the app's roles
- * (`tools/deploy/db/app-roles.sql`). The psql-only lines that set passwords
- * are left out, so the roles stay nologin and are entered with `set role`.
+ * The deploy's roles on a database built as the deploy builds it: the
+ * migrations, then the app's roles and `db/grants.sql` (`ensureRoles`).
+ * No passwords are given, so the roles stay nologin and are entered with
+ * `set role`.
  */
 
 const OWNER = "11111111-1111-4111-8111-111111111111";
 const MEMBER = "33333333-3333-4333-8333-333333333333";
-const deployDb = DEPLOY_DB_DIR;
-const ROW_SECURITY_OFF = "2026-10-26-row-security-off.sql";
-
-const withoutPsql = deploySqlWithoutPsql;
 
 let pglite: PGlite;
+let run: RunSql;
 
 async function as<T>(role: string, work: () => Promise<T>): Promise<T> {
   await pglite.exec(`set role ${role}`);
@@ -62,19 +65,19 @@ async function failureAs(
 
 async function appTables(): Promise<string[]> {
   const { rows } = await pglite.query<{ tablename: string }>(
-    "select tablename from pg_tables where schemaname = 'public' order by tablename",
+    // Every table but the migration runner's ledger, which no app role reads (migrations.test.ts).
+    "select tablename from pg_tables where schemaname = 'public' and tablename <> 'schema_migrations' order by tablename",
   );
   return rows.map((row) => row.tablename);
 }
 
 beforeAll(async () => {
   pglite = new PGlite();
-  await applyMigrations(pglite);
-  await pglite.exec(withoutPsql("roles.sql"));
-  await pglite.exec(withoutPsql("grants.sql"));
-  await pglite.exec(withoutPsql("app-roles.sql"));
-  // A second run converges: every file is applied on every deploy.
-  await pglite.exec(withoutPsql("app-roles.sql"));
+  run = sqlRunner(pglite);
+  await applyMigrations(run, dbDir());
+  await ensureRoles(run, {}, dbDir());
+  // A second run converges: the roles and grants are ensured on every deploy.
+  await ensureRoles(run, {}, dbDir());
   await pglite.query(
     "insert into community_users (id, username, password_hash) values ($1, 'owner', 'hash'), ($2, 'member', 'hash')",
     [OWNER, MEMBER],
@@ -95,53 +98,15 @@ afterAll(async () => {
 });
 
 describe("the database roles", () => {
-  it("turns row security off on every table, also where an older schema turned it on", async () => {
-    const withRowSecurity = async () =>
-      (
-        await pglite.query<{ relname: string }>(
-          "select relname from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r' and relrowsecurity",
-        )
-      ).rows.map((row) => row.relname);
-    expect(await withRowSecurity()).toEqual([]);
-    // The stage database was built when every table had it on.
-    for (const table of await appTables()) {
-      await pglite.exec(`alter table ${table} enable row level security`);
-    }
-    expect((await withRowSecurity()).length).toBeGreaterThanOrEqual(10);
-    await pglite.exec(
-      readFileSync(path.join(process.cwd(), "supabase", "migrations", ROW_SECURITY_OFF), "utf8"),
+  it("has row security off on every table, and no migration turns it on", async () => {
+    const { rows } = await pglite.query<{ relname: string }>(
+      "select relname from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r' and relrowsecurity",
     );
-    expect(await withRowSecurity()).toEqual([]);
-  });
-
-  it("takes no table lock once row security is off, and alters only the tables that still have it", async () => {
-    const migration = readFileSync(
-      path.join(process.cwd(), "supabase", "migrations", ROW_SECURITY_OFF),
-      "utf8",
-    );
-    const exclusiveLocks = async (): Promise<string[]> => {
-      await pglite.exec("begin");
-      try {
-        await pglite.exec(migration);
-        const { rows } = await pglite.query<{ relname: string }>(
-          `select c.relname from pg_locks l join pg_class c on c.oid = l.relation
-           where l.mode = 'AccessExclusiveLock' and c.relnamespace = 'public'::regnamespace`,
-        );
-        return rows.map((row) => row.relname).sort();
-      } finally {
-        await pglite.exec("rollback");
-      }
-    };
-    expect(await exclusiveLocks()).toEqual([]);
-    await pglite.exec("alter table library_designs enable row level security");
-    try {
-      expect(await exclusiveLocks()).toEqual(["library_designs"]);
-    } finally {
-      await pglite.exec("alter table library_designs disable row level security");
-    }
-    // No other file turns it on, so a deploy's run of every migration never cycles it.
-    for (const file of schemaFiles()) {
-      expect(readFileSync(file, "utf8"), file).not.toMatch(/enable row level security/i);
+    expect(rows.map((row) => row.relname)).toEqual([]);
+    for (const name of migrationFiles(dbDir())) {
+      expect(readFileSync(path.join(dbDir(), "migrations", name), "utf8"), name).not.toMatch(
+        /enable row level security/i,
+      );
     }
   });
 
@@ -609,7 +574,7 @@ describe("the database roles", () => {
     await pglite.exec(
       "grant select on community_plans to gtnh_live; grant select (name) on library_designs to gtnh_live",
     );
-    await pglite.exec(withoutPsql("app-roles.sql"));
+    await ensureRoles(run, {}, dbDir());
     expect(await failureAs("gtnh_live", "select id from community_plans")).toMatch(
       /permission denied/,
     );
@@ -618,58 +583,52 @@ describe("the database roles", () => {
     );
   });
 
-  it("keeps PostgREST's service role reading and writing every table", async () => {
-    // PostgREST logs in as authenticator, which has no rights of its own, and switches to service_role.
-    expect(await failureAs("authenticator", "select id from community_users")).toMatch(
-      /permission denied/,
-    );
-    for (const table of await appTables()) {
-      expect(
-        await failureAs("service_role", `select count(*) from ${table}`),
-        table,
-      ).toBeUndefined();
-    }
-    await as("service_role", async () => {
-      const designs = await pglite.query(
-        "select name, plan from library_designs where user_id = $1",
-        [OWNER],
-      );
-      expect(designs.rows).toHaveLength(1);
-      await pglite.query("insert into community_events (actor_key, action) values ('pgrst', 'b')");
-      await pglite.query("delete from community_events where actor_key = 'pgrst'");
-    });
-  });
-
-  it("sets every password with statement logging off for its transaction", () => {
-    // A failing statement is logged with its text by default, password included.
-    // PGlite has no server log to read; tools/deploy/db/*.sql were checked on the
-    // compose's postgres image: a failed alter role leaves no STATEMENT line.
-    for (const file of ["roles.sql", "app-roles.sql"]) {
-      const lines = readFileSync(path.join(deployDb, file), "utf8").split("\n");
-      const passwordLines = lines.flatMap((line, at) => (/password :'/.test(line) ? [at] : []));
-      expect(passwordLines.length, file).toBeGreaterThan(0);
-      for (const at of passwordLines) {
-        const before = lines.slice(0, at);
-        const begin = before.findLastIndex((line) => /^begin;/.test(line));
-        const commit = before.findLastIndex((line) => /^commit;/.test(line));
-        expect(begin, `${file}:${at + 1} is inside a transaction`).toBeGreaterThan(commit);
-        const opened = before.slice(begin);
-        expect(opened, `${file}:${at + 1}`).toContain("set local log_min_error_statement = panic;");
-        expect(opened, `${file}:${at + 1}`).toContain("set local log_statement = 'none';");
-      }
-    }
-  });
-
-  it("refuses to turn row security off where Supabase's API roles exist", async () => {
-    const migration = readFileSync(
-      path.join(process.cwd(), "supabase", "migrations", ROW_SECURITY_OFF),
-      "utf8",
-    );
-    await pglite.exec("create role anon nologin");
+  it("gives a role with a password login, and sends the password only as a bound parameter with logging off", async () => {
+    const site = "site-password-for-the-test-0123456789";
+    const live = "live-password-for-the-test-0123456789";
+    const sent: { text: string; params?: unknown[] }[] = [];
+    const recording: RunSql = (text, params) => {
+      sent.push({ text, params });
+      return run(text, params);
+    };
     try {
-      await expect(pglite.exec(migration)).rejects.toThrow(/anon or authenticated/);
+      await ensureRoles(recording, { site, live }, dbDir());
+      const { rows } = await pglite.query<{ rolname: string; rolcanlogin: boolean; scram: boolean }>(
+        `select rolname, rolcanlogin, rolpassword like 'SCRAM-SHA-256$%' as scram
+         from pg_authid where rolname in ('gtnh_site', 'gtnh_live') order by rolname`,
+      );
+      expect(rows).toEqual([
+        { rolname: "gtnh_live", rolcanlogin: true, scram: true },
+        { rolname: "gtnh_site", rolcanlogin: true, scram: true },
+      ]);
+      for (const statement of sent) {
+        expect(statement.text).not.toContain(site);
+        expect(statement.text).not.toContain(live);
+      }
+      const holding = sent.flatMap((statement, at) =>
+        statement.params?.some((param) => param === site || param === live) ? [at] : [],
+      );
+      expect(holding).toHaveLength(2);
+      const begin = sent.findIndex((statement) => statement.text.trim() === "begin");
+      const quiet = sent.findIndex((statement) =>
+        statement.text.includes("set local log_min_error_statement = panic;"),
+      );
+      expect(sent[quiet]?.text).toContain("set local log_statement = 'none';");
+      expect(sent[quiet]?.text).toContain("set local log_min_duration_statement = -1;");
+      expect(begin).toBeGreaterThanOrEqual(0);
+      expect(quiet).toBeGreaterThan(begin);
+      const commit = sent.findIndex((statement) => statement.text.trim() === "commit");
+      for (const at of holding) {
+        expect(at).toBeGreaterThan(quiet);
+        expect(at).toBeLessThan(commit);
+      }
     } finally {
-      await pglite.exec("drop role anon");
+      // Back to nologin for the cases that enter the roles with set role.
+      await ensureRoles(run, {}, dbDir());
     }
+    const { rows } = await pglite.query<{ rolcanlogin: boolean }>(
+      "select rolcanlogin from pg_roles where rolname in ('gtnh_site', 'gtnh_live')",
+    );
+    expect(rows).toEqual([{ rolcanlogin: false }, { rolcanlogin: false }]);
   });
 });
