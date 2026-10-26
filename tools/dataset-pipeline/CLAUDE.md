@@ -232,14 +232,14 @@ published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such 
 The export walks the game's hash maps, so the order it meets stacks in changes between two exports of one pack.
 Nothing the app shows may follow that order:
 
-- The catalog's record for an id (name, icon, NBT tooltip, the search text) is NEI's first listed stack for that
-  item and meta: the oracle writes each item key's first stack beside the list (`neiItemList.firstStacks`, with its
-  NBT, name, and the icon the export already drew for that exact stack: nothing new is drawn for the list, since
-  drawing every first stack crashed llvmpipe on 2.8.1's Draconic armour), and `applyNeiStandIns` lays it over the
-  record, keeping the record's icon where the first stack has none. An item NEI does not list takes the stack
-  with no NBT, else the smallest NBT string, then the smaller name (`compareStandIns`); an icon that stack lacks
-  comes from the best-ranked stack that has one. `build-resource-index.mjs` names each `resourceIndex` record after
-  the catalog, never after the first recipe slot, and orders equal recipe counts by key.
+- The catalog's record for an id (name, icon, NBT tooltip, the search text) is always one stack's, never a name from
+  one stack over another's icon. Where NEI lists the item and the export drew NEI's first listed stack (the oracle
+  writes each item key's first stack beside the list, `neiItemList.firstStacks`, with its NBT, name and the icon the
+  export already drew for that exact stack: nothing new is drawn for the list, since drawing every first stack
+  crashed llvmpipe on 2.8.1's Draconic armour), that stack stands for it (`applyNeiStandIns`). Otherwise the rule's
+  stand-in: the stack with no NBT, else the smallest NBT string, then the smaller name (`compareStandIns`), among the
+  stacks with an icon when any has one. `build-resource-index.mjs` names each `resourceIndex` record after the
+  catalog, never after the first recipe slot, and orders equal recipe counts by key.
 - An ore dictionary tag's members (a slot's alternatives and the catalog's): GregTech's unification target for the
   tag first (`oreDictionary.unificationTargets`, from the unificator's name-to-stack map), then NEI's order, then
   id (`orderOreMembers`).
