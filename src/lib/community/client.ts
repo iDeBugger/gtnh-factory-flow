@@ -12,6 +12,7 @@ import type {
   CommunityVoteResponse,
   EntryIcon,
 } from "./types";
+import { SIGN_OUT_EVERYWHERE_FAILED } from "./types";
 
 const DEVICE_ID_STORAGE_KEY = "gtnh-factory-flow.device-id.v1";
 
@@ -206,6 +207,9 @@ export async function loginCommunityUser(
 }
 
 /** Signs out of this browser; `everywhere` also ends every other session of the account. */
+/** A sign-out everywhere the server refused: its message is the server's own sentence, or the fixed one when it sent none. */
+export class SignOutEverywhereError extends Error {}
+
 export async function logoutCommunityUser(options: { everywhere?: boolean } = {}): Promise<void> {
   const response = await fetch("/api/community/auth/logout", {
     method: "POST",
@@ -214,8 +218,20 @@ export async function logoutCommunityUser(options: { everywhere?: boolean } = {}
       : {}),
   });
   if (options.everywhere && !response.ok) {
-    await parseJsonOrThrow(response);
+    const body = (await response.json().catch(() => undefined)) as { error?: unknown } | undefined;
+    throw new SignOutEverywhereError(
+      typeof body?.error === "string" && body.error ? body.error : SIGN_OUT_EVERYWHERE_FAILED,
+    );
   }
+}
+
+/**
+ * What a failed sign-out everywhere tells the player: the server's sentence
+ * (the database-down line during an outage), else the fixed one, so a
+ * network error's own text never shows.
+ */
+export function signOutEverywhereMessage(error: unknown): string {
+  return error instanceof SignOutEverywhereError ? error.message : SIGN_OUT_EVERYWHERE_FAILED;
 }
 
 /**

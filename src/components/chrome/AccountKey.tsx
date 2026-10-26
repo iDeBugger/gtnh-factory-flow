@@ -5,7 +5,7 @@ import "./chrome.css";
 import { useState } from "react";
 import { useCommunityUser } from "@/components/community/auth";
 import { flashNotice } from "@/components/flow/clean/rail/NoticeBar";
-import { SIGN_OUT_EVERYWHERE_FAILED } from "@/lib/community/types";
+import { signOutEverywhereMessage } from "@/lib/community/client";
 import { initialsOf, inkOn } from "@/components/live/LiveFaces";
 import { colorFor } from "@/lib/live/protocol";
 import { useLiveSession } from "@/store/live-session";
@@ -80,7 +80,9 @@ export function AccountKey({ pictures = false }: { pictures?: boolean }) {
               label: "Sign out everywhere",
               tip: "Signs out every browser and game using this account.",
               onSelect: () =>
-                void signOutEverywhere().catch(() => flashNotice("warn", SIGN_OUT_EVERYWHERE_FAILED)),
+                void signOutEverywhere().catch((error: unknown) =>
+                  flashNotice("warn", signOutEverywhereMessage(error)),
+                ),
             },
           ]}
           onClose={() => setOpen(undefined)}
