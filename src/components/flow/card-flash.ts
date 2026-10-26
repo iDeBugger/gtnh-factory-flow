@@ -1,3 +1,6 @@
+import { useDesignStore } from "@/store/design-store";
+import { useFactoryStore } from "@/store/factory-store";
+
 /**
  * The card reached from a machine list wears a light outline for a second (clean.css, `data-card-flash`), so it can
  * be told apart among many.
@@ -11,7 +14,9 @@
  * The outline ends when its fade does (`animationend`), not on a clock from the click: a far card is `display: none`
  * until the camera brings it near, CSS starts the fade only then, and a timer from the click would cut it off half
  * faded. Without motion there is no fade, so it ends `CARD_FLASH_MS` after the click. `CARD_FLASH_FALLBACK_MS` ends
- * it whatever happens (a card never shown).
+ * it whatever happens (a card never shown). Another plan or tab on the board ends it at once: React Flow keeps the
+ * wrapper of a node with the same id, and a converted copy keeps its ids. Those two subscriptions live only while
+ * an outline shows.
  */
 
 /** How long the outline lasts; clean.css's animation runs the same time. */
@@ -63,7 +68,19 @@ export function flashCard(nodeId: string, root: ParentNode | undefined = globalT
     if (event.target === wrapper && (event as AnimationEvent).animationName === fade) clearCardFlash();
   };
   if (fading) wrapper.addEventListener("animationend", onEnd);
-  release = () => wrapper.removeEventListener("animationend", onEnd);
+  const plan = useFactoryStore.getState().project.id;
+  const design = useDesignStore.getState().activeDesignId;
+  const stopPlan = useFactoryStore.subscribe((state) => {
+    if (state.project.id !== plan) clearCardFlash();
+  });
+  const stopDesign = useDesignStore.subscribe((state) => {
+    if (state.activeDesignId !== design) clearCardFlash();
+  });
+  release = () => {
+    wrapper.removeEventListener("animationend", onEnd);
+    stopPlan();
+    stopDesign();
+  };
   timer = setTimeout(clearCardFlash, fading ? CARD_FLASH_FALLBACK_MS : CARD_FLASH_MS);
   return true;
 }

@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useDesignStore } from "@/store/design-store";
+import { useFactoryStore } from "@/store/factory-store";
 import { CARD_FLASH_ATTRIBUTE, CARD_FLASH_FALLBACK_MS, CARD_FLASH_MS, flashCard } from "./card-flash";
 
 function board(...ids: string[]): HTMLElement {
@@ -66,6 +68,26 @@ describe("flashCard", () => {
     expect(flash(root, 'odd\\"id')).not.toBeNull();
     expect(flashCard("missing")).toBe(false);
     expect(flash(root, 'odd\\"id')).toBeNull();
+  });
+
+  it("goes at once when another tab or plan comes onto the board, where a card of the same id would wear it", () => {
+    const root = board("a");
+    useDesignStore.setState({ activeDesignId: "tab-1" });
+    flashCard("a");
+    useDesignStore.setState({ activeDesignId: "tab-2" });
+    expect(flash(root, "a")).toBeNull();
+
+    flashCard("a");
+    const project = useFactoryStore.getState().project;
+    useFactoryStore.setState({ project: { ...project, id: `${project.id}-other` } });
+    expect(flash(root, "a")).toBeNull();
+    useFactoryStore.setState({ project });
+
+    // An edit to the same plan keeps it.
+    flashCard("a");
+    useFactoryStore.setState({ project: { ...useFactoryStore.getState().project, name: "Edited" } });
+    expect(flash(root, "a")).not.toBeNull();
+    useFactoryStore.setState({ project });
   });
 
   describe("where the outline fades", () => {
