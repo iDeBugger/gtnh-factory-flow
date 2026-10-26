@@ -103,7 +103,9 @@ export function ResourceIndexPane({
   const [resourceFilter, setResourceFilter] = useState<ResourceFilterMode>("all");
   const [resourceMods, setResourceMods] = useState<Array<{ id: string; count: number }>>([]);
   const [resourceSearchOutcome, setResourceSearchOutcome] = useState<SearchOutcome>(EXACT_SEARCH);
-  const [resourceQueryLoading, setResourceQueryLoading] = useState(false);
+  // The query key the shown results answer. While it differs from the one the
+  // field and page ask for, the list on screen is an older answer.
+  const [shownQueryKey, setShownQueryKey] = useState<string>();
   const [resourceQueryError, setResourceQueryError] = useState<string | undefined>();
   const resourceQueryCacheRef = useRef<Map<string, ResourceQueryCacheEntry>>(new Map());
   const debouncedRecipeSearch = useDebouncedValue(recipeSearch, RESOURCE_SEARCH_DEBOUNCE_MS);
@@ -191,17 +193,17 @@ export function ResourceIndexPane({
   ]);
   useEffect(() => {
     // The board's own resources are answered from memory, below: no request.
+    const cacheKey = getResourceQueryKey(resourcePage);
     if (!selectedDatasetVersion || onBoard) {
       return deferStateUpdate(() => {
         setResourceResults([]);
         setResourceTotal(0);
-        setResourceQueryLoading(false);
+        setShownQueryKey(cacheKey);
         setResourceQueryError(undefined);
       });
     }
 
     const query = debouncedRecipeSearch.trim();
-    const cacheKey = getResourceQueryKey(resourcePage);
     const cached = getCachedResourceQuery(resourceQueryCacheRef.current, cacheKey);
     if (cached) {
       return deferStateUpdate(() => {
@@ -209,7 +211,7 @@ export function ResourceIndexPane({
         setResourceTotal(cached.total);
         setResourceMods(cached.mods ?? []);
         setResourceSearchOutcome(searchOutcomeOf(cached));
-        setResourceQueryLoading(false);
+        setShownQueryKey(cacheKey);
         setResourceQueryError(undefined);
       });
     }
@@ -218,7 +220,6 @@ export function ResourceIndexPane({
     let cancelled = false;
     queueMicrotask(() => {
       if (!cancelled) {
-        setResourceQueryLoading(true);
         setResourceQueryError(undefined);
       }
     });
@@ -247,7 +248,7 @@ export function ResourceIndexPane({
         setResourceTotal(result.total);
         setResourceMods(result.mods ?? []);
         setResourceSearchOutcome(searchOutcomeOf(result));
-        setResourceQueryLoading(false);
+        setShownQueryKey(cacheKey);
       })
       .catch((error) => {
         if (cancelled) {
@@ -256,7 +257,7 @@ export function ResourceIndexPane({
         setResourceResults([]);
         setResourceTotal(0);
         setResourceQueryError(error instanceof Error ? error.message : "Resource query failed.");
-        setResourceQueryLoading(false);
+        setShownQueryKey(cacheKey);
       });
 
     return () => {
@@ -299,8 +300,14 @@ export function ResourceIndexPane({
     () => true,
     () => false,
   );
+  // The list is stale from the first key typed until the answer to it lands: through the debounce, the request,
+  // and a page or sort change. Old slots stay on screen (a blank list flashes on every key), dimmed and marked busy.
+  const listStale =
+    !onBoard &&
+    (recipeSearch.trim() !== debouncedRecipeSearch.trim() ||
+      shownQueryKey !== getResourceQueryKey(resourcePage));
   const searchNone =
-    !resourceQueryLoading && debouncedRecipeSearch.trim() !== "" && displayedTotal === 0 && !!dataset;
+    !listStale && debouncedRecipeSearch.trim() !== "" && displayedTotal === 0 && !!dataset;
   const searchField = (
     <NeiSearchField
       inputRef={inputRef}
@@ -341,7 +348,7 @@ export function ResourceIndexPane({
           resources={displayedResources}
           total={displayedTotal}
           currentPage={resourcePage}
-          isLoading={resourceQueryLoading && !onBoard}
+          isLoading={listStale}
           error={resourceQueryError}
           emptyLabel={
             onBoard
@@ -1091,11 +1098,10 @@ function ResourceResultPage({
   return (
     <div
       className="nei-grid"
-      style={{
-        gridTemplateColumns: `repeat(${gridColumns}, var(--nei-cell, ${NEI_SLOT}px))`,
-        opacity: isRefreshing ? 0.6 : undefined,
-      }}
+      style={{ gridTemplateColumns: `repeat(${gridColumns}, var(--nei-cell, ${NEI_SLOT}px))` }}
       aria-label="Resource results"
+      aria-busy={isRefreshing || undefined}
+      data-stale={isRefreshing ? "" : undefined}
       role="listbox"
     >
       <NeiSlots resources={resources} activeResource={activeResource} onBrowse={browse} />

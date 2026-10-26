@@ -126,6 +126,10 @@
   height: var(--nei-art);
   overflow: hidden;
 }
+/* An older answer still on screen while the new one is asked for (ResourceIndexPane listStale). */
+.nei-grid[data-stale] {
+  opacity: 0.45;
+}
 .nei-skel {
   width: var(--nei-art);
   height: var(--nei-art);
