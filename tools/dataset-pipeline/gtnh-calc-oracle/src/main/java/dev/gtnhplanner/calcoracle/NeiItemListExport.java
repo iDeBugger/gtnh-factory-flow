@@ -128,6 +128,11 @@ final class NeiItemListExport {
      * The panel's order: CollapsibleItems indexed over the list as NEI indexes it
      * (clearCache, putItem per stack; load ran on the plugin thread), then each stack at its
      * group's first place. Public statics in both NEI versions.
+     *
+     * 2.9's NEI runs forceTagCompoundInitialization on every stack (buildItemCaches) before it
+     * indexes the groups, and this does not: a group filter that matched on NBT only that
+     * initialization adds could miss a member here. GTNH's groups match by item, meta, ore
+     * dictionary and name, never by such NBT, so its grouping comes out the same.
      */
     private static List<ItemStack> groupOrdered(List<ItemStack> sorted) throws Exception {
         Class<?> groups = Class.forName("codechicken.nei.CollapsibleItems");
