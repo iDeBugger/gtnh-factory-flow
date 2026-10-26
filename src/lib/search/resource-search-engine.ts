@@ -4,6 +4,7 @@ import type { ResourceOrder } from "./nei-order";
 import {
   blankResourceSearchKey,
   buildResourceSearchIndexes,
+  resourceNeiRanks,
   resourceSearchPage,
   searchResources,
   type ResourceSearch,
@@ -59,6 +60,8 @@ const KEPT_SEARCHES = 8;
 export function createResourceSearchEngine(file: ResourceSearchFile) {
   const { resourceIndex } = file;
   const indexes: ResourceSearchIndexes = buildResourceSearchIndexes(resourceIndex, file.resourceOrder);
+  // The column opens As in NEI: its rank table is part of loading, not of the first query.
+  resourceNeiRanks(resourceIndex, indexes);
   const directionCounts = new Map(
     file.directionCounts.map(([key, madeBy, usedBy]) => [key, { madeBy, usedBy }] as const),
   );
@@ -70,7 +73,7 @@ export function createResourceSearchEngine(file: ResourceSearchFile) {
     KEPT_SEARCHES,
   );
 
-  return function query(request: ResourceSearchRequest) {
+  const query = (request: ResourceSearchRequest) => {
     const blankKey = blankResourceSearchKey(request);
     const searched = blankKey === undefined ? request : { ...request, mod: undefined };
     const key =
@@ -100,4 +103,5 @@ export function createResourceSearchEngine(file: ResourceSearchFile) {
       blankKey !== undefined ? request.mod : undefined,
     );
   };
+  return Object.assign(query, { indexes });
 }

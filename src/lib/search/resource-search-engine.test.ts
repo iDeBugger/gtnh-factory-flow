@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { queryCatalogResources } from "@/lib/server/dataset-query";
+import { queryCatalogResources, warmResourceSearch } from "@/lib/server/dataset-query";
 import { createResourceSearchEngine, type ResourceSearchFile } from "./resource-search-engine";
 import type { ResourceQuerySort } from "./resource-search";
 
@@ -169,6 +169,12 @@ describe("the NEI sorts", () => {
       directionCounts: counts,
       sources,
     });
+
+  it("are ready when the engine is: the rank table is built at load, on the server by the prewarm", () => {
+    expect(engine(resourceOrder).indexes.neiRanks).toBeInstanceOf(Int32Array);
+    const catalog = serverCatalog(resourceOrder);
+    expect(warmResourceSearch(catalog).neiRanks).toBeInstanceOf(Int32Array);
+  });
 
   it("list everything in NEI's order with nothing typed, unlisted records after", () => {
     const answer = engine(resourceOrder)({ query: "", offset: 0, limit: 120, sort: "nei" });

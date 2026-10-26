@@ -170,7 +170,7 @@
   `resourceOrder` (the oracle's NEI list, `tools/dataset-pipeline/CLAUDE.md`), records NEI does not list after it,
   and a dataset without one by the approximation (vanilla, mod, registry name, meta, then fluids, then aspects).
   They leave out Best match's nudge (recipe count, name length), which would leave almost no two scores equal. The
-  ranks are made once per loaded list, on the first NEI sort. Exam: `nei-order.test.ts`,
+  rank table (about 70 ms on 2.9) is built by the prewarm (`warmResourceSearch`) and at worker load. Exam: `nei-order.test.ts`,
   `resource-search-engine.test.ts` "the NEI sorts".
 - A text search matches at most six words and at most two of them under three characters
   (`MAX_SEARCH_TERMS`, `MAX_SHORT_SEARCH_TERMS` in `src/lib/search/text-search.ts`): a word that short cannot use

@@ -39,6 +39,7 @@ import {
 import {
   blankResourceSearchKey,
   buildResourceSearchIndexes,
+  resourceNeiRanks,
   resourceSearchPage,
   searchOutcome,
   searchResources,
@@ -1794,7 +1795,7 @@ async function prewarmDatasetVersionOnce(
 ): Promise<void> {
   const catalog = await loadCatalog(versionId);
   getCatalogResourcesByKey(catalog);
-  ensureResourceIndexes(catalog);
+  warmResourceSearch(catalog);
 
   if (catalog.version.recipeLookupIndexPath) {
     const lookup = await loadRecipeLookupIndex(catalog.version);
@@ -3005,6 +3006,16 @@ function ensureIndexes(catalog: LoadedRecipeIndex): QueryIndexes {
     allRecipeIndexes,
   };
   return catalog.indexes;
+}
+
+/**
+ * The item search's indexes and NEI's rank table, built before any request: the items column opens As in NEI, so
+ * its first blank list would otherwise pay for the ranks (about 70 ms on 2.9).
+ */
+export function warmResourceSearch(catalog: LoadedRecipeIndex): ResourceSearchIndexes {
+  const indexes = ensureResourceIndexes(catalog);
+  resourceNeiRanks(catalog.resourceIndex, indexes);
+  return indexes;
 }
 
 function ensureResourceIndexes(catalog: LoadedRecipeIndex): ResourceSearchIndexes {
