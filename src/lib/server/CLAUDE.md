@@ -31,10 +31,10 @@
   `<APP_VERSION>-<git sha8>` (`-dirty` with uncommitted changes), or `APP_VERSION` with neither. A deploy must
   set `GTNH_BUILD_ID` or build inside a git checkout: with neither, two deploys under one `APP_VERSION` share
   year-immutable answer URLs, and browsers keep the older build's answers. `next.config.ts`
-  imports nothing from `src/` (it reads `version.ts` as text): `next start` loads it again at run time and the site
-  image ships no `src/`. Its own modules sit beside it and import nothing (`security-headers.config.ts`,
-  `body-limits.config.ts`, which `request-body.ts` re-exports); the image must copy them with it
-  (`next-config.test.ts` pins it). `datasetCacheHeaders` marks an answer immutable for a
+  imports nothing from `src/` (it reads `version.ts` as text): `next start` and the test suite load it outside a
+  build. Its own modules sit beside it and import nothing (`security-headers.config.ts`, `body-limits.config.ts`,
+  which `request-body.ts` re-exports; `next-config.test.ts` pins it). The site image runs the standalone
+  `server.js`, which carries the config serialized at build and reads no config file. `datasetCacheHeaders` marks an answer immutable for a
   year only when both keys are there and the version is this build's; anything else is `no-store`, so no build that
   changes a ranking is served from another build's URL, even under one APP_VERSION. Exam:
   `dataset-cache-headers.test.ts`, `browser-loader.test.ts`.
@@ -48,17 +48,25 @@
   sent, so a rewrite alone is bypassed by percent-encoding (`recipes%2Ejson`). The gate is `src/proxy.ts`
   (`decideDatasetPath`, `dataset-path-gate.ts`), which runs on every request path but `/_next/`: under
   `/datasets/gtnh/` (decoded) it refuses a path that is percent-encoded at all or holds a `.` or `..` segment
-  (400 `no-store`), sends the four index gzips, the shards, `client/` and `recipes.json` to
+  (400 `no-store`), sends the four index gzips, the shards, `client/`, the content-named textures
+  (`textures/rendered/<name>.png`, `textures/icons/<name>.png`) and `recipes.json` to
   `src/app/dataset-files/[versionId]/[...assetPath]/route.ts` (a day's cache, ETag, Last-Modified and one byte
-  range on a file; `no-store` on 400 and 404; `recipes.json`, about 2 GB, refused), and lets everything else
-  through to the public handler: textures (`immutable` by `next.config.ts` header rule), `oracle/`, stray copies,
-  at `max-age=0`. The gate is one process's view of a path: the raw `recipes.json` must still not exist on the
-  droplet, and the publish must not copy it. It also makes a pipeline invariant: published names stay within
+  range on a file, a texture `immutable` for a year; `no-store` on 400 and 404; `recipes.json`, about 2 GB,
+  refused), and lets everything else through to the public handler: the other textures, `oracle/`, stray copies,
+  at `max-age=0` (a texture the handler misses reaches `datasets/gtnh/[versionId]/textures/[...assetPath]/route.ts`,
+  whose miss is `no-store` too). A texture through the route costs about 1-2 ms more per icon than the public
+  handler (a `stat`, two `realpath`s, a stream); that is acceptable only because textures are immutable and kept by
+  the browser and Cloudflare, so profile before routing a hotter path this way. No cache policy is set by a `next.config.ts` header rule: Next applies the rule
+  first and keeps it over the answer's own `Cache-Control` (`send-response.js` adds a header only when absent), so a
+  texture asked for before its publish lands would be a 404 kept a year. With `GTNH_DATASET_BACKEND_URL` a
+  beforeFiles rewrite sends the proxy's texture rewrite on to the backend. The gate is one process's view of a path: the raw `recipes.json` must still not exist on the
+  server, and the publish must not copy it (`tools/deploy/publish-datasets.sh` excludes it and checks). It also makes a pipeline invariant: published names stay within
   `[A-Za-z0-9._-]` (`tools/dataset-pipeline/CLAUDE.md`; `rebuild-manifest.mjs` refuses a version that breaks it),
   or the file is unreachable. The dataset-files and textures routes resolve a file with `resolveDatasetChildPath`
   (dataset-static-file.ts): lexically, then by real path against the real version directory, so a symlink in the
   tree never reads outside it (a miss is a 404). Exam: `dataset-path-gate.test.ts`, `proxy.test.ts`,
-  `dataset-files/[versionId]/[...assetPath]/route.test.ts`, `dataset-static-file.test.ts`.
+  `dataset-files/[versionId]/[...assetPath]/route.test.ts`, `datasets/gtnh/[versionId]/textures/[...assetPath]/route.test.ts`,
+  `next-config.test.ts`, `dataset-static-file.test.ts`.
 - The answers every player gets the same (catalog, mobs, crops, recipe-ids, items) are also static files the server
   writes itself (`client-files.ts`, `dataset-client-files.ts`), served at `/datasets/gtnh/<id>/client/<kind>.<20 hex
   of the sha256 of the JSON>.json` but stored outside the dataset tree, which stays the pipeline's bytes and may be
@@ -90,7 +98,8 @@
   `api/datasets/[versionId]/client-files/route.test.ts`, `browser-loader.test.ts`.
 - Every server cache is bounded or index-sized (the Node heap is capped at 3 GB). A slow
   site: check the heap first.
-- The OG card route reads fonts through `process.cwd()` (non-standalone build).
+- The OG card route reads fonts through `process.cwd()`: the site image copies `src/app/fonts` beside the standalone
+  `server.js` (`Dockerfile`).
 - The image optimizer is off (`images.unoptimized` in next.config.ts): nothing uses next/image, and
   `/_next/image` would hand any same-origin PNG (uploads, dataset textures) to sharp. Pictures are served
   by the app's own routes or plain `<img>`; keep it that way.
@@ -126,7 +135,7 @@
   per debounced keystroke, heavy while the query holds a tier word. A request with no trusted address is never
   refused (one shared key would turn a missing proxy header into a site-wide 429 and bounds no attacker); in
   production the first such request logs a one-shot warning. `GTNH_DATASET_BUDGET_PER_MINUTE` overrides the
-  budget (`0` disables). Floods from many addresses are Cloudflare's. Exam: `dataset-rate.test.ts`,
+  budget (`0` disables). Floods from many addresses are the edge's (Cloudflare's rate rule, once the public site is behind it). Exam: `dataset-rate.test.ts`,
   `recipes/route.test.ts`, `src/lib/datasets/browser-loader.test.ts`.
 - `resolve-recipes` takes at most `RESOLVE_RECIPES_MAX_REFS` (2,000) refs in a body of at most
   `RESOLVE_RECIPES_MAX_BYTES` (2 MiB), each ref shape-checked by `recipe-ref-schema.ts` before the resolver sweeps
@@ -139,7 +148,8 @@
   catalog (`queryCatalogResources`, with its blank-list cache) and the browser runs it in a Web Worker
   (`resource-search.worker.ts` over `resource-search-engine.ts`) over the version's `items` client file
   (`getDatasetResourceSearchFile`: the catalog's `resourceIndex` exactly as the route returns its entries, the
-  made/used counts and the crop and bee keys of listed resources, `schemaVersion` 1, which a worker checks; 23 MB of
+  made/used counts, the crop and bee keys of listed resources and NEI's `resourceOrder` when the dataset has a usable
+  one, `schemaVersion` 2; a worker reads 1 and 2 (1 is 2 without an order) and refuses any other; 23 MB of
   JSON, about 2 MB brotli on 2.9). The worker answers with the route's JSON, so the page cannot tell which side
   answered. `browser-loader.ts` starts it on the first typed item query for a version, never on opening a plan or
   for the untyped list a pane shows on opening (one kept server answer), for one version at a time (another
@@ -155,6 +165,14 @@
   `src/lib/search/resource-search-parity.local.test.ts` (the installed 2.9 and 2.8.1: 11 queries each with total,
   the first 120, order and respelling, then 280 sort, kind, source, mod and page combinations). The popularity
   sweep's state is on `globalThis` (`resource-popularity.ts`) so the two routes reading it share one sweep.
+- The item sorts "nei" (As in NEI: match score first, NEI's list order between equal scores and with nothing typed)
+  and "nei-filter" (whatever matches, in NEI's order, unranked) rank by `src/lib/search/nei-order.ts`: the dataset's
+  `resourceOrder` (the oracle's NEI list, `tools/dataset-pipeline/CLAUDE.md`), records NEI does not list after it,
+  and a dataset without one by the approximation (vanilla, mod, registry name, meta, then fluids, then aspects).
+  With text "nei" scores exactly as Best match (match tiers, then the nudge: recipe count and name length) and NEI's
+  order settles only exact ties; "nei-filter" ranks nothing. The
+  rank table (about 70 ms on 2.9) is built by the prewarm (`warmResourceSearch`) and at worker load. Exam: `nei-order.test.ts`,
+  `resource-search-engine.test.ts` "the NEI sorts".
 - A text search matches at most six words and at most two of them under three characters
   (`MAX_SEARCH_TERMS`, `MAX_SHORT_SEARCH_TERMS` in `src/lib/search/text-search.ts`): a word that short cannot use
   the trigram index and walks every recipe. The partial phase (entries with ANY of the words) runs in full on
@@ -198,7 +216,8 @@
     30-57 MB. 128 MB is the smallest that keeps the shards one Blast Furnace browse read for the next (1 ms, 88 ms
     at 64 MB). A request reads at most 4 shards at a time (`SHARD_LOAD_CONCURRENCY`: faster than 6, 8 or all at
     once on a 120-shard browse, with half the read buffers of all at once);
-  - each version keeps at most 24 blank item lists (`BLANK_RESOURCE_SEARCH_KEYS`, about 2 MB each unfiltered);
+  - each version keeps at most 27 blank item lists (`BLANK_RESOURCE_SEARCH_KEYS`, about 2 MB each unfiltered: 8
+    blank orders, as "nei-filter" shares "nei"'s, x 3 kinds, and 3 source filters);
   - hydrated summaries: 8,000 (`GTNH_MAX_HYDRATED_RECIPE_SUMMARIES`), about 50 MB when full.
   `GTNH_PREWARM_FULL_DATASETS=1` reads every shard once but keeps only the last 128 MB of them: it warms the disk,
   not the heap.
@@ -214,22 +233,25 @@
   set (`startup-checks.ts`). Use `GTNH_MAX_LOADED_RECIPE_SHARD_MB`.
 - The rule has two checks, both with every served version loaded:
   - the live heap stays under 2 GB (two thirds of the heap cap);
-  - process RSS stays under about 80% of the server's RAM, counting what else runs there (the live service,
-    Caddy). Check the owner's server before a deploy that adds a version; these numbers are from a dev machine.
+  - process RSS stays under about 80% of the site container's memory limit (4 GB, `docs/deploy.md`; measured at
+    1.35 GB with both versions prewarmed in the rehearsal). Check `docker stats` on the server before a deploy that
+    adds a version; these numbers are from a dev machine.
   Both hold: both versions are prewarmed in full. If one fails, 2.8.1 is prewarmed second with its catalog
   only. Measure again when a dataset grows or a third version is served.
 
-## Supabase (community.ts, resource-popularity.ts)
+## Database (PostgREST: community.ts, resource-popularity.ts)
 
-The instance is small and has gone down under load. Rules:
+The server and the live service talk to PostgREST at `POSTGREST_URL` through `@supabase/postgrest-js`
+(`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
+which bypasses row security. No anon role exists, so a request without the token is 401. `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` are not read; the startup checks warn when either is set. Rules:
 - Every request goes through `fetchWithDbTimeout` (20 s). A timeout answers 504 rather than
   rejecting (postgrest-js retries a rejected GET three more times), and any 5xx that is not
-  JSON (Cloudflare's 522 page comes as text/plain) becomes the same plain JSON error, so no
+  JSON (a proxy's error page, often text/plain) becomes the same plain JSON error, so no
   route shows a player that page; so do PostgREST's own connection errors (PGRST000-003).
   Exam: `community-db-fetch.test.ts`.
-- The instance is Nano (Free plan): disk throughput falls to 5 MB/s once its Disk IO budget
-  is spent, and the budget refills only while demand stays under that. After 5 failures in a
-  row the client's breaker answers at once for 15 s without sending (`fetchFromDb`).
+- After 5 failures in a row the client's breaker answers at once for 15 s without sending (`fetchFromDb`): a
+  stalled database recovers only once demand drops, and every tab keeps asking.
 - A failed account lookup throws, never reads as signed out (`loadSessionUser`); accounts are
   cached a minute, as the lookup's promise from before it answers, so forgetting an account mid-read
   (Sign out everywhere) drops the read too and the old row is never written back. A library answer fails whole when a sharing read fails: the client
@@ -245,13 +267,11 @@ The instance is small and has gone down under load. Rules:
   the rest waits an hour; 500 ids keep the delete's query string under 8 KB), over the `created_at` index (migration
   `2026-10-25-community-events-created-at.sql`, mirrored in `schema.sql`), and a failed prune never fails a save. Exam:
   `community-events.test.ts`.
-- The dashboard (restarts, disk IO, memory) needs the repo owner; there is no management
-  token here.
 
 ## Sessions and secrets (session.ts)
 
-- `sessionSecret()` is the one owner of `COMMUNITY_HASH_SALT`: the session HMAC, `saltedKey` (rate-limit, feedback
-  and voter keys) and nothing else read it. In production a missing, blank or development value throws
+- `sessionSecret()` is the one owner of `COMMUNITY_HASH_SALT`: the session HMAC, `saltedKey` (rate-limit and voter
+  keys) and nothing else read it. In production a missing, blank or development value throws
   "Sign-in is not set up on this server." at the call, so a server without the secret has no sign-in, library or
   blueprints while the planner keeps serving; outside production the public development secret applies, so a
   checkout signs in with no setup. Never add a second read of the variable or a second default. The live service
@@ -280,7 +300,7 @@ The instance is small and has gone down under load. Rules:
   at most 3 votes a day on one post or blueprint (`VOTES_PER_ADDRESS_PER_PLAN_PER_DAY`; accounts are exempt). The
   `plan-previews` bucket is private and its pictures are served only by `GET .../preview`, which answers an
   unpublished post's picture to its owner and the admin alone (`Cache-Control: private, no-store`) and 404 `No preview.`
-  to everyone else; a deployment whose bucket was created public before this must be switched off in the dashboard.
+  to everyone else.
   The share card sizes the picture from its IHDR without a decode, so the preview POST stores only a PNG whose
   first chunk is an IHDR with both sides in 1..`PLAN_PREVIEW_MAX_SIDE` (4096; `readPngHeader` in `plan-preview.ts`,
   else 415), `sizePlanPreview` answers nothing for an object that breaks the rule (the card falls back to the icon
@@ -306,8 +326,7 @@ The instance is small and has gone down under load. Rules:
   so every route that reads a body reads it through `request-body.ts` (`readJsonCapped`, `readTextCapped`,
   `readFormDataCapped`) with a cap sized to what the client sends: a declared `content-length` over the cap is refused
   without parsing, a chunked body stops at the cap, and the answer is 413 with the route's own sentence. The read
-  happens where it happened before, so every gate, 503 and auth check that ran ahead of it still does. Caps: feedback
-  `FEEDBACK_MAX_BYTES` (4 MiB); plan uploads and synced designs `COMMUNITY_UPLOAD_BODY_MAX_BYTES` (4 MiB of bytes,
+  happens where it happened before, so every gate, 503 and auth check that ran ahead of it still does. Caps: plan uploads and synced designs `COMMUNITY_UPLOAD_BODY_MAX_BYTES` (4 MiB of bytes,
   then the player-facing 3 Mi-character count `COMMUNITY_UPLOAD_MAX_BYTES`); board images and plan previews
   `BOARD_IMAGE_MAX_BYTES + UPLOAD_FORM_OVERHEAD_BYTES` (the multipart is re-parsed from the capped bytes); blueprint
   saves `BLUEPRINT_BODY_MAX_BYTES` (2 MiB, the payload's own 1.5 MB check stays behind it); comments
@@ -349,47 +368,44 @@ The instance is small and has gone down under load. Rules:
 - Tests run with the default (off). A test of a gated feature calls `withModAndCommunityOn()`
   (`src/test-support/mod-and-community.ts`); a test of the off side calls `withModAndCommunityUnset()`.
 
-## Feedback from the game (feedback.ts, app/api/feedback)
+## Client address (client-address.ts)
 
-- Off (above), a report whose `origin` is absent or `game` answers 404 before the 503 and before the gate counts
-  it; that early read stops at `FEEDBACK_MAX_BYTES` even with no `content-length`. `web` is unchanged.
-- The in-game planner's Feedback box posts to `/api/feedback`; each report becomes an issue through
-  `GITHUB_FEEDBACK_TOKEN` on the repo its origin names: the game's on `GITHUB_FEEDBACK_REPO`, the web planner's
-  (`origin: "web"`) on `GITHUB_FEEDBACK_WEB_REPO` (`feedbackRepo`, `owner/name`; all three in
-  `/opt/shared/env.local`). There is no default repo, so a fork or a fresh deployment never sends its players'
-  reports to someone else's: without the token, or without the repo a report needs, the route answers 503 "Reports
-  can't be sent yet." and opens nothing. The token needs Issues read and write on both repos.
-- It was flooded on 2026-10-12 (450 spam issues from about 5,000 residential addresses, the mod's user agent, made-up
-  versions), so `feedback-guard.ts` stands in front: the mod's shapes (device id, versions), an in-memory gate (30
-  a minute for the site and 6 a minute per address; 60 refusals in 10 minutes pause reports for 6 hours, each address
-  counting at most 3 of them, so a pause takes 20 addresses and one address can never trip it), 3 an hour and 10 a
-  day per address and per device, the same words once a month, and at most 10 issues an hour and 40 a day for the
-  whole site. Player text is escaped (no pictures, links or HTML in the issue).
-- The client address is Caddy's `X-Client-Ip` (Cloudflare's CF-Connecting-IP, trusted only from Cloudflare's
-  ranges), then CF-Connecting-IP, each only as an IP literal; nothing else is read (X-Forwarded-For names a
+- The client address is Caddy's `X-Client-Ip` (its `client_ip`: the peer, or behind Cloudflare its
+  CF-Connecting-IP, trusted only from Cloudflare's ranges), then CF-Connecting-IP, each only as an IP literal; nothing else is read (X-Forwarded-For names a
   Cloudflare edge or the client's own chain, nothing sets X-Real-Ip). One module, `client-address.ts`
   (`clientAddress`, re-exported by community.ts), used by every per-address rule on the site; an IPv6 literal is
   keyed on its /64; a request with neither header is `"local"` (`NO_ADDRESS`), which the dataset budget never
-  refuses. It is trustworthy only because Caddy is the site's only peer: the unit binds loopback and the firewall
-  closes :3000. Exam: `client-address.test.ts`.
-- Emergency stop without a deploy: a Caddy rule answering 503 to `POST /api/feedback` (`/etc/caddy/Caddyfile`, then
-  `systemctl reload caddy`).
-- Plans and the picture go to the private `feedback-files` bucket, served by `/api/feedback/files/<id>/<file>`, only
-  once every check has passed; a report whose issue GitHub refuses has its files removed again. An attached plan is
-  stored and linked without its task board (`tasks`, `taskItems`, `taskComments`, `primaryView`: account ids, names,
-  screenshot files, coordinates) and without `metadata.communityPlanId` (`reportablePlan`); the box says "Tasks and
-  comments stay out." The mod strips names, paths and addresses from logs and crash reports before sending.
+  refuses. It is trustworthy only because Caddy and the stack's own containers are the site's only peers: compose
+  publishes the site on `127.0.0.1:3300` only and the firewall drops outside traffic to it (`docs/deploy.md`). Exam: `client-address.test.ts`.
+
+## Uploaded files (file-store.ts)
+
+- Board images and plan previews live in a directory, `FILE_STORE_DIR` (a volume in production; outside
+  production `scratch/local-db/files` when unset), one folder per bucket: `board-images`, `plan-previews`. Nothing there is a static file: each bucket is served only by its own route. Board images by
+  `GET /api/community/images/<YYYY-MM>/<18 hex>.<png|jpg|gif|webp>` (any other name 404, `immutable`, nosniff,
+  one unit of the address's dataset budget per read),
+  previews by the post's preview route after its access check.
+- A key is one to three plain segments, none starting with a dot (`FILE_KEY`), resolved inside its bucket, else
+  `FileKeyError`. Each bucket has a size cap (`FILE_BUCKET_MAX_BYTES`). A write lands whole (temp file, then link or
+  rename); `overwrite: false` refuses an existing key. Directories `0700`, files `0600`.
+- The board image upload answers an absolute URL from `siteUrl()` (the annotation schema takes only `http(s)://` or
+  `data:image/`), so a picture names the host it was uploaded to.
+- Exam: `file-store.test.ts`, `app/api/community/images/[month]/[name]/route.test.ts` ("serves only board images by
+  their exact name"), `plan-access.test.ts` ("keeps previews out of every public route").
 
 ## Local database (local-db/, `npm run dev:local`)
 
-- `LOCAL_DB=1` points the server's Supabase client at a real Postgres on this machine (PGlite, loaded from
+- `LOCAL_DB=1` points the server's PostgREST client at a real Postgres on this machine (PGlite, loaded from
   `supabase/schema.sql` and `supabase/migrations/*.sql` on every open) through a PostgREST stand-in
   (`local-db/postgrest.ts`). Unset, nothing changes. Never copy `.env.local` into a worktree: local work needs no
-  Supabase credentials.
+  database credentials.
 - Next.js never loads PGlite: it reaches the database over HTTP at `LOCAL_DB_URL` (`tools/local-db/serve.ts`, data in
   `scratch/local-db/pgdata`). Tests open it in memory and register it in-process (`useInProcessLocalDb`).
-- The stand-in covers the query shapes this code sends (filters, or-trees, counts, single, upserts, storage buckets).
-  A new shape (an embed, an rpc) needs it added there and a case in `postgrest.test.ts`.
+- The stand-in covers the query shapes this code sends (filters, or-trees, counts, single, upserts). Files are not in
+  the database: `npm run dev:local` keeps them in `scratch/local-db/files` (the file store below).
+  A new shape (an embed, an rpc) needs it added there and a case in `postgrest-cases.ts`, which `postgrest.test.ts`
+  runs against the stand-in and `postgrest-real.local.test.ts` against a real PostgREST (`REAL_POSTGREST_URL`,
+  `REAL_POSTGREST_TOKEN`; the Docker rehearsal).
 
 ## Cloud plans (cloud-plans.ts, app/api/library, app/api/accounts)
 

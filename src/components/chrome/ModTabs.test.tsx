@@ -10,7 +10,7 @@ import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/
 import { useFactoryStore } from "@/store/factory-store";
 import { writeNewPlanVersion } from "@/lib/datasets/new-plan-version";
 import type { DatasetManifest } from "@/lib/datasets/types";
-import { ModTabs } from "./ModTabs";
+import { convertRows, ModTabs } from "./ModTabs";
 
 const convertPlan = vi.hoisted(() => vi.fn(async () => true));
 vi.mock("@/lib/datasets/convert-action", async (importOriginal) => ({
@@ -332,6 +332,15 @@ const bothVersions: DatasetManifest = {
   latestStableVersion: "local-2.9.0-rc-2",
   versions: [datasetVersion("local-2.9.0-rc-2", "2.9.0-RC-2"), datasetVersion("local-2.8.1", "2.8.1")],
 };
+const subRows = () =>
+  [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menu"] [role="menuitem"]')].map((element) => [
+    element.textContent,
+    element.getAttribute("aria-disabled"),
+  ]);
+const subItem = (label: string) =>
+  [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menu"] [role="menuitem"]')].find((element) =>
+    element.textContent?.startsWith(label),
+  )!;
 const menuItem = (label: string) =>
   [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')].find((element) =>
     element.textContent?.startsWith(label),
@@ -356,13 +365,13 @@ describe("plans on two game versions", () => {
     expect(actions.addDesign).toHaveBeenCalledWith({ gameVersion: "2.9" });
   });
 
-  it("a 2.9 plan shows no chip; a 2.8.1 plan's tab shows 2.8.1", () => {
+  it("every plan's tab shows its version, the default's too", () => {
     useDesignStore.setState({
       designs: [design("a", "Benzene"), design("b", "Old steel", { gameVersion: "2.8.1" }), design("c", "Future", { gameVersion: "2.10" })],
     });
     render(<ModTabs {...props} />);
     const tab = (name: string) => screen.getByText(name).closest(".mt-tab")!;
-    expect(tab("Benzene").querySelector(".mt-version")).toBeNull();
+    expect(tab("Benzene").querySelector(".mt-version")?.textContent).toBe("2.9");
     expect(tab("Old steel").querySelector(".mt-version")?.textContent).toBe("2.8.1");
     expect(tab("Future").querySelector(".mt-version")?.textContent).toBe("2.10");
     // The tip's last line is the plan's version, on every tab.
@@ -371,51 +380,76 @@ describe("plans on two game versions", () => {
     expect(lastLine("Old steel")).toBe("GTNH 2.8.1");
   });
 
-  it("a phone's + menu has the New plans row, which picks the version", () => {
-    viewport.compact = true;
-    useFactoryStore.setState({ datasetManifest: bothVersions });
-    render(<ModTabs {...props} />);
-    fireEvent.click(screen.getByLabelText("New plan"));
-    expect(rows()).toContain("New plans: GTNH 2.9");
-    fireEvent.click(menuItem("New plans: GTNH 2.9"));
-    expect(rows()).toEqual(["GTNH 2.9", "GTNH 2.8.1"]);
-    fireEvent.click(menuItem("GTNH 2.8.1"));
-    fireEvent.click(screen.getByLabelText("New plan"));
-    expect(rows()).toContain("New plans: GTNH 2.8.1");
-    fireEvent.click(menuItem("New plan"));
-    expect(actions.addDesign).toHaveBeenCalledWith({ gameVersion: "2.8.1" });
-  });
-
-  it("the desktop + menu and a site with one version have no New plans row", () => {
+  it("no + menu has a New plans row: the choice is in Settings", () => {
     useFactoryStore.setState({ datasetManifest: bothVersions });
     render(<ModTabs {...props} />);
     fireEvent.click(screen.getByLabelText("New plan"));
     expect(rows().some((row) => row?.startsWith("New plans"))).toBe(false);
     cleanup();
     viewport.compact = true;
-    useFactoryStore.setState({ datasetManifest: { ...bothVersions, versions: [bothVersions.versions[0]!] } });
     render(<ModTabs {...props} />);
     fireEvent.click(screen.getByLabelText("New plan"));
     expect(rows().some((row) => row?.startsWith("New plans"))).toBe(false);
   });
 
-  it("a tab's menu converts its plan to the other served version, with the community switched off", async () => {
+  it("a tab's menu converts its plan through Convert to, a submenu of the versions, with the community switched off", async () => {
     useFactoryStore.setState({ datasetManifest: bothVersions });
     useDesignStore.setState({ designs: [design("a", "Benzene"), design("b", "Old steel", { gameVersion: "2.8.1" })], activeDesignId: "a" });
     const stored = { ...useFactoryStore.getState().project, gameVersion: "2.8.1", name: "Old steel" };
     vi.spyOn(await import("@/lib/designs/design-storage"), "readDesign").mockResolvedValue({ ...design("b", "Old steel"), project: stored } as never);
     render(<ModTabs {...props} />);
     fireEvent.contextMenu(screen.getByText("Old steel"));
-    expect(rows()).toContain("Convert to GTNH 2.9as a new plan");
-    expect(rows().some((row) => row?.startsWith("Convert to GTNH 2.8.1"))).toBe(false);
+    expect(rows().filter((row) => row?.startsWith("Convert"))).toEqual(["Convert to" + "as a new plan"]);
+    const row = menuItem("Convert to");
+    expect(row.getAttribute("aria-haspopup")).toBe("menu");
+    expect(subRows()).toEqual([]);
+    fireEvent.click(row);
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    // Every served version; the plan's own is shown, marked, and cannot be picked.
+    expect(subRows()).toEqual([
+      ["GTNH 2.9", null],
+      ["GTNH 2.8.1this plan", "true"],
+    ]);
+    fireEvent.click(subItem("GTNH 2.8.1"));
+    expect(convertPlan).not.toHaveBeenCalled();
+    expect(subRows()).toHaveLength(2);
     await act(async () => {
-      fireEvent.click(menuItem("Convert to GTNH 2.9"));
+      fireEvent.click(subItem("GTNH 2.9"));
     });
-    // Another tab is converted from its stored plan, without opening it.
+    // Another tab is converted from its stored plan, without opening it; the menu is gone.
     expect(convertPlan).toHaveBeenCalledWith(stored, "2.9", "b");
     expect(actions.switchToDesign).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
     fireEvent.contextMenu(screen.getByText("Benzene"));
-    expect(rows()).toContain("Convert to GTNH 2.8.1as a new plan");
+    fireEvent.click(menuItem("Convert to"));
+    expect(subRows()).toEqual([
+      ["GTNH 2.9this plan", "true"],
+      ["GTNH 2.8.1", null],
+    ]);
+  });
+
+  it("the Convert to submenu opens from the keyboard and the left arrow goes back", () => {
+    useFactoryStore.setState({ datasetManifest: bothVersions });
+    render(<ModTabs {...props} />);
+    fireEvent.contextMenu(screen.getByText("Benzene"));
+    const row = menuItem("Convert to");
+    row.focus();
+    fireEvent.keyDown(row, { key: "ArrowRight" });
+    expect(subRows().map(([label]) => label)).toEqual(["GTNH 2.9this plan", "GTNH 2.8.1"]);
+    expect(document.activeElement?.textContent).toBe("GTNH 2.8.1");
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+    expect(subRows()).toEqual([]);
+    expect(document.activeElement).toBe(row);
+  });
+
+  it("while a tab converts, its Convert row says so and no row converts again", () => {
+    useFactoryStore.setState({ datasetManifest: bothVersions });
+    const noop = () => undefined;
+    expect(convertRows(bothVersions, "2.9", { target: "2.8.1", sourceDesignId: "a" }, "a", noop)).toEqual([
+      { label: "Converting to GTNH 2.8.1...", disabled: true, onSelect: expect.any(Function) },
+    ]);
+    const other = convertRows(bothVersions, "2.9", { target: "2.8.1", sourceDesignId: "b" }, "a", noop);
+    expect(other.map((entry) => [entry.label, entry.disabled])).toEqual([["Convert to", true]]);
   });
 
   it("a conversion that opens nothing leaves the library where it was", async () => {
@@ -425,8 +459,9 @@ describe("plans on two game versions", () => {
     openLibrary();
     render(<ModTabs {...props} />);
     fireEvent.contextMenu(screen.getByText("Old steel"));
+    fireEvent.click(menuItem("Convert to"));
     await act(async () => {
-      fireEvent.click(menuItem("Convert to GTNH 2.9"));
+      fireEvent.click(subItem("GTNH 2.9"));
     });
     expect(convertPlan).toHaveBeenCalled();
     expect(readLibraryTabState().active).toBe(true);
@@ -439,6 +474,11 @@ describe("plans on two game versions", () => {
     fireEvent.contextMenu(screen.getByText("Benzene"));
     expect(rows().some((row) => row?.startsWith("Convert"))).toBe(false);
     fireEvent.contextMenu(screen.getByText("Old steel"));
-    expect(rows().filter((row) => row?.startsWith("Convert"))).toEqual(["Convert to GTNH 2.9as a new plan"]);
+    fireEvent.click(menuItem("Convert to"));
+    // The plan's own version is listed though this site has no recipes for it.
+    expect(subRows()).toEqual([
+      ["GTNH 2.8.1this plan", "true"],
+      ["GTNH 2.9", null],
+    ]);
   });
 });

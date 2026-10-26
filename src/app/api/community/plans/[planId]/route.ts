@@ -1,8 +1,8 @@
+import type { DbClient } from "@/lib/server/community";
 import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { factoryProjectSchema } from "@/lib/model/schemas";
 import { normalizeLoadedProject } from "@/lib/model/project-normalize";
 import { ensurePlanEngine, solvePlanStats } from "@/lib/server/plan-engine";
@@ -17,6 +17,7 @@ import {
 } from "@/lib/community/types";
 import { normalizeBlueprintTags } from "@/lib/blueprints/types";
 import { PLAN_PREVIEW_BUCKET } from "@/lib/server/plan-preview";
+import { getFileStore } from "@/lib/server/file-store";
 import {
   attachMyVotes,
   communityStorageErrorMessage,
@@ -107,7 +108,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ plan
  * though freshly computed numbers still go out in this response.
  */
 async function refreshStaleStats(
-  db: SupabaseClient,
+  db: DbClient,
   planId: string,
   plan: CommunityPlanSummary,
 ): Promise<void> {
@@ -359,9 +360,8 @@ export async function DELETE(
 
     // The post's board photograph goes with it. Best-effort: a missing
     // object (pre-preview posts) is the normal case, not a failure.
-    await db.storage
-      .from(PLAN_PREVIEW_BUCKET)
-      .remove([`${planId}.png`])
+    await getFileStore()
+      .remove(PLAN_PREVIEW_BUCKET, [`${planId}.png`])
       .catch(() => undefined);
 
     invalidatePlanListCache();

@@ -17,6 +17,7 @@ import {
   type SearchEntryFields,
   type SearchQuery,
 } from "./text-search";
+import { neiOrderRanks, usableResourceOrder, type ResourceOrder } from "./nei-order";
 
 /**
  * The item (resource) search, over a dataset's resource list: one copy of the
@@ -34,7 +35,11 @@ export type ResourceQuerySort =
   | "recipes"
   | "made"
   | "uses"
-  | "popular";
+  | "popular"
+  /** As in NEI: best matches first, NEI's list order between equal matches and with nothing typed. */
+  | "nei"
+  /** NEI's own search: whatever matches, in NEI's list order, unranked. */
+  | "nei-filter";
 
 export type ResourceSourceFilter = "plants" | "bees";
 
@@ -50,7 +55,16 @@ export interface ResourceSearchRequest {
   popularity?: Map<string, number>;
 }
 
-const RESOURCE_SORTS = new Set<string>(["name", "mod", "recipes", "made", "uses", "popular"]);
+const RESOURCE_SORTS = new Set<string>([
+  "name",
+  "mod",
+  "recipes",
+  "made",
+  "uses",
+  "popular",
+  "nei",
+  "nei-filter",
+]);
 
 /** The most one request answers, and what one without a limit gets. */
 export const RESOURCE_SEARCH_MAX_LIMIT = 120;
@@ -98,6 +112,10 @@ export interface ResourceSearchIndexes {
   searchIndex: TextSearchIndex;
   /** The words items are actually called: what a typo gets corrected against. */
   vocabulary: SearchVocabulary;
+  /** NEI's place of each record (the dataset's `resourceOrder`), when the dataset has a usable one. */
+  resourceOrder?: ResourceOrder;
+  /** Each record's rank in NEI's order (`neiOrderRanks`), made on the first sort that needs it. */
+  neiRanks?: Int32Array;
 }
 
 export interface ResourceSearch {
@@ -117,6 +135,7 @@ export function getResourceModId(resource: { id: string; kind: string }): string
 
 export function buildResourceSearchIndexes(
   resourceIndex: readonly DatasetResourceIndexEntry[],
+  resourceOrder?: unknown,
 ): ResourceSearchIndexes {
   const fields: SearchEntryFields[] = [];
   const tokensByEntry: string[][] = [];
@@ -158,7 +177,17 @@ export function buildResourceSearchIndexes(
         .filter((resource) => resource && !isOreDictionaryResource(resource))
         .map((resource) => resource.displayName ?? ""),
     ),
+    resourceOrder: usableResourceOrder(resourceIndex, resourceOrder),
   };
+}
+
+/** Each record's rank in NEI's order, kept on the indexes after the first ask. */
+export function resourceNeiRanks(
+  resourceIndex: readonly DatasetResourceIndexEntry[],
+  indexes: ResourceSearchIndexes,
+): Int32Array {
+  indexes.neiRanks ??= neiOrderRanks(resourceIndex, indexes.resourceOrder);
+  return indexes.neiRanks;
 }
 
 function resourceSearchFields(
@@ -185,6 +214,10 @@ export function searchResources(
   },
 ): ResourceSearch {
   const { sourceKeys } = facts;
+  // As in NEI ranks a typed query exactly as Best match does (match tiers, then the nudge: recipe count and name
+  // length), and NEI's order settles only what is still equal; the shorter-name rule alone left 41 Electrum Ore
+  // variants ahead of the ingot. NEI filter only ranks nothing.
+  const nudge = request.sort === "nei-filter" ? undefined : resourceRelevanceBias;
   let modCounts = new Map<string, number>();
 
   const resolved = resolveSearchPhases(
@@ -232,7 +265,7 @@ export function searchResources(
         }
         matches.push({
           resourceIndex: resourceIndexNumber,
-          score: score > 0 ? score + resourceRelevanceBias(resource) : score,
+          score: score > 0 && nudge ? score + nudge(resource) : score,
         });
       }
 
@@ -247,6 +280,7 @@ export function searchResources(
     request.sort ?? "relevance",
     facts.directionCounts,
     request.popularity,
+    () => resourceNeiRanks(resourceIndex, indexes),
   );
   return { matches, modCounts, resolved };
 }
@@ -294,8 +328,10 @@ export function resourceSearchPage(
  * out of what is kept.
  */
 export function blankResourceSearchKey(request: ResourceSearchRequest): string | undefined {
+  // With nothing typed every score is 0, so "nei-filter" is "nei" and shares its list.
+  const sort = request.sort === "nei-filter" ? "nei" : (request.sort ?? "relevance");
   return request.query.trim() === ""
-    ? JSON.stringify([request.kind ?? "", request.sort ?? "relevance", request.source ?? null])
+    ? JSON.stringify([request.kind ?? "", sort, request.source ?? null])
     : undefined;
 }
 
@@ -324,7 +360,8 @@ function sortResourceMatches(
   matches: Array<{ resourceIndex: number; score: number }>,
   sort: ResourceQuerySort,
   directionCounts: ResourceDirectionCounts,
-  popularity?: Map<string, number>,
+  popularity: Map<string, number> | undefined,
+  neiRanks: () => Int32Array,
 ) {
   const nameOf = (match: { resourceIndex: number }) => {
     const resource = resourceIndex[match.resourceIndex];
@@ -344,6 +381,16 @@ function sortResourceMatches(
     );
   };
 
+  if (sort === "nei" || sort === "nei-filter") {
+    const ranks = neiRanks();
+    if (sort === "nei-filter") {
+      return [...matches].sort((left, right) => ranks[left.resourceIndex]! - ranks[right.resourceIndex]!);
+    }
+    return [...matches].sort(
+      (left, right) =>
+        right.score - left.score || ranks[left.resourceIndex]! - ranks[right.resourceIndex]!,
+    );
+  }
   if (sort === "name") {
     return [...matches].sort((left, right) => nameOf(left).localeCompare(nameOf(right)));
   }

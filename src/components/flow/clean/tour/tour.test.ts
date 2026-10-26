@@ -94,7 +94,7 @@ describe("the script with the community library switched off", () => {
     const ids = steps.map((s) => s.id);
     expect(ids).not.toContain("library");
     expect(ids.indexOf("new-plan")).toBe(ids.indexOf("plans") + 1);
-    expect(ids[ids.length - 1]).toBe("feedback");
+    expect(ids[ids.length - 1]).toBe("done");
     expect(steps.map((s) => s.note.text).join("\n")).not.toMatch(/community/i);
     // Each step still has its actions, so the director plays it through to the end.
     for (const step of steps) expect(step.actions.length).toBeGreaterThan(0);

@@ -8,7 +8,6 @@ import {
   UPLOAD_FORM_OVERHEAD_BYTES,
 } from "@/lib/community/types";
 import { RESOLVE_RECIPES_MAX_BYTES } from "@/lib/datasets/resolve-recipes-limits";
-import { FEEDBACK_MAX_BYTES } from "@/lib/server/feedback";
 import {
   COMMENT_BODY_MAX_BYTES,
   PROXY_BODY_MAX_BYTES,
@@ -53,7 +52,7 @@ describe("the API proxy", () => {
     expect(proxy(request("POST", {})).status).toBe(200);
     expect(
       proxy(
-        new NextRequest("http://localhost:3000/api/feedback", {
+        new NextRequest("http://localhost:3000/api/community/auth/logout", {
           method: "POST",
           headers: { host: "localhost:3000", origin: "http://localhost:3000" },
         }),
@@ -105,7 +104,7 @@ describe("the dataset gate in the proxy", () => {
     }
   });
 
-  it("rewrites the index gzips, the shards, the client files and the raw recipes file to the dataset-files route", () => {
+  it("rewrites the index gzips, the shards, the client files, the content-named textures and the raw recipes file to the dataset-files route", () => {
     const gz = get(`/datasets/gtnh/${V}/recipes.json.gz`);
     expect(gz.headers.get("x-middleware-rewrite")).toBe(
       `https://gtnhplanner.com/dataset-files/${V}/recipes.json.gz`,
@@ -118,15 +117,19 @@ describe("the dataset gate in the proxy", () => {
     expect(client.headers.get("x-middleware-rewrite")).toBe(
       `https://gtnhplanner.com/dataset-files/${V}/client/crops.0123456789abcdef0123.json`,
     );
+    const texture = get(`/datasets/gtnh/${V}/textures/rendered/copper-a50d21cdeb41.png`);
+    expect(texture.headers.get("x-middleware-rewrite")).toBe(
+      `https://gtnhplanner.com/dataset-files/${V}/textures/rendered/copper-a50d21cdeb41.png`,
+    );
     const raw = get(`/datasets/gtnh/${V}/recipes.json`);
     expect(raw.headers.get("x-middleware-rewrite")).toBe(
       `https://gtnhplanner.com/dataset-files/${V}/recipes.json`,
     );
   });
 
-  it("passes textures, the manifest and the rest of the site", () => {
+  it("passes the other textures, the manifest and the rest of the site", () => {
     for (const pathname of [
-      `/datasets/gtnh/${V}/textures/rendered/copper-a50d21cdeb41.png`,
+      `/datasets/gtnh/${V}/textures/nei-layouts/x.png`,
       "/datasets/gtnh/datasets.manifest.json",
       "/",
       "/plans",
@@ -141,7 +144,6 @@ describe("the dataset gate in the proxy", () => {
 describe("what Next holds of a write body while the proxy runs", () => {
   it("sits above every route's cap, so a body Next cut at it still answers 413", () => {
     for (const cap of [
-      FEEDBACK_MAX_BYTES,
       COMMUNITY_UPLOAD_BODY_MAX_BYTES,
       BOARD_IMAGE_MAX_BYTES + UPLOAD_FORM_OVERHEAD_BYTES,
       BLUEPRINT_BODY_MAX_BYTES,

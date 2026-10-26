@@ -42,7 +42,7 @@ describe("the dataset catalog route", () => {
 
   it("answers any other failure with its fallback sentence, and the error goes to the log only", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.mocked(getDatasetCatalog).mockRejectedValueOnce(new Error("ENOENT: /opt/releases/x"));
+    vi.mocked(getDatasetCatalog).mockRejectedValueOnce(new Error("ENOENT: /srv/app/x"));
     const response = await call("local-2.9.0-rc-2");
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: "Dataset catalog failed." });

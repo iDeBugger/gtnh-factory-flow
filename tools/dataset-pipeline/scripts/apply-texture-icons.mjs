@@ -22,27 +22,18 @@ if (!existsSync(datasetPath)) {
 
 const maxDatasetBytes = positiveIntEnv("GTNH_TEXTURE_ICON_MAX_DATASET_BYTES", 450_000_000);
 const datasetSizeBytes = (await fs.stat(datasetPath)).size;
+// Above the limit only the name matching below is skipped: resolve-icon-hints.mjs has already
+// resolved the export's `asset:` hints line by line, whatever the size, and its report stays.
 if (datasetSizeBytes > maxDatasetBytes) {
   const versionId = path.basename(outDir);
-  const textureOutDir = path.join(outDir, "textures");
-  await fs.mkdir(textureOutDir, { recursive: true });
-  await fs.writeFile(
-    path.join(textureOutDir, "icon-report.json"),
-    `${JSON.stringify(
-      {
-        schemaVersion: 1,
-        datasetVersionId: versionId,
-        generatedAt: new Date().toISOString(),
-        source: "minecraft-asset-pngs",
-        skipped: true,
-        reason: `Dataset is ${datasetSizeBytes} bytes, above GTNH_TEXTURE_ICON_MAX_DATASET_BYTES=${maxDatasetBytes}.`,
-      },
-      null,
-      2,
-    )}\n`,
-  );
+  await mergeIconReport(path.join(outDir, "textures"), {
+    textureMatching: {
+      skipped: true,
+      reason: `Dataset is ${datasetSizeBytes} bytes, above GTNH_TEXTURE_ICON_MAX_DATASET_BYTES=${maxDatasetBytes}.`,
+    },
+  });
   console.log(
-    `Skipping texture icon enrichment for ${versionId}: dataset is ${datasetSizeBytes} bytes.`,
+    `Skipping texture name matching for ${versionId}: dataset is ${datasetSizeBytes} bytes.`,
   );
   process.exit(0);
 }
@@ -134,28 +125,38 @@ for (const entry of dataset.recipeMapIcons ?? []) {
 }
 
 await writeDatasetJson(datasetPath, dataset);
-await fs.writeFile(
-  path.join(textureOutDir, "icon-report.json"),
-  `${JSON.stringify(
-    {
-      schemaVersion: 1,
-      datasetVersionId: versionId,
-      generatedAt: new Date().toISOString(),
-      source: "minecraft-asset-pngs",
-      matchedResources: matched,
-      missingResources: missing,
-      preservedRenderedIcons: preservedRendered,
-      notes:
-        "Only real PNG files extracted from the GTNH instance/mod jars or rendered by the GTNH client from real ItemStacks are used. Missing icons are intentionally left blank; no generated or guessed item art is published.",
-    },
-    null,
-    2,
-  )}\n`,
-);
+await mergeIconReport(textureOutDir, {
+  datasetVersionId: versionId,
+  textureMatching: {
+    matchedResources: matched,
+    missingResources: missing,
+    preservedRenderedIcons: preservedRendered,
+    notes:
+      "Only real PNG files extracted from the GTNH instance/mod jars or rendered by the GTNH client from real ItemStacks are used. Missing icons are intentionally left blank; no generated or guessed item art is published.",
+  },
+});
 
 console.log(
   `Applied ${matched} real texture icons and preserved ${preservedRendered} rendered stack icons. ${missing} resources remain iconless.`,
 );
+
+// The report resolve-icon-hints.mjs wrote, with this step's fields added. A top-level `skipped`
+// is never written: the publish refuses a version whose report says it.
+async function mergeIconReport(textureDir, fields) {
+  const reportPath = path.join(textureDir, "icon-report.json");
+  let report = { schemaVersion: 1, source: "minecraft-asset-pngs" };
+  try {
+    report = JSON.parse(await fs.readFile(reportPath, "utf8"));
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+  }
+  delete report.skipped;
+  delete report.reason;
+  await fs.mkdir(textureDir, { recursive: true });
+  await fs.writeFile(reportPath, `${JSON.stringify({ ...report, ...fields }, null, 2)}\n`);
+}
 
 async function buildTextureIndex(root) {
   const jars = (await findFiles(path.join(root, "mods"), ".jar")).sort();

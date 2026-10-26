@@ -17,8 +17,8 @@ import {
   clearBeside,
   drawerOf,
   drawerPart,
-  feedbackKey,
   fitKey,
+  helpKey,
   forcedRow,
   libraryKey,
   itemTile,
@@ -54,7 +54,7 @@ import { isModAndCommunityOn } from "@/lib/deployment-features";
 /**
  * The tour, step by step (the mod's Script, on the website's planner): each step acts something out on the real UI,
  * then a note beside what it did says what it is. Words between asterisks are gold. Steps that need the game
- * (NEI, placing in the world, the pin list) are left out; the minimap and the feedback box are in.
+ * (NEI, placing in the world, the pin list) are left out; the minimap is in.
  * Write notes short and plain, one sentence a thought, no commas where a full stop will do.
  */
 
@@ -861,12 +861,12 @@ const newPlan: Step = {
   },
 };
 
-const feedback: Step = {
-  id: "feedback",
+const done: Step = {
+  id: "done",
   actions: [closeMenus, A.wait(200)],
   note: {
-    text: "That's everything! Found a bug, or have an idea? *Feedback* sends it from here. Questions about your own setup do well in GTNH Planner's thread on the *GT New Horizons Discord*.",
-    at: feedbackKey,
+    text: "That's everything! *Help* has the tour and every control.",
+    at: helpKey,
   },
 };
 
@@ -916,6 +916,6 @@ export function tourSteps(): Step[] {
     ...(isModAndCommunityOn() ? [libraryStep] : []),
     newPlan,
     ...(isLiveConfigured() ? [taskBoardStep, taskStep] : []),
-    feedback,
+    done,
   ];
 }

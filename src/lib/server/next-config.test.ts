@@ -28,7 +28,6 @@ describe("how the served dataset files reach a browser", () => {
     vi.stubEnv("GTNH_DATASET_BACKEND_URL", "");
     const plain = await loadConfig();
     expect(plain.rewrites.beforeFiles).toEqual([]);
-    expect(plain.rewrites.afterFiles.map((rule) => rule.source)).toContain("/umami");
 
     vi.stubEnv("GTNH_DATASET_BACKEND_URL", "https://example.test/");
     const proxied = await loadConfig();
@@ -38,8 +37,14 @@ describe("how the served dataset files reach a browser", () => {
         destination: "https://example.test/api/datasets/:version/:rest*",
       },
       {
-        source: "/datasets/gtnh/:version([A-Za-z0-9_-][A-Za-z0-9._-]*)/:rest([A-Za-z0-9_-][A-Za-z0-9._-]*)*",
+        source:
+          "/datasets/gtnh/:version([A-Za-z0-9_-][A-Za-z0-9._-]*)/:rest([A-Za-z0-9_-][A-Za-z0-9._-]*)*",
         destination: "https://example.test/datasets/gtnh/:version/:rest*",
+      },
+      {
+        source:
+          "/dataset-files/:version([A-Za-z0-9_-][A-Za-z0-9._-]*)/textures/:root(rendered|icons)/:file([A-Za-z0-9_-][A-Za-z0-9._-]*)",
+        destination: "https://example.test/datasets/gtnh/:version/textures/:root/:file",
       },
     ]);
     // No dot segment, plain or encoded, is ever forwarded; a recipe id with `:` is.
@@ -48,7 +53,13 @@ describe("how the served dataset files reach a browser", () => {
       // @ts-expect-error untyped compiled module
       "next/dist/compiled/path-to-regexp"
     )) as { pathToRegexp: (source: string, keys: unknown[]) => RegExp };
-    const [api, files] = proxied.rewrites.beforeFiles.map((rule) => pathToRegexp(rule.source, []));
+    const [api, files, textures] = proxied.rewrites.beforeFiles.map((rule) =>
+      pathToRegexp(rule.source, []),
+    );
+    // The proxy's rewrite of a content-named texture still reaches the backend; the data files do not.
+    expect(textures!.test("/dataset-files/local-2.8.1/textures/rendered/x-0123456789ab.png")).toBe(true);
+    expect(textures!.test("/dataset-files/local-2.8.1/recipes.json.gz")).toBe(false);
+    expect(textures!.test("/dataset-files/local-2.8.1/textures/rendered/..")).toBe(false);
     for (const forwarded of [
       "/api/datasets/local-2.9.0-rc-2/catalog",
       "/api/datasets/local-2.9.0-rc-2/recipes/oracle%3Agregtech%3Abw-fuels%3A4f56",
@@ -56,24 +67,37 @@ describe("how the served dataset files reach a browser", () => {
     ]) {
       expect(api!.test(forwarded), forwarded).toBe(true);
     }
-    for (const kept of ["/api/datasets/../x", "/api/datasets/v/../x", "/api/datasets/v/%2e%2e/x", "/api/datasets/./x"]) {
+    for (const kept of [
+      "/api/datasets/../x",
+      "/api/datasets/v/../x",
+      "/api/datasets/v/%2e%2e/x",
+      "/api/datasets/./x",
+    ]) {
       expect(api!.test(kept), kept).toBe(false);
     }
-    expect(files!.test("/datasets/gtnh/local-2.8.1/textures/rendered/x-0123456789ab.png")).toBe(true);
-    for (const kept of ["/datasets/gtnh/../x", "/datasets/gtnh/v/../x", "/datasets/gtnh/v/%2e%2e", "/datasets/gtnh/v/.hidden"]) {
+    expect(files!.test("/datasets/gtnh/local-2.8.1/textures/rendered/x-0123456789ab.png")).toBe(
+      true,
+    );
+    for (const kept of [
+      "/datasets/gtnh/../x",
+      "/datasets/gtnh/v/../x",
+      "/datasets/gtnh/v/%2e%2e",
+      "/datasets/gtnh/v/.hidden",
+    ]) {
       expect(files!.test(kept), kept).toBe(false);
     }
   });
 
-  it("sets no cache policy by path for dataset data: a header rule cannot tell a miss from a file", async () => {
+  it("sets no cache policy by path under the datasets: a header rule cannot tell a miss from a file", async () => {
+    // A next.config rule beats the answer's own Cache-Control, so a texture asked for before its
+    // publish lands would be a 404 kept a year. The dataset-files route answers for itself.
     const { headers } = await loadConfig();
-    const dataset = headers.filter((rule) => rule.source.startsWith("/datasets/"));
-    expect(dataset.length).toBeGreaterThan(0);
-    for (const rule of dataset) {
-      // Only textures, which are content-named, are immutable; nothing else under
-      // /datasets/ has a header rule, the dataset-files route answers for itself.
-      expect(rule.source).toContain("/textures/");
-      expect(cacheControl(rule)).toBe("public, max-age=31536000, immutable");
+    const dataset = headers.filter(
+      (rule) => rule.source.startsWith("/datasets/") || rule.source.startsWith("/dataset-files/"),
+    );
+    expect(dataset).toEqual([]);
+    for (const rule of headers) {
+      expect(cacheControl(rule), rule.source).toBeUndefined();
     }
   });
 });
@@ -84,13 +108,16 @@ describe("the build identity the config bakes in", () => {
   });
 
   it("imports nothing from src/, only self-contained files beside it: next start loads the config again at run time", async () => {
-    // A site image that ships no src/ crashes on its first request at a
-    // config import it lacks, so the config's own files sit beside it (the
-    // deploy's Dockerfile copies them) and import nothing themselves.
+    // `next start` and the tests load the config outside a build, where an
+    // import of app code would pull the app into it; the config's own files
+    // sit beside it and import nothing themselves.
     const { readFileSync } = await import("node:fs");
-    const read = (file: string) => readFileSync(new URL(`../../../${file}`, import.meta.url), "utf8");
+    const read = (file: string) =>
+      readFileSync(new URL(`../../../${file}`, import.meta.url), "utf8");
     const importsOf = (source: string) =>
-      [...source.matchAll(/^\s*(?:import|export)[^;]*?from\s+["']([^"']+)["']/gm)].map((match) => match[1] ?? "");
+      [...source.matchAll(/^\s*(?:import|export)[^;]*?from\s+["']([^"']+)["']/gm)].map(
+        (match) => match[1] ?? "",
+      );
     const source = read("next.config.ts");
     const local = importsOf(source).filter((specifier) => /^(\.|@\/)/.test(specifier));
     expect(local.sort()).toEqual(["./body-limits.config", "./security-headers.config"]);
@@ -115,5 +142,35 @@ describe("the build identity the config bakes in", () => {
     vi.resetModules();
     const config = (await import("../../../next.config")).default;
     expect(config.env?.NEXT_PUBLIC_GTNH_BUILD_ID).toMatch(/^\d+\.\d+\.\d+-[0-9a-f]{8}(-dirty)?$/);
+  });
+});
+
+describe("the site's rewrites", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("has no analytics rewrites", async () => {
+    for (const backend of ["", "https://example.test/"]) {
+      vi.stubEnv("GTNH_DATASET_BACKEND_URL", backend);
+      const { rewrites } = await loadConfig();
+      for (const rule of [...rewrites.beforeFiles, ...rewrites.afterFiles]) {
+        expect(`${rule.source} ${rule.destination}`).not.toMatch(/umami|8582/i);
+      }
+      expect(rewrites.afterFiles).toEqual([]);
+    }
+  });
+
+  it("keeps revalidated pages in memory: the site image's .next is read-only", async () => {
+    vi.resetModules();
+    const config = (await import("../../../next.config")).default;
+    expect(config.experimental?.isrFlushToDisk).toBe(false);
+  });
+
+  it("builds the standalone server the site image runs", async () => {
+    // The Dockerfile copies .next/standalone and runs its server.js.
+    vi.resetModules();
+    const config = (await import("../../../next.config")).default;
+    expect(config.output).toBe("standalone");
   });
 });

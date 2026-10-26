@@ -22,7 +22,7 @@ interface AppHeaderProps {
  * The one top bar for the whole app: title and version chip, design tabs,
  * plan actions, settings, links and account.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- the version picker is the bar's New plans key, which follows the plan; the prop stays wired
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- the version for new plans is a Settings choice, and the open plan's version is on its tab; the prop stays wired
 export function AppHeader(_props: AppHeaderProps) {
   // The chip wears a dot while a shipped release has notes this browser has
   // not opened. It has its own stamp, separate from the release notice's

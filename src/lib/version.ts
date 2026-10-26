@@ -5,7 +5,8 @@
  * with a single changelog entry covering it: minor for a release carrying
  * features (1.1.0), patch for one that is only fixes (1.0.1).
  *
- * Check `https://gtnhplanner.com/api/version` first. If it is BEHIND this
+ * Check the target's `/api/version` first (the targets are in `docs/deploy.md`;
+ * its `version` field). If it is BEHIND this
  * number, the release has not shipped yet: fold new work into the top
  * changelog entry and leave the number alone. If it MATCHES, everything is
  * live and the next change starts a new release.

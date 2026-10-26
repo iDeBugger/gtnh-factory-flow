@@ -4,7 +4,7 @@ import { designRole, listMembers, usernamesFor, type DesignRole } from "@/lib/se
 import { forgetSessionUser, getCommunityDb, loadSessionUser } from "@/lib/server/community";
 
 /**
- * The live service's reads and writes, all through the server's Supabase
+ * The live service's reads and writes, all through the server's PostgREST
  * client (fetchWithDbTimeout, or the local database with LOCAL_DB=1). Never a
  * write per edit: a room writes when it opens (the lease), every 30 s (the
  * lease again), and when it flushes (at most every 8 s while edited).
@@ -75,7 +75,7 @@ function fail(what: string, error: { message?: string } | null): never {
   throw new Error(`${what}: ${error?.message ?? "no answer"}`);
 }
 
-export function supabasePlanStore(): PlanStore {
+export function databasePlanStore(): PlanStore {
   const db = () => getCommunityDb();
 
   /** A conditional write matched nothing: the design went, or the lease is someone else's. */

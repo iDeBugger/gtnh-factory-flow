@@ -93,7 +93,12 @@ The board has its own notes in `flow/CLAUDE.md`, the Pool worksheet in `pool/CLA
   anyway and the other gives way. The overview's machine lines fit their text to the rail's measured width. Re-measure
   `BOARD_MIN_WIDTH` when a key is added to the board toolbar.
 - The items column is NEI's list (`ResourceIndexPane`, `nei/nei.css`): page keys and n/m at the top, 32 px slots
-  of art alone, a Minecraft tooltip at once (`nei/McTip`), R/U over a slot, filters and sort in one menu key. Its
+  of art alone, a Minecraft tooltip at once (`nei/McTip`), R/U over a slot, filters and sort in one menu key. The
+  column opens As in NEI (`defaultSort`), pickers on Best match; Most popular is offered only while the popularity
+  map has entries (`resource-popularity-offer.ts`, `?count=1`), and a pick no longer offered gives way to the
+  default. From the first key typed until its answer lands the old slots stay, `aria-busy` at once and dimmed only after
+  180 ms, so a quick or cached answer never blinks the grid (`listStale`, `nei/nei.css`).
+  Exam: `ResourceIndexPane.test.tsx`. Its
   search field (`searchAt`) is a body portal at the bottom middle of the screen; on a phone, under Welcome or the
   library, and while the recipe search is open it sits at the column's foot instead. A query answers at most
   120 resources, so a taller page asks in pieces. Every item search (this column, IconPicker, the setups filter,
@@ -111,6 +116,15 @@ The board has its own notes in `flow/CLAUDE.md`, the Pool worksheet in `pool/CLA
 
 ## Shared UI behaviour
 
+- A `ChromeMenu` row with `submenu` opens its rows beside it. The mouse opens it, or shuts it from another row, after
+  `SUBMENU_HOVER_MS` (200 ms) on the row; reaching the submenu first cancels a pending shut, so a diagonal move gets
+  there. A mouse press opens it, a touch or pen press toggles it; Right or Enter opens it and moves focus in (also into
+  one the mouse opened), Left goes back, and focus inside goes back to the row whenever it shuts. It is drawn inside
+  the menu (a press in it counts as inside) and wears the menu's zoom; it hangs right of the row, left where the window
+  has no room, and under or over the row where neither side has (a phone), so the row stays readable. The tab menu's
+  Convert to is one.
+- A `ChromeMenu` stops the keys it handles (arrows, Home, End, Tab) from going on: the board pans on arrows from the
+  window, and a camera move closes every dropdown. The camera also ignores keys pressed inside `[data-mod-menu]`.
 - Dropdowns dismiss through `useDropdownDismiss`: the mouse fade counts from the nearest
   point the pointer has reached, so a panel that opens away from the pointer can be
   walked to. `fadeKeep` names the element a menu hangs from.
@@ -141,11 +155,9 @@ The board has its own notes in `flow/CLAUDE.md`, the Pool worksheet in `pool/CLA
 Everything here renders only with `isLiveConfigured()`; without it the app looks exactly as before. Store rules are
 in `src/store/CLAUDE.md` (Live plans, Task boards).
 
-- The mod's top bar (`chrome/ModBar.tsx`) holds the ACCOUNT's things only, in this order: the plan tabs and +, the New
-  plans picker (the GTNH version new plans are made for; only while the site serves more than one; its version alone in
-  the icons dress; on a phone a row of the + menu instead), the live
+- The mod's top bar (`chrome/ModBar.tsx`) holds the ACCOUNT's things only, in this order: the plan tabs and +, the live
   state as a dot and the faces of who else is here (`LivePresence`: one square per account, initials in their colour; a
-  tip says Live, Connecting or Offline with edits waiting), Library, Share, the account key, feedback, settings, help.
+  tip says Live, Connecting or Offline with edits waiting), Library, Share, the account key, settings, help.
   The account key (`chrome/AccountKey.tsx`) reads "Sign in" signed out (it opens `SignInPanel`, the form that used to
   hang in the Library) and is the account's face (initials in its colour) signed in, with a menu of the username and
   Sign out. The Library has no sign-in key, only a line "Signed in as X". The Share menu's first row is Share with
@@ -164,8 +176,8 @@ in `src/store/CLAUDE.md` (Live plans, Task boards).
 - The desktop top bar is one row and hides nothing in a menu (`useTopBarFit` in `bar-parts.tsx`, steps in the pure,
   tested `chrome/top-bar-fold.ts`, `data-fit` roomy / icons / tight). The tabs give way first (the strip scrolls; the open
   plan's tab and the + never go: the `.mt` min-width, and `ModTabs` scrolls the open tab back into view when the strip
-  resizes). With under two full tabs and the + of room, Plans, Share and Sign in become icon keys like feedback, settings
-  and help (tips lead with the name; `AccountKey` takes `pictures`); with under one tab and the + the gaps tighten and the
+  resizes). With under two full tabs and the + of room, Plans, Share and Sign in become icon keys like settings and
+  help (tips lead with the name; `AccountKey` takes `pictures`); with under one tab and the + the gaps tighten and the
   live faces are two and a +N. Each step is judged by the tab strip's measured width, undone by the room the earlier dress
   would leave (what the step gave is measured when it is taken), and starts again from the widest dress when what the bar
   holds changes. A new key needs nothing here: the strip's width sees it.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { queryCatalogResources } from "@/lib/server/dataset-query";
+import { queryCatalogResources, warmResourceSearch } from "@/lib/server/dataset-query";
 import { createResourceSearchEngine, type ResourceSearchFile } from "./resource-search-engine";
 import type { ResourceQuerySort } from "./resource-search";
 
@@ -54,11 +54,19 @@ const popularity = new Map([
   ["item:gregtech:gt.metaitem.01@17305", 30],
 ]);
 
-function serverCatalog() {
+/**
+ * NEI's places for the records above (the pipeline's resourceOrder), shaped like NEI's own list:
+ * GT's meta items in their sub-item order (dust 2305, ingot 11305, plate 17305), water first as
+ * 2.9 lists fluids, and some records NEI does not list.
+ */
+const resourceOrder = [11, 12, 10, 20, 21, 30, 3, 4, null, 2, 5, 0, null, null, 13];
+
+function serverCatalog(order?: Array<number | null>) {
   return {
     version: { id: "test" },
     resources: [],
     resourceIndex: JSON.parse(JSON.stringify(resourceIndex)),
+    ...(order ? { resourceOrder: order } : {}),
     resourceDirectionCounts: new Map(
       counts.map(([key, madeBy, usedBy]) => [key, { madeBy, usedBy }]),
     ),
@@ -69,12 +77,21 @@ function serverCatalog() {
   } as unknown as Parameters<typeof queryCatalogResources>[0];
 }
 
-describe("the browser's item search", () => {
+describe.each([
+  ["without NEI's order", undefined],
+  ["with NEI's order", resourceOrder],
+])("the browser's item search %s", (_label, order) => {
   it("answers every request as the server's route does", async () => {
-    const catalog = serverCatalog();
-    // The file as the browser parses it.
+    const catalog = serverCatalog(order);
+    // The file as the browser parses it, from the server's own writer.
     const file = JSON.parse(
-      JSON.stringify({ schemaVersion: 1, resourceIndex, directionCounts: counts, sources }),
+      JSON.stringify({
+        schemaVersion: 2,
+        resourceIndex,
+        ...(order ? { resourceOrder: order } : {}),
+        directionCounts: counts,
+        sources,
+      }),
     ) as ResourceSearchFile;
     const engine = createResourceSearchEngine(file);
     const sorts: ResourceQuerySort[] = [
@@ -85,6 +102,8 @@ describe("the browser's item search", () => {
       "made",
       "uses",
       "popular",
+      "nei",
+      "nei-filter",
     ];
     let compared = 0;
     for (const query of [
@@ -129,7 +148,7 @@ describe("the browser's item search", () => {
         }
       }
     }
-    expect(compared).toBe(11 * 7 * 4 * 2);
+    expect(compared).toBe(11 * 9 * 4 * 2);
   });
 
   it("corrects a misspelling the way the server does", () => {
@@ -137,5 +156,148 @@ describe("the browser's item search", () => {
     const answer = createResourceSearchEngine(file)({ query: "stel plat", offset: 0, limit: 120 });
     expect(answer.searchPhase).toBe("corrected");
     expect(answer.resources[0]?.displayName).toBe("Steel Plate");
+  });
+});
+
+describe("the NEI sorts", () => {
+  const ids = (answer: { resources: Array<{ kind: string; id: string }> }) =>
+    answer.resources.map((entry) => `${entry.kind}:${entry.id}`);
+  const engine = (order?: Array<number | null>) =>
+    createResourceSearchEngine({
+      schemaVersion: 2,
+      resourceIndex,
+      ...(order ? { resourceOrder: order } : {}),
+      directionCounts: counts,
+      sources,
+    });
+
+  it("are ready when the engine is: the rank table is built at load, on the server by the prewarm", () => {
+    expect(engine(resourceOrder).indexes.neiRanks).toBeInstanceOf(Int32Array);
+    const catalog = serverCatalog(resourceOrder);
+    expect(warmResourceSearch(catalog).neiRanks).toBeInstanceOf(Int32Array);
+  });
+
+  it("list everything in NEI's order with nothing typed, unlisted records after", () => {
+    const answer = engine(resourceOrder)({ query: "", offset: 0, limit: 120, sort: "nei" });
+    expect(ids(answer)).toEqual([
+      "fluid:water",
+      "item:minecraft:glass",
+      "item:minecraft:log",
+      "item:minecraft:wheat",
+      "item:ic2:itemCellEmpty",
+      "item:gregtech:gt.metaitem.01@2305",
+      "item:gregtech:gt.metaitem.01@11305",
+      "item:gregtech:gt.metaitem.01@17305",
+      "item:gregtech:gt.metaitem.01@32610",
+      "item:gregtech:gt.metaitem.01@32611",
+      "item:gregtech:gt.blockmachines@1000",
+      // Not in NEI's list: after it, in the approximation's order.
+      "item:forestry:beeCombs",
+      "fluid:molten.steel",
+    ]);
+    expect(ids(engine(resourceOrder)({ query: "", offset: 0, limit: 120, sort: "nei-filter" }))).toEqual(ids(answer));
+  });
+
+  it("fall back to the approximation for a dataset without NEI's order", () => {
+    const answer = engine()({ query: "", offset: 0, limit: 120, sort: "nei" });
+    expect(ids(answer)).toEqual([
+      "item:minecraft:glass",
+      "item:minecraft:log",
+      "item:minecraft:wheat",
+      "item:forestry:beeCombs",
+      "item:gregtech:gt.blockmachines@1000",
+      "item:gregtech:gt.metaitem.01@2305",
+      "item:gregtech:gt.metaitem.01@11305",
+      "item:gregtech:gt.metaitem.01@17305",
+      "item:gregtech:gt.metaitem.01@32610",
+      "item:gregtech:gt.metaitem.01@32611",
+      "item:ic2:itemCellEmpty",
+      "fluid:molten.steel",
+      "fluid:water",
+    ]);
+  });
+
+  it("rank a typed query exactly as Best match does", () => {
+    const nei = ids(engine(resourceOrder)({ query: "steel", offset: 0, limit: 120, sort: "nei" }));
+    const best = ids(engine(resourceOrder)({ query: "steel", offset: 0, limit: 120, sort: "relevance" }));
+    expect(nei).toEqual(best);
+    expect(nei.slice(0, 3)).toEqual([
+      "item:gregtech:gt.metaitem.01@11305",
+      "item:gregtech:gt.metaitem.01@17305",
+      "item:gregtech:gt.metaitem.01@2305",
+    ]);
+  });
+
+  it("filter only, in NEI's order, with no ranking", () => {
+    const answer = engine(resourceOrder)({ query: "steel", offset: 0, limit: 120, sort: "nei-filter" });
+    expect(ids(answer)).toEqual([
+      "item:gregtech:gt.metaitem.01@2305",
+      "item:gregtech:gt.metaitem.01@11305",
+      "item:gregtech:gt.metaitem.01@17305",
+      "fluid:molten.steel",
+    ]);
+  });
+
+  it("rank \"electrum\" as Best match under As in NEI, the material near the top; filter only ranks nothing", () => {
+    const record = (kind: string, id: string, displayName: string, recipeCount: number) => ({
+      kind,
+      id,
+      displayName,
+      iconPath: `/x/${id.replace(/[^a-z0-9]/gi, "_")}.png`,
+      recipeCount,
+    });
+    // NEI lists other mods' Electrum items before GT's material, and the aspect's mod first of all.
+    const electrum = [
+      record("item", "enderio:itemitemconduit@3", "Electrum Item Pipe Casing", 5),
+      record("item", "enderio:itempowerconduit@1", "Electrum Energy Conduit", 20),
+      record("item", "gregtech:gt.metaitem.01@11303", "Electrum Ingot", 300),
+      record("item", "gregtech:gt.metaitem.01@2303", "Electrum Dust", 40),
+      record("aspect", "thaumcraft:aspect:electrum", "Electrum", 10),
+    ];
+    const search = createResourceSearchEngine({
+      schemaVersion: 2,
+      resourceIndex: electrum as never,
+      resourceOrder: [1, 2, 4, 3, 0],
+      directionCounts: [],
+      sources: { plants: [], bees: [] },
+    });
+    const ask = (sort: "nei" | "nei-filter" | "relevance") =>
+      ids(search({ query: "electrum", offset: 0, limit: 120, sort }));
+    expect(ask("nei")).toEqual([
+      "aspect:thaumcraft:aspect:electrum",
+      "item:gregtech:gt.metaitem.01@11303",
+      "item:gregtech:gt.metaitem.01@2303",
+      "item:enderio:itempowerconduit@1",
+      "item:enderio:itemitemconduit@3",
+    ]);
+    expect(ask("nei")).toEqual(ask("relevance"));
+    expect(ask("nei-filter")).toEqual([
+      "aspect:thaumcraft:aspect:electrum",
+      "item:enderio:itemitemconduit@3",
+      "item:enderio:itempowerconduit@1",
+      "item:gregtech:gt.metaitem.01@2303",
+      "item:gregtech:gt.metaitem.01@11303",
+    ]);
+  });
+
+  it("leave only matches equal in every way, nudge included, to NEI's order", () => {
+    const record = (id: string, displayName: string, recipeCount: number) => ({
+      kind: "item",
+      id,
+      displayName,
+      iconPath: `/x/${id.replace(/[^a-z0-9]/gi, "_")}.png`,
+      recipeCount,
+    });
+    const search = createResourceSearchEngine({
+      schemaVersion: 2,
+      // Same name length, same recipe count: Best match leaves them by name, As in NEI as NEI lists them.
+      resourceIndex: [record("a:x", "Steel Gear", 5), record("a:y", "Steel Bolt", 5), record("a:z", "Steel Rod", 5)] as never,
+      resourceOrder: [0, 1, 2],
+      directionCounts: [],
+      sources: { plants: [], bees: [] },
+    });
+    // The shorter "Steel Rod" wins on the nudge either way; the two equal ones follow NEI's order.
+    expect(ids(search({ query: "steel", offset: 0, limit: 120, sort: "nei" }))).toEqual(["item:a:z", "item:a:x", "item:a:y"]);
+    expect(ids(search({ query: "steel", offset: 0, limit: 120, sort: "relevance" }))).toEqual(["item:a:z", "item:a:y", "item:a:x"]);
   });
 });

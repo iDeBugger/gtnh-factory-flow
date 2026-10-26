@@ -1,7 +1,7 @@
 /**
- * How the server's Supabase client reaches the local development database.
- * `LOCAL_DB=1` turns it on; unset, nothing here runs and the hosted project is
- * used as before. Safe to import anywhere on the server: it never loads the
+ * How the server's PostgREST client reaches the local development database.
+ * `LOCAL_DB=1` turns it on; unset, nothing here runs and POSTGREST_URL is
+ * used. Safe to import anywhere on the server: it never loads the
  * database itself.
  *
  * - In a process that opened the database (tests, `tools/local-db/serve.ts`),
@@ -13,7 +13,7 @@
 /** Where `tools/local-db/serve.ts` listens unless told otherwise. */
 export const LOCAL_DB_DEFAULT_URL = "http://127.0.0.1:54329";
 
-/** supabase-js wants a key; the local database checks none. */
+/** The client sends a bearer token; the local database checks none. */
 export const LOCAL_DB_SERVICE_KEY = "local-development-only";
 
 type LocalHandler = (request: Request) => Promise<Response>;
@@ -47,7 +47,7 @@ export function useInProcessLocalDb(handler: LocalHandler | undefined): void {
   (globalThis as WithHandler)[IN_PROCESS] = handler;
 }
 
-/** supabase-js's fetch in local mode: the in-process database, else `send` (HTTP to LOCAL_DB_URL). */
+/** The client's fetch in local mode: the in-process database, else `send` (HTTP to LOCAL_DB_URL). */
 export function localDbFetch(
   input: Parameters<typeof fetch>[0],
   init: Parameters<typeof fetch>[1],

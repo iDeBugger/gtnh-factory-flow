@@ -11,7 +11,8 @@
  *                      for a localhost base, else wss://<host>/live)
  *   --user <name>      account (GTNH_USER)
  *   --password <pw>    password (GTNH_PASSWORD)
- *   --game <hash>      say hello as the game, from this server hash (web otherwise)
+ *   --game <hash>      say hello as the game, from this server hash (web otherwise:
+ *                      the socket then carries the base's Origin, as a browser's does)
  *   --for <seconds>    how long `join` listens (default: until Ctrl+C)
  *
  * Commands:
@@ -182,7 +183,11 @@ async function findAccount(username) {
 function connect() {
   return new Promise((resolve, reject) => {
     void session().then((value) => {
-      const ws = new WebSocket(liveUrl(), { headers: { cookie: `gtnh_session=${value}` } });
+      // A web client sends the site's Origin, as a browser does; the game sends none.
+      const origin = gameServer ? {} : { origin: new URL(base).origin };
+      const ws = new WebSocket(liveUrl(), {
+        headers: { cookie: `gtnh_session=${value}`, ...origin },
+      });
       const frames = [];
       const waiters = [];
       ws.on("message", (data) => {

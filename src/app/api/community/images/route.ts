@@ -2,9 +2,11 @@ import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/error-response";
 import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
-import { getCommunityDb, isCommunityConfigured } from "@/lib/server/community";
+import { isCommunityConfigured } from "@/lib/server/community";
+import { getFileStore, isFileStoreConfigured } from "@/lib/server/file-store";
 import { claimImageUpload } from "@/lib/server/image-upload-guard";
 import { readFormDataCapped } from "@/lib/server/request-body";
+import { siteUrl } from "@/lib/site-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,12 +16,11 @@ export const dynamic = "force-dynamic";
  * anonymous like voting: limited per address and for the whole site
  * (`image-upload-guard.ts`), size-capped, and the bytes are sniffed rather
  * than trusting the client's content type. Junk is refused before it is
- * counted, so it never spends anyone's share. Files land in a public Supabase
- * Storage bucket and come back as a plain URL the annotation carries; the plan
- * itself stays small.
+ * counted, so it never spends anyone's share. Files land in the file store's
+ * `board-images` bucket and come back as an absolute URL on this site (the
+ * annotation schema takes only `http(s)://` or `data:image/`), served by
+ * `./[month]/[name]`; the plan itself stays small.
  */
-
-const BUCKET = "board-images";
 
 /** Magic-byte sniffing: the four image formats browsers render everywhere. */
 function sniffImageType(bytes: Uint8Array): { contentType: string; ext: string } | undefined {
@@ -48,29 +49,8 @@ function sniffImageType(bytes: Uint8Array): { contentType: string; ext: string }
   return undefined;
 }
 
-let bucketReady = false;
-
-/** First upload creates the bucket; every later one costs one cheap check. */
-async function ensureBucket(): Promise<void> {
-  if (bucketReady) {
-    return;
-  }
-  const db = getCommunityDb();
-  const { data } = await db.storage.getBucket(BUCKET);
-  if (!data) {
-    const { error } = await db.storage.createBucket(BUCKET, {
-      public: true,
-      fileSizeLimit: BOARD_IMAGE_MAX_BYTES,
-    });
-    if (error && !/already exists/i.test(error.message)) {
-      throw new Error(`Image storage bucket could not be created: ${error.message}`);
-    }
-  }
-  bucketReady = true;
-}
-
 export async function POST(request: Request) {
-  if (!isCommunityConfigured()) {
+  if (!isCommunityConfigured() || !isFileStoreConfigured()) {
     return NextResponse.json({ error: "Image hosting is not configured." }, { status: 503 });
   }
 
@@ -112,24 +92,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: refusal.error }, { status: refusal.status });
     }
 
-    await ensureBucket();
-    const db = getCommunityDb();
-    const path = `${new Date().toISOString().slice(0, 7)}/${randomBytes(9).toString("hex")}.${sniffed.ext}`;
-    const { error } = await db.storage.from(BUCKET).upload(path, bytes, {
-      contentType: sniffed.contentType,
-      cacheControl: "31536000",
-      upsert: false,
-    });
-    if (error) {
+    const month = new Date().toISOString().slice(0, 7);
+    const name = `${randomBytes(9).toString("hex")}.${sniffed.ext}`;
+    try {
+      await getFileStore().put("board-images", `${month}/${name}`, bytes, { overwrite: false });
+    } catch (error) {
       console.error("Image upload failed.", error);
-      return NextResponse.json(
-        { error: "Image upload failed." },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: "Image upload failed." }, { status: 500 });
     }
-
-    const { data } = db.storage.from(BUCKET).getPublicUrl(path);
-    return NextResponse.json({ url: data.publicUrl });
+    return NextResponse.json({ url: `${siteUrl()}/api/community/images/${month}/${name}` });
   } catch (error) {
     return serverErrorResponse(error, "Image upload failed.");
   }

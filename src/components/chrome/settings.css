@@ -39,7 +39,8 @@
   display: flex;
   flex-direction: column;
   width: 640px;
-  max-width: calc(100vw / var(--ui-scale, 1) - 16px);
+  /* The backdrop wears the bar's zoom on top of the interface's (.ms-zoom): the window's width is divided by both. */
+  max-width: calc(100vw / (var(--ui-scale, 1) * var(--mod-zoom)) - 16px);
   height: 262px;
   background: var(--ms-surface);
   box-shadow:
@@ -434,7 +435,7 @@
 
 /* The mod's size: the bar's zoom on top of the interface's. */
 .ms-backdrop.ms-zoom {
-  zoom: calc(var(--ui-scale) * 1.7094);
+  zoom: calc(var(--ui-scale) * var(--mod-zoom));
 }
 .ms-text {
   display: flex;
@@ -465,4 +466,10 @@
 }
 .ms-slider {
   width: 80px;
+}
+
+/* A phone: a row too narrow for its control puts the control under its words. */
+:root[data-compact] .ms-row {
+  flex-wrap: wrap;
+  row-gap: 3px;
 }

@@ -34,10 +34,16 @@ import type { ShareMode } from "@/components/community/SharePlanDialog";
 import { isLiveConfigured } from "@/lib/live/live-config";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { ChecklistIcon } from "./pixel-icons";
-import { useIsCompactViewport } from "@/lib/compact-view";
-import { convertToLabel, readNewPlanVersion, servedGameVersions, useNewPlanVersion, writeNewPlanVersion } from "@/lib/datasets/new-plan-version";
-import { convertingLabel, convertPlan, convertTargets, usePendingConversion } from "@/lib/datasets/convert-action";
-import { DEFAULT_GAME_VERSION, gameVersionLabel, planGameVersion, type GameVersion } from "@/lib/model/game-version";
+import { readNewPlanVersion, servedGameVersions } from "@/lib/datasets/new-plan-version";
+import {
+  convertingLabel,
+  convertPlan,
+  convertTargets,
+  usePendingConversion,
+  type PendingConversion,
+} from "@/lib/datasets/convert-action";
+import type { DatasetManifest } from "@/lib/datasets/types";
+import { gameVersionLabel, planGameVersion, type GameVersion } from "@/lib/model/game-version";
 
 /** What the tab strip asks of the bar: the dialogs it does not own. */
 export interface ModTabsActions {
@@ -72,7 +78,6 @@ const TAB_GAP = 2;
 
 type TabMenu =
   | { kind: "plus"; anchor: ChromeAnchor }
-  | { kind: "version"; anchor: ChromeAnchor }
   | { kind: "tab"; anchor: ChromeAnchor; id: string; name: string }
   | { kind: "delete"; anchor: ChromeAnchor; id: string; name: string };
 
@@ -94,11 +99,7 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
   const solving = useSolvingBooks();
   const converting = usePendingConversion();
   const manifest = useFactoryStore((state) => state.datasetManifest);
-  const newPlanVersion = useNewPlanVersion(manifest);
-  const servedVersions = servedGameVersions(manifest);
-  // A phone's bar has no room for the New plans picker: it is a row of the + menu there.
-  const compact = useIsCompactViewport();
-  /** New plans are made for the picker's version, read at the moment of the press. */
+  /** New plans are made for the version chosen in Settings, read at the moment of the press. */
   const newPlanOptions = () => ({ gameVersion: readNewPlanVersion(useFactoryStore.getState().datasetManifest) });
 
   const [menu, setMenu] = useState<TabMenu>();
@@ -347,9 +348,6 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
   };
 
   const entries = (m: TabMenu): MenuEntry[] => {
-    if (m.kind === "version") {
-      return newPlanVersionEntries(servedVersions, newPlanVersion);
-    }
     if (m.kind === "plus") {
       return [
         {
@@ -361,15 +359,6 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
             void addDesign(newPlanOptions());
           },
         },
-        ...(compact && servedVersions.length > 1
-          ? [
-              {
-                label: `New plans: ${gameVersionLabel(newPlanVersion)}`,
-                tip: "The GTNH version a new plan is made for. A recipe picked on Welcome opens on the version you browsed it on.",
-                onSelect: () => setMenu({ kind: "version", anchor: m.anchor }),
-              } satisfies MenuEntry,
-            ]
-          : []),
         // Task boards come with live plans (the mod's + list has the same row).
         ...(isLiveConfigured()
           ? [
@@ -404,17 +393,7 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
       { label: "Rename", onSelect: () => setRenaming(m.id) },
       { label: "Copy plan code", detail: "to paste or share", onSelect: () => void copyCode(m.id) },
       // Outside the library rows: converting is not a community feature and shows with it switched off.
-      ...convertTargets(manifest, tabVersion).map(
-        (version): MenuEntry =>
-          converting?.target === version && converting.sourceDesignId === m.id
-            ? { label: convertingLabel(version), disabled: true, onSelect: () => undefined }
-            : {
-                label: convertToLabel(version),
-                detail: "as a new plan",
-                disabled: Boolean(converting),
-                onSelect: () => void convert(m.id, version),
-              },
-      ),
+      ...convertRows(manifest, tabVersion, converting, m.id, (version) => void convert(m.id, version)),
       ...libraryRows(
         Boolean(m.id === activeDesignId ? linkedPostId : designs.find((design) => design.id === m.id)?.communityPlanId),
         (mode) => {
@@ -596,11 +575,10 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
                   <>
                     {design.taskBoard ? <ChecklistIcon className="mt-tasks" /> : null}
                     <span className="mt-name">{design.name}</span>
-                    {version !== DEFAULT_GAME_VERSION ? (
-                      <span className="mt-version" data-plan-version={version} aria-label={gameVersionLabel(version)}>
-                        {version}
-                      </span>
-                    ) : null}
+                    {/* Every plan's version, the default's too: the player always sees which game the plan is for. */}
+                    <span className="mt-version" data-plan-version={version} aria-label={gameVersionLabel(version)}>
+                      {version}
+                    </span>
                   </>
                 )}
                 {converting?.sourceDesignId === design.id ? (
@@ -669,9 +647,9 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
         <ChromeMenu
           anchor={menu.anchor}
           entries={entries(menu)}
-          label={menu.kind === "plus" ? "New plan" : menu.kind === "version" ? "New plans" : `Plan options for ${menu.name}`}
-          title={menu.kind === "delete" ? `Delete '${menu.name}' for good?` : menu.kind === "version" ? "New plans" : undefined}
-          minWidth={menu.kind === "plus" ? 190 : menu.kind === "delete" ? 150 : menu.kind === "version" ? 120 : 170}
+          label={menu.kind === "plus" ? "New plan" : `Plan options for ${menu.name}`}
+          title={menu.kind === "delete" ? `Delete '${menu.name}' for good?` : undefined}
+          minWidth={menu.kind === "plus" ? 190 : menu.kind === "delete" ? 150 : 170}
           onClose={closeMenu}
         />
       ) : null}
@@ -679,17 +657,41 @@ export function ModTabs({ onPaste, onShare }: ModTabsActions) {
   );
 }
 
-/** The New plans picker's rows: one per version this site serves, the chosen one marked. */
-export function newPlanVersionEntries(served: readonly string[], chosen: string): MenuEntry[] {
-  return served.map((version) => ({
-    label: gameVersionLabel(version),
-    current: version === chosen,
-    onSelect: () => {
-      playSfx("ui.tick");
-      writeNewPlanVersion(version);
+/**
+ * The tab menu's Convert to row: a submenu of every version this site serves, the plan's own shown (marked "this
+ * plan") but not picked. None on a site with nothing else to convert to. While this tab's conversion runs the row
+ * says so, greyed; while another tab's runs it is greyed.
+ */
+export function convertRows(
+  manifest: DatasetManifest | undefined,
+  planVersion: GameVersion,
+  converting: PendingConversion | undefined,
+  designId: string,
+  onConvert: (version: GameVersion) => void,
+): MenuEntry[] {
+  if (convertTargets(manifest, planVersion).length === 0) return [];
+  if (converting?.sourceDesignId === designId) {
+    return [{ label: convertingLabel(converting.target), disabled: true, onSelect: () => undefined }];
+  }
+  const served = servedGameVersions(manifest);
+  const versions = served.includes(planVersion) ? served : [planVersion, ...served];
+  return [
+    {
+      label: CONVERT_TO_MENU_LABEL,
+      detail: "as a new plan",
+      disabled: Boolean(converting),
+      onSelect: () => undefined,
+      submenu: versions.map((version) =>
+        version === planVersion
+          ? { label: gameVersionLabel(version), detail: "this plan", current: true, disabled: true, onSelect: () => undefined }
+          : { label: gameVersionLabel(version), onSelect: () => onConvert(version) },
+      ),
     },
-  }));
+  ];
 }
+
+/** The Convert row's label; its submenu names the versions. */
+export const CONVERT_TO_MENU_LABEL = "Convert to";
 
 /** The pixel cross of the close key: two five-pixel diagonals. */
 function CloseGlyph() {

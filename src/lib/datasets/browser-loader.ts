@@ -18,6 +18,7 @@ import {
   type RecipeQuerySideOp,
 } from "./recipe-query";
 import type { SearchCorrection, SearchPhase } from "@/lib/search";
+import type { ResourceQuerySort } from "@/lib/search/resource-search";
 import type {
   DatasetResourceIndexEntry,
   DatasetVersion,
@@ -72,7 +73,7 @@ export interface RecipeDatasetResourceQuery {
   limit: number;
   kind?: "item" | "fluid";
   mod?: string;
-  sort?: "relevance" | "name" | "mod" | "recipes" | "made" | "uses" | "popular";
+  sort?: ResourceQuerySort;
   /** Narrow to what a crop can grow or a bee can make. */
   source?: "plants" | "bees";
 }

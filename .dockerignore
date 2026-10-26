@@ -1,13 +1,43 @@
-.git
-.github
-.gh-artifacts-*
-.next
-.pipeline
-.tmp
+# What the images never read. The deploy sends `git archive HEAD` (docs/deploy.md); whatever is left
+# out here is neither sent nor hashed, and a commit that changes only these files leaves `COPY . .`
+# and `next build` cached. Generated and local files (a build from a working tree):
 node_modules
-coverage
-*.tar
-*.log
+.next
+dist-live
+public/datasets
+public/highs.wasm
+public/highs.js
+scratch
+.superpowers
+.worktrees
+.pipeline
+.cache
+.git
 .env*
-dev-server*.log
-public/datasets/gtnh
+*.log
+tools/parity/out
+tsconfig.tsbuildinfo
+# The build's own files: changing them must not rebuild the app.
+Dockerfile
+.dockerignore
+.github
+# Docs, notes and tests: no route, bundle or build step reads them.
+**/*.md
+docs
+mockups
+**/*.test.ts
+**/*.test.tsx
+**/*.test.mjs
+src/test-support
+src/lib/solver/plan/__fixtures__/corpus
+vitest.config.ts
+vitest.local.config.ts
+eslint.config.mjs
+# Of tools/, the build needs its prebuild step, the site image the env check and the service token,
+# the live image its package list, the migrate image the database setup.
+tools/*
+!tools/copy-highs-wasm.mjs
+!tools/deploy/live-deps.mjs
+!tools/deploy/check-env.mjs
+!tools/deploy/service-token.mjs
+!tools/deploy/db

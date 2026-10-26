@@ -1,8 +1,3 @@
 # Blank issues are off so that /issues/new always lands on the chooser rather
-# than an empty box. The bug button in the planner header links straight to
-# bug_report.yml, so it skips this screen entirely.
+# than an empty box.
 blank_issues_enabled: false
-contact_links:
-  - name: Planner thread in the GTNH Discord
-    url: https://discord.com/channels/181078474394566657/1531402304530682036
-    about: Questions, ideas, and general chat about the planner. Faster than an issue for anything that is not a bug.

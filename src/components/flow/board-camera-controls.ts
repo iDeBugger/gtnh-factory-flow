@@ -318,6 +318,10 @@ export function useBoardCameraControls({
       if (isEditableKeyboardTarget(event.target)) {
         return;
       }
+      // An open menu owns the keys pressed in it: a pan would move the camera, and a camera move closes the menu.
+      if ((event.target as Element | null)?.closest?.("[data-mod-menu]")) {
+        return;
+      }
       // A focused card owns its arrows — React Flow nudges the card with them.
       if (
         pan &&

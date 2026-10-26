@@ -1,7 +1,7 @@
 /**
  * The top bar is one row, and nothing in it hides in a menu. As the bar narrows the plan tabs give way first (the strip
- * scrolls; the open plan's tab and the + never go), then Plans, Share and Sign in become small icon keys like feedback,
- * settings and help, then the gaps tighten.
+ * scrolls; the open plan's tab and the + never go), then Plans, Share and Sign in become small icon keys like settings
+ * and help, then the gaps tighten.
  *
  * Each step starts when the tab strip's measured room falls below what that step keeps for it. Stepping back is judged
  * by the room the previous dress would leave (what the step gave the tabs, measured when it was taken), so a bar resting

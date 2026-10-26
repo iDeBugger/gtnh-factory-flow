@@ -1,8 +1,9 @@
 import type { MetadataRoute } from "next";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
+import { siteUrl } from "@/lib/site-url";
 
 export default function robots(): MetadataRoute.Robots {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://gtnhplanner.com";
+  const base = siteUrl();
   return {
     rules: [
       {

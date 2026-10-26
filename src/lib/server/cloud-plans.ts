@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbClient } from "./community";
 import { docKey, isAccountId } from "@/lib/live/protocol";
 import type { PlanMember } from "@/lib/library/sync-types";
 import { fetchWithDbTimeout } from "./community";
@@ -42,7 +42,7 @@ export function leaseHeld(until: string | null | undefined, now = Date.now()): b
  * members.
  */
 export async function designRole(
-  db: SupabaseClient,
+  db: DbClient,
   userId: string,
   ownerId: string,
   designId: string,
@@ -65,7 +65,7 @@ export async function designRole(
 
 /** Usernames by account id. */
 export async function usernamesFor(
-  db: SupabaseClient,
+  db: DbClient,
   ids: Iterable<string>,
 ): Promise<Map<string, string>> {
   const unique = [...new Set(ids)];
@@ -85,7 +85,7 @@ export async function usernamesFor(
 
 /** The accounts a design is shared with, oldest first. */
 export async function listMembers(
-  db: SupabaseClient,
+  db: DbClient,
   ownerId: string,
   designId: string,
 ): Promise<PlanMember[]> {

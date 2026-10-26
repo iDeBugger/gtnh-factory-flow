@@ -1,7 +1,7 @@
 // The CI dependency audit gate: `npm audit` with an allowlist and a severity threshold.
 //
 // Two passes. The production tree (`--omit=dev`) must be clean at moderate: everything in it
-// ships to the droplet and the browser. The whole tree is held to high: test, lint and build
+// ships to the server and the browser. The whole tree is held to high: test, lint and build
 // tooling never ships, but a hostile dependency can still act during `npm ci` or a build.
 // `npm audit` has no allowlist of its own, and a third-party gate would run an unlocked package
 // on every pull request, so this script has no dependencies.

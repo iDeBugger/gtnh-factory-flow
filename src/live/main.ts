@@ -1,28 +1,33 @@
 /**
- * The live service's entry point (systemd unit `gtnh-live` in production,
+ * The live service's entry point (the `live` container in production,
  * `npm run dev:local` here). Development: `tsx src/live/main.ts`. Production:
  * `npm run build:live` bundles this to `dist-live/live.mjs`, run with plain
- * `node dist-live/live.mjs` from the release directory.
+ * `node dist-live/live.mjs` from the image's working directory.
  *
  * Environment:
  * - COMMUNITY_HASH_SALT: the session secret, the same as the website's.
- * - SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY: the database (or LOCAL_DB=1 and
+ * - POSTGREST_URL, POSTGREST_SERVICE_TOKEN: the database (or LOCAL_DB=1 and
  *   LOCAL_DB_URL for the local one).
  * - LIVE_PORT (3001), LIVE_HOST (127.0.0.1).
  * - LIVE_JOURNAL_DIR: where unflushed batches are kept (required in production).
  * - LIVE_INTERNAL_TOKEN: shared with the website for /internal/*.
  * - LIVE_ALLOWED_ORIGINS: comma-separated browser origins (default: localhost:3000).
+ * - LIVE_TRUSTED_PROXIES: comma-separated addresses and CIDR subnets whose
+ *   X-Client-Ip is believed, besides loopback (in Docker: the bridge gateway
+ *   docker-proxy dials from). Keep it narrow: every peer inside may name any
+ *   client address. A bad entry stops the service.
  * - LIVE_MAX_ROOMS: plans open at once in the whole service (default 500).
  * - LIVE_MAX_PLAN_BYTES: plan JSON held in open rooms, in bytes (default 64 MB).
- *   Resident memory is about four times it plus the baseline: size the unit's
- *   MemoryMax and the heap from it.
+ *   Resident memory is about four times it plus the baseline: size the container's
+ *   memory limit and the heap from it.
  */
 import path from "node:path";
 import { isCommunityConfigured } from "@/lib/server/community";
 import { assertLocalDbAllowed } from "@/lib/server/local-db/client";
 import { sessionSecret } from "@/lib/server/session";
 import { LiveService } from "./service";
-import { supabasePlanStore } from "./store";
+import { databasePlanStore } from "./store";
+import { parseTrustedProxies, type TrustedProxies } from "./trusted-proxies";
 
 function fatal(message: string): never {
   console.error(`[live] ${message}`);
@@ -34,15 +39,17 @@ async function main() {
   if (!process.env.COMMUNITY_HASH_SALT) {
     fatal("COMMUNITY_HASH_SALT is not set: sessions could not be checked.");
   }
+  let trustedProxies: TrustedProxies;
   try {
     // The website's rule: in production a blank or development value refuses every token.
     sessionSecret();
     assertLocalDbAllowed();
+    trustedProxies = parseTrustedProxies(process.env.LIVE_TRUSTED_PROXIES);
   } catch (error) {
     fatal((error as Error).message);
   }
   if (!isCommunityConfigured()) {
-    fatal("No database: set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or LOCAL_DB=1).");
+    fatal("No database: set POSTGREST_URL and POSTGREST_SERVICE_TOKEN (or LOCAL_DB=1).");
   }
   const journalDir = process.env.LIVE_JOURNAL_DIR;
   if (!journalDir && production) {
@@ -64,10 +71,11 @@ async function main() {
   let stop: (signal: string, code?: number) => Promise<void> = async () => undefined;
   const service = new LiveService({
     onShutdownRequest: () => void stop("shutdown request"),
-    store: supabasePlanStore(),
+    store: databasePlanStore(),
     journalDir: path.resolve(journalDir ?? path.join("scratch", "local-db", "live-journal")),
     allowedOrigins,
     internalToken: process.env.LIVE_INTERNAL_TOKEN || undefined,
+    trustedProxies,
     limits: {
       ...(maxRooms ? { maxRooms } : {}),
       ...(maxOpenPlanBytes ? { maxOpenPlanBytes } : {}),
@@ -78,7 +86,7 @@ async function main() {
     process.env.LIVE_HOST ?? "127.0.0.1",
   );
   console.log(
-    `[live] listening on ${process.env.LIVE_HOST ?? "127.0.0.1"}:${port}, origins ${allowedOrigins.join(" ")}`,
+    `[live] listening on ${process.env.LIVE_HOST ?? "127.0.0.1"}:${port}, origins ${allowedOrigins.join(" ")}, trusted proxies: ${trustedProxies.describe()}`,
   );
 
   let stopping = false;
@@ -102,7 +110,7 @@ async function main() {
   process.on("SIGINT", () => void stop("SIGINT"));
   process.on("SIGTERM", () => void stop("SIGTERM"));
   // A fault nothing caught: store every open plan and let the leases go, then
-  // exit 1 so systemd restarts the service. Exiting without this would leave
+  // exit 1 so the restart policy restarts the service. Exiting without this would leave
   // the plans to journal replay and REST saves refused until the leases lapse.
   // A service too broken to stop must still exit, so the exit is timed as well.
   const bail = (what: string, error: unknown) => {

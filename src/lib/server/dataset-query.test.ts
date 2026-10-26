@@ -20,6 +20,7 @@ import {
   prewarmFirstThenRest,
   prewarmInOrder,
   queryCatalogResources,
+  resourceSearchFileOf,
   createRankedRecipeSearchCache,
   keptRecipeSearch,
   RECIPE_SEARCH_CACHE_BYTES,
@@ -520,15 +521,44 @@ describe("the bounded dataset caches", () => {
     expect(nope).toMatchObject({ resources: [], total: 0, mods: all.mods });
   });
 
-  it("keep 24 blank item lists per version, the least recently read out first", () => {
-    expect(BLANK_RESOURCE_SEARCH_KEYS).toBe(24);
+  it("hand the browser's items file NEI's order beside the records, only when it fits them", async () => {
+    const catalog = (resourceOrder?: unknown) =>
+      ({
+        version: { id: "test" },
+        resources: [],
+        resourceIndex: [
+          { id: "gregtech:steel", kind: "item", displayName: "Steel", iconPath: "s.png", recipeCount: 1 },
+          { id: "minecraft:glass", kind: "item", displayName: "Glass", iconPath: "g.png", recipeCount: 1 },
+        ],
+        ...(resourceOrder === undefined ? {} : { resourceOrder }),
+        resourceDirectionCounts: new Map(),
+        passiveSourceKeys: { plants: new Set(), bees: new Set() },
+        recipeMaps: [],
+        recipeCount: 0,
+        shards: [],
+      }) as unknown as Parameters<typeof resourceSearchFileOf>[0];
+
+    const ordered = await resourceSearchFileOf(catalog([1, null]));
+    expect(ordered.schemaVersion).toBe(2);
+    expect(ordered.resourceOrder).toEqual([1, null]);
+    expect(ordered.resourceIndex.every((record) => !("resourceOrder" in record))).toBe(true);
+
+    for (const unusable of [undefined, [1], ["1", null]]) {
+      const file = await resourceSearchFileOf(catalog(unusable));
+      expect(file.schemaVersion).toBe(2);
+      expect("resourceOrder" in file).toBe(false);
+    }
+  });
+
+  it("keep 27 blank item lists per version, the least recently read out first", () => {
+    expect(BLANK_RESOURCE_SEARCH_KEYS).toBe(27);
     const cache = createBlankResourceSearchCache<number>();
-    for (let key = 0; key < 24; key += 1) {
+    for (let key = 0; key < 27; key += 1) {
       cache.set(`list-${key}`, key);
     }
     expect(cache.get("list-0")).toBe(0);
-    cache.set("list-24", 24);
-    expect(cache.count).toBe(24);
+    cache.set("list-27", 27);
+    expect(cache.count).toBe(27);
     expect(cache.get("list-1")).toBeUndefined();
     expect(cache.get("list-0")).toBe(0);
   });

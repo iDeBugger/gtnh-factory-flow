@@ -24,6 +24,22 @@ describe("the popularity map the browser's item search orders by", () => {
     await expect(landed.json()).resolves.toEqual({ entries: [["fluid:water", 40]] });
   });
 
+  it("answers only its size when asked for the count, under the same cache policy", async () => {
+    const empty = await GET(new Request("http://localhost/api/resource-popularity?count=1"));
+    expect(empty.headers.get("Cache-Control")).toBe("no-store");
+    await expect(empty.json()).resolves.toEqual({ count: 0 });
+
+    vi.mocked(getResourcePopularity).mockReturnValueOnce(
+      new Map([
+        ["fluid:water", 40],
+        ["item:minecraft:glass", 30],
+      ]),
+    );
+    const landed = await GET(new Request("http://localhost/api/resource-popularity?count=1"));
+    expect(landed.headers.get("Cache-Control")).toBe("public, max-age=1800");
+    await expect(landed.json()).resolves.toEqual({ count: 2 });
+  });
+
   it("spends the dataset budget like the routes it serves, and is refused past it", async () => {
     resetDatasetBudget();
     spendDatasetBudget("203.0.113.5", BUDGET_PER_MINUTE);
@@ -35,7 +51,7 @@ describe("the popularity map the browser's item search orders by", () => {
     expect(refused.status).toBe(429);
     expect(refused.headers.get("Retry-After")).toBe("10");
     await expect(refused.json()).resolves.toEqual({ error: DATASET_BUDGET_REFUSAL });
-    expect(getResourcePopularity).toHaveBeenCalledTimes(2);
+    expect(getResourcePopularity).toHaveBeenCalledTimes(4);
     resetDatasetBudget();
   });
 });

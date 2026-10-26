@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { PostgrestClient } from "@supabase/postgrest-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   COMMUNITY_DB_DOWN_MESSAGE,
@@ -9,15 +9,14 @@ import {
   resetDbBreaker,
 } from "./community";
 
-// Cloudflare's answer when the Supabase instance behind it does not respond:
-// an HTML page, sent as text/plain.
+// A proxy's answer when the database behind it does not respond: an HTML
+// page, sent as text/plain.
 const CLOUDFLARE_522 =
-  "<!DOCTYPE html><html><head><title>supabase.co | 522: Connection timed out</title></head><body></body></html>";
+  "<!DOCTYPE html><html><head><title>db.example | 522: Connection timed out</title></head><body></body></html>";
 
 function dbWith(timeoutMs = 20_000) {
-  return createClient("https://example.supabase.co", "service-key", {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: { fetch: (input, init) => fetchWithDbTimeout(input, init, timeoutMs) },
+  return new PostgrestClient("https://db.example", {
+    fetch: (input, init) => fetchWithDbTimeout(input, init, timeoutMs),
   });
 }
 
@@ -102,7 +101,7 @@ describe("fetchWithDbTimeout", () => {
       ),
     );
     const caller = new AbortController();
-    const pending = fetchWithDbTimeout("https://example.supabase.co/rest/v1/x", { signal: caller.signal });
+    const pending = fetchWithDbTimeout("https://db.example/x", { signal: caller.signal });
     caller.abort();
     await expect(pending).rejects.toThrow("Cancelled");
   });
@@ -115,9 +114,25 @@ describe("the database breaker", () => {
     resetDbBreaker();
   });
 
+  it("sends the service token as a bearer and no apikey header", async () => {
+    vi.stubEnv("POSTGREST_URL", "https://db.example/");
+    vi.stubEnv("POSTGREST_SERVICE_TOKEN", "service-token");
+    const fetchMock = vi.fn(async (_input: Parameters<typeof fetch>[0], _init?: RequestInit) =>
+      Response.json([{ id: "p1" }]),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { data } = await getCommunityDb().from("community_plans").select("id");
+    expect(data).toEqual([{ id: "p1" }]);
+    const [input, init] = fetchMock.mock.calls[0]!;
+    expect(String(input)).toMatch(/^https:\/\/db\.example\/community_plans\?select=id$/);
+    const headers = new Headers(init?.headers);
+    expect(headers.get("authorization")).toBe("Bearer service-token");
+    expect(headers.has("apikey")).toBe(false);
+  });
+
   it("stops sending after five failures in a row, then lets one through to try", async () => {
-    vi.stubEnv("SUPABASE_URL", "https://example.supabase.co");
-    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-key");
+    vi.stubEnv("POSTGREST_URL", "https://db.example/");
+    vi.stubEnv("POSTGREST_SERVICE_TOKEN", "service-token");
     vi.useFakeTimers({ toFake: ["Date"] });
     resetDbBreaker();
     let down = true;

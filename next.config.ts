@@ -22,11 +22,13 @@ const API_SEGMENT = "[^/.%][^/]*";
  * bare APP_VERSION, and two deploys under one version share year-immutable
  * answer URLs.
  *
- * The version is read as text, never imported: `next start` loads this file
- * again at run time, and the site image ships no src/: beside this file it
- * copies only `security-headers.config.ts` and `body-limits.config.ts`, which
- * import nothing (`next-config.test.ts` pins both). Where neither the version nor git is there (that
- * run-time load) the value is unused: `env` is inlined at build.
+ * The version is read as text, never imported: `next start` and the tests load
+ * this file outside a build, so it imports only `security-headers.config.ts`
+ * and `body-limits.config.ts` beside it, which import nothing
+ * (`next-config.test.ts` pins both). The site image's standalone `server.js`
+ * reads no config file: it carries this one, serialized at build. Where
+ * neither the version nor git is there the value is unused: `env` is inlined
+ * at build.
  */
 function buildIdentity(): string {
   const configured = process.env.GTNH_BUILD_ID?.trim();
@@ -70,6 +72,10 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_MOD_AND_COMMUNITY: process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY ?? "",
     NEXT_PUBLIC_GTNH_BUILD_ID: buildIdentity(),
   },
+  // The site image runs `.next/standalone/server.js`: the traced server files and only the packages they
+  // load, so a deploy whose lockfile is unchanged copies no node_modules. Its config is this one, serialized
+  // at build into the server (required-server-files.json); nothing reads next.config.ts at run time.
+  output: "standalone",
   outputFileTracingRoot: process.cwd(),
   turbopack: {
     root: process.cwd(),
@@ -83,11 +89,17 @@ const nextConfig: NextConfig = {
     // src/proxy.ts runs on every path, so Next holds each write body up to this size before a route runs
     // (default 10 MB). Just above the largest route cap, never below one (request-body.ts).
     proxyClientMaxBodySize: PROXY_BODY_MAX_BYTES,
+    // A revalidated page (the sitemap, llms.txt: `revalidate = 3600`) is kept in memory only. The site
+    // image's .next is read-only, so a write back under .next/server would fail on every revalidation;
+    // the prerendered files are still read from disk at start.
+    isrFlushToDisk: false,
   },
   async headers() {
     // The headers are read at build into the routes manifest, which is also when NEXT_PUBLIC_* is fixed.
-    // Security headers first (security-headers.config.ts: the policy, framing, nosniff, referrer, HSTS, and
-    // the solver worker's own policy on the static chunks), then the texture cache rules.
+    // Security headers (security-headers.config.ts: the policy, framing, nosniff, referrer, HSTS, and the
+    // solver worker's own policy on the static chunks). No cache rule by path for the datasets: a rule here
+    // beats the answer's own header, so a missing texture would be kept a year like a file. The
+    // dataset-files route sets each answer's policy (content-named textures immutable, a miss no-store).
     return [
       ...securityHeaders({
         production: process.env.NODE_ENV === "production",
@@ -95,47 +107,9 @@ const nextConfig: NextConfig = {
         siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
         modAndCommunity: process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY,
       }),
-      {
-        source: "/datasets/gtnh/:version/textures/icons/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
-      {
-        // Rendered item, block and fluid icons are named by a hash of their
-        // bytes (the normalizer's staging, stage-rendered-icons.mjs, and the
-        // fluid alpha pass for what it repaints), so changed pixels get a new
-        // URL and these can be immutable too. They are most of what a
-        // returning browser re-downloads.
-        source: "/datasets/gtnh/:version/textures/rendered/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
     ];
   },
   async rewrites() {
-    const appRewrites = [
-      {
-        source: "/umami",
-        destination: "http://127.0.0.1:8582/umami",
-      },
-      {
-        source: "/umami/:path*",
-        destination: "http://127.0.0.1:8582/umami/:path*",
-      },
-      {
-        source: "/_umami/:path*",
-        destination: "http://127.0.0.1:8582/umami/:path*",
-      },
-    ];
-
     // Dataset data files are not gated here: a rewrite matches the path as
     // sent and is bypassed by percent-encoding. src/proxy.ts does that on the
     // decoded path; it runs before these rules, so the dev proxy below never
@@ -155,9 +129,14 @@ const nextConfig: NextConfig = {
               source: `/datasets/gtnh/:version(${PUBLISHED_SEGMENT})/:rest(${PUBLISHED_SEGMENT})*`,
               destination: `${datasetBackendUrl}/datasets/gtnh/:version/:rest*`,
             },
+            // src/proxy.ts has already sent the content-named textures to the dataset-files route.
+            {
+              source: `/dataset-files/:version(${PUBLISHED_SEGMENT})/textures/:root(rendered|icons)/:file(${PUBLISHED_SEGMENT})`,
+              destination: `${datasetBackendUrl}/datasets/gtnh/:version/textures/:root/:file`,
+            },
           ]
         : [],
-      afterFiles: appRewrites,
+      afterFiles: [],
     };
   },
 };

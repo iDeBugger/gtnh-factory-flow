@@ -347,6 +347,8 @@ else
 fi
 echo "Normalizing oracle export into dataset recipes.json"
 node tools/dataset-pipeline/scripts/normalize-oracle-export.mjs "$raw_oracle_json" "$GTNH_DATASET_OUT_DIR/recipes.json"
+echo "Resolving icon hints from the mod jars"
+node tools/dataset-pipeline/scripts/resolve-icon-hints.mjs "$instance_root" "$GTNH_DATASET_OUT_DIR/recipes.json" "$GTNH_DATASET_OUT_DIR"
 echo "Applying texture icons to normalized dataset"
 node tools/dataset-pipeline/scripts/apply-texture-icons.mjs "$instance_root" "$GTNH_DATASET_OUT_DIR/recipes.json" "$GTNH_DATASET_OUT_DIR"
 echo "Computing GTNH asset fingerprint"

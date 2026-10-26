@@ -1,8 +1,8 @@
 /**
  * The local development database, served over HTTP so the Next.js dev server
  * and the live service (two processes) share one copy: PGlite on
- * `scratch/local-db/pgdata` (or LOCAL_DB_DIR), answering supabase-js's
- * PostgREST and Storage requests on 127.0.0.1:54329 (LOCAL_DB_PORT).
+ * `scratch/local-db/pgdata` (or LOCAL_DB_DIR), answering the server's
+ * PostgREST requests on 127.0.0.1:54329 (LOCAL_DB_PORT).
  *
  *   npx tsx tools/local-db/serve.ts
  *

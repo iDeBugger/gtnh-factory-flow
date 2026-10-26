@@ -551,8 +551,8 @@ export function RecipeBrowser({ onLoadDatasetVersion }: RecipeBrowserProps) {
       const welcomeCovered = readWelcomeTabState().active;
       if (welcomeCovered) {
         // The new plan is on the version whose recipes the browser showed, not the
-        // new-plan picker's: the picker's version may lack this recipe, and the
-        // picker's tip says so.
+        // New plans choice in Settings: that version may lack this recipe, and the
+        // choice's Settings section says so.
         const shown = currentState.datasetManifest?.versions.find(
           (version) => version.id === currentState.selectedDatasetVersionId,
         );
@@ -849,6 +849,7 @@ export function RecipeBrowser({ onLoadDatasetVersion }: RecipeBrowserProps) {
               searchFlashing={isSearchFlashing}
               activeResource={activeResource}
               onBrowse={browseResource}
+              defaultSort="nei"
               // NEI's field sits at the bottom middle of the screen. On a phone, under a page covering the board and under
               // the recipe search (whose own keys sit there) it is at the column's foot.
               searchAt={isCompact || boardCovered || activeResource ? "bottom" : "dock"}

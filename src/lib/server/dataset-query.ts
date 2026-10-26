@@ -30,6 +30,7 @@ import {
 import { HIDDEN_DATASET_VERSION_IDS } from "@/lib/datasets/hidden-versions";
 import { MIN_INDEXABLE_LENGTH, type SearchTerm } from "@/lib/search/text-search";
 import { BoundedLru } from "./bounded-lru";
+import { usableResourceOrder } from "@/lib/search/nei-order";
 import { DATASET_ANSWER_VERSION } from "@/lib/datasets/answer-version";
 import {
   RESOURCE_SEARCH_FILE_SCHEMA,
@@ -38,6 +39,7 @@ import {
 import {
   blankResourceSearchKey,
   buildResourceSearchIndexes,
+  resourceNeiRanks,
   resourceSearchPage,
   searchOutcome,
   searchResources,
@@ -87,6 +89,8 @@ interface LoadedRecipeIndex {
   version: DatasetVersion;
   resources: DatasetResource[];
   resourceIndex: DatasetResourceIndexEntry[];
+  /** NEI's place of each `resourceIndex` record, or null; absent in a dataset exported without it. */
+  resourceOrder?: unknown;
   /** Cached made-by/used-by recipe counts per `kind:id`, from the lookup index. */
   resourceDirectionCounts?: Map<string, { madeBy: number; usedBy: number }>;
   recipeMaps: string[];
@@ -696,7 +700,11 @@ export async function queryDatasetResources(
  * search never asks about any other).
  */
 export async function getDatasetResourceSearchFile(versionId: string): Promise<ResourceSearchFile> {
-  const catalog = await loadCatalog(versionId);
+  return resourceSearchFileOf(await loadCatalog(versionId));
+}
+
+/** `getDatasetResourceSearchFile` on a loaded catalog. */
+export async function resourceSearchFileOf(catalog: LoadedRecipeIndex): Promise<ResourceSearchFile> {
   const listed = new Set(
     catalog.resourceIndex.map((resource) => `${resource.kind}:${resource.id}`),
   );
@@ -710,9 +718,12 @@ export async function getDatasetResourceSearchFile(versionId: string): Promise<R
   }
   const sourceKeys = async (source: ResourceSourceFilter) =>
     [...(await getPassiveSourceResourceKeys(catalog, source))].filter((key) => listed.has(key));
+  // The order the route sorts by, so the worker sorts the same; one that does not fit the list is left out on both.
+  const resourceOrder = usableResourceOrder(catalog.resourceIndex, catalog.resourceOrder);
   return {
     schemaVersion: RESOURCE_SEARCH_FILE_SCHEMA,
     resourceIndex: catalog.resourceIndex,
+    ...(resourceOrder ? { resourceOrder } : {}),
     directionCounts,
     sources: { plants: await sourceKeys("plants"), bees: await sourceKeys("bees") },
   };
@@ -751,13 +762,14 @@ export async function queryCatalogResources(
  * How many blank item lists each loaded version keeps. One holds every match
  * of its kind, sort and source, never narrowed to a mod (a mod view filters
  * the un-modded list): about 2 MB on 2.9. Unbounded, every kind, sort and
- * source alone came to about 130 MB per version. 24 covers every sort of every
- * kind (21) and a few source filters, at most about 50 MB per version, and the
- * key space (3 kinds x 7 sorts x 3 sources) is too small for any request shape
+ * source alone came to about 130 MB per version. 27 covers every sort of every
+ * kind (8 blank orders: the 9 sorts, "nei-filter" sharing "nei"'s list, x 3
+ * kinds = 24) and 3 source filters, at most about 56 MB per version, and the
+ * key space (3 kinds x 8 orders x 3 sources) is too small for any request shape
  * to evict lists faster than real use. An evicted list is recomputed in 20-400
  * ms (the unfiltered ones are the slow ones).
  */
-export const BLANK_RESOURCE_SEARCH_KEYS = 24;
+export const BLANK_RESOURCE_SEARCH_KEYS = 27;
 
 export function createBlankResourceSearchCache<V>(): BoundedLru<string, V> {
   return new BoundedLru(BLANK_RESOURCE_SEARCH_KEYS);
@@ -1801,7 +1813,7 @@ async function prewarmDatasetVersionOnce(
 ): Promise<void> {
   const catalog = await loadCatalog(versionId);
   getCatalogResourcesByKey(catalog);
-  ensureResourceIndexes(catalog);
+  warmResourceSearch(catalog);
 
   if (catalog.version.recipeLookupIndexPath) {
     const lookup = await loadRecipeLookupIndex(catalog.version);
@@ -3014,8 +3026,18 @@ function ensureIndexes(catalog: LoadedRecipeIndex): QueryIndexes {
   return catalog.indexes;
 }
 
+/**
+ * The item search's indexes and NEI's rank table, built before any request: the items column opens As in NEI, so
+ * its first blank list would otherwise pay for the ranks (about 70 ms on 2.9).
+ */
+export function warmResourceSearch(catalog: LoadedRecipeIndex): ResourceSearchIndexes {
+  const indexes = ensureResourceIndexes(catalog);
+  resourceNeiRanks(catalog.resourceIndex, indexes);
+  return indexes;
+}
+
 function ensureResourceIndexes(catalog: LoadedRecipeIndex): ResourceSearchIndexes {
-  catalog.resourceIndexes ??= buildResourceSearchIndexes(catalog.resourceIndex);
+  catalog.resourceIndexes ??= buildResourceSearchIndexes(catalog.resourceIndex, catalog.resourceOrder);
   return catalog.resourceIndexes;
 }
 

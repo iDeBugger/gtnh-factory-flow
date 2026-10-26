@@ -56,7 +56,10 @@ describe("the dataset file route", () => {
       ["oracle", "oracle-report.json"],
       ["recipes-shards", "evil.json.gz"],
       ["recipes-shards", "shard-0000.json.gz", "more"],
-      ["textures", "rendered", "x.png"],
+      ["textures", "atlas", "atlas-0000.png"],
+      ["textures", "rendered", "x.json"],
+      ["textures", "rendered", "deeper", "x.png"],
+      ["textures", "icon-report.json"],
     ]) {
       const response = await get(assetPath);
       expect(response.status, assetPath.join("/")).toBe(400);
@@ -65,6 +68,22 @@ describe("the dataset file route", () => {
     }
     expect((await get(["recipes.json.gz"], "..")).status).toBe(400);
     expect(serveDatasetFile).not.toHaveBeenCalled();
+  });
+
+  it("serves a content-named texture for a year and never caches its miss", async () => {
+    expect((await get(["textures", "rendered", "gregtech_radio-0123456789ab.png"])).status).toBe(200);
+    expect((await get(["textures", "icons", "x-0123456789ab.png"])).status).toBe(200);
+    expect(served()).toEqual([
+      ["textures/rendered/gregtech_radio-0123456789ab.png", "public, max-age=31536000, immutable"],
+      ["textures/icons/x-0123456789ab.png", "public, max-age=31536000, immutable"],
+    ]);
+    expect(vi.mocked(serveDatasetFile).mock.calls[0]?.[1].contentType).toBe("image/png");
+    // Asked for before its publish lands: a 404 kept a year would hide the icon that long.
+    vi.mocked(serveDatasetFile).mockRejectedValueOnce(new Error("ENOENT"));
+    const missing = await get(["textures", "rendered", "nope-000000000000.png"]);
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get("Cache-Control")).toBe("no-store");
+    await expect(missing.json()).resolves.toEqual({ error: "Texture not found." });
   });
 
   it("never lets a miss be cached for the day a file gets", async () => {

@@ -1,3 +1,4 @@
+import { siteUrl } from "@/lib/site-url";
 import {
   getCommunityDb,
   isCommunityConfigured,
@@ -40,7 +41,7 @@ async function topPlans(base: string): Promise<string[]> {
 }
 
 export async function GET() {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://gtnhplanner.com";
+  const base = siteUrl();
   const community = isModAndCommunityOn();
   const plans = await topPlans(base);
 

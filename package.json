@@ -24,7 +24,7 @@
     "prebuild": "node tools/copy-highs-wasm.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.110.8",
+    "@supabase/postgrest-js": "2.110.8",
     "@xyflow/react": "^12.10.2",
     "gifenc": "^1.0.3",
     "highs": "^1.15.2",

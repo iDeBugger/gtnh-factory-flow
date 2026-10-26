@@ -80,7 +80,7 @@ const entries = [
   // ---- the top bar and tabs ----
   { ref: "topbar-and-plan-tabs", plan: refChain, clip: [0, 0] },
   ...[
-    ["arrange", "arrange"], ["avg-peak", "peak"], ["eu-or-amps", "power"], ["feedback", "feedback"], ["fit", "fit"], ["gear", "settings"],
+    ["arrange", "arrange"], ["avg-peak", "peak"], ["eu-or-amps", "power"], ["fit", "fit"], ["gear", "settings"],
     ["help", "help"], ["library", "library"], ["non-recipe", "nonrecipe"], ["rate-unit", "rate"], ["share", "share"], ["undo", "undo"],
   ].map(([name, id]) => ({
     ref: `tip-topbar-${name}`,
@@ -103,7 +103,6 @@ const entries = [
     clip: async ({ page }) => centreOn(page, "[role=dialog], .cs-panel, .mb-menu", 900, 840),
   },
   { ref: "non-recipe-picker-open", plan: refChain, setup: async ({ page }) => { await key(page, "nonrecipe").click(); await wait(page, 1200); }, clip: [0, 0] },
-  { ref: "feedback-panel-open", plan: refChain, setup: async ({ page }) => { await key(page, "feedback").click(); await wait(page, 1200); }, clip: async ({ page }) => centreOn(page, "[role=dialog]", 1200, 1040) },
   ...["board", "sound", "minimap", "pin-list", "keys", "in-the-world"].map((name) => ({
     ref: `settings-panel-${name}-section`,
     plan: refChain,

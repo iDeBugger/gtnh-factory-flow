@@ -11,7 +11,7 @@ describe("a route's answer for an unexpected error", () => {
   it("is the fallback sentence, and the database's own text goes to the log only", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const response = serverErrorResponse(
-      new Error('relation "community_users" does not exist at /opt/releases/x'),
+      new Error('relation "community_users" does not exist at /srv/app/x'),
       "Sign in failed.",
     );
     expect(response.status).toBe(500);

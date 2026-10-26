@@ -39,12 +39,16 @@
 
 /* The mod's size on screen: its GUI pixels are two screen pixels at GUI scale 2; these sizes are GUI pixels under the
    interface's 1.17, so the bar and its menus wear 2 / 1.17 more (ChromeMenu.tsx CHROME_SCREEN_K). */
+:root {
+  /* The one source of the mod's extra zoom in CSS (2 / 1.17); ChromeMenu.tsx CHROME_SCREEN_K is the same number. */
+  --mod-zoom: 1.7094;
+}
 .mb,
 .ml {
-  zoom: 1.7094;
+  zoom: var(--mod-zoom);
 }
 .mm.ui-zoom {
-  zoom: calc(var(--ui-scale) * 1.7094);
+  zoom: calc(var(--ui-scale) * var(--mod-zoom));
 }
 
 /* ---- The bar ------------------------------------------------------------- */
@@ -120,9 +124,6 @@
 }
 .mb-bolt {
   color: #fcd34d;
-}
-.mb-bug {
-  color: var(--mc-red);
 }
 
 /* A live plan: its state as a dot, then the faces of everyone else in it (initials in their colour), square and flat
@@ -258,7 +259,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* A plan on a version other than the default: its version after the name, in a small amber chip. */
+/* Every plan's version after its name, in a small amber chip; the name gives way first, the chip never does. */
 .mt-version {
   flex: none;
   margin-left: 3px;
@@ -614,7 +615,7 @@
 
 /* ---- A narrow bar (data-fit) ------------------------------------------------ */
 /* Always one row, nothing in a menu. The desktop top bar (ModBar's useTopBarFit): roomy, then icons (Plans, Share and
-   Sign in are icon keys like feedback, settings and help: React swaps them), then tight (the gaps close, the faces are
+   Sign in are icon keys like settings and help: React swaps them), then tight (the gaps close, the faces are
    two and a +N). The tabs scroll; the open plan's tab and the + never give way (the .mt min-width holds both). A phone's
    bar and the board toolbar use useBarFit: tight keys sit closer (Non-recipe is its bolt, Arrange its label's width);
    folded the same. */
@@ -712,4 +713,17 @@
   line-height: 16px;
   box-shadow: 0 0 0 1px var(--mc-key-edge);
   padding: 0 6px;
+}
+
+/* A row that opens a submenu: a chevron at its right end; the submenu hangs beside it, a menu like any other. */
+.mm-sub-arrow {
+  flex: none;
+  margin-left: -6px;
+  color: var(--mc-muted);
+}
+.mm-row[data-off] .mm-sub-arrow {
+  color: inherit;
+}
+.mm.mm-sub {
+  z-index: 1;
 }

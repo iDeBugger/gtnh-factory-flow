@@ -59,8 +59,15 @@ describe("the item search worker", () => {
   });
 
   it("refuses an items file of another format, so the page asks the API", async () => {
-    await loadWorker(2);
-    expect(replies).toEqual([{ type: "failed", error: "Item search file has format 2." }]);
+    await loadWorker(3);
+    expect(replies).toEqual([{ type: "failed", error: "Item search file has format 3." }]);
+  });
+
+  it("reads the current format and the one before it, which is the same without an order", async () => {
+    for (const schemaVersion of [1, 2]) {
+      await loadWorker(schemaVersion);
+      expect(replies[0]).toMatchObject({ type: "ready" });
+    }
   });
 
   it("answers with the route's JSON and skips a query cancelled before it ran", async () => {

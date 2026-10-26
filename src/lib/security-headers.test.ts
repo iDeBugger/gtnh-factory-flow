@@ -108,7 +108,7 @@ describe("the header rules", () => {
     expect(documentPolicy(production)).not.toContain("'unsafe-eval'");
   });
 
-  it("are what next.config.ts serves, ahead of the texture cache rules, with X-Powered-By off", async () => {
+  it("are all next.config.ts serves, with no cache rule and X-Powered-By off", async () => {
     const rules = await nextConfig.headers!();
     const expected = securityHeaders({
       production: process.env.NODE_ENV === "production",
@@ -116,14 +116,8 @@ describe("the header rules", () => {
       siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
       modAndCommunity: process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY,
     });
-    expect(rules.slice(0, 2)).toEqual(expected);
-    const textures = rules
-      .filter((rule) => rule.source.includes("/textures/"))
-      .map((rule) => rule.headers.find((h) => h.key === "Cache-Control")?.value);
-    expect(textures).toEqual([
-      "public, max-age=31536000, immutable",
-      "public, max-age=31536000, immutable",
-    ]);
+    // A cache rule by path would beat a route's own header: a missing texture would be kept a year.
+    expect(rules).toEqual(expected);
     expect(nextConfig.poweredByHeader).toBe(false);
   });
 });

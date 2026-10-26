@@ -144,8 +144,11 @@ The frames are the contract's (version 1). What the service adds or decides:
 - **Limits per connection:** 200 frames a second (more closes the socket), 10 joins a second, 30 batches a second, 8
   plans open, 500 selected ids in a presence frame. **Per account:** 16 sockets, 8 plans open across them, 250 ms of
   batch work a second, 30 socket upgrades a minute. **Per address:** 60 socket upgrades a minute (more answer 429
-  before the upgrade). The address is the `X-Client-Ip` header when the request comes from loopback (Caddy sets it,
-  overwriting the client's; `CF-Connecting-IP` when it is missing), otherwise the socket's own. An account is looked
+  before the upgrade). The address is the `X-Client-Ip` header when the request comes from loopback or from a peer
+  `LIVE_TRUSTED_PROXIES` names (Caddy sets it, overwriting the client's; `CF-Connecting-IP` when it is missing),
+  otherwise the socket's own. In Docker the proxy's peer is the `edge` network's gateway (docker-proxy dials the
+  container from it), so that address goes in `LIVE_TRUSTED_PROXIES`; an untrusted peer sending `X-Client-Ip` logs
+  one warning naming it. An account is looked
   up for a session at most once a minute.
 - **Pings.** Clients send `{ t: "ping" }` every 25 s (Cloudflare drops a socket idle for 100 s); the server also pings
   at the WebSocket level and drops a connection silent for 90 s.
@@ -273,13 +276,13 @@ $C --user ann --password annpass1 send <doc> '[{"o":"meta","f":{"primaryView":"t
 
 ## Production
 
-`npm run build:live` bundles the service to `dist-live/live.mjs` (esbuild; packages stay in `node_modules`), run with
-`node dist-live/live.mjs` as the systemd unit `gtnh-live` on 127.0.0.1:3001. `next build` and `next start` are
-unchanged. Environment: `COMMUNITY_HASH_SALT`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `LIVE_PORT`,
-`LIVE_HOST`, `LIVE_JOURNAL_DIR`, `LIVE_INTERNAL_TOKEN`, `LIVE_ALLOWED_ORIGINS`, `LIVE_MAX_ROOMS` (optional, default 500),
+`npm run build:live` bundles the service to `dist-live/live.mjs` (esbuild; packages stay in `node_modules`, and the
+image ships only the ones the bundle loads), run with `node dist-live/live.mjs` in the `live` container
+(`docs/deploy.md`), published on 127.0.0.1:3301. The site runs Next's standalone `server.js` in its own container. Environment: `COMMUNITY_HASH_SALT`, `POSTGREST_URL`, `POSTGREST_SERVICE_TOKEN`, `LIVE_PORT`,
+`LIVE_HOST`, `LIVE_JOURNAL_DIR`, `LIVE_INTERNAL_TOKEN`, `LIVE_ALLOWED_ORIGINS`, `LIVE_TRUSTED_PROXIES` (optional, loopback is always trusted), `LIVE_MAX_ROOMS` (optional, default 500),
 `LIVE_MAX_PLAN_BYTES` (optional, default 64 MB of plan JSON in open rooms), `NODE_ENV=production`. `LOCAL_DB=1` with `NODE_ENV=production` stops both the website and the service at startup. The website
 needs `LIVE_INTERNAL_URL` and `LIVE_INTERNAL_TOKEN` at run time and `NEXT_PUBLIC_LIVE_URL` at build time (unset:
-no live features). The rollout, staging first, is `docs/live-rollout.md`.
+no live features). The deploy and every variable's value are in `docs/deploy.md`.
 
 ## Tests
 

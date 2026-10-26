@@ -17,11 +17,12 @@ import * as memberRoute from "@/app/api/library/designs/[designId]/members/[user
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 import { Journal } from "./journal";
 import { clientAddress, LiveService, type LiveServiceOptions } from "./service";
-import { supabasePlanStore, type PlanStore } from "./store";
+import { parseTrustedProxies } from "./trusted-proxies";
+import { databasePlanStore, type PlanStore } from "./store";
 
 /** The real store, counting each kind of call. */
 function countingStore(): { store: PlanStore; calls: Record<string, number> } {
-  const real = supabasePlanStore();
+  const real = databasePlanStore();
   const calls: Record<string, number> = {};
   const store = Object.fromEntries(
     Object.entries(real).map(([name, call]) => [
@@ -165,7 +166,7 @@ async function startService(
   const journalDir = options.journalDir ?? mkdtempSync(path.join(tmpdir(), "gtnh-live-"));
   journalDirs.push(journalDir);
   const service = new LiveService({
-    store: supabasePlanStore(),
+    store: databasePlanStore(),
     journalDir,
     allowedOrigins: [ORIGIN],
     internalToken: INTERNAL_TOKEN,
@@ -1103,7 +1104,7 @@ describe("the live service", { timeout: 30_000 }, () => {
   });
 
   it("checks the budget again with the plan it read, when the plan grew after its size was read", async () => {
-    const real = supabasePlanStore();
+    const real = databasePlanStore();
     // The size read says a few bytes; a save between it and the lease made
     // the plan 4 KB, past a 3 KB budget. The room closes before anyone is in.
     const { port, service } = await startService({
@@ -1123,7 +1124,7 @@ describe("the live service", { timeout: 30_000 }, () => {
   });
 
   it("counts the plans an account is still opening against its share", async () => {
-    const real = supabasePlanStore();
+    const real = databasePlanStore();
     const { port, service } = await startService({
       store: { ...real, lease: (...args) => slow(() => real.lease(...args)) },
       limits: { roomsPerAccount: 2 },
@@ -1146,7 +1147,7 @@ describe("the live service", { timeout: 30_000 }, () => {
   });
 
   it("reserves a plan's stored size for a room still opening", async () => {
-    const real = supabasePlanStore();
+    const real = databasePlanStore();
     // Three plans of about 2 KB each against a 5 KB budget: the third join
     // fired while the first two plans are being read is refused, whoever
     // sends it, since its size is known before anything is read.
@@ -1182,7 +1183,7 @@ describe("the live service", { timeout: 30_000 }, () => {
   });
 
   it("opens many small plans at once, each budgeted at its own size", async () => {
-    const real = supabasePlanStore();
+    const real = databasePlanStore();
     const { port, service } = await startService({
       store: { ...real, lease: (...args) => slow(() => real.lease(...args)) },
     });
@@ -1309,7 +1310,7 @@ describe("the live service", { timeout: 30_000 }, () => {
   });
 
   it("tells a client to try again later, not to sign in again, when the account cannot be looked up", async () => {
-    const store = supabasePlanStore();
+    const store = databasePlanStore();
     const { port } = await startService({
       store: { ...store, account: () => Promise.reject(new Error("database down")) },
     });
@@ -1382,7 +1383,7 @@ describe("the live service", { timeout: 30_000 }, () => {
   });
 
   it("survives a connection that drops while its account is being looked up", async () => {
-    const store = supabasePlanStore();
+    const store = databasePlanStore();
     const { port } = await startService({
       store: {
         ...store,
@@ -1414,7 +1415,7 @@ describe("the live service", { timeout: 30_000 }, () => {
 
   it("answers a join the database cannot open as rate, never as not_found or forbidden", async () => {
     // A client removes its copy of a shared plan on not_found or forbidden.
-    const store = supabasePlanStore();
+    const store = databasePlanStore();
     const down = () => Promise.reject(new Error("database down"));
     const { doc } = await makeDesign();
     const { port } = await startService({ store: { ...store, lease: down } });
@@ -1542,5 +1543,42 @@ describe("where a request came from", () => {
   it("keys a peer that is not loopback on itself, whatever it sends", () => {
     expect(clientAddress(request("198.51.100.20", { "x-client-ip": "203.0.113.9" }))).toBe("198.51.100.20");
     expect(clientAddress(request("198.51.100.20", { "cf-connecting-ip": "203.0.113.9" }))).toBe("198.51.100.20");
+  });
+
+  it("reads the headers from a configured proxy", () => {
+    const trusted = parseTrustedProxies("172.30.61.1");
+    expect(clientAddress(request("172.30.61.1", { "x-client-ip": "203.0.113.9" }), trusted)).toBe("203.0.113.9");
+    expect(clientAddress(request("::ffff:172.30.61.1", { "x-client-ip": "203.0.113.9" }), trusted)).toBe(
+      "203.0.113.9",
+    );
+    expect(clientAddress(request("127.0.0.1", { "x-client-ip": "203.0.113.9" }), trusted)).toBe("203.0.113.9");
+  });
+
+  it("keys a peer outside the list on itself whatever it sends", () => {
+    const trusted = parseTrustedProxies("172.30.61.1");
+    expect(clientAddress(request("172.30.61.5", { "x-client-ip": "203.0.113.9" }), trusted)).toBe("172.30.61.5");
+    expect(clientAddress(request("172.30.61.5", { "cf-connecting-ip": "203.0.113.9" }), trusted)).toBe(
+      "172.30.61.5",
+    );
+  });
+
+  it("warns once when an untrusted peer sends X-Client-Ip", async () => {
+    // A fresh module: the warning is once per process.
+    vi.resetModules();
+    const fresh = await import("./service");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      expect(fresh.clientAddress(request("172.30.61.5"))).toBe("172.30.61.5");
+      expect(warn).not.toHaveBeenCalled();
+      expect(fresh.clientAddress(request("172.30.61.5", { "x-client-ip": "203.0.113.9" }))).toBe("172.30.61.5");
+      expect(fresh.clientAddress(request("172.30.61.6", { "x-client-ip": "203.0.113.9" }))).toBe("172.30.61.6");
+      expect(warn).toHaveBeenCalledTimes(1);
+      const message = String(warn.mock.calls[0][0]);
+      expect(message).toContain("LIVE_TRUSTED_PROXIES");
+      expect(message).toContain("172.30.61.5");
+      expect(message).not.toContain("203.0.113.9");
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

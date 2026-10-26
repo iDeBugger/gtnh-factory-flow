@@ -1,4 +1,14 @@
-@import "tailwindcss";
+/*
+ * Class names come from the app's own source only: src/ without tests, notes and the solver's test corpus.
+ * The site image's build context leaves those out (.dockerignore), so a checkout and the image scan the same
+ * files and build the same CSS.
+ */
+@import "tailwindcss" source("..");
+@source not "../**/*.test.ts";
+@source not "../**/*.test.tsx";
+@source not "../**/*.md";
+@source not "../test-support";
+@source not "../lib/solver/plan/__fixtures__/corpus";
 @import "@xyflow/react/dist/style.css";
 
 /*

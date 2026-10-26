@@ -307,7 +307,7 @@ export const redoKey: Target = barKey("redo");
 export const rateUnitKey: Target = barKey("rate");
 export const powerUnitKey: Target = barKey("power");
 export const libraryKey: Target = barKey("plans");
-export const feedbackKey: Target = barKey("feedback");
+export const helpKey: Target = barKey("help");
 
 export const railRoot: Target = () => q(".rail-root");
 export const railSection = (name: RegExp): Target => textOf(".rail-sec", name, () => railRoot());

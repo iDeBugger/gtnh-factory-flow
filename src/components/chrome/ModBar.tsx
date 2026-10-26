@@ -19,7 +19,7 @@ import { PastePlanDialog } from "@/components/export/PastePlanDialog";
 import { BarKey, useBarFit, useTopBarFit } from "./bar-parts";
 import { AccountKey } from "./AccountKey";
 import { ChromeMenu, chromeAnchorOf, type ChromeAnchor, type MenuEntry } from "./ChromeMenu";
-import { knock, OPEN_FEEDBACK_EVENT, OPEN_TOUR_EVENT, OPEN_CONTROLS_EVENT } from "./chrome-events";
+import { knock, OPEN_TOUR_EVENT, OPEN_CONTROLS_EVENT } from "./chrome-events";
 import { ModTabs } from "./ModTabs";
 import { TOP_BAR_STEPS } from "./top-bar-fold";
 import { libraryRows } from "./library-rows";
@@ -32,12 +32,8 @@ import { isLiveConfigured } from "@/lib/live/live-config";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { useCommunityAuthStore } from "@/store/community-auth-store";
 import { useLiveSession } from "@/store/live-session";
-import { closeFeedback, useFeedbackOpen } from "@/components/flow/clean/feedback/feedback-store";
 import { PlanShareDialog } from "@/components/live/PlanShareDialog";
 import { initialsOf, inkOn, liveFaceName } from "@/components/live/LiveFaces";
-import { servedGameVersions, useNewPlanVersion } from "@/lib/datasets/new-plan-version";
-import { gameVersionLabel } from "@/lib/model/game-version";
-import { newPlanVersionEntries } from "./ModTabs";
 
 /** Live plans (sharing, presence, task boards): none of it shows without NEXT_PUBLIC_LIVE_URL. */
 const LIVE = isLiveConfigured();
@@ -83,7 +79,7 @@ export interface ModBarProps {
 /**
  * The top bar holds the account's things only: the plan tabs and +, the live state and faces, then Plans (the library
  * on My plans; Shared with me and Community are its shelves) and Share (Invite people first, then the copies), the
- * account key, and feedback, settings and help, all on one row that never wraps and never hides a key in a menu: short of
+ * account key, and settings and help, all on one row that never wraps and never hides a key in a menu: short of
  * room the tabs give way, then Plans, Share and Sign in become icon keys, then the gaps tighten (`useTopBarFit`). Its keys
  * are flat like the tabs and + (chrome.css), the picture keys and the face bare until hovered. What edits or views the board (Non-recipe, undo and redo, Arrange, Fit,
  * the rate unit, EU/t, Avg) is the board's own toolbar (BoardToolbar), along the top of the board.
@@ -108,22 +104,16 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
   const sideOpen = workspace.rightPanelOpen && !bothOpen;
   const library = useLibraryTab();
   const isReadOnly = useFactoryStore((state) => state.isReadOnly);
-  const feedbackOpen = useFeedbackOpen();
-  const [menu, setMenu] = useState<{ kind: "share" | "help" | "version"; anchor: ChromeAnchor }>();
+  const [menu, setMenu] = useState<{ kind: "share" | "help"; anchor: ChromeAnchor }>();
   const [pasting, setPasting] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
   const [inviting, setInviting] = useState(false);
   const signedIn = useCommunityAuthStore((state) => Boolean(state.user));
   const username = useCommunityAuthStore((state) => state.user?.username ?? "");
   const faces = useLiveSession((state) => (state.status === "off" ? 0 : state.present.length));
-  // The version new plans are made for. Only with more than one version served; a phone has it in the + menu.
-  const manifest = useFactoryStore((state) => state.datasetManifest);
-  const newPlanVersion = useNewPlanVersion(manifest);
-  const servedVersions = servedGameVersions(manifest);
-  const showVersionPicker = !compact && servedVersions.length > 1;
   // One row, nothing in a menu: short of room the tabs give way, then Plans, Share and Sign in become icon keys, then the
   // gaps tighten (top-bar-fold.ts). A phone keeps its words and wraps (chrome.css), with its own give-way (useBarFit).
-  const step = useTopBarFit(barRef, { enabled: !compact, layoutKey: `${username}|${faces}|${showVersionPicker ? newPlanVersion : ""}` });
+  const step = useTopBarFit(barRef, { enabled: !compact, layoutKey: `${username}|${faces}` });
   const fit = compact ? phoneFit : TOP_BAR_STEPS[step];
   const tight = compact ? phoneFit !== "roomy" : step === 2;
   const pictures = !compact && step >= 1;
@@ -182,7 +172,7 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
     }),
   ];
 
-  const openMenuFrom = (kind: "share" | "help" | "version", event: MouseEvent<HTMLElement>) => {
+  const openMenuFrom = (kind: "share" | "help", event: MouseEvent<HTMLElement>) => {
     const anchor = chromeAnchorOf(event.currentTarget);
     setMenu((current) => (current?.kind === kind ? undefined : { kind, anchor }));
   };
@@ -191,19 +181,6 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
     <>
       <header ref={barRef} className="mb" data-mod-bar="" data-fit={fit} data-help-anchor="plan-actions">
       <ModTabs onPaste={() => setPasting(true)} onShare={onShare} />
-      {showVersionPicker ? (
-        <BarKey
-          id="new-plan-version"
-          // In the icons dress the key is its version alone.
-          label={pictures ? newPlanVersion : `New plans: ${gameVersionLabel(newPlanVersion)}`}
-          ariaLabel={`New plans: ${gameVersionLabel(newPlanVersion)}`}
-          tip={`New plans: ${gameVersionLabel(newPlanVersion)}`}
-          tipSub="The GTNH version a new plan is made for. Open plans keep their own. A recipe picked on Welcome opens on the version you browsed it on."
-          open={menu?.kind === "version"}
-          onClick={(event) => openMenuFrom("version", event)}
-          menuAnchor
-        />
-      ) : null}
       {LIVE ? <LivePresence tight={tight} /> : null}
       {compact ? (
         <>
@@ -255,24 +232,7 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
         {pictures ? <PixelIcon name="share" /> : undefined}
       </BarKey>
       <AccountKey pictures={pictures} />
-      <BarKey
-        id="feedback"
-        gap
-        icon
-        open={feedbackOpen}
-        ariaLabel="Feedback"
-        tip="Feedback: report a bug, share an idea, or ask for help"
-        onClick={() => {
-          if (feedbackOpen) {
-            closeFeedback();
-            return;
-          }
-          if (!knock(OPEN_FEEDBACK_EVENT)) window.open(HelpLinks.bugReport, "_blank", "noopener,noreferrer");
-        }}
-      >
-        <PixelIcon name="bug" className="mb-bug" />
-      </BarKey>
-      <BarKey id="settings" icon ariaLabel="Settings" tip="Settings" onClick={onSettings}>
+      <BarKey id="settings" gap icon ariaLabel="Settings" tip="Settings" onClick={onSettings}>
         <PixelIcon name="gear" />
       </BarKey>
       <BarKey
@@ -294,16 +254,6 @@ export function ModBar({ onShare, onScreenshot, onSettings, onChangelog, onDevMe
       </BarKey>
       {menu?.kind === "share" ? (
         <ChromeMenu anchor={menu.anchor} entries={shareEntries} label="Share this plan" minWidth={110} align="right" onClose={closeMenu} />
-      ) : null}
-      {menu?.kind === "version" ? (
-        <ChromeMenu
-          anchor={menu.anchor}
-          entries={newPlanVersionEntries(servedVersions, newPlanVersion)}
-          label="New plans"
-          title="New plans"
-          minWidth={120}
-          onClose={closeMenu}
-        />
       ) : null}
       {menu?.kind === "help" ? (
         <ChromeMenu
@@ -411,7 +361,5 @@ function helpEntries({
     { label: "Welcome", ruleAbove: true, onSelect: () => HelpLinks.openWelcome() },
     { label: unreadNotes ? "What's new *" : "What's new", detail: HelpLinks.version, onSelect: onChangelog },
     { label: "Source on GitHub", onSelect: () => HelpLinks.open(HelpLinks.github) },
-    { label: "Discord thread", onSelect: () => HelpLinks.open(HelpLinks.discord) },
-    { label: "Support on Ko-fi", onSelect: () => HelpLinks.open(HelpLinks.kofi) },
   ];
 }

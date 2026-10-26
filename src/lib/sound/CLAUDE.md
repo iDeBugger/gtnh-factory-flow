@@ -29,7 +29,7 @@ The board sounds exactly like the in-game planner: the mod's own rendered files,
 |---|---|---|
 | `ui.click` | anything pressed (`Hyb.click`) | any button, role=button/menuitem/tab/radio/switch, link, or pointer-cursor element clicked (`board-gestures` click listener); a control with `data-sfx-own` plays its own instead |
 | `ui.click` x0.6 at 1.15 | a card or drawer selected | a press on a card, drawer or note that does not move 3 px |
-| `ui.toggle_on` / `_off` | a setting switched | gear switch rows, feedback mood faces, checklist on/off |
+| `ui.toggle_on` / `_off` | a setting switched | gear switch rows, checklist on/off |
 | `ui.open` / `ui.close` | a popup opening; dismissed by a press outside or Esc | every dropdown (`useDropdownDismiss`: menus, pickers, the board's right-click menus, the non-recipe picker); the gear box opening and closing; a board unfolding/folding; a plan tab closed |
 | `ui.deny` | refused: wire dropped where nothing takes it, nothing to undo | a wire drop that changed nothing; undo/redo with empty history |
 | `ui.tick` (1.12 up, 0.9 down) | a wheel step on a value | a wheel step that changed the plan (count, rate, amps...), the top bar's wheel keys, the gear's choice rows and section wheel, a note's text size |
@@ -50,7 +50,7 @@ The board sounds exactly like the in-game planner: the mod's own rendered files,
 | `wire.item` / `wire.fluid` / `wire.power` | a wire or drawer link made, a drawer made for a port, by what it carries | a new wire (by `resourceKind`), a new drawer (by its `kind`) |
 | `wire.cut` / `wire.fluid_cut` / `wire.power_cut` | a wire cut, as what it carried | a wire gone with no card or drawer gone |
 | `dial.tier` (0.62 x1.085 per tier) | a voltage tier stepped, ULV low to MAX high | `overclockTier` or `hatchVoltageTier` changed, the old `dialPower` kind |
-| `note.stick` / `note.crumple` | a sticky note added; deleted | an annotation added or removed; feedback sent |
+| `note.stick` / `note.crumple` | a sticky note added; deleted | an annotation added or removed |
 
 Not ported: `world.place` / `world.remove` (there is no world on the website).
 

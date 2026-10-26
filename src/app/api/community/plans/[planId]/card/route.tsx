@@ -7,6 +7,7 @@ import { modAndCommunityOffResponse } from "@/lib/server/mod-and-community-gate"
 import { PNG } from "pngjs";
 import { GT_TIER_COLORS } from "@/components/flow/tier-colors";
 import { getPlanPreviewPng, getPublicPlanRow, sizePlanPreview } from "@/lib/server/plan-preview";
+import { siteHost } from "@/lib/site-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -157,6 +158,7 @@ export async function GET(
     ? undefined
     : ((await loadIconDataUri(face?.iconPath)) ?? (await loadIconDataUri(fallback?.iconPath)));
   const iconBackdrop = (face ?? fallback)?.dominantColor ?? ICON_PANEL_FALLBACK;
+  const host = siteHost();
 
   return new ImageResponse(
     (
@@ -206,9 +208,11 @@ export async function GET(
               paddingTop: 8,
             }}
           >
-            <div style={{ display: "flex", fontSize: 28, fontWeight: 700, color: BRAND }}>
-              gtnhplanner.com
-            </div>
+            {host ? (
+              <div style={{ display: "flex", fontSize: 28, fontWeight: 700, color: BRAND }}>
+                {host}
+              </div>
+            ) : null}
             {row.game_version ? (
               <div style={{ display: "flex", fontSize: 21, color: MUTED }}>
                 GTNH {row.game_version}

@@ -78,4 +78,22 @@ describe("the server's startup checks", () => {
     checkServerSetup((message) => warnings.push(message));
     expect(warnings).toHaveLength(1);
   });
+
+  it("names the database variables it reads when old ones are set", () => {
+    vi.stubEnv("LOCAL_DB", "");
+    vi.stubEnv("COMMUNITY_HASH_SALT", "a real secret of some length");
+    const warnings: string[] = [];
+    vi.stubEnv("SUPABASE_URL", "https://old.example");
+    checkServerSetup((message) => warnings.push(message));
+    vi.stubEnv("SUPABASE_URL", "");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "old-key");
+    checkServerSetup((message) => warnings.push(message));
+    expect(warnings).toEqual([
+      "[db] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not read: set POSTGREST_URL and POSTGREST_SERVICE_TOKEN.",
+      "[db] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not read: set POSTGREST_URL and POSTGREST_SERVICE_TOKEN.",
+    ]);
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+    checkServerSetup((message) => warnings.push(message));
+    expect(warnings).toHaveLength(2);
+  });
 });

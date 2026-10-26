@@ -30,6 +30,10 @@ export const dynamic = "force-dynamic";
  * never immutable (gzips and shards are replaced in place on a republish),
  * with ETag and byte ranges, and a refusal or a miss says no-store.
  *
+ * The content-named textures (`textures/rendered/`, `textures/icons/`) come here too and are
+ * kept a year: a name follows its bytes (stage-rendered-icons.mjs). Their miss is no-store like
+ * every other, so a texture asked for before its publish lands is not a 404 for that year.
+ *
  * The server's own content-addressed answers (`client/<kind>.<hash>.json`,
  * client-files.ts) are served here too, from the site's cache directory
  * (`clientFilesRoot`), not the dataset tree: immutable, as brotli or gzip by the
@@ -43,6 +47,10 @@ const INDEX_FILES = new Set([
 ]);
 const SHARDS_DIRECTORY = "recipes-shards";
 const SHARD_FILE = /^shard-\d{4}\.json\.gz$/;
+const TEXTURES_DIRECTORY = "textures";
+const CONTENT_NAMED_TEXTURE_ROOTS = new Set(["rendered", "icons"]);
+const TEXTURE_FILE = /^[A-Za-z0-9_-][A-Za-z0-9._-]*\.png$/;
+const TEXTURE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const uncached = { "Cache-Control": "no-store" };
 
 export async function GET(
@@ -62,6 +70,7 @@ export async function GET(
     return serveClientFile(request, versionId, segments[1]);
   }
 
+  const texture = segments[0] === TEXTURES_DIRECTORY;
   // Undefined is a file that is not there or a link out of the version's directory: both a miss.
   const filePath = await resolveDatasetChildPath(versionId, ...segments);
   try {
@@ -69,13 +78,13 @@ export async function GET(
       throw new Error("Not a dataset file.");
     }
     return await serveDatasetFile(filePath, {
-      cacheControl: DATASET_FILE_CACHE_CONTROL,
-      contentType: "application/gzip",
+      cacheControl: texture ? TEXTURE_CACHE_CONTROL : DATASET_FILE_CACHE_CONTROL,
+      contentType: texture ? "image/png" : "application/gzip",
       requestHeaders: request.headers,
     });
   } catch {
     return NextResponse.json(
-      { error: "Dataset file not found." },
+      { error: texture ? "Texture not found." : "Dataset file not found." },
       { status: 404, headers: uncached },
     );
   }
@@ -93,6 +102,17 @@ function allowedSegments(assetPath: string[]): string[] | undefined {
     CLIENT_FILE_NAME.test(second)
   ) {
     return [first, second];
+  }
+  const [, , third] = assetPath;
+  if (
+    assetPath.length === 3 &&
+    first === TEXTURES_DIRECTORY &&
+    second !== undefined &&
+    CONTENT_NAMED_TEXTURE_ROOTS.has(second) &&
+    third !== undefined &&
+    TEXTURE_FILE.test(third)
+  ) {
+    return [first, second, third];
   }
   if (
     assetPath.length === 2 &&

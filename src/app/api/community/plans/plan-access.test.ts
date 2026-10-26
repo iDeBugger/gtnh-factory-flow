@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FactoryProject } from "@/lib/model/types";
@@ -18,6 +19,7 @@ import * as plan from "./[planId]/route";
 import * as preview from "./[planId]/preview/route";
 import * as view from "./[planId]/view/route";
 import * as vote from "./[planId]/vote/route";
+import * as images from "../images/[month]/[name]/route";
 
 /** The server's time budget for an uploaded plan's stats solve, set per case. */
 const statsBudget = vi.hoisted(() => ({ ms: 5_000 }));
@@ -41,6 +43,7 @@ const PNG = Buffer.from(
  */
 
 let local: LocalDatabase;
+let files: string;
 const users: Record<string, { id: string; cookie: string }> = {};
 let addresses = 0;
 
@@ -119,6 +122,8 @@ async function planRow(planId: string): Promise<{ upvotes: number; downvotes: nu
 beforeAll(async () => {
   vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "plan-access-test-salt");
+  files = mkdtempSync(path.join(tmpdir(), "plan-access-"));
+  vi.stubEnv("FILE_STORE_DIR", files);
   local = await openLocalDatabase();
   useInProcessLocalDb(local.handle);
   for (const name of ["owner", "stranger", "poster"]) {
@@ -132,6 +137,7 @@ afterAll(async () => {
   vi.unstubAllEnvs();
   resetDbBreaker();
   forgetSessionUsers();
+  rmSync(files, { recursive: true, force: true });
 });
 
 describe("voting on a post", () => {
@@ -283,11 +289,21 @@ describe("a post's board photograph", () => {
     expect(Buffer.from(await read.arrayBuffer()).equals(pngHeader(39, 10))).toBe(true);
   });
 
-  it("creates the preview bucket private", async () => {
-    const { rows } = await local.db.query<{ public: boolean }>(
-      "select public from local_storage.buckets where id = 'plan-previews'",
-    );
-    expect(rows).toEqual([{ public: false }]);
+  it("keeps previews out of every public route", async () => {
+    const planId = await makePlan("Hidden picture", false);
+    expect((await postPreview(planId, PNG, "owner")).status).toBe(200);
+    // The images route serves only board image names, never the preview's key.
+    for (const [month, name] of [
+      ["..", `plan-previews/${planId}.png`],
+      ["plan-previews", `${planId}.png`],
+      ["2026-10", `../../plan-previews/${planId}.png`],
+    ]) {
+      const refused = await images.GET(new Request("http://localhost/api/community/images/x/y"), {
+        params: Promise.resolve({ month: month!, name: name! }),
+      });
+      expect(refused.status).toBe(404);
+    }
+    expect((await getPreview(planId)).status).toBe(404);
   });
 });
 

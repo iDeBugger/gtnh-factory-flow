@@ -1,6 +1,6 @@
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { PostgrestClient } from "@supabase/postgrest-js";
 import { entryIconSchema } from "@/lib/model/schemas";
 import type { CommunityPlanSummary, EntryIcon, PlanResourceStat } from "@/lib/community/types";
 import {
@@ -28,16 +28,18 @@ export { COMMUNITY_DB_DOWN_MESSAGE };
 export { makeSessionToken, SESSION_COOKIE };
 
 /**
- * Server-only Supabase access for the community hub. Uses the service-role
- * key, so this module must never be imported from client components — the
- * API routes under /api/community are the only intended consumers.
+ * Server-only database access: PostgREST at `POSTGREST_URL` with a service
+ * token (`POSTGREST_SERVICE_TOKEN`, a JWT for the `service_role`, which
+ * bypasses row security). This module must never be imported from client
+ * components: the API routes and the live service are its only consumers.
  */
+export type DbClient = PostgrestClient;
 
-let cachedClient: SupabaseClient | undefined;
+let cachedClient: DbClient | undefined;
 
 /**
  * How long one database request may take before it is abandoned. Without a
- * limit, a stalled Supabase instance holds requests open for minutes, so
+ * limit, a stalled database holds requests open for minutes, so
  * pages hang instead of failing and the server piles up open sockets. A
  * healthy request finishes in well under a second, so this only cuts off a
  * stall.
@@ -94,14 +96,14 @@ async function fetchFromDb(
 }
 
 /**
- * The client's fetch (database, storage), abandoned after `timeoutMs`,
+ * The client's fetch, abandoned after `timeoutMs`,
  * body included. A timeout before the answer arrives becomes a 504, not a
  * rejection: postgrest-js RETRIES a GET that rejects (other than with an
  * AbortError) three more times with backoff, and words a rejection as its
- * error's name and message. Supabase sits behind Cloudflare, so a stalled
- * instance answers with Cloudflare's HTML error page (522, 524, sent as
- * text/plain), which the clients would pass on whole as the error message:
- * any 5xx that is not JSON becomes the same plain answer, keeping its status
+ * error's name and message. A proxy in front of a stalled database answers
+ * with its own error page (an HTML or text/plain 502, 522 or 524), which the
+ * client would pass on whole as the error message: any 5xx that is not JSON
+ * becomes the same plain answer, keeping its status
  * so postgrest-js still retries a 520. A 4xx is left alone (PostgREST reads
  * an empty 404 as no rows).
  */
@@ -142,36 +144,33 @@ export async function fetchWithDbTimeout(
 }
 
 export function isCommunityConfigured(): boolean {
-  return isLocalDb() || Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  return isLocalDb() || Boolean(process.env.POSTGREST_URL && process.env.POSTGREST_SERVICE_TOKEN);
 }
 
-export function getCommunityDb(): SupabaseClient {
+/** A PostgREST client sending the token as a bearer, through the timed and guarded fetch. */
+function postgrestClient(url: string, token: string, send?: typeof fetch): DbClient {
+  return new PostgrestClient(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    fetch: (input, init) => fetchFromDb(input, init, send),
+  });
+}
+
+export function getCommunityDb(): DbClient {
   if (!cachedClient && isLocalDb()) {
     // Local development (LOCAL_DB=1): the database on this machine, never
-    // the hosted project, whatever SUPABASE_URL says. Never in production.
+    // the configured one, whatever POSTGREST_URL says. Never in production.
     assertLocalDbAllowed();
-    cachedClient = createClient(localDbUrl(), LOCAL_DB_SERVICE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      // The same limit and the same plain answers as the hosted project.
-      global: {
-        fetch: (input, init) =>
-          fetchFromDb(input, init, (i, n) => localDbFetch(i, n, fetch)),
-      },
-    });
+    cachedClient = postgrestClient(`${localDbUrl()}/rest/v1`, LOCAL_DB_SERVICE_KEY, (i, n) =>
+      localDbFetch(i, n, fetch),
+    );
   }
   if (!cachedClient) {
-    const url = process.env.SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) {
-      throw new Error(
-        "Community hub is not configured: set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY",
-      );
+    const url = process.env.POSTGREST_URL;
+    const token = process.env.POSTGREST_SERVICE_TOKEN;
+    if (!url || !token) {
+      throw new Error("The database is not configured: set POSTGREST_URL and POSTGREST_SERVICE_TOKEN");
     }
-
-    cachedClient = createClient(url, key, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: { fetch: (input, init) => fetchFromDb(input, init) },
-    });
+    cachedClient = postgrestClient(url.replace(/\/+$/, ""), token);
   }
 
   return cachedClient;

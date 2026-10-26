@@ -8,9 +8,10 @@ others built, vote, and open any shared plan directly in the editor.
 - **Frontend**: `/community` (browser) and the Share button in the editor.
 - **API**: Next.js routes under `src/app/api/community/**`. All validation,
   stat derivation, vote deduplication, and rate limiting happen here.
-- **Storage**: Supabase Postgres, accessed exclusively with the service-role
-  key from the API routes. Row level security is enabled with no public
-  policies, so the anon key (which we never ship) can read nothing.
+- **Storage**: Postgres behind PostgREST, accessed exclusively with the
+  service-role token from the API routes. Row level security is enabled with
+  no public policies and there is no anon role, so a request without the
+  token reads nothing.
 - **Identity**: anonymous. Votes and rate limits key on
   `sha256(salt + client IP + device id)`; raw IPs are never stored.
 - **Trust model**: the server re-validates every uploaded plan against
@@ -20,13 +21,21 @@ others built, vote, and open any shared plan directly in the editor.
 
 ## Setup
 
-1. Create a project at [supabase.com](https://supabase.com) (free tier is fine).
-2. In the SQL editor, run the contents of `supabase/schema.sql`.
-3. In **Project Settings → API**, copy:
-   - the project URL → `SUPABASE_URL`
-   - the `service_role` secret → `SUPABASE_SERVICE_ROLE_KEY`
-4. Make a long random secret for `COMMUNITY_HASH_SALT` (`openssl rand -hex 32`; the server warns under 16 characters, and in production refuses to sign in without one).
-5. Add all three to `.env.local` (dev) and the production host's environment.
+Locally, `npm run dev:local` needs no setup: a database on this machine, the
+live service and a file store, all started for you.
+
+A deployed stack runs Postgres and PostgREST beside the site (`docs/deploy.md`):
+
+1. `supabase/schema.sql` and every migration are applied on each deploy by the
+   migrate image.
+2. The site reads `POSTGREST_URL` and `POSTGREST_SERVICE_TOKEN` (a JWT for the
+   `service_role`, made with `tools/deploy/service-token.mjs`), and keeps
+   uploaded pictures in `FILE_STORE_DIR`.
+3. Make a long random secret for `COMMUNITY_HASH_SALT` (`openssl rand -hex 32`;
+   the server warns under 16 characters, and in production refuses to sign in
+   without one).
+4. All of them go in the server's environment (`/opt/gtnh/.env`), never in the
+   repo.
 
 Without these variables the rest of the app works normally; the community
 endpoints return 503 and the hub page shows an error banner.
@@ -52,4 +61,4 @@ endpoints return 503 and the hub page shows an error banner.
   Votes remain anonymous (IP+device hash).
 - Moderation: set `COMMUNITY_ADMIN_TOKEN` and send it as the `x-admin-token`
   header on `DELETE /api/community/plans/<id>` to take down any post, or
-  delete rows directly in the Supabase dashboard.
+  delete rows directly in the database (`docker exec -it gtnh-postgres psql -U postgres`).

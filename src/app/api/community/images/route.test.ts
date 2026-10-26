@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
@@ -11,6 +14,7 @@ import {
 import { withModAndCommunityUnset } from "@/test-support/mod-and-community";
 import { countedBody } from "@/test-support/request-bodies";
 import { POST } from "./route";
+import { GET } from "./[month]/[name]/route";
 
 /**
  * Board image uploads against the local database: open to anyone with the
@@ -19,6 +23,7 @@ import { POST } from "./route";
  */
 
 let local: LocalDatabase;
+let files: string;
 
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
@@ -51,6 +56,9 @@ async function uploadsRecorded(): Promise<number> {
 beforeAll(async () => {
   vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "images-test-salt");
+  vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://stage.gtnhplanner.idebugger.net");
+  files = mkdtempSync(path.join(tmpdir(), "images-route-"));
+  vi.stubEnv("FILE_STORE_DIR", files);
   local = await openLocalDatabase();
   useInProcessLocalDb(local.handle);
 }, 60_000);
@@ -59,6 +67,7 @@ afterAll(async () => {
   useInProcessLocalDb(undefined);
   await local?.close();
   vi.unstubAllEnvs();
+  rmSync(files, { recursive: true, force: true });
 });
 
 beforeEach(async () => {
@@ -69,11 +78,19 @@ beforeEach(async () => {
 describe("board image uploads", () => {
   withModAndCommunityUnset();
 
-  it("serves a board image with the setting unset", async () => {
+  it("serves a board image with the setting unset, at a URL on this site", async () => {
     const response = await upload("203.0.113.1");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { url?: unknown };
-    expect(typeof body.url).toBe("string");
+    const { url } = (await response.json()) as { url: string };
+    const match = /^https:\/\/stage\.gtnhplanner\.idebugger\.net\/api\/community\/images\/(\d{4}-\d{2})\/([0-9a-f]{18}\.png)$/.exec(
+      url,
+    );
+    expect(match, url).not.toBeNull();
+    const [, month, name] = match!;
+    const served = await GET(new Request(url), { params: Promise.resolve({ month: month!, name: name! }) });
+    expect(served.status).toBe(200);
+    expect(served.headers.get("content-type")).toBe("image/png");
+    expect(Buffer.from(await served.arrayBuffer()).equals(PNG)).toBe(true);
   });
 
   it("refuses an oversize upload before the body is buffered or counted", async () => {

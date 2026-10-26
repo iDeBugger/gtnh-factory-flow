@@ -18,6 +18,9 @@ import {
   sfxToggle,
 } from "@/lib/sound/sfx";
 import { setUiScalePercent, useUiScalePercent } from "@/lib/ui-scale";
+import { servedGameVersions, useNewPlanVersion, writeNewPlanVersion } from "@/lib/datasets/new-plan-version";
+import { gameVersionLabel } from "@/lib/model/game-version";
+import { useFactoryStore } from "@/store/factory-store";
 import { ChromeMenu, chromeAnchorOf, MENU_ANCHOR_ATTR, type ChromeAnchor } from "./ChromeMenu";
 import { knock, OPEN_CONTROLS_EVENT, OPEN_TOUR_EVENT } from "./chrome-events";
 import { SettingsPreview } from "./SettingsPreview";
@@ -68,6 +71,10 @@ export function ModSettings({ onClose }: { onClose: () => void }) {
   const [soundIndex, setSoundIndex] = useState(() => getSoundLevel());
   const [menu, setMenu] = useState<{ anchor: ChromeAnchor }>();
   const dragRef = useRef<string | undefined>(undefined);
+  // The version new plans are made for: a choice only while this site serves more than one.
+  const manifest = useFactoryStore((state) => state.datasetManifest);
+  const newPlanVersion = useNewPlanVersion(manifest);
+  const servedVersions = servedGameVersions(manifest);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -157,6 +164,24 @@ export function ModSettings({ onClose }: { onClose: () => void }) {
         },
       ],
     },
+    ...(servedVersions.length > 1
+      ? [
+          {
+            name: "Plans",
+            intro: "Open plans keep their own version. A recipe picked on Welcome opens on the version you browsed it on.",
+            rows: [
+              {
+                label: "New plans",
+                about: "The GTNH version a new plan is made for.",
+                kind: "choice",
+                names: servedVersions.map(gameVersionLabel),
+                at: servedVersions.indexOf(newPlanVersion),
+                to: (index) => writeNewPlanVersion(servedVersions[index]),
+              },
+            ],
+          } satisfies Section,
+        ]
+      : []),
     { name: "Minimap", rows: [], body: <MinimapSettingsRows className="ms-minimap" /> },
     {
       name: "Sound",

@@ -66,6 +66,8 @@ Every save goes through `persistCanvas` in design-store.ts:
 - A plan belongs to one GTNH version, `FactoryProject.gameVersion` ("2.9", "2.8.1"). Absent means 2.9: plans saved
   before the field read as 2.9 through `planGameVersion` and are never rewritten to say so (One mode: a load never
   writes). Rules of the field itself are in `src/lib/model/CLAUDE.md` (Game version).
+- Every plan's tab wears its version after its name (`.mt-version` in `ModTabs`), the default's too, on a desktop
+  and a phone: the top bar always says which game the open plan is for. The name gives way first, never the chip.
 - The active dataset follows the open plan (`ensureDatasetFor`, `DatasetCache` in `src/lib/datasets/dataset-cache.ts`:
   one load in flight per version, every loaded catalog kept, a late load only fills the cache). `datasetServesPlan` /
   `activeVersionServesPlan` guard every recipe refresh, recipe add (`refusesRecipeOnPlan`, at every add, swap and
@@ -76,8 +78,9 @@ Every save goes through `persistCanvas` in design-store.ts:
   bodies, is never refreshed, and shows `PlanVersionNotice` ("This plan is for GTNH <v>. This site has recipes
   for ..."); the recipe browser, the item list, the crop and mob lists, a marked card and the unconverted-cards notice say
   "Recipes for GTNH <v> are not on this site." The notice's key, Convert to GTNH 2.9, shows while this site serves 2.9.
-- Convert (`src/lib/datasets/convert-action.ts`: the notice's key, and a tab menu's "Convert to GTNH <v>" row for every
-  served version but the plan's, outside the community rows) loads the target's dataset (`ensureDatasetFor`),
+- Convert (`src/lib/datasets/convert-action.ts`: the notice's key, and a tab menu's "Convert to" row, outside the
+  community rows, whose submenu lists every served version, the plan's own shown as "this plan" and not pickable;
+  `convertRows` in `ModTabs.tsx`, no row while there is nothing else to convert to) loads the target's dataset (`ensureDatasetFor`),
   converts a clone (`convertProjectToVersion`) and opens it with `importProjectAsDesign`. The source tab is not
   opened, switched or written: the open tab converts what is on the board, another tab its stored record. One
   conversion runs at a time: while it runs the source tab shows the working mark and the key and row read
@@ -99,7 +102,8 @@ Every save goes through `persistCanvas` in design-store.ts:
   (`src/lib/datasets/new-plan-version.ts`), and so do the blank plans the library makes itself (the seed after the
   last plan is deleted, the first-run seed). The tour's sandbox plan stays unstamped on purpose: it is a scratch 2.9
   plan the tour throws away. The choice is remembered per device (`gtnh-factory-flow.new-plan-version.v1`;
-  allowed, as it has a visible control: the top bar's New plans key, a row of the + menu on a phone). A remembered
+  allowed, as it has a visible control: Settings > Plans > New plans, a choice shown while the site serves more
+  than one version, on a desktop and a phone alike). A remembered
   version this site no longer serves, or no manifest yet, reads as 2.9. A pick storage refuses holds for the page.
   The first-run seed waits for the manifest (at most 3 s) only when the remembered choice is not 2.9. The boot's
   dataset load starts as the manifest lands unless the plan last open on this device (`open-plan-version.v1`, a boot
@@ -108,8 +112,9 @@ Every save goes through `persistCanvas` in design-store.ts:
   waits for the stored plans (`bootWaitsForPlans`). A 2.9 player's catalog never waits, a 2.8.1 player never
   downloads 2.9.
 - Exam: `new-plan-version.test.ts`, `dataset-cache.test.ts`, `refresh-project-recipes.test.ts`, the "active dataset
-  follows the open plan" block of `factory-store.test.ts`, `ModBar.test.tsx` and `ModTabs.test.tsx` (picker, chip,
-  + menu), `notices.test.ts` (the unserved notice). In the real app: `scratch/probes/plan-version.mjs`.
+  follows the open plan" block of `factory-store.test.ts`, `ModSettings.test.tsx` (the New plans choice),
+  `ModTabs.test.tsx` (chip, + menu, Convert to), `notices.test.ts` (the unserved notice). In the real app:
+  `scratch/probes/version-ui.mjs` (Settings' New plans, Convert to, the tab chip; desktop and phone).
 
 ## Library posts are copies
 
@@ -133,7 +138,7 @@ Every save goes through `persistCanvas` in design-store.ts:
 
 ## Account sync (src/lib/library/library-sync.ts)
 
-- The Supabase instance is small. Pushes wait for 5 s of quiet (30 s max while editing,
+- The database is small and every push rewrites a whole plan. Pushes wait for 5 s of quiet (30 s max while editing,
   at once when the tab hides). Only a LOCAL change schedules a push, judged by
   `libraryChangeSignature`, never by array identity; a run never schedules the next one.
 - A design the server refused is not resent until its stamp moves. Names are clipped to

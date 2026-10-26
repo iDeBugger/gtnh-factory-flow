@@ -5,6 +5,7 @@ import {
   PLAN_SUMMARY_COLUMNS,
   type PlanRow,
 } from "./community";
+import { getFileStore, isFileStoreConfigured, type FileBucket } from "./file-store";
 
 /**
  * What a shared link is allowed to tell a stranger's chat window.
@@ -16,12 +17,12 @@ import {
  */
 
 /**
- * Where the share flow puts each post's board photograph, one object per
- * plan named `<planId>.png`. Deliberately not a table column: the object
+ * Where the share flow puts each post's board photograph (a file store
+ * bucket), one object per plan named `<planId>.png`. Deliberately not a table column: the object
  * name is derived from the id the card route already holds, so an old row
  * simply has no object and the card falls back to its icon face.
  */
-export const PLAN_PREVIEW_BUCKET = "plan-previews";
+export const PLAN_PREVIEW_BUCKET: FileBucket = "plan-previews";
 
 /**
  * The largest side a stored preview may claim. The client captures at most
@@ -89,17 +90,11 @@ export function sizePlanPreview(
 
 /** The plan's stored board photograph, or undefined when none was uploaded. */
 export async function getPlanPreviewPng(planId: string): Promise<Buffer | undefined> {
-  if (!isCommunityConfigured()) {
+  if (!isCommunityConfigured() || !isFileStoreConfigured()) {
     return undefined;
   }
   try {
-    const { data, error } = await getCommunityDb()
-      .storage.from(PLAN_PREVIEW_BUCKET)
-      .download(`${planId}.png`);
-    if (error || !data) {
-      return undefined;
-    }
-    return Buffer.from(await data.arrayBuffer());
+    return await getFileStore().get(PLAN_PREVIEW_BUCKET, `${planId}.png`);
   } catch {
     return undefined;
   }

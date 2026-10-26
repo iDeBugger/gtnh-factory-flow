@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { writeDatasetJson } from "./dataset-json-writer.mjs";
 import { recipeMapAmperage } from "./recipe-map-amperage.mjs";
 import { withoutSteamHandlersLackingFluidHatches } from "./steam-fluid-hatches.mjs";
+import { neiItemOrderFromExport, neiSortProblem } from "./nei-item-order.mjs";
 import { spargeRolledOutputs } from "./sparge-byproducts.mjs";
 import { stageRenderedIcons as stageIconsOnWorkers } from "./stage-rendered-icons.mjs";
 import {
@@ -153,6 +154,10 @@ normalizeMobDrops(findDomain("mobDrops"));
 normalizeMining(findDomain("mining"));
 overrideFurnaceRecipeMapIcon();
 assignContentRecipeIds();
+const neiItemOrder = neiItemOrderFromExport(raw.neiItemList);
+if (raw.neiItemList?.status === "exported" && neiSortProblem(raw.neiItemList)) {
+  console.warn(`WARNING: ${neiSortProblem(raw.neiItemList)} The dataset gets no NEI order.`);
+}
 
 const dataset = {
   schemaVersion: 1,
@@ -189,6 +194,8 @@ const dataset = {
     })
     .sort((left, right) => left.familyId.localeCompare(right.familyId)),
   generatedAt,
+  // Last, and only when the export has NEI's list: build-resource-index turns it into resourceOrder.
+  ...(neiItemOrder ? { neiItemOrder } : {}),
 };
 
 if (dataset.recipes.length === 0) {

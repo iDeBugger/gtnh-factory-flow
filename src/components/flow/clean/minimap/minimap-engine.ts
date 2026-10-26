@@ -4,7 +4,6 @@ import { drawMinimap, fitView, type MapView } from "./minimap-draw";
 import { readMinimapRoutes } from "./minimap-feed";
 import { getMinimap, MINIMAP_SIZES } from "./minimap-settings";
 import { buildScene, type DrawerKind, type Scene, type SceneNode, type TileExtras } from "./minimap-scene";
-import { publishMinimapScene } from "./scene-store";
 import { currentFontEpoch } from "../text-measure";
 
 /**
@@ -230,7 +229,6 @@ export class MinimapEngine {
       routes: snapshot?.routes,
       extras,
     });
-    publishMinimapScene(this.scene);
   }
 
   private tick(): void {

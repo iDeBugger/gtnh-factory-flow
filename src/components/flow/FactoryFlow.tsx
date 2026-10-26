@@ -232,7 +232,6 @@ import { PlanNoticeSwitch, PlanTopNotices } from "./clean/rail/NoticeBar";
 import { registerBoardCommands, reportArrange } from "../chrome/board-commands";
 import { BoardMinimap } from "./clean/minimap/BoardMinimap";
 import { registerMinimapRoutes } from "./clean/minimap/minimap-feed";
-import { FeedbackHost } from "./clean/feedback/FeedbackPanel";
 import { TourBridge, TourHost, TourOffer } from "./clean/tour";
 import { GT_NODE_COLORS, GT_NODE_COLOR_PALETTE, flowRampColor } from "./node-colors";
 import {
@@ -6667,7 +6666,6 @@ export function FactoryFlow() {
         <RecipeAddChips />
       </div>
       {isProjectImporting ? <FlowLoadingOverlay /> : null}
-      <FeedbackHost />
       <TourHost />
       <TourOffer />
     </div>

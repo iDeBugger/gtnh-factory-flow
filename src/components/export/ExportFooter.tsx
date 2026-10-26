@@ -4,6 +4,7 @@ import type { CommunityPlanStats, EntryIcon, PlanResourceStat } from "@/lib/comm
 import { formatSlotRate } from "@/components/flow/flow-explainers";
 import { TierBadge } from "@/components/shelf-cards";
 import { fluidArtPixels, isSwatchFluid, ResourceIcon } from "@/components/nei/ResourceIcon";
+import { siteHost } from "@/lib/site-url";
 
 /**
  * The trim under an exported board image: the plan's icon, name, headline
@@ -120,6 +121,7 @@ export function ExportFooter({
   outputs,
 }: ExportFooterProps) {
   const palette = PALETTES[tone];
+  const host = siteHost();
 
   return (
     <div
@@ -174,11 +176,13 @@ export function ExportFooter({
               <span>{stats.nodeCount} cards</span>
               {stats.highestTier ? <TierBadge tier={stats.highestTier} /> : null}
             </div>
-            <div className="mt-0.5 text-[12px]">
-              <span style={{ color: palette.brand }} className="font-semibold">
-                gtnhplanner.com
-              </span>
-            </div>
+            {host ? (
+              <div className="mt-0.5 text-[12px]">
+                <span style={{ color: palette.brand }} className="font-semibold">
+                  {host}
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

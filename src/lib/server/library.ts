@@ -1,6 +1,6 @@
+import type { DbClient } from "./community";
 import type { EntryIcon } from "@/lib/model/types";
 import type { RemoteDesignMeta, RemoteFolder } from "@/lib/library/sync-types";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { isMissingColumnError, parseEntryIcon } from "./community";
 
 /** Everything the list endpoint returns about a design: no plan. */
@@ -24,7 +24,7 @@ export interface DesignLiveRow extends DesignRow {
  * columns (`cloudColumns` false), so the library keeps working meanwhile.
  */
 export async function readDesignRow(
-  db: SupabaseClient,
+  db: DbClient,
   ownerId: string,
   designId: string,
   withPlan: boolean,

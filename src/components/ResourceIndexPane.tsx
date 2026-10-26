@@ -27,6 +27,7 @@ import { activeVersionServesPlan, unservedPlanVersion } from "@/lib/datasets/dat
 import { recipesNotOnSiteText } from "@/lib/datasets/new-plan-version";
 import { POWER_EU_CLAUSE_ID } from "@/lib/power/power-search";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
+import { useResourcePopularityOffered } from "@/lib/datasets/resource-popularity-offer";
 import { isEchoOfTouch } from "@/lib/pointer-kind";
 import { isFromBrowseMenu, useBrowseMenu } from "./browse-menu";
 import { ChromeMenu, chromeAnchorOf, MENU_ANCHOR_ATTR, type ChromeAnchor } from "./chrome/ChromeMenu";
@@ -58,6 +59,7 @@ export function ResourceIndexPane({
   autoFocus = false,
   searchAt = "top",
   leading,
+  defaultSort = "relevance",
 }: {
   search: string;
   onSearchChange: (value: string) => void;
@@ -69,6 +71,12 @@ export function ResourceIndexPane({
   searchAt?: "top" | "bottom" | "dock" | "none";
   /** Keys at the start of the page row (the column's fold key). */
   leading?: ReactNode;
+  /**
+   * The sort it opens on. The items column is NEI's list and opens "As in NEI"; a picker opens on Best match,
+   * where what was typed matters more than where NEI keeps it. Never Most popular: over an empty popularity map it
+   * is "most ways to make", which opens the list on aspects and Empty Cell.
+   */
+  defaultSort?: ResourceSortMode;
 }) {
   const datasetManifestUrl = useFactoryStore((state) => state.datasetManifestUrl);
   // While a tab's own dataset loads, the other version's items are not listed for it.
@@ -96,14 +104,31 @@ export function ResourceIndexPane({
   const [resourceResults, setResourceResults] = useState<IndexedResource[]>([]);
   const [resourceTotal, setResourceTotal] = useState(0);
   const [resourceMod, setResourceMod] = useState("");
-  // Popular is the resting default: with nothing typed it shows what players
-  // actually build. A typed query still ranks name relevance first server-side,
-  // so the sort only decides the untyped list and ties.
-  const [resourceSort, setResourceSort] = useState<ResourceSortMode>("popular");
+  // The sort the player picked, if any. Only a sort on offer counts: Most popular is offered only while the
+  // popularity map has entries, and a pick that is no longer offered gives way to the default and is forgotten,
+  // so it cannot come back on its own.
+  const popularityOffered = useResourcePopularityOffered();
+  const sortChoices = useMemo(
+    () => RESOURCE_SORT_CHOICES.filter((choice) => choice.value !== "popular" || popularityOffered),
+    [popularityOffered],
+  );
+  const [chosenSort, setChosenSort] = useState<ResourceSortMode>();
+  const resourceSort =
+    chosenSort !== undefined && sortChoices.some((choice) => choice.value === chosenSort)
+      ? chosenSort
+      : defaultSort;
+  useEffect(() => {
+    if (chosenSort !== undefined && chosenSort !== resourceSort) {
+      return deferStateUpdate(() => setChosenSort(undefined));
+    }
+    return undefined;
+  }, [chosenSort, resourceSort]);
   const [resourceFilter, setResourceFilter] = useState<ResourceFilterMode>("all");
   const [resourceMods, setResourceMods] = useState<Array<{ id: string; count: number }>>([]);
   const [resourceSearchOutcome, setResourceSearchOutcome] = useState<SearchOutcome>(EXACT_SEARCH);
-  const [resourceQueryLoading, setResourceQueryLoading] = useState(false);
+  // The query key the shown results answer. While it differs from the one the
+  // field and page ask for, the list on screen is an older answer.
+  const [shownQueryKey, setShownQueryKey] = useState<string>();
   const [resourceQueryError, setResourceQueryError] = useState<string | undefined>();
   const resourceQueryCacheRef = useRef<Map<string, ResourceQueryCacheEntry>>(new Map());
   const debouncedRecipeSearch = useDebouncedValue(recipeSearch, RESOURCE_SEARCH_DEBOUNCE_MS);
@@ -191,17 +216,17 @@ export function ResourceIndexPane({
   ]);
   useEffect(() => {
     // The board's own resources are answered from memory, below: no request.
+    const cacheKey = getResourceQueryKey(resourcePage);
     if (!selectedDatasetVersion || onBoard) {
       return deferStateUpdate(() => {
         setResourceResults([]);
         setResourceTotal(0);
-        setResourceQueryLoading(false);
+        setShownQueryKey(cacheKey);
         setResourceQueryError(undefined);
       });
     }
 
     const query = debouncedRecipeSearch.trim();
-    const cacheKey = getResourceQueryKey(resourcePage);
     const cached = getCachedResourceQuery(resourceQueryCacheRef.current, cacheKey);
     if (cached) {
       return deferStateUpdate(() => {
@@ -209,7 +234,7 @@ export function ResourceIndexPane({
         setResourceTotal(cached.total);
         setResourceMods(cached.mods ?? []);
         setResourceSearchOutcome(searchOutcomeOf(cached));
-        setResourceQueryLoading(false);
+        setShownQueryKey(cacheKey);
         setResourceQueryError(undefined);
       });
     }
@@ -218,7 +243,6 @@ export function ResourceIndexPane({
     let cancelled = false;
     queueMicrotask(() => {
       if (!cancelled) {
-        setResourceQueryLoading(true);
         setResourceQueryError(undefined);
       }
     });
@@ -247,7 +271,7 @@ export function ResourceIndexPane({
         setResourceTotal(result.total);
         setResourceMods(result.mods ?? []);
         setResourceSearchOutcome(searchOutcomeOf(result));
-        setResourceQueryLoading(false);
+        setShownQueryKey(cacheKey);
       })
       .catch((error) => {
         if (cancelled) {
@@ -256,7 +280,7 @@ export function ResourceIndexPane({
         setResourceResults([]);
         setResourceTotal(0);
         setResourceQueryError(error instanceof Error ? error.message : "Resource query failed.");
-        setResourceQueryLoading(false);
+        setShownQueryKey(cacheKey);
       });
 
     return () => {
@@ -299,8 +323,14 @@ export function ResourceIndexPane({
     () => true,
     () => false,
   );
+  // The list is stale from the first key typed until the answer to it lands: through the debounce, the request,
+  // and a page or sort change. Old slots stay on screen (a blank list flashes on every key), dimmed and marked busy.
+  const listStale =
+    !onBoard &&
+    (recipeSearch.trim() !== debouncedRecipeSearch.trim() ||
+      shownQueryKey !== getResourceQueryKey(resourcePage));
   const searchNone =
-    !resourceQueryLoading && debouncedRecipeSearch.trim() !== "" && displayedTotal === 0 && !!dataset;
+    !listStale && debouncedRecipeSearch.trim() !== "" && displayedTotal === 0 && !!dataset;
   const searchField = (
     <NeiSearchField
       inputRef={inputRef}
@@ -314,8 +344,10 @@ export function ResourceIndexPane({
     <NeiListMenu
       filter={resourceFilter}
       sort={resourceSort}
+      sortChoices={sortChoices}
+      defaultSort={defaultSort}
       onFilter={setResourceFilter}
-      onSort={setResourceSort}
+      onSort={setChosenSort}
     />
   );
   return (
@@ -341,7 +373,7 @@ export function ResourceIndexPane({
           resources={displayedResources}
           total={displayedTotal}
           currentPage={resourcePage}
-          isLoading={resourceQueryLoading && !onBoard}
+          isLoading={listStale}
           error={resourceQueryError}
           emptyLabel={
             onBoard
@@ -412,16 +444,30 @@ export function neiGridFit(width: number): { columns: number; slot: number } {
 /** One mouse notch is 100 on most platforms, so one notch is one page. */
 const RESOURCE_WHEEL_PAGE_DELTA = 80;
 
-type ResourceSortMode = "relevance" | "popular" | "name" | "mod" | "made" | "uses";
+export type ResourceSortMode =
+  | "nei"
+  | "relevance"
+  | "nei-filter"
+  | "popular"
+  | "name"
+  | "mod"
+  | "made"
+  | "uses";
 
-const RESOURCE_SORT_CHOICES: ReadonlyArray<{ value: ResourceSortMode; label: string }> = [
-  { value: "popular", label: "Most popular" },
+type ResourceSortChoice = { value: ResourceSortMode; label: string };
+
+/** The sorts the list menu offers, in its order. "popular" only while the popularity map has entries. */
+const RESOURCE_SORT_CHOICES: ReadonlyArray<ResourceSortChoice> = [
+  { value: "nei", label: "As in NEI" },
   { value: "relevance", label: "Best match" },
+  { value: "nei-filter", label: "NEI filter only" },
   { value: "name", label: "Name A–Z" },
   { value: "mod", label: "By mod" },
   { value: "made", label: "Most ways to make" },
   { value: "uses", label: "Most used" },
+  { value: "popular", label: "Most popular" },
 ];
+
 
 /**
  * The list's filter: six mutually exclusive answers, because the kind and
@@ -938,23 +984,33 @@ function NeiSearchField({
   );
 }
 
+/** A menu label inside a sentence: its first letter lowered, unless its first word is a name in capitals (NEI). */
+function inSentence(label: string): string {
+  const first = label.split(/[\s,]/, 1)[0] ?? "";
+  return first.length > 1 && first === first.toUpperCase() ? label : label.charAt(0).toLowerCase() + label.slice(1);
+}
+
 /** One menu for what the list shows and how it is sorted, from a key beside the page count. */
 function NeiListMenu({
   filter,
   sort,
+  sortChoices,
+  defaultSort,
   onFilter,
   onSort,
 }: {
   filter: ResourceFilterMode;
   sort: ResourceSortMode;
+  sortChoices: ReadonlyArray<ResourceSortChoice>;
+  defaultSort: ResourceSortMode;
   onFilter: (filter: ResourceFilterMode) => void;
   onSort: (sort: ResourceSortMode) => void;
 }) {
   const [anchor, setAnchor] = useState<ChromeAnchor>();
   const close = useCallback(() => setAnchor(undefined), []);
-  const changed = filter !== "all" || sort !== "popular";
+  const changed = filter !== "all" || sort !== defaultSort;
   const filterLabel = RESOURCE_FILTER_CHOICES.find((choice) => choice.mode === filter)?.title ?? filter;
-  const sortLabel = RESOURCE_SORT_CHOICES.find((choice) => choice.value === sort)?.label ?? sort;
+  const sortLabel = sortChoices.find((choice) => choice.value === sort)?.label ?? sort;
   return (
     <>
       <button
@@ -963,7 +1019,7 @@ function NeiListMenu({
         aria-label="Show and sort"
         aria-haspopup="menu"
         aria-expanded={anchor !== undefined}
-        title={`Showing ${filterLabel.toLowerCase()}, ${sortLabel.toLowerCase()}`}
+        title={`Showing ${inSentence(filterLabel)}, ${inSentence(sortLabel)}`}
         data-on={changed ? "" : undefined}
         {...{ [MENU_ANCHOR_ATTR]: "" }}
         onClick={(event) => {
@@ -989,7 +1045,7 @@ function NeiListMenu({
               current: filter === choice.mode,
               onSelect: () => onFilter(choice.mode),
             })),
-            ...RESOURCE_SORT_CHOICES.map((choice, index) => ({
+            ...sortChoices.map((choice, index) => ({
               label: choice.label,
               detail: index === 0 ? "Sort" : undefined,
               ruleAbove: index === 0,
@@ -1091,11 +1147,10 @@ function ResourceResultPage({
   return (
     <div
       className="nei-grid"
-      style={{
-        gridTemplateColumns: `repeat(${gridColumns}, var(--nei-cell, ${NEI_SLOT}px))`,
-        opacity: isRefreshing ? 0.6 : undefined,
-      }}
+      style={{ gridTemplateColumns: `repeat(${gridColumns}, var(--nei-cell, ${NEI_SLOT}px))` }}
       aria-label="Resource results"
+      aria-busy={isRefreshing || undefined}
+      data-stale={isRefreshing ? "" : undefined}
       role="listbox"
     >
       <NeiSlots resources={resources} activeResource={activeResource} onBrowse={browse} />
