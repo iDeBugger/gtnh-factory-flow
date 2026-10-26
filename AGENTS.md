@@ -39,8 +39,9 @@ Longer references, read on demand: `docs/solver-equations.md` (solver doctrine),
 3. `src/lib/server/**` never imports `src/{components,store,app,live}` or React.
 4. Route handlers never import the database layer (`lib/server/db`, `lib/server/repos`), the UI
    or the stores, and send no query themselves (no `.from("`, no database package).
-5. `src/live` uses `lib/server/{repos,services,auth}`, `db/index.ts` and `http/client-address.ts`
-   only, never the app, the UI or the stores.
+5. `src/live` uses `lib/server/repos`, `services/design-role.ts`,
+   `auth/{session,secret,sessions}.ts`, `db/index.ts` and `http/client-address.ts` only, never
+   the app, the UI or the stores.
 6. Browser code (the UI, the stores, every `"use client"` file and worker, and what they load
    at run time) never reaches `src/lib/server` or a Node built-in.
 7. The stores never import the UI.

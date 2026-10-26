@@ -271,12 +271,22 @@ function isImpurePackage(name: string): boolean {
   );
 }
 
-/** The places in lib/server the live service may use; never password code. */
+/**
+ * The places in lib/server the live service may use: the repositories, and
+ * by name the one service and the session code it needs, so it never loads
+ * the library's saves, the rate limits, the outbound notice client or the
+ * password code.
+ */
 const isLiveServerTarget = (file: string): boolean =>
-  (/^src\/lib\/server\/(repos|services|auth)\//.test(file) &&
-    file !== "src/lib/server/auth/passwords.ts") ||
-  file === "src/lib/server/db/index.ts" ||
-  file === "src/lib/server/http/client-address.ts";
+  file.startsWith("src/lib/server/repos/") ||
+  [
+    "src/lib/server/services/design-role.ts",
+    "src/lib/server/auth/session.ts",
+    "src/lib/server/auth/secret.ts",
+    "src/lib/server/auth/sessions.ts",
+    "src/lib/server/db/index.ts",
+    "src/lib/server/http/client-address.ts",
+  ].includes(file);
 
 /** Each rule: does this edge break it. Rule 6 (client reach) is a graph walk, below. */
 const RULES: Record<string, (edge: Edge) => boolean> = {
@@ -885,6 +895,31 @@ describe("the layers", () => {
 
   it("SQL is written only in the data layer, and spliced text only in the migrations", () => {
     expect(sqlOutOfPlace(graph)).toEqual([]);
+  });
+
+  it("refuses a live file that loads a service or auth module it does not need", () => {
+    const live = "src/live/arch-fixture.ts";
+    const bad = new Map([
+      [
+        live,
+        toSourceFile(
+          live,
+          [
+            'import { saveDesign } from "@/lib/server/services/library";',
+            'import { hashPassword } from "@/lib/server/auth/passwords";',
+            'import { isAdminRequest } from "@/lib/server/auth/admin";',
+            'import { designRole } from "@/lib/server/services/design-role";',
+            'import { loadSessionUser } from "@/lib/server/auth/sessions";',
+            'import * as designs from "@/lib/server/repos/designs";',
+          ].join("\n"),
+        ),
+      ],
+    ]);
+    expect(breaks(bad).map(key)).toEqual([
+      `5|${live}|src/lib/server/auth/admin.ts`,
+      `5|${live}|src/lib/server/auth/passwords.ts`,
+      `5|${live}|src/lib/server/services/library.ts`,
+    ]);
   });
 
   it("holds a dynamic import or require of the db entry to the same name checks", () => {
