@@ -14,8 +14,15 @@ import { isDatabaseConfigured } from "@/lib/server/services/config";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** The account's own blueprints (`listBlueprints`). */
+/**
+ * The account's own blueprints (`listBlueprints`). There is no public shelf:
+ * a request for one is answered as a route that does not exist, never with
+ * the caller's own list.
+ */
 export async function GET(request: Request) {
+  if (new URL(request.url).searchParams.get("scope") === "public") {
+    return NextResponse.json({ error: "There is no public blueprint list." }, { status: 404 });
+  }
   if (!isDatabaseConfigured()) {
     return NextResponse.json({ error: "Cloud storage is not configured." }, { status: 503 });
   }

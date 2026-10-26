@@ -73,30 +73,43 @@ afterEach(() => {
 describe("an account's own blueprints", () => {
   withModAndCommunityUnset();
 
-  it("lists the account's own blueprints, and ?scope=public is no shelf of anyone else's", async () => {
+  it("lists the account's own blueprints", async () => {
     sessionUser.mockReturnValue(ann);
-    for (const url of ["/api/blueprints", "/api/blueprints?scope=public&search=oil"]) {
-      calls.length = 0;
-      const response = await list.GET(get(url));
-      expect(response.status, url).toBe(200);
-      expect(await response.json()).toEqual({ blueprints: [] });
-      expect(calls.map((call) => call.sql)).toEqual([
-        expect.stringMatching(/^select .* from "blueprints" where "user_id" = \$1 order by "created_at" desc limit \$2$/),
-      ]);
-      expect(calls[0]?.parameters[0]).toBe(ann.id);
-    }
+    const response = await list.GET(get("/api/blueprints"));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ blueprints: [] });
+    expect(calls.map((call) => call.sql)).toEqual([
+      expect.stringMatching(/^select .* from "blueprints" where "user_id" = \$1 order by "created_at" desc limit \$2$/),
+    ]);
+    expect(calls[0]?.parameters[0]).toBe(ann.id);
     sessionUser.mockReturnValue(undefined);
-    const anonymous = await list.GET(get("/api/blueprints?scope=public"));
+    const anonymous = await list.GET(get("/api/blueprints"));
     expect(anonymous.status).toBe(401);
     expect(await anonymous.json()).toEqual({ error: "Sign in to use blueprints." });
+  });
+
+  it("answers ?scope=public with 404 and sends no query, signed in or not, with or without storage", async () => {
+    for (const viewer of [ann, undefined]) {
+      for (const configured of [true, false]) {
+        sessionUser.mockReturnValue(viewer);
+        storage.configured = configured;
+        calls.length = 0;
+        try {
+          const response = await list.GET(get("/api/blueprints?scope=public&search=oil"));
+          expect(response.status).toBe(404);
+          expect(await response.json()).toEqual({ error: "There is no public blueprint list." });
+          expect(calls).toEqual([]);
+        } finally {
+          storage.configured = true;
+        }
+      }
+    }
   });
 
   it("answers 503 on a server with no storage", async () => {
     storage.configured = false;
     try {
-      for (const url of ["/api/blueprints", "/api/blueprints?scope=public"]) {
-        expect((await list.GET(get(url))).status, url).toBe(503);
-      }
+      expect((await list.GET(get("/api/blueprints"))).status).toBe(503);
     } finally {
       storage.configured = true;
     }

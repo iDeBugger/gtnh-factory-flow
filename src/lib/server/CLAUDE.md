@@ -295,8 +295,9 @@ Blueprints (`repos/blueprints.ts`, `services/blueprints.ts`; exam `blueprints/ro
 - A blueprint is its owner's alone: the list, a read by id, an edit and a delete all name the session's account in
   their `where`; anyone else, signed in or not, finds "Blueprint not found." (an anonymous read sends no query),
   whatever the community switch says. There is no public shelf: no list or search of other accounts' blueprints, no
-  publishing, no votes and no downloads (`?scope=public` is not read). The table keeps `is_public`, `downloads` and
-  `blueprint_votes` as they stand, and the summary keeps their fields, so the own list's answer is unchanged.
+  publishing, no votes and no downloads (`?scope=public` answers 404 "There is no public blueprint list." and sends
+  no query). The table keeps `is_public`, `downloads` and `blueprint_votes` as they stand, and the summary keeps
+  their fields, so the own list's answer is unchanged.
 - A save is one transaction: the account row's lock (`accounts.lockAccount`, `for no key update`, as a new design
   takes it), the count, then the insert, so saves at once meet the cap (`BLUEPRINT_MAX_PER_USER`) one at a time; a
   failed count throws and answers the save's sentence, never reads as none. PGlite never overlaps transactions, so
