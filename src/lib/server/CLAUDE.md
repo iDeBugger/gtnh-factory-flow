@@ -479,7 +479,8 @@ Rules:
 - The schema is `db/migrations/NNNN-words.sql`, applied once each by the runner (`db/migrations.ts`,
   `tools/db/migrate.ts`; docs/deploy.md, Migrations). A change is a new file, never an edit to an applied one (the
   runner refuses a changed file by name). A file runs in the runner's transaction: no `begin`, `commit`, `rollback`,
-  `savepoint` or `concurrently` (refused by name). A new table gets its grants in `db/grants.sql` in the same
+  `savepoint` or `concurrently`, and no `standard_conforming_strings` or `backslash_quote` (each refused by name:
+  every file shares one session, and the check reads strings with the defaults). A new table gets its grants in `db/grants.sql` in the same
   commit; then `npm run db:types`. Exam: `db/migrations.test.ts`, `db/db-roles.test.ts`.
 - Tests open an in-memory PGlite per file, built by `applyMigrations` from `db/`, with `useTestDb()`
   (`src/test-support/test-db.ts`), and fail queries with `withDbFault`.

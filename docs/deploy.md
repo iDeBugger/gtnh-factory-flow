@@ -236,10 +236,11 @@ lock it applies each file in `db/migrations/` (`NNNN-words.sql`, numbered from 0
 `schema_migrations` does not hold, each in its own transaction, and records its sha256 (of the text with LF line
 ends, so a CRLF checkout matches). An applied file that has changed is refused by name: a schema change is always
 a new file. The transaction is the runner's, so a file holds no `begin`, `commit`, `rollback` or `savepoint` and
-nothing `concurrently`; the runner refuses such a file by name before applying anything, and refuses any file in
-`db/migrations/` not named `NNNN-words.sql` rather than skip it. A run that cannot take the lock within 2 minutes
-fails ("another migration run holds the lock"). A database whose `public` schema holds tables
-but no ledger is refused ("this database was not set up by the migration runner"), and so is one that has
+nothing `concurrently`, and it leaves `standard_conforming_strings` and `backslash_quote` alone (every file shares
+the runner's session, and the check reads strings with their defaults); the runner refuses such a file by name
+before applying anything, and refuses any file in `db/migrations/` not named `NNNN-words.sql` rather than skip
+it. A run that cannot take the lock within 2 minutes fails ("another migration run holds the lock"). A database
+whose `public` schema holds tables but no ledger is refused ("this database was not set up by the migration runner"), and so is one that has
 Supabase's `anon` or `authenticated` role, where row security is what keeps tables off the public API key. It
 prints `migrate: <file>` for each file it applies and `migrate: done`; a rerun prints only `migrate: done`.
 `npm run db:migrate` runs the same from a checkout (`PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`).

@@ -282,6 +282,25 @@ describe("the migration runner", () => {
     expect(blankLiterals("select E'a' '\\'; x")).toBe("select    ; x");
   });
 
+  it("refuses a file that changes how later files' strings are read, by name", () => {
+    const refused: Record<string, string> = {
+      "set standard_conforming_strings = off;": "standard_conforming_strings",
+      "SET SESSION Standard_Conforming_Strings TO off;": "standard_conforming_strings",
+      "set backslash_quote = on;": "backslash_quote",
+      "select set_config('standard_conforming_strings', 'off', false);":
+        "standard_conforming_strings",
+      "alter database postgres set backslash_quote = on;": "backslash_quote",
+    };
+    for (const [text, setting] of Object.entries(refused)) {
+      expect(() => checkMigrationText("0002-bad.sql", text), text).toThrow(
+        `0002-bad.sql: changes ${setting}, which decides how later files' strings are read`,
+      );
+    }
+    expect(() =>
+      checkMigrationText("0002-fine.sql", "set local lock_timeout = '5s';"),
+    ).not.toThrow();
+  });
+
   it("passes the repository's own migrations", () => {
     const dir = path.join(dbDir(), "migrations");
     for (const name of readdirSync(dir).filter((entry) => MIGRATION_NAME.test(entry))) {

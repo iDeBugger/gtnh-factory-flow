@@ -158,7 +158,9 @@ function stringEnd(text: string, at: number, backslashEscapes: boolean): number 
  * comment ends at a line feed or a carriage return. Plain strings double
  * `''`; `E'...'` strings also escape with a backslash, and so does a part
  * continued from one; block comments nest. An unterminated literal runs to
- * the end, as Postgres would refuse it.
+ * the end, as Postgres would refuse it. It reads strings with Postgres's
+ * defaults (standard_conforming_strings on), which is why a migration may not
+ * change them: checkMigrationText refuses that.
  */
 export function blankLiterals(text: string): string {
   let out = "";
@@ -214,8 +216,24 @@ export function blankLiterals(text: string): string {
   return out;
 }
 
-/** Refuses a file that would take over the runner's transaction or cannot run inside one. */
+/** The settings that change how Postgres reads a string literal. */
+const LEXING_SETTINGS = /\b(standard_conforming_strings|backslash_quote)\b/i;
+
+/**
+ * Refuses a file that would take over the runner's transaction or cannot run
+ * inside one. Every file runs on the runner's one session, and this check
+ * reads each with Postgres's default string rules, so a file must not change
+ * those rules for the files after it: one that names
+ * standard_conforming_strings or backslash_quote (a `set`, a `set_config`,
+ * an `alter ... set`) is refused too.
+ */
 export function checkMigrationText(name: string, text: string): void {
+  const lexing = LEXING_SETTINGS.exec(text);
+  if (lexing) {
+    throw new MigrationError(
+      `${name}: changes ${lexing[1].toLowerCase()}, which decides how later files' strings are read`,
+    );
+  }
   const code = blankLiterals(text);
   const statements = code.split(";").map((statement) => statement.trim());
   if (statements.some((statement) => TRANSACTION_CONTROL.test(statement))) {
@@ -308,7 +326,9 @@ async function openLedger(run: RunSql): Promise<void> {
 
 /**
  * Applies every migration in `dir/migrations` the ledger does not hold, each
- * in its own transaction with its ledger row, and returns their names. A file
+ * in its own transaction with its ledger row, and returns their names. All
+ * files run on `run`'s one session, so a setting a file sets outlives it: a
+ * file that changes how strings are read is refused (checkMigrationText). A file
  * that fails rolls back alone and is named in the error; the files before it
  * stay applied.
  */
