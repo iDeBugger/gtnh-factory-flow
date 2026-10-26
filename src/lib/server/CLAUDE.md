@@ -220,7 +220,7 @@
   Both hold: both versions are prewarmed in full. If one fails, 2.8.1 is prewarmed second with its catalog
   only. Measure again when a dataset grows or a third version is served.
 
-## Database (PostgREST: db/, repos/, services/)
+## Database (db/, repos/, services/)
 
 Layout: the database client, its breaker and its error copy in `db/` (import it as `@/lib/server/db`);
 passwords, sessions, the admin header and salted keys in `auth/`; rate limits and the event log in `limits/`;
@@ -232,8 +232,33 @@ plus `visibility.ts`, the access rules as query filters), the rules in `services
 answer to "who may see an unpublished post"; the live service's `PlanStore` is an adapter over the same
 repositories), which return `ServiceResult`
 (`services/result.ts`) and never import `next/*`; a route only gates, parses, calls the service and answers
-(`serviceResponse`). A route asks whether there is a database through `services/config.ts`, never `db/`. The live service loads `auth/sessions` and `db`,
+(`serviceResponse`). A route asks whether there is a database through `services/config.ts`, never `db/`. Routes read
+plan previews and the popularity map through `services/plan-preview.ts` and `services/resource-popularity.ts`.
+The live service loads the repositories, `services/design-role.ts`, `auth/{session,secret,sessions}` and `db`,
 never password code.
+
+Import rules, held by `src/architecture.test.ts` (AGENTS.md "Layers" has rules 1 to 9) with no allowlist entries:
+- 10. Services import from `lib/server` only services, repositories, `auth/`, `limits/`, `db/index.ts`,
+  `http/{viewer,client-address}.ts`, `live-notify.ts` and the query-free helpers `isServiceTarget` names
+  (`community-rows`, `library`, `cloud-plans`, `blueprints`, `plan-list-cache`, `plan-engine`, `file-store`).
+- 11. The data layer (`db/`, `repos/`) never imports services, `auth/`, `limits/`, `http/` or `live-notify.ts`,
+  and `db/` never imports `repos/`.
+- 12. Only services, `auth/`, `limits/`, the data layer and `live/store.ts` import a repository at run time
+  (a type-only import of a row shape is fine), so a route reaches queries through a service.
+- 13. `src/` never imports `tools/`.
+
+Checks with no exceptions at all:
+- Outside the data layer (and the PostgREST stand-in in `local-db/`) no file sends a query (`.from("`, a Kysely
+  builder) or takes `getDb` or `getCommunityDb` from `db/index.ts`, statically, by `import()` or by `require`.
+- Services take from `db/index.ts` only `withTransaction`, `Tx` and the failure types and sentences;
+  `services/config.ts` also takes the configured check.
+- No data-layer module but `db/index.ts`, `db/client.ts` and `db/rest.ts` exports a handle (`getDb`,
+  `getCommunityDb`, `createDbClient`, `sql`, `CompiledQuery`) or uses `export *`.
+- What the test reads as SQL writing, from the syntax tree: a `sql` template only in the data layer. Only in
+  `db/migrations.ts`: `sql.raw`, `sql.ref`, `sql.id`, `sql.lit`, `sql.table`; Kysely's `sql` other than as a tag or
+  a call's object (assigned, destructured, indexed) or under another name; `dynamic` by any path;
+  `CompiledQuery` as a value (and outside `db/` at all); a namespace or dynamic import of kysely. A sort column
+  comes from a closed map and goes through the builder, never through these.
 
 The server and the live service talk to PostgREST at `POSTGREST_URL` through `@supabase/postgrest-js`
 (`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
