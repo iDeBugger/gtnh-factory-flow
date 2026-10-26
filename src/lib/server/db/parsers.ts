@@ -5,9 +5,10 @@ import { sql, type RawBuilder } from "kysely";
  * on PGlite: both hand these parsers Postgres's text form, so one table serves
  * the pool, the tests' PGlite and the local database.
  *
- * The answers keep Postgres's `to_json` spelling, which the routes' JSON has
- * always carried (`app/api/wire-format.test.ts`), so players' clients and
- * saved answers read the same.
+ * The answers use Postgres's `to_json` spelling for timestamps and numbers
+ * for bigints: the routes' JSON wire format, which
+ * `app/api/wire-format.test.ts` pins and players' clients and saved answers
+ * read.
  */
 
 const UTC_TIMESTAMP = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)\+00$/;
@@ -28,10 +29,10 @@ export function toJsonTimestamp(text: string): string {
 }
 
 /**
- * OID to parser: `timestamptz` (1184) as JSON text, `bigint` (20) as a number,
- * as the routes' JSON has always carried both. Scalars only: an array of either (`timestamptz[]`
- * 1185, `bigint[]` 1016, as `array_agg` returns) reads differently on the two
- * drivers until its own OID is added here.
+ * OID to parser: `timestamptz` (1184) as JSON text, `bigint` (20) as a
+ * number, the wire format above. Scalars only: an array of either
+ * (`timestamptz[]` 1185, `bigint[]` 1016, as `array_agg` returns) reads
+ * differently on the two drivers until its own OID is added here.
  */
 export const DB_TYPE_PARSERS: Record<number, (text: string) => unknown> = {
   1184: toJsonTimestamp,

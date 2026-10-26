@@ -60,8 +60,9 @@ export interface BlueprintSummary {
   machineCount: number;
   /**
    * The row's publish flag and the public standing below (description,
-   * author, votes, downloads) stay in the answer as the table keeps them;
-   * nothing publishes, votes or downloads a blueprint now.
+   * author, votes, downloads) are part of the answer's shape and carry what
+   * the table holds; no route writes them, since a blueprint is its owner's
+   * alone.
    */
   isPublic: boolean;
   description: string;

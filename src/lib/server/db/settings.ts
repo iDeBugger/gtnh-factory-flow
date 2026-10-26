@@ -7,9 +7,9 @@ export type DbEnv = Readonly<Record<string, string | undefined>>;
 export type DbService = "site" | "live";
 
 /**
- * Connections per process. The site keeps 10 for the load it serves (the
- * size its earlier database API ran with); the live service flushes 4 plans at a time plus joins and
- * renewals. Both together stay far under Postgres's 100 connections.
+ * Connections per process. The site keeps 10 for its request load; the
+ * live service flushes 4 plans at a time plus joins and renewals. Both
+ * together stay far under Postgres's 100 connections.
  */
 const POOL_MAX: Record<DbService, number> = { site: 10, live: 6 };
 
