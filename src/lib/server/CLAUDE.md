@@ -109,8 +109,8 @@
   sentence and logs the error (a database or file system message names tables or the release path); the one
   sentence passed on is `COMMUNITY_DB_DOWN_MESSAGE`. Dataset routes use `datasetErrorResponse`: an unserved id
   (`DatasetNotFoundError`) is 404 `Dataset not found.`, never the id. The library's failures answer through
-  `libraryStorageErrorMessage` the same way (the route's sentence, or the database-down line); fixed 4xx copy stays as it is. Exam: `error-response.test.ts`,
-  `datasets/[versionId]/catalog/route.test.ts`.
+  `libraryStorageErrorMessage` the same way (the route's sentence, or the database-down line); fixed 4xx copy stays
+  as it is. Exam: `error-response.test.ts`, `datasets/[versionId]/catalog/route.test.ts`.
 - Every dataset route except `prewarm`, and `/api/resource-popularity` (the browser item search's popularity map,
   1 unit, outside `/api/datasets/` so an edge rule on that prefix does not cover it), spends an in-memory work
   budget per client address (`limits/dataset-rate.ts`):
@@ -457,11 +457,13 @@ which bypasses row security. No anon role exists, so a request without the token
 - While `live_lease_until` is in the future the live service is the plan's only writer: the PUT refuses a plan body
   (409 `{ live: true }`) and its write is conditional on the lease. Metadata still goes through.
 - Each save, creation, share and delete is one transaction (`withTransaction`): a design or folder save reads its row
-  `for update`, so two saves cannot both pass the "behind" check; a new design or folder locks the account row first,
-  so creations at once meet the cap one at a time; a share locks the design row before counting members; a delete
-  tombstones the design and drops its members together. A lease renewal or flush is one statement that also reads
-  the row (locking), so a miss says "gone" or "lost" from the row's newest version. `store-grants.test.ts` runs
-  every `PlanStore` call as `gtnh_live`.
+  `for update`, so two saves cannot both pass the "behind" check; a new design or folder locks the account row first
+  (`for no key update`, which foreign-key checks never wait for), so creations at once meet the cap one at a time; a
+  share locks the design row before counting members; a delete tombstones the design and drops its members together. A
+  lease renewal or flush is one statement that also reads the row (locking), so a miss says "gone" or "lost" from the
+  row's newest version. `store-grants.test.ts` runs every `PlanStore` call as `gtnh_live`. PGlite runs one transaction
+  at a time, so `cloud-plans.test.ts` pins the lock statements themselves; `services/library-postgres.test.ts` races
+  creations on a real Postgres (with `GTNH_TEST_POSTGRES_URL`).
 - `GET /api/library` keeps listing tombstones (clients rely on it never to reuse a deleted id) and adds each design's
   `members` and the `shared` plans, in one extra read when nothing is shared.
 - Deleting a design deletes its member rows (designs are tombstoned, so the foreign key's cascade never fires) and
