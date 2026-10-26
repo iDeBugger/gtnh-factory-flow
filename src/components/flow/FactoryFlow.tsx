@@ -730,8 +730,8 @@ type ResourceEdgeData = {
    * Timelapse only (board-timelapse.ts): the edge's paths render with
    * pathLength=1, so the draw-in animation's normalized dash covers any
    * route exactly and every wire takes the wire-draw slider's duration.
-   * Never set outside a run - px-based dash styles (starved dots, the
-   * clog-lock dashes) read wrong against a normalized length.
+   * Never set outside a run - px-based dash styles read wrong against a
+   * normalized length.
    */
   timelapseDraw?: boolean;
 };

@@ -2,7 +2,7 @@ import type { FactoryProject, FactoryStorage } from "../model/types";
 import { isHatchSuppliedInput } from "../model/hatch-supply";
 import { applyRecipeInputOverrides } from "../model/recipe-input-overrides";
 import { isRecipeInputConsumed } from "../model/resources";
-import { inheritSharedMachineExpansion } from "../model/shared-machine";
+import { expandSharedMachines, inheritSharedMachineExpansion } from "../model/shared-machine";
 import { parseResourceHandleId } from "@/components/flow/resource-handles";
 import { planGameVersion } from "@/lib/model/game-version";
 
@@ -10,11 +10,19 @@ export const HATCH_SUPPLY_PREFIX = "hatch-supply:";
 export const isHatchSupplyId = (id: string) => id.startsWith(HATCH_SUPPLY_PREFIX);
 const cache = new WeakMap<FactoryProject, FactoryProject>();
 
-/** Run AFTER shared-machine/pool expansion. A private source supplies only
+/**
+ * The graph every solve and every diagnosis reads: shared machines as one hidden node per recipe section, then the
+ * private hatch supplies. Asked again with its own answer it returns the same object.
+ */
+export function solveGraph(project: FactoryProject): FactoryProject {
+  return expandHatchSupplies(expandSharedMachines(project));
+}
+
+/** Run AFTER shared-machine expansion. A private source supplies only
  * the selected card's input (a Reservoir or Air Intake Hatch), fully
  * satisfying it: hatch counts and rates are abstracted away on purpose.
  * Existing wires remain saved, but do not feed a hatch-satisfied slot until
- * it is switched off. No supply leaks into a pool.
+ * it is switched off.
  */
 export function expandHatchSupplies(project: FactoryProject): FactoryProject {
   const gameVersion = planGameVersion(project);

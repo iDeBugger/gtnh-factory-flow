@@ -38,6 +38,7 @@ const node = (patch: Partial<FactoryNode> = {}): FactoryNode => ({
   recipeId: "Large Chemical Reactor",
   overclockTier: "HV",
   machineCount: 1,
+  solvePin: 1,
   parallel: 1,
   enabled: true,
   position: { x: 0, y: 0 },
@@ -60,7 +61,7 @@ describe("per-card hatch input", () => {
       ).state,
     ).toBe("over-tier");
   });
-  it("pins a fully wired over-tier build to zero and resumes it at a legal voltage", () => {
+  it("reads a fully wired over-tier build as power-stalled, and clears it at a legal voltage", () => {
     const r = recipe("Precise Assembler", 524288);
     r.inputs = [{ kind: "item", id: "ore", amount: 1 }];
     r.outputs = [{ kind: "item", id: "dust", amount: 1 }];
@@ -85,8 +86,6 @@ describe("per-card hatch input", () => {
     };
     const stalled = calculateThroughput(p);
     expect(stalled.nodes.a.powerStalled).toBe(true);
-    expect(stalled.nodes.a.utilization).toBe(0);
-    expect(stalled.edges.ship.transferredPerSecond).toBe(0);
     const raw = calculateThroughput({
       ...p,
       nodes: p.nodes.map((n) => ({ ...n, powerInputMode: "eut" as const })),

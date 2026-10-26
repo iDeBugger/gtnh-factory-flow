@@ -122,8 +122,7 @@ export function readUpTo(
 // ---------------------------------------------------------------------------
 
 /**
- * The rings of Up to pools that blame each other (old Build's dead loop and clog lock: `death-spiral.ts`,
- * `clog-lock.ts`). A pool blames the Up to pools on the wire network of its `port` and `tied` ports: for a STARVED
+ * The rings of Up to pools that blame each other. A pool blames the Up to pools on the wire network of its `port` and `tied` ports: for a STARVED
  * pool those that make what it is short of, for a CLOGGED or UNUSED one those that take what it cannot get rid of.
  * A ring is a strongly connected part of that relation (a pool blaming itself counts) whose members all stand still and
  * all read STARVED (DEAD_LOOP) or all UNUSED (CLOG_LOCK). Standing still is what makes it a ring's own doing: a ring that

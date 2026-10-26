@@ -18,12 +18,23 @@ function makeNode(overrides: Partial<FactoryNode>): FactoryNode {
   };
 }
 
+const MACHINE_RECIPE: Recipe = {
+  id: "recipe-1",
+  name: "Machine",
+  machineType: "Assembler",
+  minimumTier: "LV",
+  durationTicks: 20,
+  eut: 30,
+  inputs: [],
+  outputs: [],
+};
+
 function makeProject(nodes: FactoryNode[], recipes: Recipe[] = []): FactoryProject {
   return {
     schemaVersion: PROJECT_SCHEMA_VERSION,
     id: "project-1",
     name: "Test plan",
-    recipes,
+    recipes: [MACHINE_RECIPE, ...recipes],
     nodes,
     storages: [],
     edges: [],
@@ -31,7 +42,7 @@ function makeProject(nodes: FactoryNode[], recipes: Recipe[] = []): FactoryProje
   };
 }
 
-/** A CropsNH crop card: `machineCount` on its node means planted crops. */
+/** A CropsNH crop card: its count means planted crops. */
 function makeCropRecipe(id: string): Recipe {
   return {
     id,
@@ -71,6 +82,13 @@ function makeResult(overrides: Partial<ThroughputResult>): ThroughputResult {
   };
 }
 
+/** Books whose cards are solved at these counts. */
+function solved(counts: Record<string, number>): ThroughputResult["nodes"] {
+  return Object.fromEntries(
+    Object.entries(counts).map(([id, count]) => [id, { theoreticalMachinesRequired: count, utilization: 1 }]),
+  ) as unknown as ThroughputResult["nodes"];
+}
+
 describe("computeCommunityPlanStats", () => {
   it("sums machines and finds the highest voltage tier across enabled nodes", () => {
     const project = makeProject([
@@ -79,7 +97,11 @@ describe("computeCommunityPlanStats", () => {
       makeNode({ id: "c", machineCount: 4, overclockTier: "HV", enabled: false }),
     ]);
 
-    const stats = computeCommunityPlanStats(project, makeResult({ totalEuT: 1234 }));
+    // The machines to build are the solved counts.
+    const stats = computeCommunityPlanStats(
+      project,
+      makeResult({ totalEuT: 1234, nodes: solved({ a: 3, b: 2, c: 4 }) }),
+    );
 
     expect(stats.machineCount).toBe(5);
     expect(stats.highestTier).toBe("EV");
@@ -115,7 +137,7 @@ describe("computeCommunityPlanStats", () => {
       [makeCropRecipe("crop-1")],
     );
 
-    const stats = computeCommunityPlanStats(project, makeResult({}));
+    const stats = computeCommunityPlanStats(project, makeResult({ nodes: solved({ managed: 50, bare: 20, machine: 3 }) }));
 
     expect(stats.machineCount).toBe(5);
   });

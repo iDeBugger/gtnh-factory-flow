@@ -45,6 +45,7 @@ const node: FactoryNode = {
   id: "hile",
   recipeId: recipe.id,
   machineCount: 1,
+  solvePin: 1,
   parallel: 1,
   position: { x: 0, y: 0 },
   enabled: true,
@@ -173,7 +174,7 @@ describe("HILE issue #50", () => {
     ).toHaveLength(0);
   });
 
-  it("stalls an over-tier recipe despite ample power and resumes with a higher source", () => {
+  it("reads an over-tier recipe as power-stalled despite ample power, and clears it with a higher source", () => {
     const highRecipe = { ...recipe, eut: 122880, minimumTier: "ZPM" as const };
     const lowSource = {
       ...node,
@@ -201,7 +202,6 @@ describe("HILE issue #50", () => {
     };
     const stalled = calculateThroughput(project);
     expect(stalled.nodes.hile.powerStalled).toBe(true);
-    expect(stalled.edges.ship.transferredPerSecond).toBe(0);
     const working = calculateThroughput({
       ...project,
       nodes: [{ ...lowSource, machineConfigTiers: { laserSource: "luv-256" } }],

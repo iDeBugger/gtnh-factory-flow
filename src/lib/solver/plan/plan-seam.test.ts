@@ -3,29 +3,8 @@ import { calculateThroughput } from "../throughput";
 import { mockForced, mockLeftovers, mockPlans, mockUnneeded } from "./__fixtures__/mock-extras";
 import { parsePortKey } from "./port-key";
 
-describe("the dispatch seam in calculateThroughput", () => {
-  const solveProject = () => ({ ...mockForced.project, planMode: undefined });
-
-  it("planMode off: the old Solve result, unchanged by the seam's presence", () => {
-    const withKeyAbsent = (() => {
-      const { planMode: _unused, ...rest } = mockForced.project;
-      void _unused;
-      return rest;
-    })();
-    const a = calculateThroughput(solveProject(), { generatedAt: "t" });
-    const b = calculateThroughput(withKeyAbsent as typeof mockForced.project, { generatedAt: "t" });
-    expect(a).toEqual(b);
-    expect(a.plan).toBeUndefined();
-  });
-
-  it("planMode off: a Build project is solved by the Build books", () => {
-    const { solveMode: _s, planMode: _p, ...build } = mockForced.project;
-    void _s;
-    void _p;
-    expect(() => calculateThroughput(build as typeof mockForced.project, { generatedAt: "t" })).not.toThrow();
-  });
-
-  it("planMode on: reaches the plan solver and answers with plan extras", () => {
+describe("calculateThroughput", () => {
+  it("answers with the plan solver's extras", () => {
     const result = calculateThroughput(mockForced.project, { generatedAt: "t" });
     expect(result.plan).toBeDefined();
     expect(result.nodes["mac"]!.theoreticalMachinesRequired).toBeCloseTo(3, 9);

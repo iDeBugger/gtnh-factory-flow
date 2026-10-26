@@ -62,7 +62,6 @@ export function buildMachineList(
 ): MachineListEntry[] {
   const gameVersion = planGameVersion(project);
   const recipes = new Map(project.recipes.map((recipe) => [recipe.id, recipe]));
-  const solving = project.solveMode === true || project.poolMode === true;
   const entries: MachineListEntry[] = [];
   for (const node of project.nodes) {
     const recipe = recipes.get(node.recipeId);
@@ -90,29 +89,22 @@ export function buildMachineList(
             ? getNodePowerReport(effective, view, gameVersion)
             : undefined,
         required: nonnegative(result.nodes[view.id]?.theoreticalMachinesRequired ?? 0),
-        usage: Math.min(1, nonnegative(result.nodes[view.id]?.utilization ?? 1)),
       };
     });
-    const required = sections.reduce((sum, part) => sum + part.required, 0);
-    const usage = Math.min(
-      1,
-      sections.reduce((sum, part) => sum + part.usage, 0),
-    );
-    const units = solving ? required : nonnegative(node.machineCount);
+    // The solved counts: the plan solver sizes every card.
+    const units = sections.reduce((sum, part) => sum + part.required, 0);
     // Crop counts on the board are seeds; the list counts the actual harvesters.
-    const seeds = solving
-      ? Math.max(0, Math.ceil(units - 0.000001))
-      : Math.max(0, Math.round(units));
+    const seeds = Math.max(0, Math.ceil(units - 0.000001));
     const count = crop ? cropsNhHarvesterMachineCount(crop, seeds) : units;
     // Parallel processing affects draw, never the number of physical machines.
     const parallel = Math.max(1, node.parallel);
-    const runningCount = solving || usage > 0 ? count : 0;
+    const runningCount = count;
     const report = sections[0]?.report;
     const steam = sections[0]?.steam;
     const peakDraw = Math.max(0, ...sections.map((part) => part.report?.drawEuT ?? 0));
     const average = (draw: (part: (typeof sections)[number]) => number) =>
       sections.reduce(
-        (sum, part) => sum + draw(part) * (solving ? part.required : units * part.usage) * parallel,
+        (sum, part) => sum + draw(part) * part.required * parallel,
         0,
       );
 
@@ -133,17 +125,11 @@ export function buildMachineList(
     const euT = report
       ? peakDraw * runningCount * parallel
       : cropEuT !== undefined
-        ? solving || usage > 0
-          ? cropEuT
-          : 0
+        ? cropEuT
         : powerEuT !== undefined && powerEuT < 0
           ? -powerEuT * runningCount * parallel
           : undefined;
-    const avgEuT = report
-      ? average((part) => part.report?.drawEuT ?? 0)
-      : euT !== undefined
-        ? euT * (solving ? 1 : usage)
-        : undefined;
+    const avgEuT = report ? average((part) => part.report?.drawEuT ?? 0) : euT;
     const steamLs = steam
       ? Math.max(...sections.map((part) => part.steam?.drawSteamPerTick ?? 0)) *
         20 *
@@ -182,7 +168,7 @@ export function buildMachineList(
       steamLs,
       avgSteamLs,
       madeEuT,
-      avgMadeEuT: madeEuT !== undefined ? madeEuT * (solving ? 1 : usage) : undefined,
+      avgMadeEuT: madeEuT,
       pressure: steam ? (steam.highPressure ? "high-pressure" : "bronze") : undefined,
       state: report?.state ?? "ok",
     });

@@ -1,4 +1,4 @@
-import type { FactoryProject, FactoryStorage, StorageBufferMode } from "./types";
+import type { FactoryProject, FactoryStorage } from "./types";
 
 /**
  * What a drawer IS. The board draws each role as a different shape.
@@ -49,38 +49,27 @@ export function getStorageRoles(project: FactoryProject): Map<string, StorageRol
   }
 
   for (const storage of storages) {
-    roles.set(storage.id, storageRoleFor(storage, hasIn.has(storage.id), hasOut.has(storage.id), project.poolMode === true));
+    roles.set(storage.id, storageRoleFor(storage, hasIn.has(storage.id), hasOut.has(storage.id)));
   }
   return roles;
 }
 
-/**
- * One drawer's role from what is wired to it. In POOL MODE a drawer with no
- * wires still has a job if it says which side of the pool it sits on: the
- * pool expansion wires it in, and the card should wear that role before
- * the solve has run. Shared with the card, which reads its own wires.
- */
+/** One drawer's role from what is wired to it. Shared with the card, which reads its own wires. */
 export function storageRoleFor(
   storage: Pick<FactoryStorage, "drainMode" | "poolSide" | "targetPerSecond">,
   fed: boolean,
   drawn: boolean,
-  poolMode: boolean,
 ): StorageRole {
   const drainRole = (): StorageRole =>
     storage.drainMode === "byproduct" ? "byproduct" : storage.drainMode === "trash" ? "trash" : "product";
-  if (poolMode) {
-    const side = poolSideOf(storage, fed, drawn);
-    return side === "source" ? "source" : side === "drain" ? drainRole() : "idle";
-  }
   if (fed) {
     return drawn ? "buffer" : drainRole();
   }
   if (drawn) {
     return "source";
   }
-  // Unwired, but declared in pool mode: it stays the product (or source) it
-  // was made as, a lingering drawer rather than a blank one, until a wire
-  // says otherwise.
+  // Unwired, but declared (a loose drawer, `addPoolStorage`): it stays the product (or source) it was made as, a
+  // lingering drawer rather than a blank one, until a wire says otherwise.
   if ((storage.targetPerSecond ?? 0) < 0) return "source";
   if (storage.poolSide === "drain") {
     return drainRole();
@@ -89,31 +78,6 @@ export function storageRoleFor(
     return "source";
   }
   return "idle";
-}
-
-/**
- * Which side of the POOL a drawer sits on. Pool mode ignores wires, but saved
- * wires still say what the drawer was FOR: fed only, a drain (product); drawn
- * only, a source. A negative target or declared `poolSide` wins. A buffer
- * (both) or a drawer with neither has no side (the pool is the buffer) and
- * stays idle.
- */
-export function poolSideOf(
-  storage: Pick<FactoryStorage, "poolSide" | "targetPerSecond">,
-  fed: boolean,
-  drawn: boolean,
-): "source" | "drain" | undefined {
-  if ((storage.targetPerSecond ?? 0) < 0) return "source";
-  if (storage.poolSide) {
-    return storage.poolSide;
-  }
-  if (fed && !drawn) {
-    return "drain";
-  }
-  if (drawn && !fed) {
-    return "source";
-  }
-  return undefined;
 }
 
 /**
@@ -131,9 +95,4 @@ export function describeStorage(
 /** One drawer's role. Prefer `getStorageRoles` when asking about several. */
 export function getStorageRole(project: FactoryProject, storageId: string): StorageRole {
   return getStorageRoles(project).get(storageId) ?? "idle";
-}
-
-/** Solve balances intermediate drawers unless storage/ratio behavior was explicitly chosen. */
-export function effectiveBufferMode(storage: Pick<FactoryStorage, "bufferMode">, solveMode: boolean): StorageBufferMode {
-  return storage.bufferMode ?? (solveMode ? "strict" : "overflow");
 }

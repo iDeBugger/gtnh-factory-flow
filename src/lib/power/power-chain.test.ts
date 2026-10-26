@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PROJECT_SCHEMA_VERSION, type FactoryProject } from "@/lib/model/types";
 import { calculateThroughput } from "@/lib/solver/throughput";
-import { closeBoundaries } from "@/lib/solver/close-boundaries";
+import { openSelectionEnds } from "@/lib/blueprints/open-ends";
 import { buildPowerRecipe } from "./power-recipe";
 
 /**
@@ -17,6 +17,7 @@ function node(id: string, recipeId: string, machineCount = 1, settings?: Record<
     id,
     recipeId,
     machineCount,
+    solvePin: machineCount,
     parallel: 1,
     overclockTier: "LV",
     enabled: true,
@@ -82,19 +83,29 @@ describe("power chain against the workbook", () => {
           resourceKind: "fluid" as const,
           resourceId: "ic2superheatedsteam",
         },
+        {
+          id: "e-spill",
+          source: "lhe",
+          target: "spill",
+          resourceKind: "fluid" as const,
+          resourceId: "ic2superheatedsteam",
+        },
+      ],
+      // The steam the turbines leave goes to a byproduct drawer.
+      storages: [
+        { id: "spill", kind: "fluid", resourceId: "ic2superheatedsteam", drainMode: "byproduct", position: { x: 0, y: 0 } },
       ],
       fuelProfiles: [],
     } as unknown as FactoryProject;
 
-    // The board rules are gone; this exam is about the chain, not the
-    // boundary, so it closes the boundary itself the way the rules used to.
+    // This exam is about the chain, not the boundary: the rest of the slots are opened for it.
     const result = calculateThroughput(
-      closeBoundaries(project, { inputs: "all", outputs: "all" }),
+      openSelectionEnds(project),
       { generatedAt: "fixed" },
     );
 
     // Everything runs flat out: 276,000 L/s of steam covers the turbines'
-    // 256,000 with room to spare, and free outputs carry the surplus.
+    // 256,000 with room to spare, and the byproduct drawer takes the surplus.
     expect(result.nodes["reactor"].utilization).toBeCloseTo(1);
     expect(result.nodes["lhe"].utilization).toBeCloseTo(1);
     expect(result.nodes["turbine"].utilization).toBeCloseTo(1);

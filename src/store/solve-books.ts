@@ -2,73 +2,17 @@ import { calculateThroughput } from "@/lib/solver";
 import type { FactoryProject, ThroughputResult } from "@/lib/model/types";
 
 /**
- * The store's one door to the solver, sized to the board it is asked about.
+ * The store's one door to the solver. The plan solver runs integer programs on HiGHS, which only the Web Worker
+ * loads, so the solve runs there whenever there is one: the caller gets its previous books back immediately,
+ * flagged `stale`, and the real result replaces `lastResult` through the sink when the worker lands.
  *
- * A small board solves synchronously: the result is back before the state
- * update lands. A BIG board must not run on the main thread (seconds to
- * minutes, on every edit and tab switch). It moves to a Web Worker: the
- * caller gets its previous books back immediately, flagged `stale`, and the
- * real result replaces `lastResult` through the sink when the worker lands.
+ * Finished books are kept in a small content-keyed LRU, so switching tabs between unchanged plans is instant; the
+ * design store re-reads a plan from IndexedDB on every switch, so the cache cannot key on object identity.
  *
- * Finished big-board books are kept in a small content-keyed LRU, so
- * switching tabs between unchanged big plans is instant; the design store
- * re-reads a plan from IndexedDB on every switch, so the cache cannot key on
- * object identity.
- *
- * Rapid edits coalesce: one solve runs at a time, only the newest waiting
- * plan is kept, and a result for a plan no longer on the canvas is cached
- * but never shown. Environments without workers (SSR, vitest, old browsers)
- * keep the synchronous path for every size.
+ * Rapid edits coalesce: one solve runs at a time, only the newest waiting plan is kept, and a result for a plan no
+ * longer on the canvas is cached but never shown. Environments without workers (SSR, vitest, old browsers) solve
+ * synchronously.
  */
-
-/**
- * Nodes plus edges above which the solve leaves the main thread. Around this
- * size the homegrown simplex already takes 100ms+ per edit (the worker's
- * HiGHS stays under 50ms), and main-thread time grows roughly cubically.
- */
-const SYNC_SOLVE_LIMIT = 120;
-
-/**
- * Size is not the whole story. One more reason to leave the main thread:
- * this plan's last MAIN-THREAD solve took longer than SLOW_SOLVE_MS (three
- * frames: past it every edit stutters, and in Firefox a hang that long clips
- * the board's sounds, see board-sounds.ts).
- */
-const SLOW_SOLVE_MS = 50;
-/**
- * SOLVE MODE is far heavier on the homegrown simplex: six dense solves over
- * every machine and wire at once, and pool mode (which rides on solve mode)
- * adds a pool drawer per resource. It can run several times slower than plan
- * mode there, while HiGHS (worker only) stays fast. Past this small size it
- * always goes to the worker rather than waiting for the slow-solve rule to
- * learn from a frozen tab.
- */
-const SOLVE_MODE_SYNC_LIMIT = 40;
-
-/**
- * The last MAIN-THREAD solve's wall time, and the plan it was measured on.
- * Only a synchronous solve may write it: the worker runs HiGHS, roughly ten
- * times faster than the main thread's simplex, so its timing says nothing
- * about how long the tab would freeze (letting it count would send a slow
- * plan back to the main thread). A slow plan therefore stays with the worker
- * for the session; another plan decides by its own size.
- */
-let lastSolveDurationMs: number | undefined;
-let lastSolveProjectId: string | undefined;
-
-/**
- * Every edit solves; there is no manual recalculation. The old board toolbar's
- * switch for it saved "off" here, and plan boards show no such switch, so a
- * browser holding it showed every plan it opened at zero with no way out. The
- * stored value is removed on load so no browser stays stuck in it.
- */
-try {
-  if (typeof localStorage !== "undefined") {
-    localStorage.removeItem("gtnh-factory-flow.auto-solve.v1");
-  }
-} catch {
-  // Storage refused (a private window): nothing was stored either.
-}
 
 const BIG_BOOKS_CACHE_LIMIT = 8;
 const bigBooksCache = new Map<string, ThroughputResult>();
@@ -83,9 +27,9 @@ let worker: Worker | undefined;
 let workerBroken = false;
 let inFlight: SolveRequest | undefined;
 let queued: SolveRequest | undefined;
-/** The content key of the plan the canvas currently shows, when it is big. */
+/** The content key of the plan the canvas currently shows, while the worker solves it. */
 let currentKey: string | undefined;
-/** The last books handed out, big or small: what a stale placeholder wears. */
+/** The last books handed out: what a stale placeholder wears. */
 let lastBooks: ThroughputResult | undefined;
 
 /** Where finished worker solves land; the factory store registers itself. */
@@ -94,22 +38,8 @@ export function registerBooksSink(apply: (result: ThroughputResult) => void) {
 }
 
 export function solveBooks(project: FactoryProject): ThroughputResult {
-  const size = project.nodes.length + project.edges.length;
-  const provenSlow =
-    lastSolveDurationMs !== undefined &&
-    lastSolveDurationMs > SLOW_SOLVE_MS &&
-    lastSolveProjectId === project.id;
-  const expectSlow =
-    size > SYNC_SOLVE_LIMIT ||
-    provenSlow ||
-    ((project.solveMode === true || project.poolMode === true) && size > SOLVE_MODE_SYNC_LIMIT) ||
-    // Plan mode runs integer programs (HiGHS, which only the worker loads): the worker whenever there is one.
-    project.planMode === true;
-  if (!expectSlow || !workerAvailable()) {
-    const started = performance.now();
+  if (!workerAvailable()) {
     const result = calculateThroughput(project);
-    lastSolveDurationMs = performance.now() - started;
-    lastSolveProjectId = project.id;
     currentKey = undefined;
     lastBooks = result;
     return result;
@@ -176,13 +106,11 @@ function getWorker(): Worker {
         key: string;
         result?: ThroughputResult;
         error?: string;
-        solveMs?: number;
       }>,
     ) => {
       const { key, result, error } = event.data;
       inFlight = undefined;
       if (result) {
-        // `solveMs` is deliberately not read: see lastSolveDurationMs.
         deliver(key, result);
       } else {
         console.error("solve worker error:", error);

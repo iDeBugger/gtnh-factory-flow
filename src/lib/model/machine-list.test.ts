@@ -3,7 +3,7 @@ import { PHENOL_STEPS, VINYL_RECIPE, phenolPlan } from "./__fixtures__/phenol-28
 import { buildMachineList, formatMachineListCount } from "./machine-list";
 import { PROJECT_SCHEMA_VERSION, type FactoryProject, type Recipe } from "./types";
 import { calculateThroughput } from "@/lib/solver/throughput";
-import { closeBoundaries } from "@/lib/solver/close-boundaries";
+import { openSelectionEnds } from "@/lib/blueprints/open-ends";
 
 const light: Recipe = {
   id: "light",
@@ -34,6 +34,7 @@ function project(): FactoryProject {
       id: `n${index}`,
       recipeId,
       machineCount: [2, 3, 4][index]!,
+      solvePin: [2, 3, 4][index]!,
       parallel: 1,
       enabled: true,
       overclockTier: "LV",
@@ -44,7 +45,7 @@ function project(): FactoryProject {
 
 describe("the machine list follows each board card", () => {
   it("keeps identical machines/recipes separate and scales each card's own draw", () => {
-    const p = closeBoundaries(project());
+    const p = openSelectionEnds(project());
     const lines = buildMachineList(p, calculateThroughput(p));
     expect(lines).toHaveLength(3);
     expect(lines.find((line) => line.nodeId === "n0")).toMatchObject({
@@ -65,10 +66,10 @@ describe("the machine list follows each board card", () => {
     expect(lines.reduce((sum, line) => sum + line.count, 0)).toBe(9);
   });
 
-  it.each([false, true])(
-    "uses fractional solved counts below and above the stored count (pool=%s)",
-    (poolMode) => {
-      const p = closeBoundaries({ ...project(), solveMode: true, poolMode });
+  it(
+    "uses fractional solved counts below and above the stored count",
+    () => {
+      const p = openSelectionEnds(project());
       [0.125, 6.25, 101.375].forEach((count, index) => {
         p.nodes[index]!.solvePin = count;
       });
@@ -86,7 +87,8 @@ describe("the machine list follows each board card", () => {
   );
 
   it("retains zero-demand cards at zero and does not bill retained nameplate results", () => {
-    const p = closeBoundaries({ ...project(), solveMode: true });
+    const p = openSelectionEnds(project());
+    for (const node of p.nodes) delete node.solvePin;
     const lines = buildMachineList(p, calculateThroughput(p));
     expect(lines).toHaveLength(3);
     expect(lines.every((line) => line.count === 0 && line.euT === 0 && line.avgEuT === 0)).toBe(
@@ -95,7 +97,7 @@ describe("the machine list follows each board card", () => {
   });
 
   it("does not count parallel operations as more machines", () => {
-    const p = closeBoundaries(project());
+    const p = openSelectionEnds(project());
     p.nodes[0]!.parallel = 4;
     const line = buildMachineList(p, calculateThroughput(p)).find(
       (entry) => entry.nodeId === "n0",
@@ -108,13 +110,7 @@ describe("the machine list follows each board card", () => {
     const p = project();
     p.nodes = [{ ...p.nodes[0]!, extraRecipes: [{ recipeId: "heavy" }] }];
     const result = calculateThroughput(p);
-    // A shared card spends 25% on 8 EU/t and 75% on 24 EU/t.
-    result.nodes.n0!.utilization = 0.25;
-    result.nodes["n0#r1"]!.utilization = 0.75;
-    expect(buildMachineList(p, result)).toEqual([
-      expect.objectContaining({ count: 2, euT: 48, avgEuT: 40 }),
-    ]);
-    p.solveMode = true;
+    // The card is solved at a quarter machine on 8 EU/t and half a machine on 24 EU/t.
     result.nodes.n0!.theoreticalMachinesRequired = 0.25;
     result.nodes["n0#r1"]!.theoreticalMachinesRequired = 0.5;
     result.nodes.n0!.utilization = result.nodes["n0#r1"]!.utilization = 1;
@@ -125,7 +121,6 @@ describe("the machine list follows each board card", () => {
 
   it("weights generation and steam by solved counts too", () => {
     const p = project();
-    p.solveMode = true;
     p.recipes = [
       { ...light, id: "power", eut: 0, power: { sourceId: "test", euPerTick: 32, stats: [] } },
       { ...light, id: "steam", machineType: "Steam Grinder" },

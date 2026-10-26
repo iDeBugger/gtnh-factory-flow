@@ -1,6 +1,5 @@
 import type { FactoryProject, MachineTier, ThroughputResult } from "@/lib/model/types";
 import { GT_VOLTAGE_TIERS, getVoltageTierIndex } from "@/lib/model/tiers";
-import { getNodeMachineBuildCount } from "@/lib/model/passive-production";
 import { buildMachineList } from "@/lib/model/machine-list";
 import { sortByRate } from "@/lib/model/rate-order";
 import {
@@ -30,17 +29,10 @@ export function computeCommunityPlanStats(
 ): CommunityPlanStats {
   let highestTierIndex = -1;
   let highestTier: Exclude<MachineTier, "DEMO"> | undefined;
-  let machineCount = 0;
-  const recipesById = new Map(project.recipes.map((recipe) => [recipe.id, recipe]));
-
   for (const node of project.nodes) {
     if (!node.enabled) {
       continue;
     }
-
-    // A crop card's machineCount is planted crops, not machines: it counts
-    // the managers or farms those crops fill, and hand-picked crops nothing.
-    machineCount += getNodeMachineBuildCount(recipesById.get(node.recipeId), node);
     if (isVoltageTier(node.overclockTier)) {
       const index = getVoltageTierIndex(node.overclockTier);
       if (index > highestTierIndex) {
@@ -50,14 +42,12 @@ export function computeCommunityPlanStats(
     }
   }
 
-  if (project.planMode) {
-    // On the plan board a card's count is the solver's answer, not what was
-    // built: the machines to buy are the solved counts rounded up per card.
-    machineCount = buildMachineList(project, result).reduce(
-      (sum, entry) => sum + Math.max(0, Math.ceil(entry.count - 0.000001)),
-      0,
-    );
-  }
+  // A card's count is the solver's answer, not what was built: the machines to buy are the solved counts rounded
+  // up per card.
+  const machineCount = buildMachineList(project, result).reduce(
+    (sum, entry) => sum + Math.max(0, Math.ceil(entry.count - 0.000001)),
+    0,
+  );
 
   const icons = buildResourceIconIndex(project);
   return {

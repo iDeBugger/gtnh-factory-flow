@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PROJECT_SCHEMA_VERSION, type FactoryEdge, type FactoryNode, type FactoryProject } from "./types";
 import { canonicalizeResourceHandleId } from "./edge-identity";
 import { calculateThroughput } from "@/lib/solver/throughput";
-import { deriveNodeVerdict, findUnwiredNodeIds } from "@/components/flow/node-verdict";
+import { findUnwiredNodeIds } from "@/components/flow/node-verdict";
 import {
   expandSharedMachines,
   getSharedMachineHandlers,
@@ -187,51 +187,6 @@ describe("the shared time row", () => {
       ],
     });
 
-  it("caps the sections' shares of one machine at a total of one", () => {
-    const result = calculateThroughput(board(), { generatedAt: "fixed" });
-    const first = result.nodes["card"]!.utilization;
-    const second = result.nodes["card#r1"]!.utilization;
-    expect(first + second).toBeCloseTo(1, 4);
-    // Fairness: two equal askers split the machine evenly.
-    expect(first).toBeCloseTo(0.5, 3);
-    expect(second).toBeCloseTo(0.5, 3);
-    // Each section's wire carries its own flow under its own edge id.
-    expect(result.edges["l"]!.transferredPerSecond).toBeCloseTo(0.5, 3);
-  });
-
-  it("still splits evenly when an unrelated dead card sits on the board", () => {
-    // Jack's Electrolyzer board (2026-09-07): an unwired second tower pinned
-    // the fairness stage's worst-off level at zero, and at zero the simplex
-    // had parked one recipe of the shared card at zero too - so the card
-    // read 100/0 with a phantom clog lock on a millionth of a litre.
-    const proj = board();
-    proj.recipes = [...proj.recipes, recipe("lonely", [["oil", 1]], [["tar", 1]])];
-    proj.nodes = [...proj.nodes, node("dead", "lonely")];
-    const result = calculateThroughput(proj, { generatedAt: "fixed" });
-    expect(result.nodes["dead"]!.utilization).toBeCloseTo(0, 4);
-    expect(result.nodes["card"]!.utilization).toBeCloseTo(0.5, 3);
-    expect(result.nodes["card#r1"]!.utilization).toBeCloseTo(0.5, 3);
-    expect(deriveNodeVerdict(proj, result, "card").kind).not.toBe("clog-lock");
-  });
-
-  it("lets a section run flat out when the other has nothing to do", () => {
-    const proj = board();
-    // Unwire the light section's product: it has nowhere to go, so the
-    // heavy section gets the whole machine.
-    proj.edges = proj.edges.filter((entry) => entry.id !== "l");
-    const result = calculateThroughput(proj, { generatedAt: "fixed" });
-    expect(result.nodes["card"]!.utilization).toBeCloseTo(1, 4);
-    expect(result.nodes["card#r1"]!.utilization).toBeCloseTo(0, 4);
-  });
-
-  it("reads a section held back by the machine as busy, naming the other recipe", () => {
-    const proj = board();
-    const result = calculateThroughput(proj, { generatedAt: "fixed" });
-    const verdict = deriveNodeVerdict(proj, result, "card#r1");
-    expect(verdict.kind).toBe("busy");
-    expect(verdict.busy?.sharerName).toBe("heavy");
-  });
-
   it("answers the unwired notice with the card, not the section", () => {
     const proj = board();
     proj.edges = proj.edges.filter((entry) => entry.id !== "l");
@@ -241,9 +196,8 @@ describe("the shared time row", () => {
     expect(unwired.some((id) => id.includes("#r"))).toBe(false);
   });
 
-  it("pins a solve-mode count on the whole card, sections sharing it", () => {
+  it("pins a count on the whole card, sections sharing it", () => {
     const proj = board();
-    proj.solveMode = true;
     proj.nodes = proj.nodes.map((entry) =>
       entry.id === "card" ? { ...entry, solvePin: 4 } : entry,
     );

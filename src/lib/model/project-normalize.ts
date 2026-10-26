@@ -33,13 +33,6 @@ export interface LoadOptions {
   keepCellWires?: boolean;
 }
 
-let legacyModes = false;
-
-/** Tests of the old Build, Solve and Pool engine keep a plan's mode as it came. The app never calls this. */
-export function allowLegacyModesForTests(on = true): void {
-  legacyModes = on;
-}
-
 /**
  * The funnel, plus what it has to say: the tanks that loose cell wires became. Nothing is written anywhere: the
  * migrated plan is saved by the player's first edit.
@@ -51,9 +44,6 @@ export function normalizeLoadedProjectWithNotice(
   project: FactoryProject;
   notice?: PlanNotice;
 } {
-  if (legacyModes) {
-    return { project: normalizeLegacyProject(project) };
-  }
   if (options?.keepCellWires) {
     return { project: asPlan(normalizeLegacyProject(project)) };
   }

@@ -3,8 +3,7 @@ import type { Recipe } from "./types";
 /**
  * The LEGACY trash can node: a pure void with an empty recipe that eats
  * anything wired into it. The load funnel converts cans to trash-mode drawers
- * (project-normalize.ts); this remains for recognising them and as dead-path
- * safety in the solver (equilibrium.ts, role "trash").
+ * (project-normalize.ts); this remains for recognising them.
  */
 export const TRASH_MACHINE_TYPE = "Trash Can";
 /** The can's universal wire-here port: accepts any concrete resource. */

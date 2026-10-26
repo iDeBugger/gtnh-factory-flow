@@ -1,5 +1,5 @@
 import { calculateThroughput } from "@/lib/solver";
-import { closeBoundaries } from "@/lib/solver/close-boundaries";
+import { openSelectionEnds } from "./open-ends";
 import { computeCommunityPlanStats } from "@/lib/community/plan-stats";
 import type { PlanResourceStat } from "@/lib/community/types";
 import type { FactoryProject, MachineTier } from "@/lib/model/types";
@@ -31,14 +31,9 @@ export function computeBlueprintIo(payload: BoardClipboardPayload): BlueprintIo 
       edges: payload.edges,
       recipes: payload.recipes,
     };
-    // Heal the cut before solving: the capture severed every wire that
-    // crossed the selection boundary, and in a closed plan each cut leaves a
-    // bare slot that stops its machine dead. Counts still read the original
-    // payload, so the virtual drawers never show up as cards.
-    const stats = computeCommunityPlanStats(
-      project,
-      calculateThroughput(closeBoundaries(project)),
-    );
+    // Open the cut before solving (open-ends.ts). Counts still read the original payload, so the drawers never show
+    // up as cards.
+    const stats = computeCommunityPlanStats(project, calculateThroughput(openSelectionEnds(project)));
     return {
       needs: stats.needs,
       outputs: stats.outputs,

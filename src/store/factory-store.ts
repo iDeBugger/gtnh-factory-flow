@@ -5462,9 +5462,8 @@ function pruneOrphanStorages(project: FactoryProject): FactoryProject {
     linkedStorageIds.add(edge.target);
   }
 
-  // A drawer with a declared pool side is never an orphan: in pool mode it
-  // has no wires by design (the side IS its link), and it must survive every
-  // other edit on the board - and the trip back to build or solve.
+  // A loose drawer (a declared `poolSide`, `addPoolStorage`) is never an orphan: it has no wires yet by design, and
+  // it must survive every other edit on the board.
   const nextStorages = storages.filter(
     (storage) => storage.poolSide !== undefined || linkedStorageIds.has(storage.id),
   );

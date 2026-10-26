@@ -11,21 +11,23 @@ import type {
 } from "../model/types";
 import { collectTrashNodeIds } from "../model/trash";
 import { getStorageRoles } from "../model/storage-role";
-import { clampUtilization } from "./equilibrium";
 import { isHatchSupplyId } from "./hatch-supply";
 
 const EPSILON = 0.000001;
+
+/** A machine's running fraction, 0 to 1; a value that is not a number reads as full speed. */
+export function clampUtilization(utilization: number): number {
+  if (!Number.isFinite(utilization)) {
+    return 1;
+  }
+  return Math.min(Math.max(utilization, 0), 1);
+}
 
 /**
  * The resource books: what a plan makes, what it eats, and what it imports or
  * ships. Made and eaten are a bag-of-cards sum (not a walk of the wires), which
  * is what `netPerSecond` reports; imports and exports are read off the
  * boundary drawers (applyBoundaryDrawerBalances).
- *
- * Lives apart from the solver proper because the flow panel derives the same
- * three groups from a selection's own solve (see `selection-flow.ts`), and the
- * two views must never disagree about what counts as a need, an output, or an
- * internal loop.
  */
 function ensureBalance(
   balances: Map<ResourceKey, ResourceBalance>,
@@ -377,19 +379,3 @@ export function splitBalances(balances: Iterable<ResourceBalance>): {
   };
 }
 
-/**
- * Made and used in equal measure inside the scope — the "Internal" group.
- * Derived here rather than in the panel so the three groups always partition
- * the same book.
- */
-export function selectInternalBalances(balances: Iterable<ResourceBalance>): ResourceBalance[] {
-  return [...balances]
-    .filter(
-      (balance) =>
-        balance.producedPerSecond > 0 &&
-        balance.consumedPerSecond > 0 &&
-        balance.deficitPerSecond <= EPSILON &&
-        balance.surplusPerSecond <= EPSILON,
-    )
-    .sort((left, right) => right.consumedPerSecond - left.consumedPerSecond);
-}

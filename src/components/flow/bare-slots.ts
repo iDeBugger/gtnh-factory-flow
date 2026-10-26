@@ -1,6 +1,5 @@
 import type { FactoryProject, NodeThroughputResult, ResourceKind } from "@/lib/model/types";
 import { makeResourceKey } from "@/lib/model";
-import type { ResolvedSetupRules } from "@/lib/model/setup-rules";
 
 type ProjectEdge = FactoryProject["edges"][number];
 
@@ -18,17 +17,13 @@ export interface BareSlots {
 }
 
 /**
- * Every slot on a card with no wire on it, both ends, under the board's
- * rules: a side the rules answer (free inputs, free outputs) has nothing bare
- * to report, because the solve already fed or drained it. Shared by the
- * verdict (which marks them) and the death-spiral detector (which must not
- * call a ring dead when one of its members is simply not wired up yet).
+ * Every slot on a card with no wire on it, both ends: the plan is closed, so each one is a hard zero the card
+ * marks.
  */
 export function findBareSlots(
   nodeResult: NodeThroughputResult,
   incoming: ProjectEdge[],
   outgoing: ProjectEdge[],
-  rules: ResolvedSetupRules,
 ): BareSlots | undefined {
   const describe = (
     flow: { kind: ResourceKind; resourceId: string; displayName?: string },
@@ -39,25 +34,21 @@ export function findBareSlots(
     edges.some((edge) => makeResourceKey(edge.resourceKind, edge.resourceId) === key);
 
   const inputs: BareSlot[] = [];
-  if (!rules.freeInputs) {
-    for (const [key, flow] of Object.entries(nodeResult.inputs)) {
-      if (flow.amountPerSecond > RATE_EPSILON && !incoming.some((edge) => makeResourceKey(edge.resourceKind, edge.resourceId) === key)) {
-        inputs.push(describe(flow, key));
-      }
+  for (const [key, flow] of Object.entries(nodeResult.inputs)) {
+    if (flow.amountPerSecond > RATE_EPSILON && !incoming.some((edge) => makeResourceKey(edge.resourceKind, edge.resourceId) === key)) {
+      inputs.push(describe(flow, key));
     }
   }
 
   const outputs: BareSlot[] = [];
-  if (!rules.freeOutputs) {
-    for (const [key, flow] of Object.entries(nodeResult.outputs)) {
-      // An unwired EU port is not a bare slot: unbanked power dissipates in
-      // game, so the closed-plan rule waives it (as the solver cores do).
-      if (flow.kind === "power") {
-        continue;
-      }
-      if (flow.amountPerSecond > RATE_EPSILON && !wiredOn(outgoing, key)) {
-        outputs.push(describe(flow, key));
-      }
+  for (const [key, flow] of Object.entries(nodeResult.outputs)) {
+    // An unwired EU port is not a bare slot: unbanked power dissipates in
+    // game, so the closed-plan rule waives it (as the solver cores do).
+    if (flow.kind === "power") {
+      continue;
+    }
+    if (flow.amountPerSecond > RATE_EPSILON && !wiredOn(outgoing, key)) {
+      outputs.push(describe(flow, key));
     }
   }
 

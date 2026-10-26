@@ -73,7 +73,7 @@ describe("power as a resource", () => {
     const result = calculateThroughput(
       project({
         recipes: [generatorRecipe("gen", 640)],
-        nodes: [node("g", "gen")],
+        nodes: [{ ...node("g", "gen"), solvePin: 1 }],
         storages: [drawer("src", "fluid", "fuel")],
         edges: [wire("src", "g", "fluid", "fuel")],
       }),
@@ -86,7 +86,7 @@ describe("power as a resource", () => {
     const result = calculateThroughput(
       project({
         recipes: [generatorRecipe("gen", 640)],
-        nodes: [node("g", "gen")],
+        nodes: [{ ...node("g", "gen"), solvePin: 1 }],
         storages: [drawer("src", "fluid", "fuel"), drawer("bank", "power", "eu")],
         edges: [wire("src", "g", "fluid", "fuel"), wire("g", "bank", "power", "eu")],
       }),

@@ -38,7 +38,7 @@ function CleanStorageNodeComponent(props: NodeProps<StorageFlowNode>) {
   // wiring changed.
   const role = useFactoryStore((state): StorageRole => {
     const sides = wiredSidesOf(state.project.edges, storage.id);
-    return storageRoleFor(storage, (sides & 1) !== 0, (sides & 2) !== 0, state.project.poolMode === true);
+    return storageRoleFor(storage, (sides & 1) !== 0, (sides & 2) !== 0);
   });
   return <CleanDrawer data={data} selected={selected === true} role={role} />;
 }

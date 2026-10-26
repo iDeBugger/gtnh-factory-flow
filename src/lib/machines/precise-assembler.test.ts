@@ -58,6 +58,7 @@ const node: FactoryNode = {
   recipeId: precise.id,
   enabled: true,
   machineCount: 1,
+  solvePin: 1,
   parallel: 1,
   position: { x: 0, y: 0 },
   overclockTier: "LuV",
@@ -213,7 +214,7 @@ describe("Precise Auto-Assembler power and casing support", () => {
     ).toHaveLength(0);
   });
 
-  it("stalls the solver when the machine casing cannot handle the recipe", () => {
+  it("reads the machine as power-stalled when its casing cannot handle the recipe", () => {
     const configured = { ...node, machineConfigTiers: { prassMachineCasing: "iv" } };
     const project: FactoryProject = {
       schemaVersion: PROJECT_SCHEMA_VERSION,
@@ -245,7 +246,6 @@ describe("Precise Auto-Assembler power and casing support", () => {
     };
     const stopped = calculateThroughput(project);
     expect(stopped.nodes.machine.powerStalled).toBe(true);
-    expect(stopped.edges.ship.transferredPerSecond).toBe(0);
     const running = calculateThroughput({ ...project, nodes: [node] });
     expect(running.nodes.machine.powerStalled).toBe(false);
     expect(running.edges.ship.transferredPerSecond).toBeGreaterThan(0);

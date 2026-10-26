@@ -5,9 +5,8 @@ import type { FactoryProject, ThroughputResult } from "@/lib/model/types";
 
 /**
  * Stats are derived on the server from the uploaded plan (`calculateThroughput`).
- * A plan-mode plan solves integer programs, which only HiGHS can do, so the
- * routes load it first (a no-op for every other plan and after the first
- * load). If it cannot load the solve fails honestly and the stats are the
+ * A plan solves integer programs, which only HiGHS can do, so the routes load
+ * it first (a no-op after the first load). If it cannot load the solve fails honestly and the stats are the
  * failed plan's, never an error page.
  *
  * The solve runs on the request thread and blocks every other request while
@@ -27,14 +26,13 @@ const PLAN_STATS_BUDGET_MS = 5_000;
 
 let limitsSet = false;
 
-export async function ensurePlanEngine(project: Pick<FactoryProject, "planMode">): Promise<void> {
+/** The routes pass the plan they are about to solve; every plan solves on HiGHS, so it is not read. */
+export async function ensurePlanEngine(_plan?: FactoryProject): Promise<void> {
   if (!limitsSet) {
     setLpSolveDefaults({ timeLimitSeconds: LP_TIME_LIMIT_SECONDS, maxMipNodes: MAX_MIP_NODES });
     limitsSet = true;
   }
-  if (project.planMode) {
-    await initLpEngine();
-  }
+  await initLpEngine();
 }
 
 /**

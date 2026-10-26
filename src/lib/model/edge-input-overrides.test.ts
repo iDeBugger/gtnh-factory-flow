@@ -7,7 +7,7 @@ import { normalizeLoadedProject } from "./project-normalize";
 import { useFactoryStore } from "@/store/factory-store";
 import { buildRailPorts, deriveNodeVerdict } from "@/components/flow/node-verdict";
 import { calculateThroughput } from "@/lib/solver/throughput";
-import { closeBoundaries } from "@/lib/solver/close-boundaries";
+import { openSelectionEnds } from "@/lib/blueprints/open-ends";
 
 const FINE = "gregtech:gt.metaitem.02@19035";
 const recipe = resistor as Recipe;
@@ -97,7 +97,7 @@ describe("issue #49: repeated Auto Workbench ingredients", () => {
 
       // Close only the OTHER boundaries; a second dictionary demand must not
       // get a free source drawer and hide the defect from this solver check.
-      const closed = closeBoundaries(p);
+      const closed = openSelectionEnds(p);
       expect(closed.storages?.some((s) => s.resourceId === "oredict:wireFineCopper")).toBe(false);
       const result = calculateThroughput(closed);
       const bench = result.nodes.bench!;

@@ -1,12 +1,9 @@
 import { calculateThroughput } from "@/lib/solver";
 import { initLpEngine } from "@/lib/solver/lp-engine";
-import { attachClogLocks } from "@/components/flow/clog-lock";
 import type { FactoryProject } from "@/lib/model/types";
 
 // HiGHS loads once at worker startup, and every solve waits for the load to
-// settle: a board routed here is slow by definition, so a one-time wasm
-// fetch is always the better trade than a minutes-long homegrown walk. A
-// failed load resolves too - solves then run on the homegrown simplex.
+// settle. A failed load resolves too - solves then run on the homegrown simplex.
 // The route serves them from the package in any start mode; public/ (copied by predev and prebuild) is the fallback.
 const engineReady = initLpEngine({
   glueUrl: "/api/highs/highs.js",
@@ -25,16 +22,7 @@ self.onmessage = async (event: MessageEvent<{ key: string; project: FactoryProje
   const { key, project } = event.data;
   try {
     await engineReady;
-    const started = performance.now();
-    const result = calculateThroughput(project);
-    // The clog-lock proof is a second LP over the same board, and on a plan
-    // with many stopped machines a harder one than the books: it runs here,
-    // on HiGHS, and rides back on the books so the main thread never runs it.
-    attachClogLocks(project, result);
-    // The solve's own cost rides back so the router can learn whether this
-    // board is one that must stay off the main thread - the diagnosis
-    // counts, since a board slow only in its proof must stay here too.
-    self.postMessage({ key, result, solveMs: performance.now() - started });
+    self.postMessage({ key, result: calculateThroughput(project) });
   } catch (error) {
     self.postMessage({ key, error: error instanceof Error ? error.message : String(error) });
   }
