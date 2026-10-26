@@ -99,16 +99,85 @@ function sha256(text: string): string {
 const TRANSACTION_CONTROL =
   /^(begin|commit|rollback|abort|end|start\s+transaction|savepoint|release|prepare\s+transaction)\b/i;
 
+const IDENT_CHAR = /[A-Za-z0-9_$\u0080-\uffff]/;
+const DOLLAR_TAG = /\$(?:[A-Za-z_\u0080-\uffff][A-Za-z0-9_\u0080-\uffff]*)?\$/y;
+
+/** The `$tag$` or `$$` that starts at `at`, if one does. */
+function dollarTagAt(text: string, at: number): string | undefined {
+  DOLLAR_TAG.lastIndex = at;
+  return DOLLAR_TAG.exec(text)?.[0];
+}
+
+/**
+ * The file's text with every comment, string literal, quoted name and
+ * dollar-quoted body blanked, read left to right in one pass as Postgres's
+ * lexer does: what opens first wins, so an apostrophe inside a `--` comment
+ * opens no string and a `--` inside a string starts no comment. Plain strings
+ * double `''`; `E'...'` strings also escape with a backslash; block comments
+ * nest. An unterminated literal runs to the end, as Postgres would refuse it.
+ */
+export function blankLiterals(text: string): string {
+  let out = "";
+  let i = 0;
+  const n = text.length;
+  const identBefore = () => i > 0 && IDENT_CHAR.test(text[i - 1]);
+  while (i < n) {
+    const c = text[i];
+    const next = text[i + 1];
+    if (c === "-" && next === "-") {
+      const end = text.indexOf("\n", i);
+      i = end === -1 ? n : end;
+      out += " ";
+    } else if (c === "/" && next === "*") {
+      let depth = 1;
+      i += 2;
+      while (i < n && depth > 0) {
+        if (text[i] === "/" && text[i + 1] === "*") {
+          depth += 1;
+          i += 2;
+        } else if (text[i] === "*" && text[i + 1] === "/") {
+          depth -= 1;
+          i += 2;
+        } else {
+          i += 1;
+        }
+      }
+      out += " ";
+    } else if ((c === "E" || c === "e") && next === "'" && !identBefore()) {
+      i += 2;
+      while (i < n) {
+        if (text[i] === "\\") i += 2;
+        else if (text[i] === "'" && text[i + 1] === "'") i += 2;
+        else if (text[i] === "'") break;
+        else i += 1;
+      }
+      i += 1;
+      out += " ";
+    } else if (c === "'" || c === '"') {
+      i += 1;
+      while (i < n) {
+        if (text[i] === c && text[i + 1] === c) i += 2;
+        else if (text[i] === c) break;
+        else i += 1;
+      }
+      i += 1;
+      out += " ";
+    } else if (c === "$" && !identBefore() && dollarTagAt(text, i)) {
+      const tag = dollarTagAt(text, i)!;
+      const end = text.indexOf(tag, i + tag.length);
+      i = end === -1 ? n : end + tag.length;
+      out += " ";
+    } else {
+      out += c;
+      i += 1;
+    }
+  }
+  return out;
+}
+
 /** Refuses a file that would take over the runner's transaction or cannot run inside one. */
 export function checkMigrationText(name: string, text: string): void {
-  // Comments, string literals, quoted names and dollar-quoted bodies (a DO
-  // block's begin ... end) are not statements.
-  const code = text
-    .replace(/\$([A-Za-z_][A-Za-z0-9_]*)?\$[\s\S]*?\$\1\$/g, " ")
-    .replace(/'(?:[^']|'')*'/g, " ")
-    .replace(/"(?:[^"]|"")*"/g, " ")
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .replace(/--[^\n]*/g, " ");
+  const code = blankLiterals(text);
   const statements = code.split(";").map((statement) => statement.trim());
   if (statements.some((statement) => TRANSACTION_CONTROL.test(statement))) {
     throw new MigrationError(

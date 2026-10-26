@@ -1,10 +1,12 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   applyMigrations,
+  blankLiterals,
+  checkMigrationText,
   dbDir,
   ensureRoles,
   MIGRATION_NAME,
@@ -226,6 +228,46 @@ describe("the migration runner", () => {
       ].join("\n"),
     });
     expect(await applyMigrations(run, fine)).toEqual(["0001-fine.sql"]);
+  });
+
+  it("reads comments, strings, quoted names and dollar bodies in one left-to-right pass", () => {
+    const transaction = /holds no begin, commit, rollback or savepoint/;
+    // An apostrophe in a comment opens no string, so the commit after it is seen.
+    expect(() =>
+      checkMigrationText(
+        "0002-bad.sql",
+        "-- the site's flag\ncommit;\nalter table a add column b text default 'x';",
+      ),
+    ).toThrow(transaction);
+    // An E-string's backslash escapes its quote, so the string ends where Postgres ends it.
+    expect(() =>
+      checkMigrationText("0002-bad.sql", "select E'it\\'s';\ncommit;\nselect 'y';"),
+    ).toThrow(transaction);
+    expect(() =>
+      checkMigrationText("0002-bad.sql", "/* it's /* nested */ still a comment */ rollback;"),
+    ).toThrow(transaction);
+    expect(() =>
+      checkMigrationText("0002-bad.sql", `create table "it's" (id int);\ncommit;`),
+    ).toThrow(transaction);
+    // What a literal holds stays inside it, whichever kind opened first.
+    expect(blankLiterals("select '-- not a comment'; commit")).toBe("select  ; commit");
+    expect(blankLiterals("select 'it''s'; x")).toBe("select  ; x");
+    expect(blankLiterals("select e'a\\'b'; x")).toBe("select  ; x");
+    expect(blankLiterals('select "a""b"; x')).toBe("select  ; x");
+    expect(blankLiterals("do $f$ begin; $$ end; $f$; x")).toBe("do  ; x");
+    // A $ inside a name or a $1 parameter opens no dollar quote.
+    expect(blankLiterals("select a$b$c, $1; x")).toBe("select a$b$c, $1; x");
+    // A plain string keeps its backslash: it does not escape the quote.
+    expect(blankLiterals("select 'a\\'; commit")).toBe("select  ; commit");
+  });
+
+  it("passes the repository's own migrations", () => {
+    const dir = path.join(dbDir(), "migrations");
+    for (const name of readdirSync(dir).filter((entry) => MIGRATION_NAME.test(entry))) {
+      expect(() =>
+        checkMigrationText(name, readFileSync(path.join(dir, name), "utf8")),
+      ).not.toThrow();
+    }
   });
 
   it("hashes a file's text with LF line ends, so a CRLF checkout reads as unchanged", async () => {
