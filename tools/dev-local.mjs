@@ -26,6 +26,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { containerMismatch } from "./local-db/container.mjs";
+import { CONTROL_HEADER, CONTROL_HEADER_VALUE } from "./local-db/control.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dbPort = Number(process.env.LOCAL_DB_PORT ?? 54329);
@@ -191,7 +192,10 @@ async function stop(code = 0) {
     headers: { authorization: `Bearer ${shared.LIVE_INTERNAL_TOKEN}` },
   }).catch(() => undefined);
   await new Promise((resolve) => setTimeout(resolve, 1500));
-  await fetch(`${controlUrl}/shutdown`, { method: "POST" }).catch(() => undefined);
+  await fetch(`${controlUrl}/shutdown`, {
+    method: "POST",
+    headers: { [CONTROL_HEADER]: CONTROL_HEADER_VALUE },
+  }).catch(() => undefined);
   const exited = children.map(
     (child) =>
       new Promise((resolve) => (child.exitCode !== null ? resolve() : child.once("exit", resolve))),

@@ -4,8 +4,9 @@
  * on 127.0.0.1:54330 (LOCAL_DB_PG_PORT), their `DATABASE_URL`. A small
  * control listener on 127.0.0.1:54329 (LOCAL_DB_PORT) answers
  * `GET /__local-db/ready` once the migrations are applied and stops this
- * process on `POST /__local-db/shutdown` (how dev-local stops it on Windows,
- * where a child gets no signal).
+ * process on `POST /__local-db/shutdown` with dev-local's control header
+ * (`control.mjs`; how dev-local stops it on Windows, where a child gets no
+ * signal).
  *
  *   npx tsx tools/local-db/serve.ts
  *
@@ -44,6 +45,7 @@ import {
   sqlRunner,
 } from "../../src/lib/server/db/migrations";
 import { DB_TYPE_PARSERS } from "../../src/lib/server/db/parsers";
+import { controlHandler } from "./control.mjs";
 
 interface Served {
   describe: string;
@@ -141,18 +143,7 @@ async function main() {
     process.exit(0);
   };
 
-  const server = createServer((req, res) => {
-    if (req.method === "POST" && req.url === "/__local-db/shutdown") {
-      res.writeHead(200).end();
-      void shutdown();
-      return;
-    }
-    if (req.method === "GET" && req.url === "/__local-db/ready") {
-      res.writeHead(200, { "content-type": "text/plain" }).end("ready");
-      return;
-    }
-    res.writeHead(404).end();
-  });
+  const server = createServer(controlHandler({ onShutdown: () => void shutdown() }));
 
   server.listen(port, "127.0.0.1", () => {
     console.log(`${served.describe}, control on http://127.0.0.1:${port}`);
