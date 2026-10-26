@@ -8,15 +8,11 @@
 import { readFileSync } from "node:fs";
 import { isIP } from "node:net";
 import { pathToFileURL } from "node:url";
-import { verifyServiceToken } from "./service-token.mjs";
 
 const REQUIRED = [
   "POSTGRES_PASSWORD",
-  "POSTGREST_AUTHENTICATOR_PASSWORD",
   "GTNH_SITE_DB_PASSWORD",
   "GTNH_LIVE_DB_PASSWORD",
-  "POSTGREST_JWT_SECRET",
-  "POSTGREST_SERVICE_TOKEN",
   "COMMUNITY_HASH_SALT",
   "LIVE_INTERNAL_TOKEN",
   "LIVE_ALLOWED_ORIGINS",
@@ -28,28 +24,28 @@ const REQUIRED = [
 const LONG_SECRETS = [
   "COMMUNITY_HASH_SALT",
   "LIVE_INTERNAL_TOKEN",
-  "POSTGREST_JWT_SECRET",
   "GTNH_SITE_DB_PASSWORD",
   "GTNH_LIVE_DB_PASSWORD",
 ];
 const MIN_SECRET_LENGTH = 32;
 
 /**
- * Passwords spliced into a connection URI (PGRST_DB_URI, the site's and the
- * live service's DATABASE_URL) or a postgres setting: only characters no URI
- * treats specially, as `openssl rand -hex 32` makes. A `/`, `@`, `:`, `?` or
- * `#` would break the URI only at run time.
+ * Passwords spliced into a connection URI (the site's and the live service's
+ * DATABASE_URL) or a postgres setting: only characters no URI treats
+ * specially, as `openssl rand -hex 32` makes. A `/`, `@`, `:`, `?` or `#`
+ * would break the URI only at run time.
  */
-const URI_SAFE_SECRETS = [
-  "POSTGRES_PASSWORD",
-  "POSTGREST_AUTHENTICATOR_PASSWORD",
-  "GTNH_SITE_DB_PASSWORD",
-  "GTNH_LIVE_DB_PASSWORD",
-];
+const URI_SAFE_SECRETS = ["POSTGRES_PASSWORD", "GTNH_SITE_DB_PASSWORD", "GTNH_LIVE_DB_PASSWORD"];
 const URI_SAFE = /^[A-Za-z0-9_-]+$/;
 
 /** Development-only switches a deployed stack must never carry. */
 const FORBIDDEN = ["LOCAL_DB", "NODE_ENV"];
+
+/**
+ * The prefix of the variables PostgREST read. The stack no longer runs it, so
+ * one left in .env is a leftover secret nothing reads: refused until removed.
+ */
+const POSTGREST_PREFIX = "POSTGREST_";
 
 /** The narrowest proxy list a mistake can widen to: every peer inside may name any client address. */
 const WIDEST_PREFIX = { 4: 24, 6: 120 };
@@ -144,14 +140,10 @@ export function checkDeployEnv(env, image, options = {}) {
       );
     }
   }
-  if (
-    value("POSTGREST_SERVICE_TOKEN") &&
-    value("POSTGREST_JWT_SECRET") &&
-    !verifyServiceToken(value("POSTGREST_SERVICE_TOKEN"), value("POSTGREST_JWT_SECRET"))
-  ) {
-    problems.push(
-      "POSTGREST_SERVICE_TOKEN is not a service_role token signed with POSTGREST_JWT_SECRET: make it with tools/deploy/service-token.mjs.",
-    );
+  for (const name of Object.keys(env)
+    .filter((key) => key.startsWith(POSTGREST_PREFIX))
+    .sort()) {
+    problems.push(`${name} belongs to PostgREST, which this stack no longer runs: remove it.`);
   }
   for (const name of FORBIDDEN) {
     if (name in env) {

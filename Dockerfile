@@ -80,7 +80,7 @@ COPY --from=build /app/.next/standalone/node_modules ./node_modules
 COPY --from=build /app/public ./public
 COPY --from=build /app/src/app/fonts ./src/app/fonts
 # The deploy runs the env check in this image, against the server's .env.
-COPY --from=build /app/tools/deploy/check-env.mjs /app/tools/deploy/service-token.mjs ./deploy/
+COPY --from=build /app/tools/deploy/check-env.mjs ./deploy/
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/.next/standalone/server.js /app/.next/standalone/package.json ./
 COPY --from=build /app/.next/standalone/.next ./.next

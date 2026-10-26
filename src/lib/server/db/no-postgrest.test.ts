@@ -20,15 +20,9 @@ const EXCEPTIONS: Record<string, string> = {
   "src/lib/server/startup-checks.ts": "warns that the old variables are not read",
   "src/lib/server/startup-checks.test.ts": "pins those warnings",
   "src/lib/server/CLAUDE.md": "names this test and the variables the startup checks warn about",
-  // The stack still runs PostgREST until its compose and env check change.
-  "tools/deploy/docker-compose.yml": "the stack's postgrest service",
-  "tools/deploy/compose.rehearsal.yml": "the rehearsal's postgrest override",
-  "tools/deploy/env.example": "the stack's PostgREST variables",
-  "tools/deploy/check-env.mjs": "checks the stack's PostgREST variables",
-  "tools/deploy/check-env.test.mjs": "pins those checks",
-  "tools/deploy/deploy.sh": "waits for the stack's postgrest service",
-  "tools/deploy/service-token.mjs": "signs the stack's PostgREST token",
-  "tools/deploy/service-token.test.mjs": "pins that token",
+  // A server's .env still holding PostgREST's variables is refused by name.
+  "tools/deploy/check-env.mjs": "refuses a POSTGREST_ variable left in the env",
+  "tools/deploy/check-env.test.mjs": "pins that refusal",
 };
 
 function filesUnder(dir: string): string[] {

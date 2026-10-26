@@ -34,11 +34,10 @@ src/lib/solver/plan/__fixtures__/corpus
 vitest.config.ts
 vitest.local.config.ts
 eslint.config.mjs
-# Of tools/, the build needs its prebuild step, the site image the env check and the service token,
+# Of tools/, the build needs its prebuild step, the site image the env check,
 # the live image its package list, the migrate image the migration runner.
 tools/*
 !tools/copy-highs-wasm.mjs
 !tools/deploy/live-deps.mjs
 !tools/deploy/check-env.mjs
-!tools/deploy/service-token.mjs
 !tools/db/migrate.ts

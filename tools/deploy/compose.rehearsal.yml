@@ -1,6 +1,7 @@
 # The stack on a workstation (OrbStack or Docker Desktop), over the real
 # compose file: data under scratch/rehearsal/ instead of /srv/gtnh, other
-# loopback ports, and PostgREST published for postgrest-real.local.test.ts.
+# loopback ports, and Postgres published on loopback for local tests against
+# the real roles (REAL_DATABASE_URL).
 # Paths are relative to tools/deploy (the first file's directory).
 #
 #   docker compose -f tools/deploy/docker-compose.yml -f tools/deploy/compose.rehearsal.yml \
@@ -13,14 +14,12 @@ services:
   postgres:
     volumes: !override
       - ../../scratch/rehearsal/postgres:/var/lib/postgresql/data
-
-  postgrest:
-    # Only for the compatibility test against a real PostgREST; never in production.
+    # Only in the rehearsal: production's database is on the internal network alone.
     networks: !override
       - backend
       - edge
     ports:
-      - "127.0.0.1:3482:3000"
+      - "127.0.0.1:3482:5432"
 
   site:
     ports: !override

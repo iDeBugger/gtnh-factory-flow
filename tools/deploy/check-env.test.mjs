@@ -1,15 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { checkDeployEnv, parseEnvFile } from "./check-env.mjs";
-import { signServiceToken } from "./service-token.mjs";
 
-const JWT_SECRET = "f".repeat(64);
 const complete = () => ({
   POSTGRES_PASSWORD: "postgres-password-value",
-  POSTGREST_AUTHENTICATOR_PASSWORD: "authenticator-password-value",
   GTNH_SITE_DB_PASSWORD: "a".repeat(64),
   GTNH_LIVE_DB_PASSWORD: "b".repeat(64),
-  POSTGREST_JWT_SECRET: JWT_SECRET,
-  POSTGREST_SERVICE_TOKEN: signServiceToken(JWT_SECRET),
   COMMUNITY_HASH_SALT: "0123456789abcdef0123456789abcdef0123456789",
   LIVE_INTERNAL_TOKEN: "internal-token-0123456789abcdef0123456789",
   LIVE_ALLOWED_ORIGINS: "https://stage.gtnhplanner.idebugger.net",
@@ -28,7 +23,7 @@ describe("the deploy's env check", () => {
     const problems = checkDeployEnv({}, stage);
     for (const name of [
       "POSTGRES_PASSWORD",
-      "POSTGREST_SERVICE_TOKEN",
+      "GTNH_SITE_DB_PASSWORD",
       "LIVE_TRUSTED_PROXIES",
       "GTNH_TAG",
     ]) {
@@ -41,14 +36,26 @@ describe("the deploy's env check", () => {
     expect(problems).toEqual([expect.stringMatching(/^COMMUNITY_HASH_SALT is shorter than 32/)]);
   });
 
-  it("refuses a service token from another secret", () => {
-    const problems = checkDeployEnv(
-      { ...complete(), POSTGREST_SERVICE_TOKEN: signServiceToken("e".repeat(64)) },
-      stage,
-    );
-    expect(problems).toEqual([
-      expect.stringMatching(/^POSTGREST_SERVICE_TOKEN is not a service_role token/),
+  it("needs no PostgREST variable, and refuses each one still present, by name", () => {
+    const problems = checkDeployEnv({}, stage);
+    expect(problems.filter((problem) => problem.includes("POSTGREST"))).toEqual([]);
+    const leftover = {
+      ...complete(),
+      POSTGREST_SERVICE_TOKEN: "s3cr3t.service.token",
+      POSTGREST_AUTHENTICATOR_PASSWORD: "s3cr3t-authenticator",
+      POSTGREST_JWT_SECRET: "",
+      POSTGREST_URL: "http://postgrest:3000",
+    };
+    const refused = checkDeployEnv(leftover, stage);
+    expect(refused).toEqual([
+      "POSTGREST_AUTHENTICATOR_PASSWORD belongs to PostgREST, which this stack no longer runs: remove it.",
+      "POSTGREST_JWT_SECRET belongs to PostgREST, which this stack no longer runs: remove it.",
+      "POSTGREST_SERVICE_TOKEN belongs to PostgREST, which this stack no longer runs: remove it.",
+      "POSTGREST_URL belongs to PostgREST, which this stack no longer runs: remove it.",
     ]);
+    for (const problem of refused) {
+      expect(problem).not.toMatch(/s3cr3t/);
+    }
   });
 
   it("refuses LOCAL_DB", () => {
@@ -84,11 +91,10 @@ describe("the deploy's env check", () => {
 
   it("refuses a password a connection URI would break on", () => {
     for (const bad of ["pa/ss", "p@ss", "pa:ss", "pa?ss", "pa#ss", "pa+ss="]) {
-      expect(
-        checkDeployEnv({ ...complete(), POSTGREST_AUTHENTICATOR_PASSWORD: bad }, stage),
-      ).toEqual([expect.stringMatching(/^POSTGREST_AUTHENTICATOR_PASSWORD holds characters/)]);
+      expect(checkDeployEnv({ ...complete(), POSTGRES_PASSWORD: bad }, stage)).toEqual([
+        expect.stringMatching(/^POSTGRES_PASSWORD holds characters/),
+      ]);
     }
-    expect(checkDeployEnv({ ...complete(), POSTGRES_PASSWORD: "a/b" }, stage)).toHaveLength(1);
   });
 
   it("refuses an app role password that is missing, short or not URI-safe, by name", () => {
@@ -137,7 +143,6 @@ describe("the deploy's env check", () => {
       COMMUNITY_HASH_SALT: "s3cr3t-salt",
       LIVE_INTERNAL_TOKEN: "s3cr3t-token",
       POSTGREST_JWT_SECRET: "s3cr3t-jwt",
-      POSTGREST_SERVICE_TOKEN: "s3cr3t.service.token",
       LIVE_ALLOWED_ORIGINS: "s3cr3t-origin",
       LIVE_TRUSTED_PROXIES: "s3cr3t-proxy",
       NEXT_PUBLIC_MOD_AND_COMMUNITY: "s3cr3t-switch",
