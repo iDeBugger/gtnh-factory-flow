@@ -169,8 +169,8 @@
   and "nei-filter" (whatever matches, in NEI's order, unranked) rank by `src/lib/search/nei-order.ts`: the dataset's
   `resourceOrder` (the oracle's NEI list, `tools/dataset-pipeline/CLAUDE.md`), records NEI does not list after it,
   and a dataset without one by the approximation (vanilla, mod, registry name, meta, then fluids, then aspects).
-  Among equal matches "nei" puts the shorter name first (the name-length half of Best match's nudge, never its recipe
-  count, which would leave almost no two scores equal), then NEI's order; "nei-filter" ranks nothing. The
+  With text "nei" scores exactly as Best match (match tiers, then the nudge: recipe count and name length) and NEI's
+  order settles only exact ties; "nei-filter" ranks nothing. The
   rank table (about 70 ms on 2.9) is built by the prewarm (`warmResourceSearch`) and at worker load. Exam: `nei-order.test.ts`,
   `resource-search-engine.test.ts` "the NEI sorts".
 - A text search matches at most six words and at most two of them under three characters

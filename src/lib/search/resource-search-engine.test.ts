@@ -217,23 +217,15 @@ describe("the NEI sorts", () => {
     ]);
   });
 
-  it("rank a typed query by match first and settle equal matches in NEI's order", () => {
+  it("rank a typed query exactly as Best match does", () => {
     const nei = ids(engine(resourceOrder)({ query: "steel", offset: 0, limit: 120, sort: "nei" }));
     const best = ids(engine(resourceOrder)({ query: "steel", offset: 0, limit: 120, sort: "relevance" }));
-    // Best match settles the three equal "Steel ..." names by recipe count and name length.
-    expect(best.slice(0, 3)).toEqual([
-      "item:gregtech:gt.metaitem.01@11305",
-      "item:gregtech:gt.metaitem.01@17305",
-      "item:gregtech:gt.metaitem.01@2305",
-    ]);
-    // As in NEI settles them where the order puts them: dust, ingot, plate.
+    expect(nei).toEqual(best);
     expect(nei.slice(0, 3)).toEqual([
-      "item:gregtech:gt.metaitem.01@2305",
       "item:gregtech:gt.metaitem.01@11305",
       "item:gregtech:gt.metaitem.01@17305",
+      "item:gregtech:gt.metaitem.01@2305",
     ]);
-    // A weaker match stays below them.
-    expect(nei.indexOf("fluid:molten.steel")).toBeGreaterThan(2);
   });
 
   it("filter only, in NEI's order, with no ranking", () => {
@@ -246,7 +238,7 @@ describe("the NEI sorts", () => {
     ]);
   });
 
-  it("put the shorter of equal matches first under As in NEI, then NEI's order; filter only ranks nothing", () => {
+  it("rank \"electrum\" as Best match under As in NEI, the material near the top; filter only ranks nothing", () => {
     const record = (kind: string, id: string, displayName: string, recipeCount: number) => ({
       kind,
       id,
@@ -257,7 +249,7 @@ describe("the NEI sorts", () => {
     // NEI lists other mods' Electrum items before GT's material, and the aspect's mod first of all.
     const electrum = [
       record("item", "enderio:itemitemconduit@3", "Electrum Item Pipe Casing", 5),
-      record("item", "enderio:itempowerconduit@1", "Electrum Energy Conduit", 900),
+      record("item", "enderio:itempowerconduit@1", "Electrum Energy Conduit", 20),
       record("item", "gregtech:gt.metaitem.01@11303", "Electrum Ingot", 300),
       record("item", "gregtech:gt.metaitem.01@2303", "Electrum Dust", 40),
       record("aspect", "thaumcraft:aspect:electrum", "Electrum", 10),
@@ -269,15 +261,16 @@ describe("the NEI sorts", () => {
       directionCounts: [],
       sources: { plants: [], bees: [] },
     });
-    const ask = (sort: "nei" | "nei-filter") =>
+    const ask = (sort: "nei" | "nei-filter" | "relevance") =>
       ids(search({ query: "electrum", offset: 0, limit: 120, sort }));
     expect(ask("nei")).toEqual([
       "aspect:thaumcraft:aspect:electrum",
-      "item:gregtech:gt.metaitem.01@2303",
       "item:gregtech:gt.metaitem.01@11303",
+      "item:gregtech:gt.metaitem.01@2303",
       "item:enderio:itempowerconduit@1",
       "item:enderio:itemitemconduit@3",
     ]);
+    expect(ask("nei")).toEqual(ask("relevance"));
     expect(ask("nei-filter")).toEqual([
       "aspect:thaumcraft:aspect:electrum",
       "item:enderio:itemitemconduit@3",
@@ -287,7 +280,7 @@ describe("the NEI sorts", () => {
     ]);
   });
 
-  it("leave names of one length to NEI's order, whatever their recipe counts", () => {
+  it("leave only matches equal in every way, nudge included, to NEI's order", () => {
     const record = (id: string, displayName: string, recipeCount: number) => ({
       kind: "item",
       id,
@@ -297,12 +290,14 @@ describe("the NEI sorts", () => {
     });
     const search = createResourceSearchEngine({
       schemaVersion: 2,
-      resourceIndex: [record("a:x", "Steel Gear", 1), record("a:y", "Steel Bolt", 900)] as never,
-      resourceOrder: [0, 1],
+      // Same name length, same recipe count: Best match leaves them by name, As in NEI as NEI lists them.
+      resourceIndex: [record("a:x", "Steel Gear", 5), record("a:y", "Steel Bolt", 5), record("a:z", "Steel Rod", 5)] as never,
+      resourceOrder: [0, 1, 2],
       directionCounts: [],
       sources: { plants: [], bees: [] },
     });
-    expect(ids(search({ query: "steel", offset: 0, limit: 120, sort: "nei" }))).toEqual(["item:a:x", "item:a:y"]);
-    expect(ids(search({ query: "steel", offset: 0, limit: 120, sort: "relevance" }))).toEqual(["item:a:y", "item:a:x"]);
+    // The shorter "Steel Rod" wins on the nudge either way; the two equal ones follow NEI's order.
+    expect(ids(search({ query: "steel", offset: 0, limit: 120, sort: "nei" }))).toEqual(["item:a:z", "item:a:x", "item:a:y"]);
+    expect(ids(search({ query: "steel", offset: 0, limit: 120, sort: "relevance" }))).toEqual(["item:a:z", "item:a:y", "item:a:x"]);
   });
 });

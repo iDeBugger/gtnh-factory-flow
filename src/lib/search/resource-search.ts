@@ -214,16 +214,10 @@ export function searchResources(
   },
 ): ResourceSearch {
   const { sourceKeys } = facts;
-  // How equal matches are told apart before the sort. Best match: recipe count and name length. As in NEI: the
-  // shorter name only, so "electrum" puts Electrum Ingot and Dust before Electrum Item Pipe Casing; names of one
-  // length are left equal for NEI's order to settle (recipe count would leave almost no two scores equal). NEI
-  // filter only ranks nothing.
-  const nudge =
-    request.sort === "nei"
-      ? shortNameNudge
-      : request.sort === "nei-filter"
-        ? undefined
-        : resourceRelevanceBias;
+  // As in NEI ranks a typed query exactly as Best match does (match tiers, then the nudge: recipe count and name
+  // length), and NEI's order settles only what is still equal; the shorter-name rule alone left 41 Electrum Ore
+  // variants ahead of the ingot. NEI filter only ranks nothing.
+  const nudge = request.sort === "nei-filter" ? undefined : resourceRelevanceBias;
   let modCounts = new Map<string, number>();
 
   const resolved = resolveSearchPhases(
@@ -349,12 +343,8 @@ export function blankResourceSearchKey(request: ResourceSearchRequest): string |
  * count for a little - never enough to outrank an actual better match.
  */
 function resourceRelevanceBias(resource: DatasetResourceIndexEntry): number {
-  return Math.log10(1 + (resource.recipeCount ?? 0)) / 10 + shortNameNudge(resource);
-}
-
-/** The name-length part of that nudge: the plainer, shorter name first. */
-function shortNameNudge(resource: DatasetResourceIndexEntry): number {
-  return -(resource.displayName ?? resource.id).length / 400;
+  const name = resource.displayName ?? resource.id;
+  return Math.log10(1 + (resource.recipeCount ?? 0)) / 10 - name.length / 400;
 }
 
 /** What the search did, for the "showing results for ..." line. */
