@@ -417,7 +417,9 @@ function syntaxTree(file: SourceFile): ts.SourceFile {
 
 /**
  * The names `file` imports or re-exports from `target`: each binding's
- * exported name, `*` for a namespace or `export *`, `default` for a default.
+ * exported name, `*` for a namespace or `export *`, `default` for a default,
+ * and `import()` for a dynamic import or `require`, whose names this reading
+ * cannot see and so never passes.
  */
 function namesImported(file: SourceFile, target: string): string[] {
   if (!file.edges.some((edge) => edge.to === target)) return [];
@@ -450,13 +452,30 @@ function namesImported(file: SourceFile, target: string): string[] {
       }
     }
   }
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      const loaded = node.arguments[0];
+      if (
+        (callee.kind === ts.SyntaxKind.ImportKeyword ||
+          (ts.isIdentifier(callee) && callee.text === "require")) &&
+        loaded &&
+        ts.isStringLiteral(loaded) &&
+        resolveSpecifier(path.join(ROOT, file.path), loaded.text) === target
+      ) {
+        names.push("import()");
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(syntaxTree(file));
   return names;
 }
 
 const DB_ENTRY = "src/lib/server/db/index.ts";
 
 /** The db entry's database handles: only the data layer takes one. */
-const CLIENT_HANDLES = new Set(["getDb", "getCommunityDb", "*"]);
+const CLIENT_HANDLES = new Set(["getDb", "getCommunityDb", "*", "import()"]);
 
 /** Files outside the data layer that take a database handle from the db entry. */
 function clientHandleImports(graph: Map<string, SourceFile>): string[] {
@@ -776,6 +795,33 @@ describe("the layers", () => {
 
   it("SQL is written only in the data layer, and spliced text only in the migrations", () => {
     expect(sqlOutOfPlace(graph)).toEqual([]);
+  });
+
+  it("holds a dynamic import or require of the db entry to the same name checks", () => {
+    const fixtures: Record<string, string> = {
+      "src/lib/server/services/import-fixture.ts": [
+        "export const handle = async () => {",
+        '  const { getDb } = await import("../db");',
+        "  return getDb();",
+        "};",
+      ].join("\n"),
+      "src/lib/server/services/require-fixture.ts":
+        'export const handle = () => require("../db").getDb();',
+      "src/lib/server/import-fixture.ts":
+        'export const handle = async () => (await import("./db")).getCommunityDb();',
+    };
+    const bad = new Map(
+      Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
+    );
+    expect(clientHandleImports(bad)).toEqual([
+      "src/lib/server/import-fixture.ts: import()",
+      "src/lib/server/services/import-fixture.ts: import()",
+      "src/lib/server/services/require-fixture.ts: import()",
+    ]);
+    expect(serviceDbNames(bad)).toEqual([
+      "src/lib/server/services/import-fixture.ts: import()",
+      "src/lib/server/services/require-fixture.ts: import()",
+    ]);
   });
 
   it("refuses each way of putting a value into the SQL text", () => {
