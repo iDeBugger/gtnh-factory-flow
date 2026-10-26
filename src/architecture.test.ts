@@ -614,9 +614,7 @@ const SERVICE_DB_NAMES = new Set([
   "isDatabaseError",
   "COMMUNITY_DB_DOWN_MESSAGE",
   "blueprintStorageErrorMessage",
-  "communityStorageErrorMessage",
   "libraryStorageErrorMessage",
-  "isMissingColumnError",
 ]);
 const CONFIG_DB_NAMES = new Set(["isCommunityConfigured", "isDatabaseConfigured"]);
 

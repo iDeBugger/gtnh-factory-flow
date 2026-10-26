@@ -1,4 +1,5 @@
 import { getDb, type Tx } from "../db";
+import { escapeLike } from "./like";
 
 /**
  * The account rows: who signs in, under which name, and the epoch that ends
@@ -84,14 +85,6 @@ export async function setSessionEpoch(userId: string, epoch: number, tx?: Tx): P
     .set({ session_epoch: epoch })
     .where("id", "=", userId)
     .execute();
-}
-
-/**
- * Escapes LIKE's wildcards (`%`, `_`) and its escape character (backslash,
- * Postgres's default), so the pattern matches the typed characters only.
- */
-function escapeLike(text: string): string {
-  return text.replace(/[\\%_]/g, "\\$&");
 }
 
 /**

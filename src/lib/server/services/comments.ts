@@ -1,4 +1,5 @@
 import { COMMUNITY_COMMENT_MAX_LENGTH, type CommunityComment } from "@/lib/community/types";
+import { withTransaction } from "../db";
 import type { Viewer } from "../http/viewer";
 import { checkRateLimit } from "../limits/rate-limit";
 import { invalidatePlanListCache } from "../plan-list-cache";
@@ -37,15 +38,10 @@ function rowToComment(
   };
 }
 
-/** A storage failure as the answer: the repository's sentence at 500. */
-function storageFailure(error: unknown): ServiceResult<never> {
-  return fail("unavailable", (error as Error).message, { status: 500 });
-}
-
 /**
  * A post's thread, newest last, the way a thread reads. Deleted comments are
  * simply not there. The thread follows the post: whoever `canSeePlan` admits
- * reads it. A failed read of the post throws: an error, never a missing post.
+ * reads it. A failed read throws: an error, never a missing post.
  */
 export async function listComments(
   viewer: Viewer,
@@ -58,12 +54,7 @@ export async function listComments(
   if (!plan || !canSeePlan(viewer, plan)) {
     return fail("not-found", PLAN_NOT_FOUND);
   }
-  let rows: comments.CommentRow[];
-  try {
-    rows = await comments.list(planId, COMMENT_LIMIT);
-  } catch (error) {
-    return storageFailure(error);
-  }
+  const rows = await comments.list(planId, COMMENT_LIMIT);
   return ok({ comments: rows.map((row) => rowToComment(row, viewer, plan.user_id)) });
 }
 
@@ -94,14 +85,19 @@ export async function commentAccess(
   return ok({ planOwnerId: plan.user_id });
 }
 
-/** Posts a comment on a post `commentAccess` let through, and restamps the post's comment figures. */
+/**
+ * Posts a comment on a post `commentAccess` let through, and restamps the
+ * post's comment figures in the same transaction: a comment and its count
+ * land together or not at all. A failed write throws.
+ */
 export async function addComment(
   viewer: Viewer,
   planId: string,
   planOwnerId: string | null,
   body: unknown,
 ): Promise<ServiceResult<{ comment: CommunityComment }>> {
-  if (!viewer.userId || viewer.username === undefined) {
+  const { userId, username } = viewer;
+  if (!userId || username === undefined) {
     return fail("unauthorized", "Sign in to comment.");
   }
   const sent = ((body ?? {}) as { body?: unknown }).body;
@@ -109,24 +105,26 @@ export async function addComment(
   if (!text || text.length > COMMUNITY_COMMENT_MAX_LENGTH) {
     return fail("bad-request", `A comment runs 1 to ${COMMUNITY_COMMENT_MAX_LENGTH} characters.`);
   }
-  let row: comments.CommentRow;
-  try {
-    row = await comments.insert({
-      plan_id: planId,
-      user_id: viewer.userId,
-      author_name: viewer.username,
-      body: text,
-    });
-  } catch (error) {
-    return storageFailure(error);
-  }
-  // Best effort: a failed recount leaves a sort slightly stale, never a comment unposted.
-  await comments.recount(planId).catch(() => undefined);
+  // A post taken down since `commentAccess` read it fails the insert's
+  // foreign key: an error, as before the lock.
+  const row = await withTransaction(async (tx) => {
+    await plans.lockPost(planId, tx);
+    const written = await comments.insert(
+      { plan_id: planId, user_id: userId, author_name: username, body: text },
+      tx,
+    );
+    await comments.recount(planId, tx);
+    return written;
+  });
   invalidatePlanListCache();
   return ok({ comment: rowToComment(row, viewer, planOwnerId) });
 }
 
-/** Takes a comment down: its author, the post's owner or an admin account may. */
+/**
+ * Takes a comment down: its author, the post's owner or an admin account
+ * may. The mark and the post's recount are one transaction. A failed read
+ * or write throws: an error, never a missing comment.
+ */
 export async function deleteComment(
   viewer: Viewer,
   planId: string,
@@ -145,12 +143,14 @@ export async function deleteComment(
   if (!allowed) {
     return fail("forbidden", "Not your comment.");
   }
-  try {
-    await comments.softDelete(planId, commentId);
-  } catch (error) {
-    return storageFailure(error);
-  }
-  await comments.recount(planId).catch(() => undefined);
+  await withTransaction(async (tx) => {
+    await plans.lockPost(planId, tx);
+    // A comment already marked by a request just before this one is as gone
+    // as this one would make it: the answer is the same.
+    if (await comments.softDelete(planId, commentId, tx)) {
+      await comments.recount(planId, tx);
+    }
+  });
   invalidatePlanListCache();
   return ok({ ok: true });
 }

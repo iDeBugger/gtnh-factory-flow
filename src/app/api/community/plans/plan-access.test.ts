@@ -7,6 +7,7 @@ import type { FactoryProject } from "@/lib/model/types";
 import { takeLpCount } from "@/lib/solver/plan/lp";
 import { APP_VERSION } from "@/lib/version";
 import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
+import { setDbFaultForTests } from "@/lib/server/db/guard";
 import { useInProcessLocalDb } from "@/lib/server/local-db/client";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
 import { getCommunityDb, resetDbBreaker } from "@/lib/server/db";
@@ -88,6 +89,26 @@ function request(
 }
 
 const params = <T extends object>(value: T) => ({ params: Promise.resolve(value) });
+
+/** A query the database refused (not an outage): what a route answers as its own sentence at 500. */
+const refused = () => Object.assign(new Error("boom"), { code: "XX000", severity: "ERROR" });
+
+/** Every statement the direct client sends from here on, in order, as compiled. */
+function recordSql(): string[] {
+  const sent: string[] = [];
+  setDbFaultForTests((text) => {
+    sent.push(text);
+    return undefined;
+  });
+  return sent;
+}
+
+/** The index of the first statement from `from` on that matches `pattern`. */
+function at(sent: string[], pattern: RegExp, from = 0): number {
+  const index = sent.findIndex((text, i) => i >= from && pattern.test(text));
+  expect(index, `${pattern} in\n${sent.join("\n")}`).toBeGreaterThanOrEqual(0);
+  return index;
+}
 
 /** The smallest post the route takes: a plan with cards. */
 function postBody(deviceId: string) {
@@ -385,19 +406,13 @@ describe("a post's comments", () => {
 
   it("a database error reading a post's comments answers 500, not 404", async () => {
     const planId = await makePlan("Unreachable thread", true);
-    useInProcessLocalDb(async (request) => {
-      const url = new URL(request.url);
-      if (request.method === "GET" && url.pathname.endsWith("/community_plans")) {
-        return Response.json({ message: "boom", code: "XX000", details: "", hint: "" }, { status: 500 });
-      }
-      return testDb().standIn(request);
-    });
+    withDbFault(/from "community_plans"/, refused());
     try {
       const failed = await readComments(planId);
       expect(failed.status).toBe(500);
       expect(await failed.json()).toEqual({ error: "Comments could not be loaded." });
     } finally {
-      useInProcessLocalDb(testDb().standIn);
+      clearDbFault();
       resetDbBreaker();
     }
     expect((await readComments(planId)).status).toBe(200);
@@ -410,19 +425,13 @@ describe("a post's comments", () => {
         request("POST", `/api/community/plans/${planId}/comments`, { who: "poster", body: { body: "Hello" } }),
         params({ planId }),
       );
-    useInProcessLocalDb(async (request) => {
-      const url = new URL(request.url);
-      if (request.method === "GET" && url.pathname.endsWith("/community_plans")) {
-        return Response.json({ message: "boom", code: "XX000", details: "", hint: "" }, { status: 500 });
-      }
-      return testDb().standIn(request);
-    });
+    withDbFault(/from "community_plans"/, refused());
     try {
       const failed = await postComment();
       expect(failed.status).toBe(500);
       expect(await failed.json()).toEqual({ error: "The comment could not be posted." });
     } finally {
-      useInProcessLocalDb(testDb().standIn);
+      clearDbFault();
       resetDbBreaker();
     }
     expect((await postComment()).status).toBe(200);
@@ -440,6 +449,120 @@ describe("a post's comments", () => {
     expect((await commentsRepo.list(planId, 10)).map((row) => row.id)).toEqual([written.id]);
     await commentsRepo.softDelete(planId, written.id);
     expect(await commentsRepo.list(planId, 10)).toEqual([]);
+  });
+
+  const commentCount = async (planId: string) =>
+    (
+      await testDb()
+        .db.selectFrom("community_plans")
+        .select(["comment_count", "last_comment_at"])
+        .where("id", "=", planId)
+        .executeTakeFirstOrThrow()
+    );
+
+  const postComment = (planId: string, who: string, body: string) =>
+    comments.POST(
+      request("POST", `/api/community/plans/${planId}/comments`, { who, body: { body } }),
+      params({ planId }),
+    );
+
+  it("a comment and its count move together", async () => {
+    const planId = await makePlan("Counted thread", true);
+    expect((await postComment(planId, "poster", "First")).status).toBe(200);
+    expect(await commentCount(planId)).toMatchObject({ comment_count: 1 });
+
+    withDbFault(/update "community_plans"/, refused());
+    try {
+      const failed = await postComment(planId, "poster", "Second");
+      expect(failed.status).toBe(500);
+      expect(await failed.json()).toEqual({ error: "The comment could not be posted." });
+    } finally {
+      clearDbFault();
+      resetDbBreaker();
+    }
+    expect((await commentsRepo.list(planId, 10)).map((row) => row.body)).toEqual(["First"]);
+    expect(await commentCount(planId)).toMatchObject({ comment_count: 1 });
+
+    const [only] = await commentsRepo.list(planId, 10);
+    withDbFault(/update "community_plans"/, refused());
+    try {
+      const failed = await comment.DELETE(
+        request("DELETE", `/api/community/plans/${planId}/comments/${only!.id}`, { who: "poster" }),
+        params({ planId, commentId: only!.id }),
+      );
+      expect(failed.status).toBe(500);
+      expect(await failed.json()).toEqual({ error: "The comment could not be deleted." });
+    } finally {
+      clearDbFault();
+      resetDbBreaker();
+    }
+    expect((await commentsRepo.list(planId, 10)).map((row) => row.body)).toEqual(["First"]);
+    expect(await commentCount(planId)).toMatchObject({ comment_count: 1 });
+  });
+
+  it("recounts a post's comments and its last comment as they land and go", async () => {
+    const planId = await makePlan("Recounted thread", true);
+    const first = (await (await postComment(planId, "poster", "One")).json()) as { comment: { id: string } };
+    const second = (await (await postComment(planId, "owner", "Two")).json()) as {
+      comment: { id: string; createdAt: string };
+    };
+    expect(await commentCount(planId)).toEqual({ comment_count: 2, last_comment_at: second.comment.createdAt });
+    const removed = await comment.DELETE(
+      request("DELETE", `/api/community/plans/${planId}/comments/${second.comment.id}`, { who: "owner" }),
+      params({ planId, commentId: second.comment.id }),
+    );
+    expect(removed.status).toBe(200);
+    const [kept] = await commentsRepo.list(planId, 10);
+    expect(kept!.id).toBe(first.comment.id);
+    expect(await commentCount(planId)).toEqual({ comment_count: 1, last_comment_at: kept!.created_at });
+  });
+
+  it("a database error finding a comment to delete answers 500, not 404", async () => {
+    const planId = await makePlan("Unreachable comment", true);
+    const posted = (await (await postComment(planId, "poster", "Here")).json()) as { comment: { id: string } };
+    const commentId = posted.comment.id;
+    const deleteIt = () =>
+      comment.DELETE(
+        request("DELETE", `/api/community/plans/${planId}/comments/${commentId}`, { who: "poster" }),
+        params({ planId, commentId }),
+      );
+    for (const table of [/community_comments/, /community_users/]) {
+      forgetSessionUsers();
+      withDbFault(table, refused());
+      try {
+        const failed = await deleteIt();
+        expect(failed.status, String(table)).toBe(500);
+        expect(await failed.json()).toEqual({ error: "The comment could not be deleted." });
+      } finally {
+        clearDbFault();
+        resetDbBreaker();
+      }
+    }
+    expect((await commentsRepo.list(planId, 10)).map((row) => row.id)).toEqual([commentId]);
+    expect((await deleteIt()).status).toBe(200);
+  });
+
+  it("writes a comment and its post's figures under the post's lock", async () => {
+    const planId = await makePlan("Locked thread", true);
+    const LOCK = /^select "id" from "community_plans" where "id" = \$1 for no key update$/;
+    let sent = recordSql();
+    const posted = await postComment(planId, "poster", "Locked");
+    expect(posted.status).toBe(200);
+    const { comment: written } = (await posted.json()) as { comment: { id: string } };
+    let lock = at(sent, LOCK);
+    let write = at(sent, /^insert into "community_comments"/, lock);
+    at(sent, /^update "community_plans" set "comment_count" = /, write);
+
+    sent = recordSql();
+    const removed = await comment.DELETE(
+      request("DELETE", `/api/community/plans/${planId}/comments/${written.id}`, { who: "poster" }),
+      params({ planId, commentId: written.id }),
+    );
+    expect(removed.status).toBe(200);
+    lock = at(sent, LOCK);
+    write = at(sent, /^update "community_comments" set "deleted_at" = /, lock);
+    at(sent, /^update "community_plans" set "comment_count" = /, write);
+    clearDbFault();
   });
 });
 
@@ -516,6 +639,201 @@ describe("listing posts", () => {
     // Alone, they are no search at all: nothing past the unsearched list.
     expect(await names("*")).toEqual(everything);
     expect(await names("%")).toEqual(everything);
+  });
+});
+
+describe("filtering and sorting the list", () => {
+  withModAndCommunityOn();
+
+  const steel = { kind: "item", resourceId: "gregtech:steel", rate: 2 };
+  const oil = { kind: "fluid", resourceId: "oil", rate: 100 };
+  const power = { kind: "item", resourceId: "ic2:coal", rate: 1 };
+
+  /** Posts straight into the table, every column a case reads set, kept apart by their game version. */
+  async function seed(
+    version: string,
+    rows: Array<{
+      name: string;
+      isPublic?: boolean;
+      tags?: string[];
+      author?: string;
+      description?: string;
+      outputs?: unknown[];
+      needs?: unknown[];
+      tier?: number;
+      euT?: number;
+      views?: number;
+      lastActivity?: string | null;
+      createdAt: string;
+    }>,
+  ) {
+    for (const row of rows) {
+      await testDb().pglite.query(
+        `insert into community_plans (user_id, author_name, name, description, game_version, plan, is_public,
+           uploader_key, tags, tags_text, outputs, needs, highest_tier_index, total_eu_t, views,
+           last_activity_at, created_at)
+         values ($1, $2, $3, $4, $5, '{"nodes":[]}', $6, 'test', $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+        [
+          users.owner!.id,
+          row.author ?? "owner",
+          row.name,
+          row.description ?? "",
+          version,
+          row.isPublic ?? true,
+          JSON.stringify(row.tags ?? []),
+          (row.tags ?? []).join(" "),
+          JSON.stringify(row.outputs ?? []),
+          JSON.stringify(row.needs ?? []),
+          row.tier ?? -1,
+          row.euT ?? 0,
+          row.views ?? 0,
+          row.lastActivity ?? null,
+          row.createdAt,
+        ],
+      );
+    }
+    invalidatePlanListCache();
+  }
+
+  const names = async (query: string, who?: string) => {
+    const response = await list.GET(request("GET", `/api/community/plans?${query}`, { who }));
+    expect(response.status).toBe(200);
+    return ((await response.json()) as { plans: Array<{ name: string }> }).plans.map((plan) => plan.name);
+  };
+
+  it("narrows by what a post makes and takes, tier, power, tag, author and text, as the shelf did", async () => {
+    await seed("filters", [
+      { name: "Steel mill", outputs: [steel], needs: [power], tags: ["early game"], tier: 2, euT: 30, createdAt: "2026-10-01 10:00:00+00" },
+      { name: "Refinery", outputs: [oil], needs: [power], tags: ["oil"], tier: 3, euT: 500, createdAt: "2026-10-02 10:00:00+00" },
+      { name: "Both", outputs: [steel, oil], needs: [], tags: ["oil", "steel"], author: "b_rkge", tier: 4, euT: 2000, description: "big refinery", createdAt: "2026-10-03 10:00:00+00" },
+      { name: "Hidden steel", isPublic: false, outputs: [steel], createdAt: "2026-10-04 10:00:00+00" },
+    ]);
+    const v = "gameVersion=filters";
+    expect(await names(v)).toEqual(["Both", "Refinery", "Steel mill"]);
+    expect(await names(`${v}&makes=${encodeURIComponent("item:gregtech:steel")}`)).toEqual(["Both", "Steel mill"]);
+    expect(await names(`${v}&makes=${encodeURIComponent("item:gregtech:steel,fluid:oil")}`)).toEqual(["Both"]);
+    expect(await names(`${v}&takes=${encodeURIComponent("item:ic2:coal")}`)).toEqual(["Refinery", "Steel mill"]);
+    expect(await names(`${v}&maxTierIndex=3`)).toEqual(["Refinery", "Steel mill"]);
+    expect(await names(`${v}&maxEuT=500`)).toEqual(["Refinery", "Steel mill"]);
+    const search = (text: string) => names(`${v}&search=${encodeURIComponent(text)}`);
+    expect(await search("#oil")).toEqual(["Both", "Refinery"]);
+    expect(await search("#oil #steel")).toEqual(["Both"]);
+    expect(await search("#early_game")).toEqual(["Steel mill"]);
+    expect(await search("@b_rkge")).toEqual(["Both"]);
+    expect(await search("@brkge")).toEqual([]);
+    expect(await search("@")).toEqual([]);
+    expect(await search("refinery")).toEqual(["Both", "Refinery"]);
+    expect(await search("MILL")).toEqual(["Steel mill"]);
+    expect(await names(`${v}&mine=1`, "owner")).toContain("Hidden steel");
+  });
+
+  it("sorts by the chosen column, ties and nulls as the shelf did", async () => {
+    await seed("sorting", [
+      { name: "Old busy", views: 5, lastActivity: "2026-10-05 10:00:00+00", createdAt: "2026-10-01 10:00:00+00" },
+      { name: "New busy", views: 5, lastActivity: null, createdAt: "2026-10-03 10:00:00+00" },
+      { name: "Quiet", views: 1, lastActivity: "2026-10-04 10:00:00+00", createdAt: "2026-10-02 10:00:00+00" },
+    ]);
+    const v = "gameVersion=sorting";
+    expect(await names(`${v}&sort=new`)).toEqual(["New busy", "Quiet", "Old busy"]);
+    // Equal views: newest first.
+    expect(await names(`${v}&sort=views`)).toEqual(["New busy", "Old busy", "Quiet"]);
+    // No activity sorts last, whichever way the column is read.
+    expect(await names(`${v}&sort=active`)).toEqual(["Old busy", "Quiet", "New busy"]);
+    expect(await names(`${v}&sort=nonsense`)).toEqual(["New busy", "Quiet", "Old busy"]);
+    expect(await names(`${v}&sort=views&pageSize=1&page=2`)).toEqual(["Old busy"]);
+  });
+
+  it("matches `%`, `_` and a backslash in a tag or the text as themselves", async () => {
+    await seed("like-escape", [
+      { name: "a_c", tags: ["t_g"], createdAt: "2026-10-01 10:00:00+00" },
+      { name: "abc", tags: ["tag"], createdAt: "2026-10-01 10:00:01+00" },
+      { name: "a%c", tags: ["t%g"], createdAt: "2026-10-01 10:00:02+00" },
+      { name: "a\\c", tags: ["t\\g"], createdAt: "2026-10-01 10:00:03+00" },
+    ]);
+    // The search box scrubs these characters out; a search built past it
+    // still matches only what it names.
+    const found = async (search: { tags?: string[]; text?: string }) =>
+      (
+        await plansRepo.list({
+          search: { tags: search.tags ?? [], author: "", bareAuthor: false, text: search.text ?? "" },
+          gameVersion: "like-escape",
+          makes: [],
+          takes: [],
+          shelf: { kind: "public" },
+          sort: { column: "created_at", ascending: true, nullsLast: false },
+          offset: 0,
+          limit: 10,
+        })
+      ).rows.map((row) => row.name);
+    expect(await found({})).toEqual(["a_c", "abc", "a%c", "a\\c"]);
+    expect(await found({ text: "a_c" })).toEqual(["a_c"]);
+    expect(await found({ text: "a%c" })).toEqual(["a%c"]);
+    expect(await found({ text: "a\\c" })).toEqual(["a\\c"]);
+    expect(await found({ text: "%" })).toEqual(["a%c"]);
+    expect(await found({ tags: ["t_g"] })).toEqual(["a_c"]);
+    expect(await found({ tags: ["t%g"] })).toEqual(["a%c"]);
+    expect(await found({ tags: ["t\\g"] })).toEqual(["a\\c"]);
+  });
+
+  it("reads a page's rows and its count on one read-only snapshot", async () => {
+    await seed("snapshot", [{ name: "Snap", createdAt: "2026-10-01 10:00:00+00" }]);
+    const sent = recordSql();
+    try {
+      const response = await list.GET(request("GET", "/api/community/plans?gameVersion=snapshot"));
+      expect(((await response.json()) as { total: number }).total).toBe(1);
+    } finally {
+      clearDbFault();
+    }
+    const begin = at(sent, /^set transaction isolation level repeatable read, read only$/);
+    const rows = at(sent, /^select "id", .* from "community_plans" where .* order by .* limit \$\d+ offset \$\d+$/, begin);
+    const count = at(sent, /^select count\(\*\) as "count" from "community_plans" where /, begin);
+    expect(sent.slice(begin + 1, begin + 3).sort()).toEqual([sent[rows], sent[count]].sort());
+    // The two statements filter alike.
+    const where = (text: string) => text.slice(text.indexOf(" where "), text.indexOf(" order by ") > 0 ? text.indexOf(" order by ") : undefined);
+    expect(where(sent[rows]!)).toBe(where(sent[count]!));
+  });
+});
+
+describe("counting views and downloads", () => {
+  withModAndCommunityOn();
+
+  const counts = async (planId: string) =>
+    testDb()
+      .db.selectFrom("community_plans")
+      .select(["views", "downloads"])
+      .where("id", "=", planId)
+      .executeTakeFirstOrThrow();
+
+  it("counts each in one statement that carries the viewer's access rule", async () => {
+    const planId = await makePlan("Counted once", false);
+    const sent = recordSql();
+    try {
+      const viewed = await view.POST(request("POST", `/api/community/plans/${planId}/view`, { who: "owner" }), params({ planId }));
+      expect(await viewed.json()).toEqual({ views: 1 });
+      const downloaded = await download.POST(
+        request("POST", `/api/community/plans/${planId}/download`, { who: "owner" }),
+        params({ planId }),
+      );
+      expect(downloaded.status).toBe(200);
+      expect(await downloaded.json()).toEqual({ name: "Counted once", plan: { nodes: [] } });
+    } finally {
+      clearDbFault();
+    }
+    const plans = sent.filter((text) => /"community_plans"/.test(text));
+    expect(plans).toHaveLength(2);
+    expect(plans[0]).toMatch(/^update "community_plans" set "views" = "views" \+ \$1 where \("id" = \$2 and \("community_plans"\."is_public" = \$3 or "community_plans"\."user_id" = \$4\)\) returning "views"$/);
+    expect(plans[1]).toMatch(/^update "community_plans" set "downloads" = "downloads" \+ \$1 where \("id" = \$2 and \("community_plans"\."is_public" = \$3 or "community_plans"\."user_id" = \$4\)\) returning "plan", "name"$/);
+    expect(await counts(planId)).toEqual({ views: 1, downloads: 1 });
+
+    const stranger = await download.POST(
+      request("POST", `/api/community/plans/${planId}/download`, { who: "stranger" }),
+      params({ planId }),
+    );
+    expect(stranger.status).toBe(404);
+    expect(await stranger.json()).toEqual({ error: "Plan not found." });
+    const strangerView = await view.POST(request("POST", `/api/community/plans/${planId}/view`, { who: "stranger" }), params({ planId }));
+    expect(strangerView.status).toBe(404);
+    expect(await counts(planId)).toEqual({ views: 1, downloads: 1 });
   });
 });
 

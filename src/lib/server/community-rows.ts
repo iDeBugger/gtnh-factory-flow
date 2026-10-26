@@ -12,21 +12,41 @@ export function parseEntryIcon(value: unknown): EntryIcon | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** The columns before the activity trio: what a database not yet migrated can answer. */
-export const PLAN_SUMMARY_COLUMNS_LEGACY =
-  "id,name,description,game_version,dataset_version,tags,is_public,icon,needs,outputs," +
-  "total_eu_t,machine_count,node_count,storage_count,edge_count,highest_tier," +
-  "highest_tier_index,upvotes,downvotes,score,downloads,views,created_at,updated_at," +
-  "user_id,author_name";
-/** The activity columns, which a later migration added; a sort on one needs them. */
-export const PLAN_ACTIVITY_COLUMNS = new Set(["comment_count", "last_comment_at", "last_activity_at"]);
+/** The columns a listing reads: everything but the plan JSON. */
+export const PLAN_SUMMARY_FIELDS = [
+  "id",
+  "name",
+  "description",
+  "game_version",
+  "dataset_version",
+  "tags",
+  "is_public",
+  "icon",
+  "needs",
+  "outputs",
+  "total_eu_t",
+  "machine_count",
+  "node_count",
+  "storage_count",
+  "edge_count",
+  "highest_tier",
+  "highest_tier_index",
+  "upvotes",
+  "downvotes",
+  "score",
+  "downloads",
+  "views",
+  "created_at",
+  "updated_at",
+  "user_id",
+  "author_name",
+  "comment_count",
+  "last_comment_at",
+  "last_activity_at",
+] as const;
 
-/** Columns returned for plan listings (everything except the plan JSON). */
-export const PLAN_SUMMARY_COLUMNS =
-  "id,name,description,game_version,dataset_version,tags,is_public,icon,needs,outputs," +
-  "total_eu_t,machine_count,node_count,storage_count,edge_count,highest_tier," +
-  "highest_tier_index,upvotes,downvotes,score,downloads,views,created_at,updated_at," +
-  "user_id,author_name,comment_count,last_comment_at,last_activity_at";
+/** The same columns as a PostgREST select list. */
+export const PLAN_SUMMARY_COLUMNS = PLAN_SUMMARY_FIELDS.join(",");
 
 export interface PlanRow {
   id: string;

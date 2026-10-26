@@ -262,9 +262,20 @@ Checks with no exceptions at all:
   `CompiledQuery` as a value (and outside `db/` at all); a namespace or dynamic import of kysely. A sort column
   comes from a closed map and goes through the builder, never through these.
 
-Accounts, the event log, the library (designs with the live lease, members, folders) go to Postgres directly
-(`getDb` at `DATABASE_URL`, see Local database below); the live service's queries are all among these, and it
-refuses to start without `DATABASE_URL`; `services/config.ts` answers "configured" only with both clients set.
+Accounts, the event log, the library (designs with the live lease, members, folders), community posts and their
+comments go to Postgres directly (`getDb` at `DATABASE_URL`, see Local database below); the live service's queries
+are all among these, and it refuses to start without `DATABASE_URL`; `services/config.ts` answers "configured" only
+with both clients set. Community posts (`repos/plans.ts`, `repos/comments.ts`; exam `plan-access.test.ts`, the
+Postgres cases in `services/community-plans-postgres.test.ts`):
+- The list's page and its `total` are two statements over one condition, run on one read-only `repeatable read`
+  snapshot (`withTransaction(work, { readSnapshot: true })`): the total never disagrees with the rows, and a page
+  past the end still counts every post. Tag and text terms are `ilike` patterns with `\`, `%` and `_` escaped
+  (`repos/like.ts`), bound like every other term; make and take are `@>` against `json([key])`.
+- A view and a download are one `update ... + 1 ... returning` each, with `planVisibleTo(viewer)` in its `where`:
+  concurrent counts all land, and a post the viewer may not see counts nothing.
+- A comment's insert or delete and its post's recount (one `update ... from (select count(*), max(created_at))`)
+  are one transaction, after `plans.lockPost` (`for no key update`), so a recount sees every comment committed
+  before it (the Postgres case of ten comments at once fails without the lock).
 Every other repository, until its swap, goes to PostgREST at `POSTGREST_URL` through `@supabase/postgrest-js`
 (`getCommunityDb()`, type `DbClient`), with `POSTGREST_SERVICE_TOKEN` as a bearer: a JWT for the `service_role`,
 which bypasses row security. No anon role exists, so a request without the token is 401. `SUPABASE_URL` and
@@ -426,8 +437,8 @@ which bypasses row security. No anon role exists, so a request without the token
 - Next.js never loads PGlite: it reaches the database over HTTP at `LOCAL_DB_URL` (`tools/local-db/serve.ts`, data in
   `scratch/local-db/pgdata`). Tests open it in memory and register it in-process (`useInProcessLocalDb`).
 - The direct client (`getDb`, Kysely over `pg`, `db/client.ts`) sits beside the PostgREST one while repositories move
-  across, behind the same breaker (`db/guard.ts`); accounts and the event log (`repos/accounts`, `repos/events`) query
-  through it, every other repository still through PostgREST. It reads `DATABASE_URL`; pool sizes and
+  across, behind the same breaker (`db/guard.ts`); the repositories named under Database query through it, every
+  other repository still through PostgREST. It reads `DATABASE_URL`; pool sizes and
   timeouts are `db/settings.ts`. Values parse the same on `pg` and PGlite (`DB_TYPE_PARSERS`: timestamptz as PostgREST's
   JSON text, bigint as a number); a jsonb column takes only `json(value)`. Row types are generated (`npm run db:types`,
   `db/schema.test.ts` fails while `db/schema.ts` is stale). Tests reach one PGlite through both clients with

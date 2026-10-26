@@ -1,24 +1,17 @@
-import { applyPlanSearch, type PlanSearch } from "@/lib/community/search-query";
+import type { Expression, ExpressionBuilder, SqlBool } from "kysely";
+import type { PlanSearch } from "@/lib/community/search-query";
 import type { EntryIcon, PlanResourceStat } from "@/lib/community/types";
-import {
-  communityStorageErrorMessage,
-  getCommunityDb,
-  isMissingColumnError,
-  type Tx,
-} from "../db";
-import {
-  PLAN_ACTIVITY_COLUMNS,
-  PLAN_SUMMARY_COLUMNS,
-  PLAN_SUMMARY_COLUMNS_LEGACY,
-  type PlanRow,
-} from "../community-rows";
-import { publicPlans } from "./visibility";
+import { getCommunityDb, getDb, json, type Database, type Tx } from "../db";
+import { PLAN_SUMMARY_FIELDS, type PLAN_SUMMARY_COLUMNS, type PlanRow } from "../community-rows";
+import { escapeLike } from "./like";
+import { sqlRules, type VisibilityViewer } from "./visibility";
 
 /**
  * Community posts (`community_plans`). Who may see or change a post is the
- * services' rule (`services/access.ts`); these only read and write rows.
- * Repositories take an optional transaction last; until the direct client
- * lands there is none and `tx` is unused.
+ * services' rule (`services/access.ts`); these read and write rows, and
+ * where the rule must hold inside one statement (a list, a counter) they
+ * apply its SQL form (`repos/visibility.ts`). Repositories take an optional
+ * transaction last.
  */
 
 /** The columns a list may sort on: a closed set, so no request text names a column. */
@@ -55,57 +48,98 @@ export interface PlanListQuery {
   limit: number;
 }
 
+/** `%text%` for ilike, the text's own `%`, `_` and backslash matching only themselves. */
+const containing = (text: string) => `%${escapeLike(text)}%`;
+
 /**
- * One page of posts and the count of every post the query matches, however
- * far past the end the page is. A database still without the activity
- * columns answers with the old ones, and a sort that needs them falls back
- * to newest first, so the list never blanks between a deploy and the schema
- * paste. Throws when the database does not answer.
+ * Every condition of a list query, for both of its statements. The search
+ * terms are bound parameters: the free text never becomes a filter of its
+ * own, whatever it holds.
  */
-export async function list(
+function listWhere(
   query: PlanListQuery,
-  _tx?: Tx,
-): Promise<{ rows: PlanRow[]; total: number }> {
-  const db = getCommunityDb();
-  const { column, ascending, nullsLast } = query.sort;
-  const load = async (legacy: boolean): Promise<{ rows: PlanRow[]; total: number }> => {
-    const orderColumn = legacy && PLAN_ACTIVITY_COLUMNS.has(column) ? "created_at" : column;
-    let builder = db
-      .from("community_plans")
-      .select(legacy ? PLAN_SUMMARY_COLUMNS_LEGACY : PLAN_SUMMARY_COLUMNS, { count: "exact" });
-    builder = applyPlanSearch(builder, query.search);
+): (eb: ExpressionBuilder<Database, "community_plans">) => Expression<SqlBool> {
+  return (eb) => {
+    const where: Expression<SqlBool>[] = [];
+    for (const tag of query.search.tags) {
+      where.push(eb("tags_text", "ilike", containing(tag)));
+    }
+    if (query.search.author) {
+      where.push(eb("author_name", "=", query.search.author));
+    } else if (query.search.bareAuthor) {
+      // A bare @ narrows to nobody rather than to everything.
+      where.push(eb("author_name", "=", ""));
+    }
+    if (query.search.text) {
+      const pattern = containing(query.search.text);
+      where.push(
+        eb.or([
+          eb("name", "ilike", pattern),
+          eb("description", "ilike", pattern),
+          eb("tags_text", "ilike", pattern),
+        ]),
+      );
+    }
     if (query.maxTierIndex !== undefined) {
-      builder = builder.lte("highest_tier_index", query.maxTierIndex);
+      where.push(eb("highest_tier_index", "<=", query.maxTierIndex));
     }
     if (query.gameVersion) {
-      builder = builder.eq("game_version", query.gameVersion);
+      where.push(eb("game_version", "=", query.gameVersion));
     }
     if (query.maxEuT !== undefined) {
-      builder = builder.lte("total_eu_t", query.maxEuT);
+      where.push(eb("total_eu_t", "<=", query.maxEuT));
     }
     // JSON containment: the stat arrays hold {kind, resourceId, ...} and
     // @> matches on the keys given, so the rate is free to differ.
     for (const resource of query.makes) {
-      builder = builder.contains("outputs", JSON.stringify([resource]));
+      where.push(eb("outputs", "@>", json([resource])));
     }
     for (const resource of query.takes) {
-      builder = builder.contains("needs", JSON.stringify([resource]));
+      where.push(eb("needs", "@>", json([resource])));
     }
-    builder = query.shelf.kind === "mine" ? builder.eq("user_id", query.shelf.userId) : publicPlans(builder);
-    const { data, count, error } = await builder
-      .order(orderColumn, { ascending, nullsFirst: nullsLast ? false : undefined })
-      .order("created_at", { ascending: false })
-      .range(query.offset, query.offset + query.limit - 1)
-      .returns<PlanRow[]>();
-    if (error && !legacy && isMissingColumnError(error)) {
-      return load(true);
-    }
-    if (error) {
-      throw new Error(communityStorageErrorMessage(error, "Listing community plans failed."));
-    }
-    return { rows: data ?? [], total: count ?? data?.length ?? 0 };
+    where.push(
+      query.shelf.kind === "mine"
+        ? eb("community_plans.user_id", "=", query.shelf.userId)
+        : sqlRules.publicPlans()(eb),
+    );
+    return eb.and(where);
   };
-  return load(false);
+}
+
+/**
+ * One page of posts and the count of every post the query matches, however
+ * far past the end the page is: two statements over one condition, which the
+ * caller runs on one snapshot (`withTransaction`'s `readSnapshot`). Ties
+ * break newest first; `nullsLast` puts posts without the column's value
+ * after the rest, whichever way it is read. Throws when the database does
+ * not answer.
+ */
+export async function list(
+  query: PlanListQuery,
+  tx?: Tx,
+): Promise<{ rows: PlanRow[]; total: number }> {
+  const db = tx ?? getDb();
+  const { column, ascending, nullsLast } = query.sort;
+  const where = listWhere(query);
+  const rows = await db
+    .selectFrom("community_plans")
+    .select(PLAN_SUMMARY_FIELDS)
+    .where(where)
+    .orderBy(column, (order) => {
+      const direction = ascending ? order.asc() : order.desc();
+      return nullsLast ? direction.nullsLast() : direction;
+    })
+    .orderBy("created_at", "desc")
+    .limit(query.limit)
+    .offset(query.offset)
+    .$castTo<PlanRow>()
+    .execute();
+  const counted = await db
+    .selectFrom("community_plans")
+    .select((eb) => eb.fn.countAll<number>().as("count"))
+    .where(where)
+    .executeTakeFirstOrThrow();
+  return { rows, total: Number(counted.count) };
 }
 
 /**
@@ -113,68 +147,83 @@ export async function list(
  * none when the read fails. An unpublished post's version is its owner's
  * business, so it never names a choice on the public shelf.
  */
-export async function distinctGameVersions(_tx?: Tx): Promise<string[]> {
-  let query = getCommunityDb().from("community_plans").select("game_version");
-  query = publicPlans(query);
-  const { data } = await query
-    .neq("game_version", "")
-    .limit(1000)
-    .returns<Array<{ game_version: string }>>();
-  return [...new Set((data ?? []).map((row) => row.game_version).filter(Boolean))].sort((a, b) =>
-    b.localeCompare(a, undefined, { numeric: true }),
-  );
+export async function distinctGameVersions(tx?: Tx): Promise<string[]> {
+  try {
+    const rows = await (tx ?? getDb())
+      .selectFrom("community_plans")
+      .select("game_version")
+      .distinct()
+      .where(sqlRules.publicPlans())
+      .where("game_version", "<>", "")
+      .limit(1000)
+      .execute();
+    return rows
+      .map((row) => row.game_version)
+      .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+  } catch {
+    return [];
+  }
 }
 
 /**
  * A post's summary row, published or not (the caller decides who sees it),
  * or undefined when there is none. A failed read answers undefined too: every
- * caller answers it as a missing post. Old databases answer without the
- * activity columns.
+ * caller answers it as a missing post.
  */
-export async function readSummary(planId: string, _tx?: Tx): Promise<PlanRow | undefined> {
-  const db = getCommunityDb();
-  let { data, error } = await db
-    .from("community_plans")
-    .select(PLAN_SUMMARY_COLUMNS)
-    .eq("id", planId)
-    .single<PlanRow>();
-  if (error && isMissingColumnError(error)) {
-    ({ data, error } = await db
-      .from("community_plans")
-      .select(PLAN_SUMMARY_COLUMNS_LEGACY)
-      .eq("id", planId)
-      .single<PlanRow>());
+export async function readSummary(planId: string, tx?: Tx): Promise<PlanRow | undefined> {
+  try {
+    return await (tx ?? getDb())
+      .selectFrom("community_plans")
+      .select(PLAN_SUMMARY_FIELDS)
+      .where("id", "=", planId)
+      .$castTo<PlanRow>()
+      .executeTakeFirst();
+  } catch {
+    return undefined;
   }
-  return error || !data ? undefined : data;
 }
 
 /** Who owns a post and whether it is published, for the access rule. Throws when the database does not answer. */
 export async function readAccess(
   planId: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<{ id: string; user_id: string | null; is_public: boolean } | undefined> {
-  const { data, error } = await getCommunityDb()
-    .from("community_plans")
-    .select("id,user_id,is_public")
-    .eq("id", planId)
-    .maybeSingle<{ id: string; user_id: string | null; is_public: boolean }>();
-  if (error) {
-    throw new Error(error.message || "Reading the post failed.", { cause: error });
-  }
-  return data ?? undefined;
+  return (tx ?? getDb())
+    .selectFrom("community_plans")
+    .select(["id", "user_id", "is_public"])
+    .where("id", "=", planId)
+    .executeTakeFirst();
+}
+
+/**
+ * Locks a post's row until the transaction ends, so the writes that restamp
+ * its figures (a comment and its recount) run one at a time per post and
+ * each recount sees the comments committed before it. `for no key update`:
+ * a comment's foreign-key check on the post never waits for it.
+ */
+export async function lockPost(planId: string, tx: Tx): Promise<void> {
+  await tx
+    .selectFrom("community_plans")
+    .select("id")
+    .where("id", "=", planId)
+    .forNoKeyUpdate()
+    .execute();
 }
 
 /** A post's owner, or undefined when there is none; a failed read answers undefined too, as a missing post. */
 export async function readOwner(
   planId: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<{ id: string; user_id: string | null } | undefined> {
-  const { data } = await getCommunityDb()
-    .from("community_plans")
-    .select("id,user_id")
-    .eq("id", planId)
-    .single<{ id: string; user_id: string | null }>();
-  return data ?? undefined;
+  try {
+    return await (tx ?? getDb())
+      .selectFrom("community_plans")
+      .select(["id", "user_id"])
+      .where("id", "=", planId)
+      .executeTakeFirst();
+  } catch {
+    return undefined;
+  }
 }
 
 /** The stat columns a post stores, computed by the server from its plan. */
@@ -205,78 +254,116 @@ export interface NewPlanRow extends PlanStatsColumns {
   uploader_key: string;
 }
 
-/**
- * Stores a new post and answers its id. A database still without the
- * activity column takes the post without it. Throws when the insert fails.
- */
-export async function insert(row: NewPlanRow, _tx?: Tx): Promise<string> {
-  const db = getCommunityDb();
-  let { data, error } = await db
-    .from("community_plans")
-    .insert({ ...row, last_activity_at: new Date().toISOString() })
-    .select("id")
-    .single();
-  if (error && isMissingColumnError(error)) {
-    ({ data, error } = await db.from("community_plans").insert(row).select("id").single());
-  }
-  if (error || !data) {
-    throw new Error(communityStorageErrorMessage(error, "Insert failed"));
-  }
-  return (data as { id: string }).id;
+/** What an author's edit may change, jsonb fields as plain values (the repository wraps them). */
+export type PlanPatch = Partial<
+  Pick<
+    NewPlanRow,
+    | keyof PlanStatsColumns
+    | "name"
+    | "description"
+    | "game_version"
+    | "dataset_version"
+    | "plan"
+    | "tags"
+    | "tags_text"
+    | "icon"
+    | "stats_version"
+  > & { is_public: boolean; updated_at: string; last_activity_at: string }
+>;
+
+/** An icon as the column takes it: SQL null when there is none, as PostgREST wrote it. */
+const iconParam = (icon: EntryIcon | null) => (icon === null ? null : json(icon));
+
+/** The stat columns as the table takes them, the arrays as jsonb. */
+function statsValues(stats: PlanStatsColumns) {
+  return {
+    needs: json(stats.needs),
+    outputs: json(stats.outputs),
+    total_eu_t: stats.total_eu_t,
+    machine_count: stats.machine_count,
+    node_count: stats.node_count,
+    storage_count: stats.storage_count,
+    edge_count: stats.edge_count,
+    highest_tier: stats.highest_tier,
+    highest_tier_index: stats.highest_tier_index,
+  };
+}
+
+/** Stores a new post and answers its id. Throws when the insert fails. */
+export async function insert(row: NewPlanRow, tx?: Tx): Promise<string> {
+  const inserted = await (tx ?? getDb())
+    .insertInto("community_plans")
+    .values({
+      ...row,
+      ...statsValues(row),
+      plan: json(row.plan),
+      tags: json(row.tags),
+      icon: iconParam(row.icon),
+      last_activity_at: new Date().toISOString(),
+    })
+    .returning("id")
+    .executeTakeFirstOrThrow();
+  return inserted.id;
 }
 
 /**
- * Writes the fields of `patch` to the owner's post. A database still without
- * the activity column takes the edit without it. Throws when the update
+ * Writes the fields of `patch` to the owner's post. Throws when the update
  * fails; answers whether a row was there to change.
  */
 export async function update(
   planId: string,
   ownerId: string,
-  patch: Record<string, unknown>,
-  _tx?: Tx,
+  patch: PlanPatch,
+  tx?: Tx,
 ): Promise<boolean> {
-  const db = getCommunityDb();
-  const write = (fields: Record<string, unknown>) =>
-    db.from("community_plans").update(fields).eq("id", planId).eq("user_id", ownerId).select("id");
-  let { data, error } = await write(patch);
-  if (error && isMissingColumnError(error) && "last_activity_at" in patch) {
-    const { last_activity_at: dropped, ...rest } = patch;
-    void dropped;
-    ({ data, error } = await write(rest));
-  }
-  if (error) {
-    throw new Error(communityStorageErrorMessage(error, "Updating the plan failed."));
-  }
-  return (data ?? []).length > 0;
+  const { needs, outputs, plan, tags, icon, ...plain } = patch;
+  const result = await (tx ?? getDb())
+    .updateTable("community_plans")
+    .set({
+      ...plain,
+      ...(needs !== undefined ? { needs: json(needs) } : {}),
+      ...(outputs !== undefined ? { outputs: json(outputs) } : {}),
+      ...(plan !== undefined ? { plan: json(plan) } : {}),
+      ...(tags !== undefined ? { tags: json(tags) } : {}),
+      ...(icon !== undefined ? { icon: iconParam(icon) } : {}),
+    })
+    .where("id", "=", planId)
+    .where("user_id", "=", ownerId)
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows) > 0;
 }
 
 /** Deletes a post (its comments and votes go with it). Throws when the delete fails. */
-export async function remove(planId: string, _tx?: Tx): Promise<void> {
-  const { error } = await getCommunityDb().from("community_plans").delete().eq("id", planId);
-  if (error) {
-    throw new Error(error.message);
+export async function remove(planId: string, tx?: Tx): Promise<void> {
+  await (tx ?? getDb()).deleteFrom("community_plans").where("id", "=", planId).execute();
+}
+
+/** The release a post's stat card was computed by; undefined when the post is missing or the read fails. */
+export async function readStatsVersion(planId: string, tx?: Tx): Promise<string | undefined> {
+  try {
+    const row = await (tx ?? getDb())
+      .selectFrom("community_plans")
+      .select("stats_version")
+      .where("id", "=", planId)
+      .executeTakeFirst();
+    return row?.stats_version;
+  } catch {
+    return undefined;
   }
 }
 
-/** The release a post's stat card was computed by; undefined when the read fails. */
-export async function readStatsVersion(planId: string, _tx?: Tx): Promise<string | null | undefined> {
-  const { data, error } = await getCommunityDb()
-    .from("community_plans")
-    .select("stats_version")
-    .eq("id", planId)
-    .single<{ stats_version: string | null }>();
-  return error || !data ? undefined : data.stats_version;
-}
-
 /** A post's stored plan JSON; undefined when the read fails. */
-export async function readPlanJson(planId: string, _tx?: Tx): Promise<unknown> {
-  const { data } = await getCommunityDb()
-    .from("community_plans")
-    .select("plan")
-    .eq("id", planId)
-    .single<{ plan: unknown }>();
-  return data?.plan;
+export async function readPlanJson(planId: string, tx?: Tx): Promise<unknown> {
+  try {
+    const row = await (tx ?? getDb())
+      .selectFrom("community_plans")
+      .select("plan")
+      .where("id", "=", planId)
+      .executeTakeFirst();
+    return row?.plan;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Stores a recomputed stat card. Not an author edit: `updated_at` stays. Best effort: a failure is not reported. */
@@ -284,63 +371,59 @@ export async function writeStats(
   planId: string,
   stats: PlanStatsColumns,
   version: string,
-  _tx?: Tx,
+  tx?: Tx,
 ): Promise<void> {
-  await getCommunityDb()
-    .from("community_plans")
-    .update({ ...stats, stats_version: version })
-    .eq("id", planId);
-}
-
-/** A post's view count and access fields. Throws when the database does not answer. */
-export async function readViews(
-  planId: string,
-  _tx?: Tx,
-): Promise<{ views: number; is_public: boolean | null; user_id: string | null } | undefined> {
-  const { data, error } = await getCommunityDb()
-    .from("community_plans")
-    .select("views,is_public,user_id")
-    .eq("id", planId)
-    .maybeSingle<{ views: number; is_public: boolean | null; user_id: string | null }>();
-  if (error) {
-    throw new Error(error.message || "Reading the view count failed.", { cause: error });
-  }
-  return data ?? undefined;
-}
-
-/** Sets a post's view count. Throws when the update fails. */
-export async function writeViews(planId: string, views: number, _tx?: Tx): Promise<void> {
-  const { error } = await getCommunityDb().from("community_plans").update({ views }).eq("id", planId);
-  if (error) {
-    throw new Error(error.message || "Counting the view failed.", { cause: error });
+  try {
+    await (tx ?? getDb())
+      .updateTable("community_plans")
+      .set({ ...statsValues(stats), stats_version: version })
+      .where("id", "=", planId)
+      .execute();
+  } catch {
+    // The saved card stays; the next open tries again.
   }
 }
 
-/** What a download hands out, its count and the access fields; undefined when missing or the read fails. */
-export async function readDownload(
+/**
+ * Counts one view of a post the viewer may see and answers the new count, or
+ * undefined when there is no such post for them. One statement: concurrent
+ * views each add one, and the access rule holds in the same statement.
+ * Throws when the database does not answer.
+ */
+export async function countView(
   planId: string,
-  _tx?: Tx,
-): Promise<
-  | { plan: unknown; downloads: number; name: string; is_public: boolean | null; user_id: string | null }
-  | undefined
-> {
-  const { data, error } = await getCommunityDb()
-    .from("community_plans")
-    .select("plan,downloads,name,is_public,user_id")
-    .eq("id", planId)
-    .single<{
-      plan: unknown;
-      downloads: number;
-      name: string;
-      is_public: boolean | null;
-      user_id: string | null;
-    }>();
-  return error || !data ? undefined : data;
+  viewer: VisibilityViewer,
+  tx?: Tx,
+): Promise<number | undefined> {
+  const row = await (tx ?? getDb())
+    .updateTable("community_plans")
+    .set((eb) => ({ views: eb("views", "+", 1) }))
+    .where((eb) => eb.and([eb("id", "=", planId), sqlRules.planVisibleTo(viewer)(eb)]))
+    .returning("views")
+    .executeTakeFirst();
+  return row?.views;
 }
 
-/** Sets a post's download count. Best effort: a failure is not reported. */
-export async function writeDownloads(planId: string, downloads: number, _tx?: Tx): Promise<void> {
-  await getCommunityDb().from("community_plans").update({ downloads }).eq("id", planId);
+/**
+ * Counts one download of a post the viewer may see and answers what it hands
+ * out, in one statement like `countView`. Undefined when there is no such
+ * post for them; a failed write answers undefined too, as a missing post.
+ */
+export async function takeDownload(
+  planId: string,
+  viewer: VisibilityViewer,
+  tx?: Tx,
+): Promise<{ plan: unknown; name: string } | undefined> {
+  try {
+    return await (tx ?? getDb())
+      .updateTable("community_plans")
+      .set((eb) => ({ downloads: eb("downloads", "+", 1) }))
+      .where((eb) => eb.and([eb("id", "=", planId), sqlRules.planVisibleTo(viewer)(eb)]))
+      .returning(["plan", "name"])
+      .executeTakeFirst();
+  } catch {
+    return undefined;
+  }
 }
 
 /** The column sets a by-score read of the public posts can ask for. */

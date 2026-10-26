@@ -4,11 +4,13 @@ import { PGlite } from "@electric-sql/pglite";
 import { Kysely, PGliteDialect } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as accounts from "../repos/accounts";
+import * as comments from "../repos/comments";
 import * as designMembers from "../repos/design-members";
 import * as designs from "../repos/designs";
 import * as events from "../repos/events";
 import * as folders from "../repos/folders";
-import { useDbForTests } from "./index";
+import * as plans from "../repos/plans";
+import { useDbForTests, withTransaction } from "./index";
 import { applyMigrations, schemaFiles } from "./migrations";
 import type { Database } from "./schema";
 import { DEPLOY_DB_DIR, deploySqlWithoutPsql } from "@/test-support/deploy-sql";
@@ -368,6 +370,94 @@ describe("the database roles", () => {
       useDbForTests(undefined);
       await pglite.query("delete from library_designs where id = 'd2'");
       await pglite.query("delete from library_folders where id = 'f1'");
+    }
+  });
+
+  it("runs every direct community post and comment repository function as the site role", async () => {
+    const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) });
+    useDbForTests(db);
+    const owner = { userId: OWNER, isAdmin: false, adminToken: false };
+    const stats = {
+      needs: [],
+      outputs: [{ kind: "item" as const, resourceId: "steel", displayName: "Steel", ratePerSecond: 1 }],
+      total_eu_t: 30,
+      machine_count: 1,
+      node_count: 1,
+      storage_count: 0,
+      edge_count: 0,
+      highest_tier: "LV",
+      highest_tier_index: 1,
+    };
+    let planId: string | undefined;
+    try {
+      await as("gtnh_site", async () => {
+        planId = await plans.insert({
+          ...stats,
+          user_id: OWNER,
+          author_name: "owner",
+          name: "Roles",
+          description: "",
+          game_version: "roles",
+          dataset_version: "",
+          plan: { nodes: [] },
+          tags: ["oil"],
+          tags_text: "oil",
+          icon: null,
+          stats_version: "0",
+          uploader_key: "test",
+        });
+        const id = planId;
+        const query: plans.PlanListQuery = {
+          search: { tags: ["oil"], author: "owner", bareAuthor: false, text: "rol" },
+          gameVersion: "roles",
+          maxTierIndex: 5,
+          maxEuT: 100,
+          makes: [{ kind: "item", resourceId: "steel" }],
+          takes: [],
+          shelf: { kind: "mine", userId: OWNER },
+          sort: { column: "last_activity_at", ascending: false, nullsLast: true },
+          offset: 0,
+          limit: 10,
+        };
+        const page = await withTransaction((tx) => plans.list(query, tx), { readSnapshot: true });
+        expect(page).toMatchObject({ total: 1, rows: [{ id, name: "Roles" }] });
+        await expect(
+          withTransaction((tx) => plans.remove(id, tx), { readSnapshot: true }),
+        ).rejects.toThrow(/read-only transaction/);
+        expect(await plans.readSummary(id)).toMatchObject({ id, tags: ["oil"], outputs: stats.outputs });
+        expect(await plans.readAccess(id)).toEqual({ id, user_id: OWNER, is_public: true });
+        expect(await plans.readOwner(id)).toEqual({ id, user_id: OWNER });
+        expect(await plans.distinctGameVersions()).toContain("roles");
+        expect(await plans.update(id, OWNER, { name: "Roles edited", tags: ["oil", "gas"], icon: null })).toBe(true);
+        expect(await plans.readStatsVersion(id)).toBe("0");
+        expect(await plans.readPlanJson(id)).toEqual({ nodes: [] });
+        await plans.writeStats(id, { ...stats, machine_count: 4 }, "1");
+        expect(await plans.readStatsVersion(id)).toBe("1");
+        expect(await plans.countView(id, owner)).toBe(1);
+        expect(await plans.takeDownload(id, owner)).toEqual({ plan: { nodes: [] }, name: "Roles edited" });
+        const written = await withTransaction(async (tx) => {
+          await plans.lockPost(id, tx);
+          const row = await comments.insert({ plan_id: id, user_id: MEMBER, author_name: "member", body: "Hi" }, tx);
+          await comments.recount(id, tx);
+          return row;
+        });
+        expect(await comments.list(id, 10)).toEqual([written]);
+        expect(await comments.readAccess(id, written.id)).toEqual({ authorId: MEMBER, planOwnerId: OWNER });
+        expect(await plans.readSummary(id)).toMatchObject({ comment_count: 1, last_comment_at: written.created_at });
+        await withTransaction(async (tx) => {
+          await plans.lockPost(id, tx);
+          expect(await comments.softDelete(id, written.id, tx)).toBe(true);
+          await comments.recount(id, tx);
+        });
+        expect(await plans.readSummary(id)).toMatchObject({ comment_count: 0, last_comment_at: null });
+        await plans.remove(id);
+        expect(await plans.readAccess(id)).toBeUndefined();
+      });
+    } finally {
+      useDbForTests(undefined);
+      if (planId) {
+        await pglite.query("delete from community_plans where id = $1", [planId]);
+      }
     }
   });
 

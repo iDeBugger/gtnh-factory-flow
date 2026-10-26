@@ -6,7 +6,7 @@
  * PostgREST one (`getCommunityDb`, `rest.ts`) and the direct one (`getDb`,
  * Kysely over `pg`). One breaker (`breaker.ts`) serves both.
  */
-import type { Kysely, Transaction } from "kysely";
+import { sql, type Kysely, type Transaction } from "kysely";
 import { createDbClient, type DirectDbClient } from "./client";
 import type { Database } from "./schema";
 import type { DbService } from "./settings";
@@ -22,12 +22,10 @@ export { DB_BREAKER_FAILURES, DB_BREAKER_OPEN_MS, resetDbBreaker } from "./break
 export {
   blueprintStorageErrorMessage,
   COMMUNITY_DB_DOWN_MESSAGE,
-  communityStorageErrorMessage,
   DatabaseDownError,
   DbQueryError,
   isDatabaseDown,
   isDatabaseError,
-  isMissingColumnError,
   libraryStorageErrorMessage,
 } from "./errors";
 export { json, type JsonParam } from "./parsers";
@@ -80,14 +78,34 @@ export function getDb(): Kysely<Database> {
   return current.client.db;
 }
 
+export interface TransactionOptions {
+  /**
+   * Read only, on one snapshot (`repeatable read`): every statement sees the
+   * rows as they stood at the first, such as a page and the count it shows.
+   */
+  readSnapshot?: boolean;
+}
+
 /**
  * Runs `work` in one transaction: committed when it resolves, rolled back
  * when it throws. Inside, use only `tx` and await nothing else (no session
  * read, no rate limit, no fetch): on PGlite an outside query waits for the
  * transaction forever, on Postgres it takes a second pool slot.
  */
-export function withTransaction<T>(work: (tx: Tx) => Promise<T>): Promise<T> {
-  return getDb().transaction().execute(work);
+export function withTransaction<T>(
+  work: (tx: Tx) => Promise<T>,
+  options: TransactionOptions = {},
+): Promise<T> {
+  return getDb()
+    .transaction()
+    .execute(async (tx) => {
+      if (options.readSnapshot) {
+        // A statement of its own rather than the driver's transaction
+        // settings, which PGlite's driver drops: the same SQL on both.
+        await sql`set transaction isolation level repeatable read, read only`.execute(tx);
+      }
+      return work(tx);
+    });
 }
 
 /** Closes the pool (on shutdown). A test database is its owner's to close. */

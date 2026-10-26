@@ -49,7 +49,10 @@ endpoints return 503 and the hub page shows an error banner.
   self-heal under races.
 - Views: counted when a plan's preview/detail is opened, not per list render.
 - Downloads: counted via the download endpoint (JSON download and
-  "Open in editor" both use it).
+  "Open in editor" both use it). Each count is one statement that adds one
+  only on a post the viewer may see, so counts never get lost under races.
+- Comments: a comment and its post's comment count are written in one
+  transaction, so the count always matches the thread.
 - Thumbnails: JPEG data URLs (≤ 400 KB) captured client-side from the canvas
   at share time and stored inline in the row; the capture shrinks itself until
   it fits. Cards without a photo fall back to the plan's top output sprite.

@@ -18,6 +18,7 @@ import {
   rowToPlanSummary,
   type PlanRow,
 } from "../community-rows";
+import { withTransaction } from "../db";
 import { getFileStore } from "../file-store";
 import type { Viewer } from "../http/viewer";
 import { checkRateLimit } from "../limits/rate-limit";
@@ -213,7 +214,11 @@ export async function listPlans(
   const cached = cacheKey ? readPlanListCache<{ rows: PlanRow[]; total: number }>(cacheKey) : undefined;
   // What is not cached is fetched at once, side by side, not in turn.
   const [pageData, gameVersions, voterKey] = await Promise.all([
-    cached ? Promise.resolve(cached) : plans.list(query),
+    // The page and its count on one snapshot, so a post landing between the
+    // two never makes the total disagree with the rows.
+    cached
+      ? Promise.resolve(cached)
+      : withTransaction((tx) => plans.list(query, tx), { readSnapshot: true }),
     loadVersions(),
     deviceId ? makeVoterKey(request, deviceId) : Promise.resolve(undefined),
   ]);
@@ -271,8 +276,8 @@ export async function readPlan(
 /**
  * Saved stat cards go stale as the solver changes. On open, recompute from
  * the stored plan JSON with this release's solver (once per plan per
- * release) and persist the result. Best effort: a missing stats_version
- * column, an unparseable plan or a failed write leave the saved card as is,
+ * release) and persist the result. Best effort: a failed read, an
+ * unparseable plan or a failed write leave the saved card as is,
  * though freshly computed numbers still go out in this answer.
  */
 async function refreshStaleStats(planId: string, plan: CommunityPlanSummary): Promise<void> {
@@ -430,7 +435,7 @@ export async function editPlan(
   }
 
   const now = new Date().toISOString();
-  const update: Record<string, unknown> = { updated_at: now, last_activity_at: now };
+  const update: plans.PlanPatch = { updated_at: now, last_activity_at: now };
   if (body.name !== undefined) {
     const name = typeof body.name === "string" ? body.name.trim() : "";
     if (!name || name.length > COMMUNITY_NAME_MAX_LENGTH) {
@@ -530,12 +535,12 @@ export async function countPlanView(
   if (!(await checkRateLimit(makeActorKey(request), "view", VIEWS_PER_MINUTE, 60))) {
     return fail("rate-limited", "Too many requests. Slow down.");
   }
-  const row = await plans.readViews(planId);
-  if (!row || !canSeePlan(viewer, row)) {
+  // The access rule rides in the counting statement (`planVisibleTo`, the
+  // SQL form of `canSeePlan`): a post the viewer may not see counts nothing.
+  const views = await plans.countView(planId, viewer);
+  if (views === undefined) {
     return fail("not-found", PLAN_NOT_FOUND);
   }
-  const views = row.views + 1;
-  await plans.writeViews(planId, views);
   return ok({ views });
 }
 
@@ -547,11 +552,11 @@ export async function downloadPlan(
   if (!isUuid(planId)) {
     return fail("not-found", PLAN_NOT_FOUND);
   }
-  const row = await plans.readDownload(planId);
-  if (!row || !canSeePlan(viewer, row)) {
+  // As for a view: one statement that counts only a post the viewer may see.
+  const row = await plans.takeDownload(planId, viewer);
+  if (!row) {
     return fail("not-found", PLAN_NOT_FOUND);
   }
-  await plans.writeDownloads(planId, row.downloads + 1);
   return ok({ name: row.name, plan: row.plan });
 }
 

@@ -8,24 +8,6 @@ export const COMMUNITY_DB_DOWN_MESSAGE =
   "The community database is not responding. Try again in a few minutes.";
 
 /**
- * PGRST204 / 42703: the table predates a column this build reads or writes.
- * Re-running supabase/schema.sql (idempotent ALTERs) fixes it.
- */
-export function isMissingColumnError(error: { code?: string } | null | undefined): boolean {
-  return error?.code === "PGRST204" || error?.code === "42703";
-}
-
-export function communityStorageErrorMessage(
-  error: { code?: string; message?: string } | null,
-  fallback: string,
-): string {
-  if (error?.code === "PGRST204" || error?.code === "42703") {
-    return "Community storage is out of date: re-run the latest supabase/schema.sql in the Supabase SQL editor.";
-  }
-  return error?.message ?? fallback;
-}
-
-/**
  * What the library's sync strip says when a query failed: the database-down
  * line when it could not be reached, else the route's own sentence. The
  * schema is the migration runner's, so a missing table is a broken deploy,

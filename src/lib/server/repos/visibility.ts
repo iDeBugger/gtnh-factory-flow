@@ -13,15 +13,10 @@ interface EqFilter {
   eq(column: string, value: unknown): unknown;
 }
 
-/** Narrows a query of `community_plans` to the published posts: the public shelf. */
-export function publicPlans<T extends EqFilter>(query: T): T {
-  // PostgREST's builders return themselves; the cast keeps the caller's type
-  // without making the compiler expand the builder's generics.
-  return query.eq("is_public", true) as T;
-}
-
 /** Narrows a query of `blueprints` to the published ones: the public shelf. */
 export function publicBlueprints<T extends EqFilter>(query: T): T {
+  // PostgREST's builders return themselves; the cast keeps the caller's type
+  // without making the compiler expand the builder's generics.
   return query.eq("is_public", true) as T;
 }
 
