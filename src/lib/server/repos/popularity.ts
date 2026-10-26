@@ -30,7 +30,7 @@ export async function publicPlanPage(
     .order("id", { ascending: true })
     .range(offset, offset + limit - 1);
   if (error) {
-    throw new Error(error.message);
+    throw new Error(error.message || "Reading the public posts failed.", { cause: error });
   }
   return (data ?? []) as PopularityPlanRow[];
 }

@@ -47,6 +47,15 @@ it("reads no rows as an empty page", async () => {
 });
 
 it("throws when the database does not answer, so the sweep keeps its last ranking", async () => {
-  db.range.mockResolvedValue({ data: null, error: { message: "upstream request timeout" } });
-  await expect(publicPlanPage(0, 10)).rejects.toThrow("upstream request timeout");
+  const error = { message: "upstream request timeout" };
+  db.range.mockResolvedValue({ data: null, error });
+  await expect(publicPlanPage(0, 10)).rejects.toMatchObject({
+    message: "upstream request timeout",
+    cause: error,
+  });
+});
+
+it("names the read when the database's error has no message", async () => {
+  db.range.mockResolvedValue({ data: null, error: { message: "" } });
+  await expect(publicPlanPage(0, 10)).rejects.toThrow("Reading the public posts failed.");
 });
