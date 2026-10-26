@@ -28,6 +28,7 @@ import * as eventsRepo from "@/lib/server/repos/events";
 import * as votesRepo from "@/lib/server/repos/votes";
 import * as comment from "./[planId]/comments/[commentId]/route";
 import { invalidatePlanListCache } from "@/lib/server/plan-list-cache";
+import { getFileStore } from "@/lib/server/file-store";
 import * as images from "../images/[month]/[name]/route";
 
 /** The server's time budget for an uploaded plan's stats solve, set per case. */
@@ -38,6 +39,29 @@ vi.mock("@/lib/server/plan-engine", async (importOriginal) => {
   return {
     ...actual,
     solvePlanStats: (project: FactoryProject) => actual.solvePlanStats(project, statsBudget.ms),
+  };
+});
+
+/**
+ * Every key the file store is asked to remove, as asked: a case-insensitive
+ * disk (a Mac's) would remove an upper-case key's file too, so the files
+ * alone cannot show which spelling was used.
+ */
+const removedKeys = vi.hoisted(() => [] as string[]);
+vi.mock("@/lib/server/file-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/server/file-store")>();
+  return {
+    ...actual,
+    getFileStore: () => {
+      const store = actual.getFileStore();
+      return {
+        ...store,
+        remove: (bucket: Parameters<typeof store.remove>[0], keys: string[]) => {
+          removedKeys.push(...keys);
+          return store.remove(bucket, keys);
+        },
+      };
+    },
   };
 });
 
@@ -425,6 +449,27 @@ describe("a post's board photograph", () => {
       expect(refused.status).toBe(404);
     }
     expect((await getPreview(planId)).status).toBe(404);
+  });
+
+  it("goes with its post when the post is taken down through an upper-case id", async () => {
+    vi.stubEnv("COMMUNITY_ADMIN_TOKEN", "plan-access-admin-token");
+    for (const who of ["owner", undefined] as const) {
+      removedKeys.length = 0;
+      const planId = await makePlan("Shouted", true);
+      expect((await postPreview(planId, PNG, "owner")).status).toBe(200);
+      expect(await getFileStore().get("plan-previews", `${planId}.png`)).toBeDefined();
+      const loud = planId.toUpperCase();
+      const removed = await plan.DELETE(
+        request("DELETE", `/api/community/plans/${loud}`, {
+          who,
+          headers: who ? {} : { "x-admin-token": "plan-access-admin-token" },
+        }),
+        params({ planId: loud }),
+      );
+      expect(removed.status, who ?? "admin header").toBe(200);
+      expect(removedKeys, who ?? "admin header").toContain(`${planId}.png`);
+      expect(await getFileStore().get("plan-previews", `${planId}.png`), who ?? "admin header").toBeUndefined();
+    }
   });
 
   it("answers a failed account lookup as no preview, not an unhandled error", async () => {

@@ -516,10 +516,12 @@ export async function deletePlan(viewer: Viewer, planId: string): Promise<Servic
     }
   }
 
-  await plans.remove(planId);
+  const removed = await plans.remove(planId);
+  // The stored row's id names the object, whatever case the request spelled
+  // it in (`previewUploadAccess`); a uuid's stored text is lower case.
   // Best effort: a missing object (posts from before previews) is the normal case, not a failure.
   await getFileStore()
-    .remove(PLAN_PREVIEW_BUCKET, [`${planId}.png`])
+    .remove(PLAN_PREVIEW_BUCKET, [`${removed ?? planId.toLowerCase()}.png`])
     .catch(() => undefined);
   invalidatePlanListCache();
   return ok({ ok: true });

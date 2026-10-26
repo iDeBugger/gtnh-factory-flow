@@ -302,9 +302,14 @@ export async function update(
   return Number(result.numUpdatedRows) > 0;
 }
 
-/** Deletes a post (its comments and votes go with it). Throws when the delete fails. */
-export async function remove(planId: string, tx?: Tx): Promise<void> {
-  await (tx ?? getDb()).deleteFrom("community_plans").where("id", "=", planId).execute();
+/** Deletes a post (its comments and votes go with it): its stored id, or undefined when there was none. Throws when the delete fails. */
+export async function remove(planId: string, tx?: Tx): Promise<string | undefined> {
+  const row = await (tx ?? getDb())
+    .deleteFrom("community_plans")
+    .where("id", "=", planId)
+    .returning("id")
+    .executeTakeFirst();
+  return row?.id;
 }
 
 /** The release a post's stat card was computed by; undefined when the post is missing. */
