@@ -353,7 +353,7 @@ is pinned twice: by recorded statements (the lock comes first) in the route suit
 | Unshare (member remove or leave) | delete, the answer's member list | |
 | Design delete | tombstone and members delete | |
 | Comment add or delete | the comment write and one recount `update ... from (select count(*), max(created_at))` | the post `for no key update` (`plans.lockPost`) |
-| Vote | toggle, then `update ... set upvotes = (select count(*) ...), downvotes = (...) returning` | the post `for no key update` (`votes.lockParent`) |
+| Vote | read the voter's vote, toggle, then `update ... set upvotes = (select count(*) ...), downvotes = (...) returning` (two identical clicks at once cast then retract) | the post `for no key update` (`votes.lockParent`) |
 | Plan list page | the rows and `count(*)` | none: read-only `repeatable read` snapshot |
 
 Single statements, no transaction: a view or download count (`update ... + 1 ... returning`, with

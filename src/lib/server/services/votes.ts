@@ -104,9 +104,10 @@ export async function castVote(
   }
 
   const voterKey = await makeVoterKey(request, input.deviceId);
+  // A first look, for the address's limit only: what the click does is
+  // decided again under the row's lock below.
   const existing = await votes.read(target, id, voterKey);
-  const retracting = existing === input.value;
-  if (!viewer.userId && !retracting) {
+  if (!viewer.userId && existing !== input.value) {
     const perTarget = `votes:address:${saltedKey(clientAddress(request))}:${id}`;
     if (!(await checkRateLimit(perTarget, "vote-cast", VOTES_PER_ADDRESS_PER_PLAN_PER_DAY, 24 * 60 * 60))) {
       return fail("rate-limited", NETWORK_VOTES_SPENT);
@@ -115,24 +116,29 @@ export async function castVote(
 
   // The row's lock, the vote and the recount are one transaction: the votes
   // on one row land one at a time, each recount counting every vote before
-  // it, and a vote never stands without its count.
+  // it, and a vote never stands without its count. Whether the click
+  // retracts is read under that lock, so two identical clicks at once
+  // toggle twice (cast then retract) instead of both casting. A click whose
+  // first look saw the vote, and finds it retracted by its twin, casts it
+  // back unlimited: the same voter's one vote again, never a new voter.
   const counted = await withTransaction(async (tx) => {
     if (!(await votes.lockParent(target, id, tx))) {
       return undefined;
     }
+    const retracting = (await votes.read(target, id, voterKey, tx)) === input.value;
     if (retracting) {
       await votes.remove(target, id, voterKey, tx);
     } else {
       await votes.upsert(target, id, voterKey, input.value, tx);
     }
-    return votes.recount(target, id, tx);
+    return { ...(await votes.recount(target, id, tx)), retracting };
   });
   // Taken down since the access read.
   if (!counted) {
     return fail("not-found", rules.notFound);
   }
   rules.afterVote();
-  const { upvotes, downvotes } = counted;
+  const { upvotes, downvotes, retracting } = counted;
   return ok({ upvotes, downvotes, score: upvotes - downvotes, myVote: retracting ? undefined : input.value });
 }
 

@@ -311,6 +311,21 @@ describe("voting on a post", () => {
     expect(await tally(planId)).toEqual({ upvotes: 1, downvotes: 0, rowsUp: 1, rowsDown: 0 });
   });
 
+  it("takes two identical clicks at once as a toggle: cast then retract, retract then cast", async () => {
+    const planId = await makePlan("Double clicked", true);
+    const click = () => castVote(planId, { deviceId: "double", value: 1 }, { who: "stranger" });
+    const [first, second] = await Promise.all([click(), click()]);
+    expect([first.status, second.status]).toEqual([200, 200]);
+    expect(await tally(planId)).toEqual({ upvotes: 0, downvotes: 0, rowsUp: 0, rowsDown: 0 });
+    const myVotes = [(await first.json()).myVote, (await second.json()).myVote];
+    expect(myVotes.sort()).toEqual([1, undefined]);
+
+    expect((await click()).status).toBe(200);
+    const [third, fourth] = await Promise.all([click(), click()]);
+    expect([third.status, fourth.status]).toEqual([200, 200]);
+    expect(await tally(planId)).toEqual({ upvotes: 1, downvotes: 0, rowsUp: 1, rowsDown: 0 });
+  });
+
   it("writes a vote and its post's counts under the post's lock", async () => {
     const planId = await makePlan("Locked votes", true);
     const LOCK = /^select "id" from "community_plans" where "id" = \$1 for no key update$/;
