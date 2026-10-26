@@ -311,6 +311,28 @@ describe("a post's board photograph", () => {
     }
     expect((await getPreview(planId)).status).toBe(404);
   });
+
+  it("answers a failed account lookup as no preview, not an unhandled error", async () => {
+    const planId = await makePlan("Looked up", true);
+    expect((await postPreview(planId, PNG, "owner")).status).toBe(200);
+    forgetSessionUsers();
+    useInProcessLocalDb(async (request) => {
+      const url = new URL(request.url);
+      if (request.method === "GET" && url.pathname.endsWith("/community_users")) {
+        return Response.json({ message: "boom", code: "XX000", details: "", hint: "" }, { status: 500 });
+      }
+      return local.handle(request);
+    });
+    try {
+      const failed = await getPreview(planId, "stranger");
+      expect(failed.status).toBe(404);
+      expect(await failed.json()).toEqual({ error: "No preview." });
+    } finally {
+      useInProcessLocalDb(local.handle);
+      resetDbBreaker();
+    }
+    expect((await getPreview(planId, "stranger")).status).toBe(200);
+  });
 });
 
 describe("counting views", () => {

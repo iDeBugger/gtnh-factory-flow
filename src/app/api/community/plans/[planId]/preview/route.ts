@@ -97,7 +97,13 @@ export async function GET(request: Request, context: { params: Promise<{ planId:
     return none;
   }
   const { planId } = await context.params;
-  const access = await previewAccess(await readViewer(request), planId);
+  // A failed account lookup answers as every other failure here does: a
+  // picture's request has no use for an error body, and none reveals nothing.
+  const viewer = await readViewer(request).catch(() => undefined);
+  if (!viewer) {
+    return none;
+  }
+  const access = await previewAccess(viewer, planId);
   if (!access.ok) {
     return none;
   }
