@@ -243,8 +243,10 @@ node tools/dataset-pipeline/scripts/build-datasets.mjs all --export   # build bo
 tools/deploy/publish-datasets.sh stage local-2.9.0-rc-2 local-2.8.1
 ```
 
-The datasets are built only by `build-datasets.mjs` (`tools/dataset-pipeline/CLAUDE.md`, Build and publish): it
-exports in Docker, rebuilds, and installs a version only when the checks below would pass.
+The datasets are built only by `build-datasets.mjs` (`tools/dataset-pipeline/CLAUDE.md`, Build and publish: what a
+fresh clone needs first, memory, disk, network and run times, and recovering from a failed export). It exports in
+Docker, rebuilds, installs a version only when the checks below would pass, and points the power maps
+(`src/lib/power/data`) at what it installed: commit those maps with the publish.
 
 Publishing copies from this checkout's `public/datasets/gtnh` into `/srv/gtnh/datasets`, in the pipeline's
 order (`tools/dataset-pipeline/CLAUDE.md`):
