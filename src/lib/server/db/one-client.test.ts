@@ -14,7 +14,8 @@ import { describe, expect, it } from "vitest";
 const ROOT = path.resolve(__dirname, "../../../..");
 const SKIPPED_DIRECTORIES = new Set(["node_modules", ".next", "scratch", "dist-live", "dist-db"]);
 const THIS_FILE = "src/lib/server/db/one-client.test.ts";
-const NAMES = [/postgrest/i, /getCommunityDb/, /LOCAL_DB_URL/, /@supabase/];
+// `db/rest.ts` was the PostgREST client's module: a note naming it sends the reader nowhere.
+const NAMES = [/postgrest/i, /getCommunityDb/, /LOCAL_DB_URL/, /@supabase/, /db\/rest\.ts/];
 
 const EXCEPTIONS: Record<string, string> = {
   // A server's .env still holding PostgREST's variables is refused by name.
