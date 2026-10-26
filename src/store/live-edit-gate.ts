@@ -13,6 +13,7 @@
  */
 
 let quietDepth = 0;
+let screenOnlyDepth = 0;
 
 /** Runs `change` with its project changes not counted as edits. */
 export function quietly<T>(change: () => T): T {
@@ -26,6 +27,24 @@ export function quietly<T>(change: () => T): T {
 
 export function isQuietChange(): boolean {
   return quietDepth > 0;
+}
+
+/**
+ * A quiet change to the plan already on the canvas, made on this screen only (the recipe refresh re-keying a card's
+ * recipe), as opposed to a plan landing. Live editing moves the base of edits made away from a room by it, so it is
+ * never sent as anyone's edit.
+ */
+export function quietlyOnThisScreen<T>(change: () => T): T {
+  screenOnlyDepth += 1;
+  try {
+    return quietly(change);
+  } finally {
+    screenOnlyDepth -= 1;
+  }
+}
+
+export function isScreenOnlyChange(): boolean {
+  return screenOnlyDepth > 0;
 }
 
 export interface LiveUndoHandler {

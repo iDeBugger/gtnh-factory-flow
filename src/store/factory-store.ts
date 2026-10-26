@@ -63,7 +63,7 @@ import {
   type RateUnit,
 } from "@/lib/model/rate-unit";
 import { registerBooksSink, solveBooks } from "./solve-books";
-import { liveUndoHandler, quietly } from "./live-edit-gate";
+import { liveUndoHandler, quietly, quietlyOnThisScreen } from "./live-edit-gate";
 import { applyOps, type LiveOp } from "@/lib/live/ops";
 import { applyEdgeInputOverride } from "@/lib/model/edge-input-overrides";
 import {
@@ -1446,7 +1446,7 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
       return undefined;
     }
   },
-  refreshProjectRecipes: (recipes, migration = {}, options = {}) => quietly(() => {
+  refreshProjectRecipes: (recipes, migration = {}, options = {}) => quietlyOnThisScreen(() => {
     let revoked: RevokedSubstitute[] = [];
     let deferred: Recipe[] = [];
     setPresentation((state) => {

@@ -204,10 +204,38 @@ changes nothing until then. Architecture and protocol: `docs/live.md`.
   link, library copy) is created in the account at once (`library-sync.ts`: a new unsynced design runs a sync with no
   quiet period, `markDesignFresh`), and it joins its live room as soon as the row exists. A plan made moments ago takes the
   canvas over the account's first snapshot once (`Room.fresh`/`seed`): the account read the saved record, which can be
-  behind the canvas; nothing else ever lets the canvas overrule a snapshot. No timer pushes a plan open live.
+  behind the canvas; apart from that and the edits made away from the room (below), the canvas never overrules a
+  snapshot. No timer pushes a plan open live.
 - SHARING NOTICES. The service's `shared` frame (to every socket of an added account, in the room or not) shows the notice
   with Open and refreshes the account list; `unshared` refreshes it (the sync drops copies no longer listed). Each plan is
   announced once a session (the service may repeat one); an `unshared` lets the next share be announced.
+- EDITS AWAY FROM THE ROOM. An edit to a plan the account holds while this tab has no room open for it (signed-in
+  user not known yet, the service refused the plan) keeps the plan as it stood before as the base (`keepDetachedBase`,
+  the first only). The base lives in IndexedDB only (beside the pending batches, never listed with them): every tab
+  reads it there, and the room that uses it takes it in the transaction that stores the batches made of it, so no
+  second tab sends them. Before joining, a room puts what was left for it in front of what it holds: a closed tab's
+  batches (oldest), then base-to-canvas as this person's edit, then edits made since the room was made. At the first
+  snapshot the recipes their cards name that the live plan lacks go as batches of their own in front of them
+  (`withRecipesTheyName`); the stored batches keep their ids and ops, so a crash never applies one twice. The wait
+  for storage is bounded (3 s): past it the room joins, and what arrives later lands against the view at that moment
+  and is sent at once, after everything the room already sent and before any later edit. Base writes run in turn per
+  design (keep, shift, move, take, forget). Every edit made while no room is open checks storage with one small
+  transaction (edits made while one waits its turn share it), so the edit right after another tab took the base
+  keeps a new one; nothing about the base is cached in memory. A screen-only change (the recipe refresh, `quietlyOnThisScreen`) moves the base
+  with it, so it is never sent. A pull of a newer account copy puts the same edits on top of it (same recipe guard),
+  and the base moves to the pulled plan only once the merged record is written; a push with the plan moves it; a
+  push without it (409 live) does not. The account sync waits at most 2 s for the live store: a design whose base it
+  cannot read waits for the next run, the others go on. Deleting a design forgets its base (bounded too), and a new
+  copy of a shared plan starts with none. Without live configured no base is kept and a pull is the account's plan,
+  as before. Known limits: a field edited away from the room and by someone else since takes whichever arrives last,
+  with no notice, however long ago it was made (the same as two live edits); a push of a newer local copy is last
+  writer wins over live edits already flushed to the account; edits made between the room's making and its first
+  snapshot leave undo when a plan made moments ago takes its snapshot over; the base is one per design, not per tab:
+  another open tab's pending batches go before this tab's edits away from the room even when they are newer, and a
+  plan reloaded from another tab's save while no room is open leaves the base where it was, so that tab's edits go
+  again as this person's (the same values), and edits a tab has not autosaved yet when another tab's room takes the
+  base are lost (that room's canvas lacks them; the window is one autosave wait). Exam: `live-session.test.ts`, `library-sync-live.test.ts`,
+  `src/lib/live/live-pending-store.test.ts` (real IndexedDB through fake-indexeddb).
 - ACCOUNT SYNC never sends the body of a plan open live, here or in another tab (`isDesignOpenLive`, a localStorage
   mark refreshed while open), and a pull of one moves only its metadata. A push answered 409 `{ live: true }` goes
   again without the plan: not an error, not a conflict copy. Copies of shared plans are never pushed as ours; the
