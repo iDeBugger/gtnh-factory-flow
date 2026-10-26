@@ -139,6 +139,15 @@ describe("the order helpers", () => {
     expect(neiItemOrderFromExport(undefined)).toBeUndefined();
   });
 
+  it("keep the export's order as is, so a collapsible group the oracle put together stays together", () => {
+    // The oracle moves a group's members (cells of several mods) to the first member's place.
+    const stacks = ["item:minecraft:stone", "item:ic2:itemcellempty", "item:gregtech:gt.metaitem.01@30", "item:gregtech:gt.metaitem.01@31", "item:gregtech:gt.blockores"];
+    const records = stacks.map((key) => ({ kind: "item", id: key.slice("item:".length) })).reverse();
+    const order = resourceOrderFor(records, neiItemOrderFromExport({ status: "exported", stacks }));
+    const placed = records.map((record, index) => [order[index], record.id]).sort((left, right) => left[0] - right[0]);
+    expect(placed.map(([, id]) => `item:${id}`)).toEqual(stacks);
+  });
+
   it("place records by kind and id", () => {
     expect(
       resourceOrderFor(

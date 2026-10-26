@@ -159,8 +159,10 @@ published RC-2 still does; `scripts/carry-recipe-ids.mjs` maps ids between such 
   load does with NEI's own code: `NEIClientConfig.bootNEI()` and a wait for the plugin thread (plugins hide items and
   add variants; `ItemInfo` fills the owners the `mod` rule reads), NEI's `getPermutations` per registry item, the
   registry-order numbering into `ItemSorter`'s `default` rule, `ItemStackSet` for duplicates, `ItemSorter.sort`. It
-  runs last, after every domain, so nothing else sees NEI half booted. Collapsible groups are not applied: a group
-  stands where its first stack stands. `-Dgtnh.oracle.neiItemList=false` skips it;
+  runs last, after every domain, so nothing else sees NEI half booted. Then NEI's collapsible groups, as both NEI
+  versions apply them after the sort (`updateOrdering` and the panel's stable sort by it): every member of a group
+  moves to the group's first member's place, in sorted order, expanded or collapsed (`NeiOrdering.groupOrdered`,
+  exam `NeiOrderingTest`). `-Dgtnh.oracle.neiItemList=false` skips it;
   `gtnh.oracle.neiBootTimeoutSeconds` (900) bounds the wait.
 - Per pack, by what the classes have, never by a version check: 2.9's NEI (2.8.155-GTNH) has `getPermutations`
   static on `ItemListLoader` and lists fluids as `neiFluidDisplay` stacks (`StackInfo.isFluidDisplayItem`, mapped to

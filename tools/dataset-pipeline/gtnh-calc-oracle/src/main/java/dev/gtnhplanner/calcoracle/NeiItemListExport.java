@@ -27,8 +27,10 @@ import java.util.Map;
  * and waits for the plugin thread; it collects each registry item's stacks through NEI's own
  * {@code getPermutations}, numbers them in registry order into {@code ItemSorter}'s "default"
  * ordering, drops duplicates through NEI's {@code ItemStackSet}, and sorts with
- * {@code ItemSorter.sort}. Collapsible groups are not applied: a group sits where its first
- * stack sits, so the order of stacks is the same.
+ * {@code ItemSorter.sort}. Then it applies NEI's collapsible groups as both NEI versions do after
+ * that sort ({@code updateOrdering}, then the panel's stable sort by it): every member of a group
+ * moves to the group's first member's place, the members in their sorted order, whether the
+ * group is shown expanded or collapsed (NeiOrdering.groupOrdered).
  *
  * <p>Per pack: 2.9's NEI (2.8.155-GTNH) keeps {@code getPermutations} static on
  * {@code ItemListLoader} and lists fluids as {@code neiFluidDisplay} stacks
@@ -69,9 +71,10 @@ final class NeiItemListExport {
         }
         try {
             bootNei(config);
-            List<ItemStack> items = gatherItems();
+            List<ItemStack> sortedItems = gatherItems();
             Class<?> sorter = Class.forName("codechicken.nei.ItemSorter");
-            sorter.getMethod("sort", List.class).invoke(null, items);
+            sorter.getMethod("sort", List.class).invoke(null, sortedItems);
+            List<ItemStack> items = groupOrdered(sortedItems);
             Object sortList = sorter.getField("list").get(null);
             String sortString = String.valueOf(sorter.getMethod("getSaveString", List.class).invoke(null, sortList));
 
@@ -114,6 +117,27 @@ final class NeiItemListExport {
             adapters.add(exporter.adapter("nei-item-list", "failed", true, 0, 0, started, String.valueOf(cause)));
         }
         return out;
+    }
+
+    /**
+     * The panel's order: CollapsibleItems indexed over the list as NEI indexes it
+     * (clearCache, putItem per stack; load ran on the plugin thread), then each stack at its
+     * group's first place. Public statics in both NEI versions.
+     */
+    private static List<ItemStack> groupOrdered(List<ItemStack> sorted) throws Exception {
+        Class<?> groups = Class.forName("codechicken.nei.CollapsibleItems");
+        groups.getMethod("clearCache").invoke(null);
+        Method putItem = groups.getMethod("putItem", ItemStack.class);
+        for (ItemStack stack : sorted) {
+            putItem.invoke(null, stack);
+        }
+        final Method groupIndex = groups.getMethod("getGroupIndex", ItemStack.class);
+        return NeiOrdering.groupOrdered(sorted, new NeiOrdering.GroupOf<ItemStack>() {
+            @Override
+            public int groupIndex(ItemStack stack) throws Exception {
+                return ((Integer) groupIndex.invoke(null, stack)).intValue();
+            }
+        });
     }
 
     /** NEI's boot as a world load runs it, then the plugin thread's end (it sets pluginNEIConfigLoaded last). */
