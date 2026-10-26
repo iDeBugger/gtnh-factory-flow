@@ -36,6 +36,8 @@ export const CC = {
   canvasDot: "#26282D",
   /** The text colour of a prompt in its off half-beat. */
   promptOff: "#6F737C",
+  /** The outline on a card reached from a machine list (`card-flash.ts`). */
+  flash: "#F2F4F8",
 } as const;
 
 /** Geometry in CSS px at zoom 1: the mod's card exactly, 320 wide (16 cells), 112 rails, 32 icons; rows stay two cells. */
