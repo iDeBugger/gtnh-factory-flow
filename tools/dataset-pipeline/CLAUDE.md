@@ -234,7 +234,9 @@ Nothing the app shows may follow that order:
 
 - The catalog's record for an id (name, icon, NBT tooltip, the search text) is NEI's first listed stack for that
   item and meta: the oracle writes each item key's first stack beside the list (`neiItemList.firstStacks`, with its
-  NBT, name and icon), and `applyNeiStandIns` lays it over the record. An item NEI does not list takes the stack
+  NBT, name, and the icon the export already drew for that exact stack: nothing new is drawn for the list, since
+  drawing every first stack crashed llvmpipe on 2.8.1's Draconic armour), and `applyNeiStandIns` lays it over the
+  record, keeping the record's icon where the first stack has none. An item NEI does not list takes the stack
   with no NBT, else the smallest NBT string, then the smaller name (`compareStandIns`); an icon that stack lacks
   comes from the best-ranked stack that has one. `build-resource-index.mjs` names each `resourceIndex` record after
   the catalog, never after the first recipe slot, and orders equal recipe counts by key.
