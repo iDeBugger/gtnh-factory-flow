@@ -3208,6 +3208,15 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
 
     @Override
     public Map<String, Object> itemStack(ItemStack stack) {
+        return itemStack(stack, true);
+    }
+
+    /** A stack as {@link #itemStack(ItemStack)} writes it, with an icon only where one was already queued. */
+    Map<String, Object> itemStackWithKnownIcon(ItemStack stack) {
+        return itemStack(stack, false);
+    }
+
+    private Map<String, Object> itemStack(ItemStack stack, boolean render) {
         if (stack == null || stack.getItem() == null || stack.stackSize <= 0) {
             return null;
         }
@@ -3232,7 +3241,7 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
         if (stack.stackTagCompound != null) {
             item.put("nbt", stack.stackTagCompound.toString());
         }
-        String icon = ItemStackIconExporter.captureIcon(stack);
+        String icon = render ? ItemStackIconExporter.captureIcon(stack) : ItemStackIconExporter.knownIcon(stack);
         if (icon != null && icon.length() > 0) {
             item.put("icon", icon);
         }

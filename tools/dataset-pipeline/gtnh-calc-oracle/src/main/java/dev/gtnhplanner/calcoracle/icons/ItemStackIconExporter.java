@@ -14,13 +14,22 @@ public final class ItemStackIconExporter {
     private ItemStackIconExporter() {}
 
     public static String captureIcon(ItemStack stack) {
+        return call("captureIcon", stack);
+    }
+
+    /** The icon an earlier capture queued for this stack, or null; queues nothing. */
+    public static String knownIcon(ItemStack stack) {
+        return call("knownIcon", stack);
+    }
+
+    private static String call(String name, ItemStack stack) {
         if (stack == null || !Boolean.getBoolean("gtnh.oracle.renderIcons")) {
             return null;
         }
 
         try {
             Class<?> renderer = Class.forName("dev.gtnhplanner.calcoracle.icons.ClientItemStackIconRenderer");
-            Method method = renderer.getMethod("captureIcon", ItemStack.class);
+            Method method = renderer.getMethod(name, ItemStack.class);
             Object value = method.invoke(null, stack);
             return value instanceof String ? (String) value : null;
         } catch (InvocationTargetException e) {

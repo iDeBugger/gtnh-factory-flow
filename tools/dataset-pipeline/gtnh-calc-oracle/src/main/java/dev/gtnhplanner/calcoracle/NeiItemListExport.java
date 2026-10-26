@@ -134,12 +134,15 @@ final class NeiItemListExport {
         return out;
     }
 
-    /** A listed stack as the export writes every stack (one of it), or null where it cannot be read. */
+    /**
+     * A listed stack as the export writes every stack (one of it), or null where it cannot be read. Its icon is the
+     * one the export already drew for that stack, if any: nothing new is drawn for the list.
+     */
     private Map<String, Object> firstStack(ItemStack stack) {
         try {
             ItemStack one = stack.copy();
             one.stackSize = 1;
-            return exporter.itemStack(one);
+            return exporter.itemStackWithKnownIcon(one);
         } catch (Throwable t) {
             return null;
         }

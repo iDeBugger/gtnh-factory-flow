@@ -110,6 +110,23 @@ public final class ClientItemStackIconRenderer {
         }
     }
 
+    /**
+     * The icon a capture already queued for this stack, or null. Queues nothing: NEI's first listed stacks
+     * (NeiItemListExport) take an icon only where the export drew that stack anyway, since a stack drawn for nothing
+     * else crashed llvmpipe (Draconic Evolution's armour renderer on 2.8.1).
+     */
+    public static String knownIcon(ItemStack stack) {
+        if (stack == null || stack.getItem() == null) {
+            return null;
+        }
+        try {
+            String direct = existingIconFilename(stackKey(stack));
+            return direct != null ? direct : existingIconFilename(stackKey(renderableStack(stack)));
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     private static ItemStack renderableStack(ItemStack stack) {
         ItemStack renderStack = stack.copy();
         renderStack.stackSize = 1;
