@@ -69,6 +69,15 @@ function docker(args) {
 function startPostgresContainer() {
   const running = docker(["container", "inspect", "-f", "{{.State.Running}}", CONTAINER]);
   if (running.status !== 0) {
+    const image = composePostgresImage();
+    if (docker(["image", "inspect", image]).status !== 0) {
+      // A first pull can take minutes: no time limit, and its progress shows.
+      console.log(`[dev-local] pulling ${image} (once)`);
+      const pulled = spawnSync("docker", ["pull", image], { stdio: "inherit" });
+      if (pulled.status !== 0) {
+        throw new Error(`docker pull ${image} failed`);
+      }
+    }
     const made = docker([
       "run",
       "--detach",
@@ -81,7 +90,7 @@ function startPostgresContainer() {
       "POSTGRES_HOST_AUTH_METHOD=trust",
       "--volume",
       `${CONTAINER}:/var/lib/postgresql/data`,
-      composePostgresImage(),
+      image,
     ]);
     if (made.status !== 0) {
       throw new Error(`docker run failed: ${made.stderr.trim()}`);
@@ -211,41 +220,53 @@ process.on("SIGTERM", () => void stop(0));
 // What `npm run dev` does first (its predev script).
 spawnSync(process.execPath, ["tools/copy-highs-wasm.mjs"], { cwd: root, stdio: "inherit" });
 
-const dbEnv = { LOCAL_DB_PORT: String(dbPort), LOCAL_DB_PG_PORT: String(pgPort) };
-if (dockerAnswers()) {
-  startedContainer = startPostgresContainer();
-  dbEnv.LOCAL_DB_POSTGRES_URL = directUrl;
-  console.log(`[dev-local] Postgres in Docker (${CONTAINER}) on 127.0.0.1:${pgPort}`);
-} else {
-  // The PGlite socket allows 4 connections: 2 each for Next and the live
-  // service, released after a second idle so the other can take its turn.
-  Object.assign(shared, { DATABASE_POOL_MAX: "2", DATABASE_POOL_IDLE_MS: "1000" });
-  const why = process.env.LOCAL_DB_PGLITE === "1" ? "LOCAL_DB_PGLITE=1" : "Docker is not answering";
-  console.log(
-    `[dev-local] ${why}: the direct client uses PGlite's socket on 127.0.0.1:${pgPort}, ` +
-      "which is not isolated under concurrent queries. Start Docker for a real Postgres.",
+// A failed start (the container, a service that never answers) stops what
+// it already started, the container included, rather than leaving it running.
+try {
+  const dbEnv = { LOCAL_DB_PORT: String(dbPort), LOCAL_DB_PG_PORT: String(pgPort) };
+  if (dockerAnswers()) {
+    startedContainer = startPostgresContainer();
+    dbEnv.LOCAL_DB_POSTGRES_URL = directUrl;
+    console.log(`[dev-local] Postgres in Docker (${CONTAINER}) on 127.0.0.1:${pgPort}`);
+  } else {
+    // The PGlite socket allows 4 connections: 2 each for Next and the live
+    // service, released after a second idle so the other can take its turn.
+    Object.assign(shared, { DATABASE_POOL_MAX: "2", DATABASE_POOL_IDLE_MS: "1000" });
+    const why =
+      process.env.LOCAL_DB_PGLITE === "1" ? "LOCAL_DB_PGLITE=1" : "Docker is not answering";
+    console.log(
+      `[dev-local] ${why}: the direct client uses PGlite's socket on 127.0.0.1:${pgPort}, ` +
+        "which is not isolated under concurrent queries. Start Docker for a real Postgres.",
+    );
+  }
+
+  start("local-db", [bin.tsx, "tools/local-db/serve.ts"], dbEnv);
+  await waitFor(
+    `${dbUrl}/rest/v1/community_users?select=id&limit=1`,
+    "The local database",
+    120_000,
   );
-}
 
-start("local-db", [bin.tsx, "tools/local-db/serve.ts"], dbEnv);
-await waitFor(`${dbUrl}/rest/v1/community_users?select=id&limit=1`, "The local database", 120_000);
+  if (existsSync(path.join(root, "src", "live", "main.ts"))) {
+    start("live", [bin.tsx, "src/live/main.ts"], {
+      ...shared,
+      LIVE_PORT: String(livePort),
+      LIVE_JOURNAL_DIR: path.join(root, "scratch", "local-db", "live-journal"),
+      LIVE_ALLOWED_ORIGINS: `http://localhost:${webPort},http://127.0.0.1:${webPort}`,
+    });
+  }
 
-if (existsSync(path.join(root, "src", "live", "main.ts"))) {
-  start("live", [bin.tsx, "src/live/main.ts"], {
+  start("next", [bin.next, "dev", "--port", String(webPort)], {
     ...shared,
-    LIVE_PORT: String(livePort),
-    LIVE_JOURNAL_DIR: path.join(root, "scratch", "local-db", "live-journal"),
-    LIVE_ALLOWED_ORIGINS: `http://localhost:${webPort},http://127.0.0.1:${webPort}`,
+    NEXT_PUBLIC_LIVE_URL: `ws://localhost:${livePort}/live`,
+    // Board images and plan previews.
+    FILE_STORE_DIR: path.join(root, "scratch", "local-db", "files"),
+    // The origin uploaded board images and other absolute links name.
+    NEXT_PUBLIC_SITE_URL: `http://localhost:${webPort}`,
   });
+
+  console.log(`[dev-local] http://localhost:${webPort} with the local database at ${dbUrl}`);
+} catch (error) {
+  console.error(`[dev-local] could not start: ${error instanceof Error ? error.message : error}`);
+  await stop(1);
 }
-
-start("next", [bin.next, "dev", "--port", String(webPort)], {
-  ...shared,
-  NEXT_PUBLIC_LIVE_URL: `ws://localhost:${livePort}/live`,
-  // Board images and plan previews.
-  FILE_STORE_DIR: path.join(root, "scratch", "local-db", "files"),
-  // The origin uploaded board images and other absolute links name.
-  NEXT_PUBLIC_SITE_URL: `http://localhost:${webPort}`,
-});
-
-console.log(`[dev-local] http://localhost:${webPort} with the local database at ${dbUrl}`);
