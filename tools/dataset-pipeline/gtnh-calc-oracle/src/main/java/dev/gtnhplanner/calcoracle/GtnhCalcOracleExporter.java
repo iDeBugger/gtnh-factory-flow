@@ -213,6 +213,7 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
         }
 
         domain.put("entries", entries);
+        domain.put("unificationTargets", oreUnificationTargets());
         adapters.add(adapter("ore-dictionary", "computed", true, entries.size(), stackCount, started, null));
         return domain;
     }
@@ -3123,6 +3124,42 @@ public final class GtnhCalcOracleExporter implements MiningContext, MachineDataC
         }
         alternatives.add(self);
         return alternatives;
+    }
+
+    /**
+     * Each ore dictionary tag's GregTech unification target (the stack GregTech turns every member
+     * into), by resource id: the member a tag's slot shows first. GTOreDictUnificator in 2.9,
+     * GT_OreDictUnificator in 2.8.1; a tag GregTech does not unify has none.
+     */
+    private Map<String, Object> oreUnificationTargets() {
+        Map<String, Object> targets = new java.util.TreeMap<String, Object>();
+        Map<String, ItemStack> byName = null;
+        for (String className : new String[] {"gregtech.api.util.GTOreDictUnificator", "gregtech.api.util.GT_OreDictUnificator"}) {
+            try {
+                java.lang.reflect.Field field = Class.forName(className).getDeclaredField("sName2StackMap");
+                field.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                Map<String, ItemStack> map = (Map<String, ItemStack>) field.get(null);
+                byName = map;
+                break;
+            } catch (Throwable ignored) {
+            }
+        }
+        if (byName == null) {
+            return targets;
+        }
+        for (Map.Entry<String, ItemStack> entry : byName.entrySet()) {
+            ItemStack stack = entry.getValue();
+            if (entry.getKey() == null || stack == null || stack.getItem() == null) {
+                continue;
+            }
+            String registryId = String.valueOf(Item.itemRegistry.getNameForObject(stack.getItem()));
+            if (registryId == null || "null".equals(registryId)) {
+                continue;
+            }
+            targets.put(entry.getKey(), itemResourceId(registryId, stack.getItemDamage()));
+        }
+        return targets;
     }
 
     private boolean unifiedStacksMethodResolved;

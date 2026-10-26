@@ -64,6 +64,21 @@ export function neiItemOrderFromExport(neiItemList) {
   return order.length > 0 ? order : undefined;
 }
 
+/**
+ * NEI's first listed stack of each item, keyed `item:<id>[@meta]`, from the export's
+ * `firstStacks` (the oracle writes each listed key's first stack with its NBT, name and icon).
+ * The catalog shows that stack for the item, as NEI's panel does. Empty without the list.
+ */
+export function neiFirstStacksFromExport(neiItemList) {
+  const stacks = new Map();
+  for (const stack of Array.isArray(neiItemList?.firstStacks) ? neiItemList.firstStacks : []) {
+    if (stack?.kind !== "item" || typeof stack.id !== "string") continue;
+    const key = `item:${stack.id}`;
+    if (!stacks.has(key)) stacks.set(key, stack);
+  }
+  return stacks;
+}
+
 /** `resourceOrder` for a `resourceIndex`, or undefined when the dataset has no `neiItemOrder`. */
 export function resourceOrderFor(resourceIndex, neiItemOrder) {
   if (!Array.isArray(neiItemOrder) || neiItemOrder.length === 0) {

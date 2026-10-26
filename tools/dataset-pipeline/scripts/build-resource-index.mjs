@@ -46,7 +46,7 @@ if (!resourceOrder) {
 /**
  * The order of an earlier build, for an export without NEI's list: this version's own last
  * build (its resource-index.json.gz, not yet overwritten), then GTNH_PREVIOUS_DATASET_DIR (the
- * dataset generate-dataset reused icons from). GTNH_NEI_ORDER_CARRY=0 turns it off.
+ * installed copy build-datasets.mjs mounts). GTNH_NEI_ORDER_CARRY=0 turns it off.
  */
 async function carriedNeiItemOrder() {
   if (process.env.GTNH_NEI_ORDER_CARRY === "0") {
@@ -182,11 +182,14 @@ function buildResourceIndex(dataset) {
         continue;
       }
 
+      // The catalog's stand-in (normalize-oracle-export.mjs, chosen by rule) names the record; a
+      // recipe slot's own name, NBT or choices fill in only what the catalog lacks, since which
+      // slot comes first follows the order the export met the recipes in.
       const indexed = resourcesByKey.get(key);
       index.set(key, {
         kind: resource.kind,
         id: resource.id,
-        displayName: resource.displayName ?? indexed?.displayName,
+        displayName: indexed?.displayName ?? resource.displayName,
         iconPath: currentIconPath(resource.iconPath, indexed?.iconPath),
         iconAtlas: indexed?.iconAtlas ?? resource.iconAtlas,
         dominantColor:
@@ -195,19 +198,24 @@ function buildResourceIndex(dataset) {
           indexed?.iconAtlas?.dominantColor ??
           resource.iconAtlas?.dominantColor,
         recipeCount: 1,
-        tooltip: resource.tooltip ?? indexed?.tooltip,
-        oreDictionary: resource.oreDictionary ?? indexed?.oreDictionary,
-        alternatives: resource.alternatives ?? indexed?.alternatives,
+        tooltip: indexed ? indexed.tooltip : resource.tooltip,
+        oreDictionary: indexed?.oreDictionary ?? resource.oreDictionary,
+        alternatives: indexed?.alternatives ?? resource.alternatives,
       });
     }
   }
 
-  return [...index.values()].sort((left, right) => right.recipeCount - left.recipeCount);
+  // Busiest first; equal counts by key, never by the order the recipes came in.
+  return [...index.values()].sort(
+    (left, right) =>
+      right.recipeCount - left.recipeCount ||
+      (`${left.kind}:${left.id}` < `${right.kind}:${right.id}` ? -1 : 1),
+  );
 }
 
 function mergeResourceIcon(target, resource, indexed) {
   if (!target.displayName) {
-    target.displayName = resource.displayName ?? indexed?.displayName;
+    target.displayName = indexed?.displayName ?? resource.displayName;
   }
   if (!target.iconPath) {
     target.iconPath = currentIconPath(resource.iconPath, indexed?.iconPath);
@@ -223,13 +231,13 @@ function mergeResourceIcon(target, resource, indexed) {
       resource.iconAtlas?.dominantColor;
   }
   if (!target.oreDictionary) {
-    target.oreDictionary = resource.oreDictionary ?? indexed?.oreDictionary;
+    target.oreDictionary = indexed?.oreDictionary ?? resource.oreDictionary;
   }
-  if (!target.tooltip) {
-    target.tooltip = resource.tooltip ?? indexed?.tooltip;
+  if (!target.tooltip && !indexed) {
+    target.tooltip = resource.tooltip;
   }
   if (!target.alternatives) {
-    target.alternatives = resource.alternatives ?? indexed?.alternatives;
+    target.alternatives = indexed?.alternatives ?? resource.alternatives;
   }
 }
 

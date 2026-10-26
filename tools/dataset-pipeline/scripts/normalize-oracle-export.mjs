@@ -4,7 +4,8 @@ import crypto from "node:crypto";
 import { existsSync } from "node:fs";
 import { writeDatasetJson } from "./dataset-json-writer.mjs";
 import { recipeMapAmperage } from "./recipe-map-amperage.mjs";
-import { neiItemOrderFromExport, neiSortProblem } from "./nei-item-order.mjs";
+import { neiFirstStacksFromExport, neiItemOrderFromExport, neiSortProblem } from "./nei-item-order.mjs";
+import { compareStandIns, orderCropDrops, orderOreMembers } from "./stand-in-order.mjs";
 import { spargeRolledOutputs } from "./sparge-byproducts.mjs";
 import { stageRenderedIcons as stageIconsOnWorkers } from "./stage-rendered-icons.mjs";
 import {
@@ -51,6 +52,9 @@ const singleblockFamilyIds = new Set((findDomain("gregtech")?.recipeMaps ?? []).
 const renderedIcons = await stageRenderedIcons(renderedIconDir, outDir);
 
 const resources = new Map();
+// Per catalog key: the stack standing for it, and the best-ranked stack with an icon (addResource).
+const standIns = new Map();
+const standInIcons = new Map();
 const recipes = [];
 const recipeMaps = new Set();
 const recipeMapIcons = new Map();
@@ -140,6 +144,20 @@ const VOLATILE_RECIPE_FIELDS = new Set([
 const TANK_MACHINE_TYPE = "Tank";
 let tankIconFallback;
 const oreDictionaryAlternativesByName = new Map();
+// NEI's order and its first listed stack per item, before the domains: every stand-in below is
+// chosen by them (standInOrder), never by the order the export walked the game's hash maps.
+const neiItemOrder = neiItemOrderFromExport(raw.neiItemList);
+if (raw.neiItemList?.status === "exported" && neiSortProblem(raw.neiItemList)) {
+  console.warn(`WARNING: ${neiSortProblem(raw.neiItemList)} The dataset gets no NEI order.`);
+}
+const neiPlace = new Map((neiItemOrder ?? []).map((key, index) => [key, index]));
+const neiFirstStacks = neiFirstStacksFromExport(neiItemOrder ? raw.neiItemList : undefined);
+const oreUnificationTargets = Object.fromEntries(
+  Object.entries(findDomain("oreDictionary")?.unificationTargets ?? {}).map(([name, id]) => [
+    name,
+    canonicalResourceId("item", String(id)),
+  ]),
+);
 const oreDictionary = normalizeOreDictionary(findDomain("oreDictionary")?.entries ?? {});
 
 normalizeGregtech(findDomain("gregtech"));
@@ -153,10 +171,7 @@ normalizeMobDrops(findDomain("mobDrops"));
 normalizeMining(findDomain("mining"));
 overrideFurnaceRecipeMapIcon();
 assignContentRecipeIds();
-const neiItemOrder = neiItemOrderFromExport(raw.neiItemList);
-if (raw.neiItemList?.status === "exported" && neiSortProblem(raw.neiItemList)) {
-  console.warn(`WARNING: ${neiSortProblem(raw.neiItemList)} The dataset gets no NEI order.`);
-}
+applyNeiStandIns();
 
 const dataset = {
   schemaVersion: 1,
@@ -955,6 +970,7 @@ function normalizeForestryBees(domain) {
     setRecipeMapIcon(
       machineType,
       species.input ?? species.products?.[0]?.resource ?? species.specialty?.[0]?.resource,
+      { ordered: true },
     );
     addRecipe({
       id: recipeId("forestry-bee", species.uid ?? species.name ?? hashRecipe(species)),
@@ -1318,6 +1334,7 @@ function addIc2CropRecipe(crop, variants, fallback, conditions = []) {
   setRecipeMapIcon(
     machineType,
     crop.seed ?? crop.displayItem ?? baseVariant.drops?.[0]?.resource,
+    { ordered: true },
   );
   addRecipe({
     id: recipeId("ic2-crop", crop.owner, cropKey, conditionSlug),
@@ -1418,13 +1435,16 @@ function normalizeCropsNhCrops(domain) {
     const tier = positiveInt(crop.tier, 1);
     const growthPoints = positiveInt(crop.growthDuration, 0);
     const dropChance = positiveNumber(crop.dropChance, 0);
-    const dropTable = (crop.dropTable ?? [])
-      .map((entry) => ({
-        resource: resourceAmount(entry.resource),
-        stackSize: positiveNumber(entry.resource?.amount, 1),
-        weight: positiveInt(entry.weight, 0),
-      }))
-      .filter((entry) => entry.resource && entry.weight > 0);
+    // The export lists drops in hash-map order; the slots show them heaviest first.
+    const dropTable = orderCropDrops(
+      (crop.dropTable ?? [])
+        .map((entry) => ({
+          resource: resourceAmount(entry.resource),
+          stackSize: positiveNumber(entry.resource?.amount, 1),
+          weight: positiveInt(entry.weight, 0),
+        }))
+        .filter((entry) => entry.resource && entry.weight > 0),
+    );
     if (growthPoints <= 0 || dropChance <= 0 || dropTable.length === 0) {
       continue;
     }
@@ -1456,7 +1476,7 @@ function normalizeCropsNhCrops(domain) {
 
     const input = cropsNhSeedInput(crop);
     recipeMaps.add(machineType);
-    setRecipeMapIcon(machineType, crop.seed ?? crop.dropTable?.[0]?.resource);
+    setRecipeMapIcon(machineType, crop.seed ?? heaviestRawDrop(crop), { ordered: true });
     addRecipe({
       id: recipeId("cropsnh-crop", "cropsnh", crop.id ?? crop.name ?? hashRecipe(crop)),
       name: `${machineType}: ${text(crop.name, crop.id ?? "Crop")}`,
@@ -1480,11 +1500,12 @@ function normalizeCropsNhCrops(domain) {
             ? Number(crop.minSeedBedTier)
             : undefined,
           machineOnly: crop.machineOnly === true ? true : undefined,
-          biomeTags: normalizeStringArray(crop.likedBiomeTags),
+          // Sets in the game, exported in hash-set order: sorted so a rebuild keeps them.
+          biomeTags: normalizeStringArray(crop.likedBiomeTags)?.sort(),
           requirements: normalizeStringArray(crop.growthRequirements),
           soils: normalizeStringArray(
             (crop.soils ?? []).map((entry) => entry?.displayName).filter(Boolean),
-          ),
+          )?.sort(),
           drops: dropTable.map((entry) => ({
             id: entry.resource.id,
             stackSize: entry.stackSize,
@@ -1543,8 +1564,14 @@ function cropsNhDurationTicks(crop, env) {
   return Math.ceil(crop.growthPoints / perCycle) * crop.growthCycleTicks;
 }
 
+/** A crop's heaviest drop, then by id: the face a crop with no seed item wears. */
+function heaviestRawDrop(crop) {
+  const drops = (crop.dropTable ?? []).map((entry) => ({ ...entry, resource: entry.resource, weight: Number(entry.weight) || 0 }));
+  return orderCropDrops(drops)[0]?.resource;
+}
+
 function cropsNhSeedInput(crop) {
-  const icon = resourceAmount(crop.seed ?? crop.dropTable?.[0]?.resource, {
+  const icon = resourceAmount(crop.seed ?? heaviestRawDrop(crop), {
     consumed: false,
     defaultAmount: 1,
   });
@@ -1624,7 +1651,7 @@ function normalizeOreVeins(domain, dimensionsByKey) {
       continue;
     }
     recipeMaps.add(machineType);
-    setRecipeMapIcon(machineType, (vein.ores ?? [])[0]?.ore);
+    setRecipeMapIcon(machineType, (vein.ores ?? [])[0]?.ore, { ordered: true });
     const name = veinDisplayName(vein);
     addRecipe({
       id: recipeId("ore-vein", text(vein.id, undefined) ?? hashRecipe(vein)),
@@ -1676,7 +1703,7 @@ function normalizeSmallOres(domain, dimensionsByKey) {
       continue;
     }
     recipeMaps.add(machineType);
-    setRecipeMapIcon(machineType, (smallOre.drops ?? [])[0]);
+    setRecipeMapIcon(machineType, (smallOre.drops ?? [])[0], { ordered: true });
     const name =
       text(smallOre.material?.name, undefined) ?? veinDisplayName({ id: smallOre.id });
     addRecipe({
@@ -1738,7 +1765,7 @@ function normalizeUndergroundFluids(domain, dimensionsByKey) {
       );
     }
     recipeMaps.add(machineType);
-    setRecipeMapIcon(machineType, entry.fluid);
+    setRecipeMapIcon(machineType, entry.fluid, { ordered: true });
     addRecipe({
       id: recipeId("underground-fluid", text(entry.fluidId, undefined) ?? hashRecipe(entry)),
       name: `${machineType}: ${resourceLabel(output)}`,
@@ -1913,15 +1940,35 @@ function beeProductOutput(entry, specialty = false) {
   return output;
 }
 
-function setRecipeMapIcon(machineType, rawIcon) {
+/**
+ * A map's icon. A map with its NEI catalyst (GregTech's, crafting, Thaumcraft, the machines the
+ * normalizer names) sets it once. A map built from many records (bees, crops, veins, small ores,
+ * underground fluids) has no catalyst in the export, so `ordered` keeps the candidate first in
+ * NEI's order, then by id and stand-in rank, whatever order the records came in.
+ */
+function setRecipeMapIcon(machineType, rawIcon, { ordered = false } = {}) {
   const icon = resourceAmount(rawIcon);
   if (!icon) {
     return;
   }
   addResource(icon);
-  if (!recipeMapIcons.has(machineType)) {
+  const current = recipeMapIcons.get(machineType);
+  if (!current || (ordered && compareByNeiPlace(icon, current) < 0)) {
     recipeMapIcons.set(machineType, icon);
   }
+}
+
+function neiPlaceOf(resource) {
+  return neiPlace.get(`${resource.kind}:${resource.id}`) ?? Number.MAX_SAFE_INTEGER;
+}
+
+/** NEI's order, then id, then the stand-in rule (no NBT, smallest NBT). */
+function compareByNeiPlace(left, right) {
+  return (
+    neiPlaceOf(left) - neiPlaceOf(right) ||
+    compareById(left, right) ||
+    compareStandIns(left, right)
+  );
 }
 
 function craftingInputGrid(rawRecipe) {
@@ -2143,10 +2190,13 @@ function slotAlternatives(rawResource, selfId, selfAmount) {
 
 function oreDictionaryResource(rawResource) {
   const names = (rawResource.names ?? []).map((entry) => text(entry, "")).filter(Boolean);
-  const alternatives = [
-    ...(rawResource.alternatives ?? []).map((entry) => resourceAmount(entry)).filter(Boolean),
-    ...names.flatMap((name) => oreDictionaryAlternativesByName.get(name) ?? []),
-  ];
+  const alternatives = orderOreMembers(
+    [
+      ...(rawResource.alternatives ?? []).map((entry) => resourceAmount(entry)).filter(Boolean),
+      ...names.flatMap((name) => oreDictionaryAlternativesByName.get(name) ?? []),
+    ],
+    { target: oreUnificationTargets[names[0]], neiPlace },
+  );
   if (names.length === 0 && alternatives.length === 0) {
     return undefined;
   }
@@ -2201,21 +2251,49 @@ function choiceResource(rawResource) {
   };
 }
 
+/**
+ * The catalog's stand-in for an id is chosen by rule, never by which stack the export met first:
+ * the stack with no NBT, else the smallest NBT (compareStandIns), and NEI's own first listed stack
+ * over both where NEI lists the item (applyNeiStandIns). An icon the stand-in lacks comes from the
+ * best-ranked stack that has one.
+ */
 function addResource(resource) {
   if (!resource?.kind || !resource?.id) {
     return;
   }
   const key = `${resource.kind}:${resource.id}`;
-  const existing = resources.get(key);
-  if (!existing) {
+  const current = standIns.get(key);
+  if (!current || compareStandIns(resource, current) < 0) {
+    standIns.set(key, resource);
     resources.set(key, resourceCatalogEntry(resource));
-    return;
   }
-  if (!existing.iconPath && resource.iconPath) {
-    existing.iconPath = resource.iconPath;
+  const iconed = standInIcons.get(key);
+  if (resource.iconPath && (!iconed || compareStandIns(resource, iconed) < 0)) {
+    standInIcons.set(key, resource);
   }
-  if (!existing.dominantColor && resource.dominantColor) {
-    existing.dominantColor = resource.dominantColor;
+}
+
+/** Fills missing icons from the best iconed stack, then lays NEI's first listed stack over each item it lists. */
+function applyNeiStandIns() {
+  for (const [key, entry] of resources) {
+    const iconed = standInIcons.get(key);
+    if (!entry.iconPath && iconed) {
+      entry.iconPath = iconed.iconPath;
+      entry.dominantColor = iconed.dominantColor;
+    }
+    const first = neiFirstStacks.get(key);
+    const nei = first ? resourceAmount(first) : undefined;
+    if (!nei) {
+      continue;
+    }
+    entry.displayName = nei.displayName ?? entry.displayName;
+    if (nei.modId) entry.modId = nei.modId;
+    if (nei.tooltip) entry.tooltip = nei.tooltip;
+    else delete entry.tooltip;
+    if (nei.iconPath) {
+      entry.iconPath = nei.iconPath;
+      entry.dominantColor = nei.dominantColor;
+    }
   }
 }
 
@@ -2585,9 +2663,10 @@ function renderedIconColor(fileName) {
 function normalizeOreDictionary(entries) {
   const normalized = {};
   for (const [name, alternatives] of Object.entries(entries ?? {})) {
-    const normalizedAlternatives = (alternatives ?? [])
-      .map((entry) => resourceAmount(entry))
-      .filter(Boolean);
+    const normalizedAlternatives = orderOreMembers(
+      (alternatives ?? []).map((entry) => resourceAmount(entry)).filter(Boolean),
+      { target: oreUnificationTargets[name], neiPlace },
+    );
     oreDictionaryAlternativesByName.set(name, normalizedAlternatives);
     normalized[name] = normalizedAlternatives.map((entry) => entry.id).sort();
   }

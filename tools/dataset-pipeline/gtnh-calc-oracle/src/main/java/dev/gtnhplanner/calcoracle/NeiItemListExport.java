@@ -86,11 +86,20 @@ final class NeiItemListExport {
             Method isFluidDisplay = staticMethod("codechicken.nei.recipe.StackInfo", "isFluidDisplayItem", ItemStack.class);
             Method getFluid = staticMethod("codechicken.nei.recipe.StackInfo", "getFluid", ItemStack.class);
             List<String> keys = new ArrayList<String>(items.size());
+            // Each item key's first listed stack, with its NBT, name and icon: the stack the website
+            // shows for the item, as NEI's panel shows it first.
+            List<Map<String, Object>> firstStacks = new ArrayList<Map<String, Object>>();
+            java.util.Set<String> seen = new java.util.HashSet<String>();
             int unnamed = 0;
             for (ItemStack stack : items) {
                 String key = resourceKey(stack, isFluidDisplay, getFluid);
                 if (key == null) {
                     unnamed++;
+                } else if (key.startsWith("item:") && seen.add(key)) {
+                    Map<String, Object> first = firstStack(stack);
+                    if (first != null) {
+                        firstStacks.add(first);
+                    }
                 }
                 keys.add(key);
             }
@@ -99,6 +108,7 @@ final class NeiItemListExport {
             out.put("sort", sortString);
             out.put("stackCount", Integer.valueOf(keys.size()));
             out.put("stacks", keys);
+            out.put("firstStacks", firstStacks);
             GtnhCalcOracleMod.LOG.info(
                 "GTNH calculation oracle NEI item list: {} stack(s), sorted by {}.",
                 Integer.valueOf(keys.size()),
@@ -122,6 +132,17 @@ final class NeiItemListExport {
             adapters.add(exporter.adapter("nei-item-list", "failed", true, 0, 0, started, String.valueOf(cause)));
         }
         return out;
+    }
+
+    /** A listed stack as the export writes every stack (one of it), or null where it cannot be read. */
+    private Map<String, Object> firstStack(ItemStack stack) {
+        try {
+            ItemStack one = stack.copy();
+            one.stackSize = 1;
+            return exporter.itemStack(one);
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     /**

@@ -1530,3 +1530,54 @@ describe("a recipe's minimum tier counts its map's amperage", () => {
     expect(tiers(dataset, "gt.recipe.massfab", 256).recipe).toBe("LV");
   });
 });
+
+describe("a stand-in is chosen by the game's rules, never by export order", () => {
+  const NEI_SORT = "nei.itemsort.minecraft,nei.itemsort.mod,nei.itemsort.id,nei.itemsort.default,nei.itemsort.damage,nei.itemsort.name";
+  const hammer = (nbt, name) => ({ ...item("gregtech:gt.metatool.01@12", 1, name), ...(nbt ? { nbt } : {}) });
+  const smelt = (id, input, output) => ({ id, input, output });
+  const catalogEntry = (dataset, id) => dataset.resources.find((resource) => resource.id === id);
+
+  it("takes the stack with no NBT, else the smallest NBT, whichever the export met first", () => {
+    const recipes = [
+      smelt("a", item("minecraft:stone", 1, "Stone"), hammer("{Material:Zinc}", "Zinc Hammer")),
+      smelt("b", item("minecraft:sand", 1, "Sand"), hammer("{Material:Iron}", "Iron Hammer")),
+    ];
+    const forward = normalize({ domains: [{ id: "smelting", recipes }] });
+    const backward = normalize({ domains: [{ id: "smelting", recipes: [...recipes].reverse() }] });
+    expect(catalogEntry(forward, "gregtech:gt.metatool.01@12").displayName).toBe("Iron Hammer");
+    expect(catalogEntry(backward, "gregtech:gt.metatool.01@12")).toEqual(catalogEntry(forward, "gregtech:gt.metatool.01@12"));
+    const plain = normalize({
+      domains: [{ id: "smelting", recipes: [...recipes, smelt("c", item("minecraft:dirt", 1, "Dirt"), hammer(undefined, "Hammer"))] }],
+    });
+    expect(catalogEntry(plain, "gregtech:gt.metatool.01@12").displayName).toBe("Hammer");
+  });
+
+  it("shows NEI's first listed stack for an item NEI lists", () => {
+    const dataset = normalize({
+      domains: [{ id: "smelting", recipes: [smelt("a", item("minecraft:stone", 1, "Stone"), hammer("{Material:Zinc}", "Zinc Hammer"))] }],
+      neiItemList: {
+        status: "exported",
+        sort: NEI_SORT,
+        stacks: ["item:gregtech:gt.metatool.01@12"],
+        firstStacks: [hammer("{Material:Steel}", "Steel Hammer")],
+      },
+    });
+    const entry = catalogEntry(dataset, "gregtech:gt.metatool.01@12");
+    expect(entry.displayName).toBe("Steel Hammer");
+    expect(entry.tooltip).toEqual(["NBT: {Material:Steel}"]);
+  });
+
+  it("lists an ore dictionary tag's members GregTech's unification target first, then in NEI's order, then by id", () => {
+    const members = [item("mod:c", 1, "C"), item("mod:a", 1, "A"), item("mod:target", 1, "Target"), item("mod:b", 1, "B")];
+    const exportWith = (entries) => ({
+      domains: [
+        { id: "oreDictionary", entries: { ingotThing: entries }, unificationTargets: { ingotThing: "mod:target" } },
+        { id: "smelting", recipes: [smelt("a", { kind: "oreDictionary", names: ["ingotThing"], amount: 1 }, item("minecraft:glass", 1, "Glass"))] },
+      ],
+      neiItemList: { status: "exported", sort: NEI_SORT, stacks: ["item:mod:c", "item:mod:b"], firstStacks: [] },
+    });
+    const order = (dataset) => catalogEntry(dataset, "oredict:ingotThing").alternatives.map((entry) => entry.id);
+    expect(order(normalize(exportWith(members)))).toEqual(["mod:target", "mod:c", "mod:b", "mod:a"]);
+    expect(order(normalize(exportWith([...members].reverse())))).toEqual(["mod:target", "mod:c", "mod:b", "mod:a"]);
+  });
+});
