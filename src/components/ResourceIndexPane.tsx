@@ -460,7 +460,7 @@ type ResourceSortChoice = { value: ResourceSortMode; label: string };
 const RESOURCE_SORT_CHOICES: ReadonlyArray<ResourceSortChoice> = [
   { value: "nei", label: "As in NEI" },
   { value: "relevance", label: "Best match" },
-  { value: "nei-filter", label: "NEI, filter only" },
+  { value: "nei-filter", label: "NEI filter only" },
   { value: "name", label: "Name A–Z" },
   { value: "mod", label: "By mod" },
   { value: "made", label: "Most ways to make" },

@@ -88,7 +88,7 @@ async function sortRows() {
   const labels = [
     "As in NEI",
     "Best match",
-    "NEI, filter only",
+    "NEI filter only",
     "Name A–Z",
     "By mod",
     "Most ways to make",
@@ -252,14 +252,15 @@ describe("ResourceIndexPane", () => {
     expect(await sortRows()).toEqual([
       "As in NEI",
       "Best match",
-      "NEI, filter only",
+      "NEI filter only",
       "Name A–Z",
       "By mod",
       "Most ways to make",
       "Most used",
       "Most popular",
     ]);
-    fireEvent.click(screen.getByText("NEI, filter only"));
+    fireEvent.click(screen.getByText("NEI filter only"));
     await waitFor(() => expect(lastSort()).toBe("nei-filter"));
+    expect(sortShown()).toBe("Showing everything, NEI filter only");
   });
 });
