@@ -18,9 +18,10 @@ import { describe, expect, it } from "vitest";
  *
  * The data layer (`src/lib/server/db/` and `src/lib/server/repos/`) alone
  * holds the database: its clients, its queries and its SQL. No request value
- * can reach SQL text: a `sql` template's `${}` is a bound parameter, and the
- * calls that splice text in (`sql.raw`, `sql.ref`, `sql.id`, ...) appear only
- * in `db/migrations.ts`, which reads the repository's own files.
+ * can reach SQL text through what the test reads: a `sql` template's `${}`
+ * is a bound parameter, and what splices text in (`sql.raw`, `sql.ref`,
+ * `sql.id`, `dynamic`, `CompiledQuery.raw`, ...; see `sqlWriting`) appears
+ * only in `db/migrations.ts`, which reads the repository's own files.
  */
 
 /** The most entries the allowlist may hold, per rule and for the querying app files. */
@@ -507,48 +508,107 @@ function serviceDbNames(graph: Map<string, SourceFile>): string[] {
 /** Kysely's calls that put their argument into the SQL text rather than bind it. */
 const SPLICING_CALLS = new Set(["raw", "ref", "id", "lit", "table"]);
 
-const namedSql = (node: ts.Expression): boolean =>
-  (ts.isIdentifier(node) && node.text === "sql") ||
-  (ts.isPropertyAccessExpression(node) && node.name.text === "sql");
+const isKysely = (specifier: ts.Node): boolean =>
+  ts.isStringLiteral(specifier) && /^kysely(\/|$)/.test(specifier.text);
+
+/** A name used as a type, or named in an import: no value reaches SQL through it. */
+const inTypeOrImport = (node: ts.Node): boolean =>
+  ts.isTypeReferenceNode(node.parent) ||
+  ts.isTypeQueryNode(node.parent) ||
+  ts.isImportSpecifier(node.parent) ||
+  ts.isExpressionWithTypeArguments(node.parent);
 
 /**
- * Where SQL is written: each `sql` template, each splicing call (`sql.raw`,
- * `sql.ref`, `sql.id`, `sql.lit`, `sql.table`, `dynamic.ref`,
- * `dynamic.table`), and each import of Kysely's `sql` under another name,
- * which would hide the rest from this reading.
+ * Where SQL is written, read from the syntax tree. `template` is a `sql`
+ * template; `splicing` lists what can put a value into the SQL text:
+ * - a splicing call on `sql` (`sql.raw`, `sql.ref`, `sql.id`, `sql.lit`, `sql.table`);
+ * - Kysely's `sql` used other than as a template tag or the object of such a
+ *   call (assigned, destructured, indexed, passed), which hides its calls
+ *   from this reading, and `sql` imported under another name;
+ * - `dynamic` (`db.dynamic.ref`, `const { dynamic } = db`), whose `ref` and
+ *   `table` take any string as an identifier;
+ * - `CompiledQuery` as a value (`CompiledQuery.raw` runs a string as SQL),
+ *   and outside db/ any mention of it;
+ * - a namespace or dynamic import of kysely, which would reach all of these
+ *   under other names.
  */
 function sqlWriting(file: SourceFile): { template: boolean; splicing: string[] } {
-  const found = { template: false, splicing: [] as string[] };
-  if (!/\bsql\b|\.dynamic\b/.test(file.text)) return found;
+  const splicing = new Set<string>();
+  let template = false;
+  if (!/\bsql\b|\bdynamic\b|\bCompiledQuery\b|kysely/.test(file.text)) {
+    return { template, splicing: [] };
+  }
+  const tree = syntaxTree(file);
+  const sqlNames = new Set<string>();
+  for (const statement of tree.statements) {
+    if (!ts.isImportDeclaration(statement) || !isKysely(statement.moduleSpecifier)) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) splicing.add("kysely namespace import");
+    if (bindings && ts.isNamedImports(bindings)) {
+      for (const element of bindings.elements) {
+        if ((element.propertyName ?? element.name).text !== "sql") continue;
+        sqlNames.add(element.name.text);
+        if (element.name.text !== "sql") splicing.add(`sql as ${element.name.text}`);
+      }
+    }
+  }
+  // Any `sql` counts, imported or not, and so does an alias of Kysely's.
+  const namedSql = (node: ts.Expression): boolean =>
+    (ts.isIdentifier(node) && (node.text === "sql" || sqlNames.has(node.text))) ||
+    (ts.isPropertyAccessExpression(node) && node.name.text === "sql");
   const visit = (node: ts.Node): void => {
     if (ts.isTaggedTemplateExpression(node) && namedSql(node.tag)) {
-      found.template = true;
+      template = true;
     }
-    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+    if (ts.isCallExpression(node)) {
       const callee = node.expression;
-      const name = callee.name.text;
-      if (SPLICING_CALLS.has(name) && namedSql(callee.expression)) {
-        found.splicing.push(`sql.${name}`);
-      }
       if (
-        (name === "ref" || name === "table") &&
-        ts.isPropertyAccessExpression(callee.expression) &&
-        callee.expression.name.text === "dynamic"
+        ts.isPropertyAccessExpression(callee) &&
+        SPLICING_CALLS.has(callee.name.text) &&
+        namedSql(callee.expression)
       ) {
-        found.splicing.push(`dynamic.${name}`);
+        splicing.add(`sql.${callee.name.text}`);
       }
+      const loaded = node.arguments[0];
+      if (
+        (callee.kind === ts.SyntaxKind.ImportKeyword ||
+          (ts.isIdentifier(callee) && callee.text === "require")) &&
+        loaded &&
+        isKysely(loaded)
+      ) {
+        splicing.add("kysely loaded dynamically");
+      }
+    }
+    if (ts.isIdentifier(node) && sqlNames.has(node.text) && !inTypeOrImport(node)) {
+      const parent = node.parent;
+      const isTag = ts.isTaggedTemplateExpression(parent) && parent.tag === node;
+      const isCallObject =
+        ts.isPropertyAccessExpression(parent) &&
+        parent.expression === node &&
+        ts.isCallExpression(parent.parent) &&
+        parent.parent.expression === parent;
+      if (!isTag && !isCallObject) splicing.add("sql used as a value");
     }
     if (
-      ts.isImportSpecifier(node) &&
-      node.propertyName?.text === "sql" &&
-      node.name.text !== "sql"
+      (ts.isPropertyAccessExpression(node) && node.name.text === "dynamic") ||
+      (ts.isBindingElement(node) && (node.propertyName ?? node.name).getText() === "dynamic") ||
+      (ts.isElementAccessExpression(node) &&
+        ts.isStringLiteral(node.argumentExpression) &&
+        node.argumentExpression.text === "dynamic")
     ) {
-      found.splicing.push(`sql as ${node.name.text}`);
+      splicing.add("dynamic");
+    }
+    if (ts.isIdentifier(node) && node.text === "CompiledQuery") {
+      if (!file.path.startsWith("src/lib/server/db/")) {
+        splicing.add("CompiledQuery");
+      } else if (!inTypeOrImport(node)) {
+        splicing.add("CompiledQuery as a value");
+      }
     }
     ts.forEachChild(node, visit);
   };
-  visit(syntaxTree(file));
-  return found;
+  visit(tree);
+  return { template, splicing: [...splicing] };
 }
 
 /** SQL written where it may not be: templates outside the data layer, splicing outside the migrations. */
@@ -718,6 +778,75 @@ describe("the layers", () => {
     expect(sqlOutOfPlace(graph)).toEqual([]);
   });
 
+  it("refuses each way of putting a value into the SQL text", () => {
+    const repo = (name: string) => `src/lib/server/repos/splice-${name}.ts`;
+    const fixtures: Record<string, string> = {
+      [repo("compiled")]: [
+        'import { CompiledQuery } from "kysely";',
+        'import { getDb } from "../db";',
+        "export const run = (c: string) => getDb().executeQuery(CompiledQuery.raw(`select ${c}`));",
+      ].join("\n"),
+      [repo("dynamic-destructured")]: [
+        'import { getDb } from "../db";',
+        "export const column = (c: string) => {",
+        "  const { dynamic } = getDb();",
+        "  return dynamic.ref(c);",
+        "};",
+      ].join("\n"),
+      [repo("dynamic-ref")]: [
+        'import { getDb } from "../db";',
+        "export const column = (c: string) => getDb().dynamic.ref(c);",
+      ].join("\n"),
+      [repo("dynamic-table")]: [
+        'import { getDb } from "../db";',
+        'export const table = (t: string) => getDb()["dynamic"].table(t);',
+      ].join("\n"),
+      [repo("sql-variable")]: [
+        'import { sql } from "kysely";',
+        "const s = sql;",
+        "export const column = (c: string) => s.raw(c);",
+      ].join("\n"),
+      [repo("sql-destructured")]: [
+        'import { sql } from "kysely";',
+        "const { raw } = sql;",
+        "export const column = (c: string) => raw(c);",
+      ].join("\n"),
+      [repo("sql-indexed")]: [
+        'import { sql } from "kysely";',
+        'export const column = (c: string) => sql["raw"](c);',
+      ].join("\n"),
+      [repo("sql-namespace")]: [
+        'import * as k from "kysely";',
+        "export const column = (c: string) => k.sql.raw(c);",
+      ].join("\n"),
+      [repo("sql-dynamic-import")]: [
+        "export const column = async (c: string) => {",
+        '  const { sql: text } = await import("kysely");',
+        "  return text.raw(c);",
+        "};",
+      ].join("\n"),
+      "src/lib/server/db/compiled-as-type.ts": [
+        'import type { CompiledQuery } from "kysely";',
+        "export const size = (query: CompiledQuery) => query.sql.length;",
+      ].join("\n"),
+    };
+    const bad = new Map(
+      Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
+    );
+    expect(sqlOutOfPlace(bad)).toEqual([
+      `${repo("compiled")}: CompiledQuery`,
+      `${repo("dynamic-destructured")}: dynamic`,
+      `${repo("dynamic-ref")}: dynamic`,
+      `${repo("dynamic-table")}: dynamic`,
+      `${repo("sql-destructured")}: sql used as a value`,
+      `${repo("sql-dynamic-import")}: kysely loaded dynamically`,
+      `${repo("sql-indexed")}: sql used as a value`,
+      `${repo("sql-namespace")}: kysely namespace import`,
+      `${repo("sql-namespace")}: sql.raw`,
+      `${repo("sql-variable")}: sql used as a value`,
+    ]);
+  });
+
   it("refuses a bad file under each data-layer rule", () => {
     // Read from memory through the same parser as the real tree; nothing is written to disk.
     const fixtures: Record<string, string> = {
@@ -770,6 +899,7 @@ describe("the layers", () => {
     expect(sqlOutOfPlace(bad)).toEqual([
       "src/lib/server/auth/arch-fixture.ts: sql template",
       "src/lib/server/db/arch-fixture.ts: sql as text",
+      "src/lib/server/db/arch-fixture.ts: sql.id",
       "src/lib/server/repos/arch-fixture.ts: sql.raw",
       "src/lib/server/repos/arch-fixture.ts: sql.ref",
     ]);
