@@ -4,8 +4,8 @@ const db = vi.hoisted(() => ({ page: vi.fn() }));
 vi.mock("@/lib/server/services/config", () => ({ isDatabaseConfigured: () => true }));
 // The stand-in answers each page the way the PostgREST client did; the repository throws its error.
 vi.mock("@/lib/server/repos/popularity", () => ({
-  publicPlanPage: async () => {
-    const { data, error } = (await db.page()) as { data: unknown[] | null; error: { message: string } | null };
+  publicPlanPage: async (offset: number, limit: number) => {
+    const { data, error } = (await db.page(offset, limit)) as { data: unknown[] | null; error: { message: string } | null };
     if (error) {
       throw new Error(error.message);
     }
@@ -74,4 +74,28 @@ it("keeps the last good ranking when a sweep fails, and waits before trying agai
   } finally {
     vi.useRealTimers();
   }
+});
+
+it("reads ten posts a statement, stepping by ten, until a short page", async () => {
+  const full = { data: Array.from({ length: 10 }, () => ({ plan, outputs: [] })), error: null };
+  db.page
+    .mockResolvedValueOnce(full)
+    .mockResolvedValueOnce(full)
+    .mockResolvedValueOnce({ data: [{ plan, outputs: [] }], error: null });
+  await refreshResourcePopularity();
+  expect(db.page.mock.calls).toEqual([
+    [0, 10],
+    [10, 10],
+    [20, 10],
+  ]);
+});
+
+it("stops after a thousand posts", async () => {
+  db.page.mockResolvedValue({
+    data: Array.from({ length: 10 }, () => ({ plan, outputs: [] })),
+    error: null,
+  });
+  await refreshResourcePopularity();
+  expect(db.page).toHaveBeenCalledTimes(100);
+  expect(db.page).toHaveBeenLastCalledWith(990, 10);
 });
