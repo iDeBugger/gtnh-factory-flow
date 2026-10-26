@@ -54,13 +54,16 @@ Options and steps:
    checks pass (`deploy-lib.mjs`: icon hints resolved, and no NEI order lost against the installed copy). The
    rendered textures the installed copy has and the build lacks are copied into the build first, as a publish adds
    them (saved plans cite names an earlier export drew); then two renames swap the copies, the old one to
-   `.pipeline/datasets/<id>/replaced/`. Then `refresh-power-maps.mjs` points the power maps
-   (`src/lib/power/data`) at the installed build: each map entry's icon, colour and name become the build's record
-   for its id, so a map never cites an icon the build does not draw; an id the build lacks fails the pack (the
-   map's choice needs `tools/power-machine-icons.mjs` or `tools/power-resource-map.mjs` again). Exam: the power
-   map tests check every map icon is the dataset's icon for that id, `scripts/refresh-power-maps.test.mjs`.
-5. Every pack runs even when one fails, and the manifest is rebuilt whenever one was installed, so it always names
-   the installed bytes. A refused or failed pack is listed at the end and the command exits 1; a refused build
+   `.pipeline/datasets/<id>/replaced/`. Installed into the default root (or with `--power-maps`), the build also
+   points the power maps (`src/lib/power/data`) at itself: `refresh-power-maps.mjs --check` runs against the build
+   before the swap, so a map naming an id the build lacks refuses the pack with nothing swapped and nothing written
+   (the map's choice needs `tools/power-machine-icons.mjs` or `tools/power-resource-map.mjs` again); after the swap
+   each map entry's icon, colour and name become the installed build's record for its id, so a map never cites an
+   icon the build does not draw. A refresh that fails after the swap leaves the pack installed and says so. `--out`
+   elsewhere leaves the repo's maps alone unless `--power-maps`. Exam: the power map tests check every map icon is
+   the dataset's icon for that id, `scripts/refresh-power-maps.test.mjs`.
+5. Every pack runs even when one fails, and the manifest is rebuilt whenever one was installed (a swap happened),
+   so it always names the installed bytes. A refused or failed pack is listed at the end and the command exits 1; a refused build
    stays in `.pipeline/datasets/<id>/dataset/`. Logs: `.pipeline/datasets/<id>/logs/` (`export.log`,
    `build.log`, the last run's as `.previous`). Exam: `scripts/build-datasets.test.mjs`.
 6. A failed export: read `logs/export.log` (the runner prints the last 160 lines of the game log on a crash). The
