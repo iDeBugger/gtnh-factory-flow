@@ -144,6 +144,11 @@ describe("the database roles", () => {
     );
     expect(await failureAs("gtnh_site", "truncate community_events")).toMatch(/permission denied/);
     expect(await failureAs("gtnh_site", "create role y")).toMatch(/permission denied/);
+    for (const role of ["gtnh_site", "gtnh_live"]) {
+      expect(await failureAs(role, "create temp table t (a int)"), role).toMatch(
+        /permission denied to create temporary tables/,
+      );
+    }
   });
 
   it("lets the live role run every statement the live store sends", async () => {

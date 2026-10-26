@@ -44,8 +44,15 @@ set local log_statement = 'none';
 alter role gtnh_site with login password :'site_password';
 alter role gtnh_live with login password :'live_password';
 
--- No role but the owner makes objects in public (Postgres 15's default, said here).
+-- No role but the owner makes objects in public (Postgres 15's default, said
+-- here), and no role makes temporary tables either: the app roles hold no
+-- DDL at all, and nothing in the stack uses temporary tables.
 revoke create on schema public from public;
+do $$
+begin
+  execute format('revoke temporary on database %I from public', current_database());
+end
+$$;
 grant usage on schema public to gtnh_site, gtnh_live;
 
 revoke all on all tables in schema public from gtnh_site, gtnh_live;

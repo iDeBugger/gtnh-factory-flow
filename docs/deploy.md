@@ -196,7 +196,7 @@ is 401.
 grants their rights again in one transaction on every run, so a grant the file drops is gone after the next deploy:
 
 - `gtnh_site`: select, insert, update and delete on every app table and usage on the sequences; no DDL, no
-  truncate.
+  truncate. Neither role may create temporary tables (`temporary` is revoked from `public`).
 - `gtnh_live`: the columns the live store uses: select `id, username, is_admin, session_epoch` on
   `community_users`; select on `library_design_members`; select `user_id, id, plan, seq, plan_bytes, deleted_at,
   live_lease_until, live_lease_token` and update `plan, seq, plan_updated_at, updated_at, live_lease_until,
