@@ -220,7 +220,7 @@
   Both hold: both versions are prewarmed in full. If one fails, 2.8.1 is prewarmed second with its catalog
   only. Measure again when a dataset grows or a third version is served.
 
-## Database (PostgREST: db/, resource-popularity.ts)
+## Database (PostgREST: db/, repos/, services/)
 
 Layout: the database client, its breaker and its error copy in `db/` (import it as `@/lib/server/db`);
 passwords, sessions, the admin header and salted keys in `auth/`; rate limits and the event log in `limits/`;
