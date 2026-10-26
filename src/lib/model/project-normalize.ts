@@ -28,21 +28,14 @@ export function normalizeLoadedProject(
   return normalizeLoadedProjectWithNotice(project, options).project;
 }
 
-/**
- * `keepMode` leaves a plan's mode as it came. Nothing in the app passes it; the old Build, Solve and Pool code stays
- * in the tree until it is removed and its tests load their plans this way.
- */
+/** `keepCellWires` leaves loose cell wires for the landing (the store), which turns them into tanks and says so. */
 export interface LoadOptions {
-  keepMode?: boolean;
+  keepCellWires?: boolean;
 }
 
 let legacyModes = false;
 
-/**
- * Tests of the old Build, Solve and Pool code switch the conversion off for
- * the whole test file (each file runs in its own module scope). The app never
- * calls this.
- */
+/** Tests of the old Build, Solve and Pool engine keep a plan's mode as it came. The app never calls this. */
 export function allowLegacyModesForTests(on = true): void {
   legacyModes = on;
 }
@@ -58,8 +51,11 @@ export function normalizeLoadedProjectWithNotice(
   project: FactoryProject;
   notice?: PlanNotice;
 } {
-  if (options?.keepMode ?? legacyModes) {
+  if (legacyModes) {
     return { project: normalizeLegacyProject(project) };
+  }
+  if (options?.keepCellWires) {
+    return { project: asPlan(normalizeLegacyProject(project)) };
   }
   // Cell wires first, so the passes after them see ordinary wires.
   const wired = convertLooseCellWires(project);

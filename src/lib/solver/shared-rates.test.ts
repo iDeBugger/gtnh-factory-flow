@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { PROJECT_SCHEMA_VERSION, type FactoryProject } from "../model/types";
 import { calculateThroughput } from "./throughput";
 import { parseFactoryProjectJson, serializeFactoryProject } from "../import-export/factory-json";
+import { allowLegacyModesForTests } from "../model/project-normalize";
+
+allowLegacyModesForTests();
 
 function fixture(poolMode: boolean): FactoryProject {
   return {
@@ -147,7 +150,7 @@ it("preserves rates, rules and wires through JSON and mode switches; Build does 
   const p = fixture(false);
   p.storages![0].targetMode = "at-most";
   p.storages![1].targetPerSecond = 3;
-  const loaded = parseFactoryProjectJson(serializeFactoryProject(p), { keepMode: true });
+  const loaded = parseFactoryProjectJson(serializeFactoryProject(p));
   for (const poolMode of [true, false]) {
     loaded.poolMode = poolMode;
     expect(calculateThroughput(loaded).storages.ore.consumedPerSecond).toBeCloseTo(6);

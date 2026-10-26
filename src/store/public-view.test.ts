@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createEmptyProject } from "@/examples";
 import { useFactoryStore } from "./factory-store";
-import { allowLegacyModesForTests } from "@/lib/model/project-normalize";
-
-// These tests exercise the old Build, Solve and Pool code, which the app no longer reaches.
-allowLegacyModesForTests();
 
 afterEach(() => useFactoryStore.getState().markHydratedProject(createEmptyProject()));
 
@@ -21,7 +17,6 @@ describe("public viewing edit boundary", () => {
     store.setProjectIdentity({ description: "Changed" });
     store.setProject(createEmptyProject());
     store.addCustomRateNode();
-    store.setBoardMode("pool");
     store.cleanBoard();
     store.pasteBoardItems(
       { nodes: [], edges: [], recipes: [], storages: [], annotations: [], pockets: [] },
@@ -110,23 +105,3 @@ describe("public viewing edit boundary", () => {
   });
 });
 
-
-it("allows screenshot mode previews without changing the author's plan or unlocking edits", () => {
-  const store = useFactoryStore.getState();
-  const original = createEmptyProject();
-  store.loadViewedProject(original);
-  const before = useFactoryStore.getState();
-  for (const mode of ["pool", "solve", "build"] as const) {
-    store.setScreenshotMode(mode);
-    const next = useFactoryStore.getState();
-    expect(Boolean(next.project.poolMode)).toBe(mode === "pool");
-    expect(Boolean(next.project.solveMode)).toBe(mode !== "build");
-    expect(next.isReadOnly).toBe(true);
-    expect(next.project.nodes).toBe(before.project.nodes);
-    expect(next.undoHistory).toEqual([]);
-    store.renameProject("Not allowed");
-    expect(useFactoryStore.getState().project).toBe(next.project);
-  }
-  expect(original.solveMode).toBeUndefined();
-  expect(original.poolMode).toBeUndefined();
-});

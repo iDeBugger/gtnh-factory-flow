@@ -76,15 +76,3 @@ describe("opening public posts", () => {
   });
 });
 
-
-it.each(["build", "solve", "pool", "plan"] as const)("opens a posted %s setup in its saved mode", async (mode) => {
-  mocks.download.mockResolvedValue({
-    name: "Saved mode",
-    plan: { ...createEmptyProject(), solveMode: mode !== "build" || undefined, poolMode: mode === "pool" || undefined, planMode: mode === "plan" || undefined },
-  });
-  await openCommunityPost({ id: "mode-post", isMine: false, authorName: "Author" });
-  const project = mocks.importProjectAsDesign.mock.calls[0][0];
-  expect(Boolean(project.solveMode)).toBe(mode !== "build");
-  expect(Boolean(project.poolMode)).toBe(mode === "pool");
-  expect(Boolean(project.planMode)).toBe(mode === "plan");
-});

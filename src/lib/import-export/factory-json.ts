@@ -27,7 +27,7 @@ export function parseFactoryProjectJson(source: string, options?: LoadOptions): 
   }
 
   try {
-    return normalizeLoadedProject(factoryProjectSchema.parse(raw), { keepMode: true, ...options });
+    return normalizeLoadedProject(factoryProjectSchema.parse(raw), { keepCellWires: true, ...options });
   } catch (error) {
     if (error instanceof ZodError) {
       const issues = error.issues

@@ -97,7 +97,6 @@ export function CleanDrawer({
   const rateUnit = useFactoryStore((state) => state.rateUnit);
   const powerUnit = useFactoryStore((state) => state.powerDisplayUnit);
   const hoveredFlowResourceKey = useFactoryStore((state) => state.hoveredFlowResourceKey);
-  const selectedFlowResourceKey = useFactoryStore((state) => state.selectedFlowResourceKey);
   const setHoveredFlowScope = useFactoryStore((state) => state.setHoveredFlowScope);
   const scopeLit = useFactoryStore((state) => Boolean(state.hoveredFlowScope?.nodes[storage.id]));
   const scopePort = useFactoryStore((state) => {
@@ -131,7 +130,7 @@ export function CleanDrawer({
   const setDrainMode = useFactoryStore((state) => state.setStorageDrainMode);
 
   const resourceKey = makeResourceKey(storage.kind, storage.resourceId);
-  const resourceLit = (hoveredFlowResourceKey ?? selectedFlowResourceKey) === resourceKey;
+  const resourceLit = hoveredFlowResourceKey === resourceKey;
   const lit = scopeLit || scopePort || resourceLit;
   const label = resourceLabel(
     category ?? { id: storage.resourceId, displayName: storage.displayName },

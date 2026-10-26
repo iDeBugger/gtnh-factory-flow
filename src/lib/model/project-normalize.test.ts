@@ -480,7 +480,7 @@ describe("loose cell wires on load", () => {
     ]);
     expect(notice?.text).toBe("1 cell wire now goes through a fluid tank.");
     // A parser keeps the wire for the landing to convert and say so.
-    expect(normalizeLoadedProject(project, { keepMode: true }).edges[0]?.crossForm?.litresPerCell).toBe(1000);
+    expect(normalizeLoadedProject(project, { keepCellWires: true }).edges[0]?.crossForm?.litresPerCell).toBe(1000);
   });
 });
 
@@ -542,7 +542,7 @@ describe("the game version through the load funnel", () => {
     for (const project of [old, { ...old, solveMode: true }, { ...old, planMode: true, solveMode: true }]) {
       expect("gameVersion" in normalizeLoadedProject(project)).toBe(false);
       expect(normalizeLoadedProject({ ...project, gameVersion: "2.8.1" }).gameVersion).toBe("2.8.1");
-      expect(normalizeLoadedProject({ ...project, gameVersion: "2.8.1" }, { keepMode: true }).gameVersion).toBe("2.8.1");
+      expect(normalizeLoadedProject({ ...project, gameVersion: "2.8.1" }, { keepCellWires: true }).gameVersion).toBe("2.8.1");
     }
     const pool = { ...old, solveMode: true, poolMode: true, gameVersion: "2.8.1" };
     expect(normalizeLoadedProjectWithNotice(pool).project.gameVersion).toBe("2.8.1");

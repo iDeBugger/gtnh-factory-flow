@@ -114,7 +114,7 @@ export function CleanPortRow({
     Boolean(state.hoveredFlowScope?.ports[`${p.nodeId}|${p.handleId}`]),
   );
   const resourceLit = useFactoryStore(
-    (state) => (state.hoveredFlowResourceKey ?? state.selectedFlowResourceKey) === p.resourceKey,
+    (state) => state.hoveredFlowResourceKey === p.resourceKey,
   );
   // This row's Forced tile lights with the rest of its spill (the buffer's tile and its other makers').
   const spillLit = useSpillHover((state) => p.spillTo !== undefined && state.drawerId === p.spillTo);

@@ -1803,7 +1803,6 @@ export function FactoryFlow() {
   const createBoard = useFactoryStore((state) => state.createBoard);
   const updateAnnotation = useFactoryStore((state) => state.updateAnnotation);
   const deleteAnnotation = useFactoryStore((state) => state.deleteAnnotation);
-  const cancelResourceConnection = useFactoryStore((state) => state.cancelResourceConnection);
   const nodeColorPaintMode = useFactoryStore((state) => state.nodeColorPaintMode);
   const setNodeColorPaintMode = useFactoryStore((state) => state.setNodeColorPaintMode);
   const boardView = useBoardView();
@@ -1819,18 +1818,13 @@ export function FactoryFlow() {
   const anyLineMode = true;
   const setFlowViewportCenter = useFactoryStore((state) => state.setFlowViewportCenter);
   const hoveredFlowResourceKey = useFactoryStore((state) => state.hoveredFlowResourceKey);
-  const selectedFlowResourceKey = useFactoryStore((state) => state.selectedFlowResourceKey);
-  const hoveredNodeBottlenecks = useFactoryStore((state) => state.hoveredNodeBottlenecks);
-  const selectedNodeBottlenecks = useFactoryStore((state) => state.selectedNodeBottlenecks);
-  const hoveredUsageNodeId = useFactoryStore((state) => state.hoveredUsageNodeId);
   const recipeSearch = useFactoryStore((state) => state.highlightSearch);
   const isProjectImporting = useFactoryStore((state) => state.isProjectImporting);
   // The side panel's question: hover or click a resource row and every wire
   // and card carrying it lights up. Hovering a DRAWER on the board is narrower
   // and goes through flow-scope instead; do not fold it in here, it would
   // light half the board.
-  const activeFlowResourceKey = hoveredFlowResourceKey ?? selectedFlowResourceKey;
-  const activeNodeBottlenecks = hoveredNodeBottlenecks || selectedNodeBottlenecks;
+  const activeFlowResourceKey = hoveredFlowResourceKey;
   const recipesById = useMemo(
     () => new Map(project.recipes.map((recipe) => [recipe.id, recipe])),
     [project.recipes],
@@ -1969,15 +1963,11 @@ export function FactoryFlow() {
           position: node.position,
           ...childOf(node.pocketId),
           zIndex:
-            hoveredUsageNodeId === node.id
+            activeFlowResourceKey && recipeContainsResourceKey(recipe, activeFlowResourceKey)
               ? 1500
-              : activeNodeBottlenecks && result.nodes[node.id]?.status === "bottleneck"
-                ? 1500
-                : activeFlowResourceKey && recipeContainsResourceKey(recipe, activeFlowResourceKey)
-                  ? 1500
-                  : CARD_Z_INDEX,
+              : CARD_Z_INDEX,
           // Reusing the previous `data` object when nothing in it moved lets
-          // RecipeNode's memo hold; this memo rebuilds on every hover and
+          // the card's memo hold; this memo rebuilds on every hover and
           // solve, which would otherwise re-render every node on the board.
           data: reuseObjectIdentity(recipeNodeDataCache, node.id, {
             projectNode: node,
@@ -2057,8 +2047,6 @@ export function FactoryFlow() {
     ];
   }, [
     activeFlowResourceKey,
-    activeNodeBottlenecks,
-    hoveredUsageNodeId,
     groupSummaries,
     pocketView,
     project.annotations,
@@ -4706,7 +4694,6 @@ export function FactoryFlow() {
           return;
         }
 
-        cancelResourceConnection();
         setNodeColorPaintMode(undefined);
         setAnnotationTool(undefined);
         setDeleteMode(false);
@@ -4732,9 +4719,7 @@ export function FactoryFlow() {
           return;
         }
 
-        // Escape backs out of whatever tool or half-made wire is active, and
-        // lets go of the selection.
-        cancelResourceConnection();
+        // Escape backs out of whatever tool is active, and lets go of the selection.
         setNodeColorPaintMode(undefined);
         setAnnotationTool(undefined);
         setDeleteMode(false);
@@ -4749,7 +4734,6 @@ export function FactoryFlow() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     annotationTool,
-    cancelResourceConnection,
     clearBoardSelection,
     copyBoardSelection,
     deleteSelectedBoardItems,
@@ -4907,8 +4891,7 @@ export function FactoryFlow() {
 
   const handlePaneClick = useCallback(() => {
     selectNode(undefined);
-    cancelResourceConnection();
-  }, [cancelResourceConnection, selectNode]);
+  }, [selectNode]);
 
   // THE BOARD MENU (BoardContextMenu.tsx): one right click anywhere on the
   // board. A control that already answers a right click has prevented the
