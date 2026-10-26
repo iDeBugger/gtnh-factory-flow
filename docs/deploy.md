@@ -246,7 +246,8 @@ From this checkout's `public/datasets/gtnh` (the pipeline's output) into `/srv/g
 order (`tools/dataset-pipeline/CLAUDE.md`):
 
 1. Refuses a version without `recipe-lookup-index.json.gz`, or a manifest listing a version that is neither given
-   nor on the server.
+   nor on the server. Refuses a version with no NEI order (`resourceOrder` in `resource-index.json.gz`) whose served
+   copy has one (`GTNH_ALLOW_NO_NEI_ORDER=1` publishes it anyway), and warns about one that never had it.
 2. Textures first, additively, straight into the served tree: `rsync -a --ignore-existing`, never `--delete`, never
    a swapped `textures/`. Texture URLs are cached for a year and saved plans name old files.
 3. The data, staged in `/srv/gtnh/datasets-staging` (outside the served root, starting from the served copy so only

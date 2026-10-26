@@ -139,6 +139,28 @@ export async function datasetIconProblems(versionDir) {
   return problems;
 }
 
+/**
+ * The publish check on NEI's item order (`resourceOrder` in resource-index.json.gz): a version
+ * that would lose the order the server already serves is refused, since its item list would
+ * silently fall back to the approximation (GTNH_ALLOW_NO_NEI_ORDER=1 publishes it anyway); one
+ * that never had it is published with a loud warning.
+ */
+export function neiOrderVerdict(id, { local, served, allowLoss = false }) {
+  if (local) {
+    return { ok: true, message: `${id}: NEI order present` };
+  }
+  if (served && !allowLoss) {
+    return {
+      ok: false,
+      message: `${id} has no NEI order, but the served ${id} has one: the rebuild lost it (export the client phase again, or GTNH_ALLOW_NO_NEI_ORDER=1).`,
+    };
+  }
+  return {
+    ok: true,
+    message: `WARNING: ${id} has NO NEI order: its item list sorts As in NEI by the approximation.`,
+  };
+}
+
 async function main([command, ...args]) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   if (command === "build-id") {
@@ -176,8 +198,18 @@ async function main([command, ...args]) {
     }
     return problems.length === 0 ? 0 : 1;
   }
+  if (command === "nei-order") {
+    const [id, local, served] = args;
+    const verdict = neiOrderVerdict(id, {
+      local: local === "1",
+      served: served === "1",
+      allowLoss: process.env.GTNH_ALLOW_NO_NEI_ORDER === "1",
+    });
+    (verdict.ok ? console.log : console.error)(verdict.message);
+    return verdict.ok ? 0 : 1;
+  }
   console.error(
-    "Usage: deploy-lib.mjs build-id | wait <url> <version> <build> [seconds] | same <a> <b> | icons <dir>",
+    "Usage: deploy-lib.mjs build-id | wait <url> <version> <build> [seconds] | same <a> <b> | icons <dir> | nei-order <id> <local 0|1> <served 0|1>",
   );
   return 2;
 }

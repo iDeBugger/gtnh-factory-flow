@@ -1,10 +1,11 @@
 import fs from "node:fs/promises";
 import { createReadStream } from "node:fs";
+import path from "node:path";
 import readline from "node:readline";
 import { gunzipSync } from "node:zlib";
 import { gzipDeterministic } from "./deterministic-gzip.mjs";
 import { writeDatasetJson } from "./dataset-json-writer.mjs";
-import { resourceOrderFor } from "./nei-item-order.mjs";
+import { neiItemOrderFromCatalog, resourceOrderFor } from "./nei-item-order.mjs";
 
 const datasetPath = process.argv[2];
 
@@ -16,6 +17,10 @@ const dataset = await readDataset(datasetPath);
 dataset.resourceIndex = buildResourceIndex(dataset);
 // NEI's order of the records, beside them (nei-item-order.mjs); a rerun recomputes it.
 delete dataset.resourceOrder;
+const carried = dataset.neiItemOrder ? undefined : await carriedNeiItemOrder();
+if (carried) {
+  dataset.neiItemOrder = carried.order;
+}
 const resourceOrder = resourceOrderFor(dataset.resourceIndex, dataset.neiItemOrder);
 if (resourceOrder) {
   dataset.resourceOrder = resourceOrder;
@@ -25,10 +30,44 @@ await writeDataset(datasetPath, dataset);
 console.log(
   `Wrote resourceIndex with ${dataset.resourceIndex.length} resources${
     resourceOrder
-      ? `, ${resourceOrder.filter((place) => place !== null).length} of them in NEI's order`
+      ? `, ${resourceOrder.filter((place) => place !== null).length} of them in NEI's order${
+          carried ? ` (carried from ${carried.from}: this export has no NEI list)` : ""
+        }`
       : ", no NEI order in this export"
   }.`,
 );
+if (!resourceOrder) {
+  console.warn(
+    "WARNING: this dataset has NO NEI order: its item list sorts As in NEI by the approximation. " +
+      "NEI's list comes only from a client export (GTNH_EXPORT_PACK_KIND=client, or GTNH_FORCE_CLIENT_ICON_EXPORT=1).",
+  );
+}
+
+/**
+ * The order of an earlier build, for an export without NEI's list: this version's own last
+ * build (its resource-index.json.gz, not yet overwritten), then GTNH_PREVIOUS_DATASET_DIR (the
+ * dataset generate-dataset reused icons from). GTNH_NEI_ORDER_CARRY=0 turns it off.
+ */
+async function carriedNeiItemOrder() {
+  if (process.env.GTNH_NEI_ORDER_CARRY === "0") {
+    return undefined;
+  }
+  const dirs = [path.dirname(path.resolve(datasetPath)), process.env.GTNH_PREVIOUS_DATASET_DIR].filter(Boolean);
+  for (const dir of dirs) {
+    const file = path.join(dir, "resource-index.json.gz");
+    let catalog;
+    try {
+      catalog = JSON.parse(gunzipSync(await fs.readFile(file)).toString("utf8"));
+    } catch {
+      continue;
+    }
+    const order = neiItemOrderFromCatalog(catalog);
+    if (order) {
+      return { order, from: file };
+    }
+  }
+  return undefined;
+}
 
 async function readDataset(filePath) {
   if (!filePath.endsWith(".gz")) {

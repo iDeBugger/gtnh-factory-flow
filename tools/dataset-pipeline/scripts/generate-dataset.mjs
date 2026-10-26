@@ -67,6 +67,8 @@ if (splitServerClientExport) {
     console.log(`Skipping client icon export for ${versionId}: ${clientIconDecision.reason}`);
     if (clientIconDecision.previousDatasetDir) {
       await reusePreviousIcons(clientIconDecision.previousDatasetDir);
+      // Only the client phase reads NEI's list: build-resource-index carries the order on from there too.
+      process.env.GTNH_PREVIOUS_DATASET_DIR ??= clientIconDecision.previousDatasetDir;
     }
   }
 } else {

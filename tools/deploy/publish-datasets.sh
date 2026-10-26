@@ -79,6 +79,16 @@ done
 for id in "${ids[@]}"; do
   echo "$listed" | grep -qx "$id" || fail "$id is not in the local manifest."
 done
+# NEI's item order rides in resource-index.json.gz; a rebuild that skipped the client export has none.
+# grep -c reads to the end: grep -q would stop early and fail the pipe under pipefail.
+has_order='gzip -dc "$1" | grep -c "\"resourceOrder\":\[" > /dev/null'
+for id in "${ids[@]}"; do
+  local_order=0
+  bash -c "$has_order" _ "$local_root/$id/resource-index.json.gz" && local_order=1
+  served_order=0
+  remote "f='$root/$id/resource-index.json.gz'; test -f \"\$f\" && gzip -dc \"\$f\" | grep -c '\"resourceOrder\":\[' > /dev/null" && served_order=1
+  node "$here/deploy-lib.mjs" nei-order "$id" "$local_order" "$served_order" || fail "$id would lose its NEI order."
+done
 echo "publishing: ${ids[*]}"
 
 remote "umask 022 && test -d '$root' && mkdir -p '$staging'" || fail "$root is missing (the infra role creates it)."

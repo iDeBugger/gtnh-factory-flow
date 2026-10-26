@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   buildId,
   datasetIconProblems,
+  neiOrderVerdict,
   readAppVersion,
   sameFile,
   waitForBuild,
@@ -28,6 +29,13 @@ describe("the deploy's checks", () => {
     expect(readAppVersion(source)).toMatch(/^\d+\.\d+\.\d+$/);
     expect(readAppVersion('export const APP_VERSION = "4.4.1";')).toBe("4.4.1");
     expect(() => readAppVersion("nothing here")).toThrow();
+  });
+
+  it("refuses a dataset that would lose the NEI order the server serves, and warns about one without", () => {
+    expect(neiOrderVerdict("v", { local: true, served: true })).toMatchObject({ ok: true });
+    expect(neiOrderVerdict("v", { local: false, served: true })).toMatchObject({ ok: false });
+    expect(neiOrderVerdict("v", { local: false, served: true, allowLoss: true })).toMatchObject({ ok: true });
+    expect(neiOrderVerdict("v", { local: false, served: false }).message).toMatch(/^WARNING: v has NO NEI order/);
   });
 
   it("builds the id from the version and the commit", () => {

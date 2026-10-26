@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -21,26 +21,30 @@ function fluid(id, displayName) {
  * The export through the pipeline's own scripts, as generate-dataset runs them: normalize,
  * build-resource-index, build-recipe-index. Answers recipes.json and resource-index.json.gz.
  */
-function runPipeline(rawExport) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nei-item-order-"));
+function runPipeline(rawExport, { dir: keptDir, env: extraEnv = {} } = {}) {
+  const dir = keptDir ?? fs.mkdtempSync(path.join(os.tmpdir(), "nei-item-order-"));
   try {
     const input = path.join(dir, "oracle-export.json");
     const recipes = path.join(dir, "recipes.json");
     fs.writeFileSync(input, JSON.stringify(rawExport));
-    const env = { ...process.env, GTNH_DATASET_VERSION_ID: "nei-order", GTNH_DATASET_VERSION_LABEL: "2.9.0" };
+    const env = { ...process.env, GTNH_DATASET_VERSION_ID: "nei-order", GTNH_DATASET_VERSION_LABEL: "2.9.0", ...extraEnv };
+    let log = "";
     for (const [name, args] of [
       ["normalize-oracle-export.mjs", [input, recipes]],
       ["build-resource-index.mjs", [recipes]],
       ["build-recipe-index.mjs", [recipes, dir]],
     ]) {
-      execFileSync(process.execPath, [script(name), ...args], { env, stdio: "pipe" });
+      log += execFileSync(process.execPath, [script(name), ...args], { env, stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
     }
     return {
+      log,
       dataset: JSON.parse(fs.readFileSync(recipes, "utf8")),
       catalog: JSON.parse(gunzipSync(fs.readFileSync(path.join(dir, "resource-index.json.gz"))).toString("utf8")),
     };
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    if (!keptDir) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   }
 }
 
@@ -131,6 +135,54 @@ describe("NEI's item order through the pipeline", () => {
 });
 
 const DEFAULT = NEI_DEFAULT_SORT.join(",");
+
+describe("a rebuild whose export has no NEI list (the client phase skipped)", () => {
+  const ordered = {
+    ...EXPORT,
+    neiItemList: { status: "exported", sort: NEI_DEFAULT_SORT.join(","), stacks: ["fluid:water", "item:minecraft:stone"] },
+  };
+  const tempDir = () => fs.mkdtempSync(path.join(os.tmpdir(), "nei-item-order-carry-"));
+
+  it("carries the order on from this version's last build", () => {
+    const dir = tempDir();
+    try {
+      runPipeline(ordered, { dir });
+      const { dataset, catalog, log } = runPipeline(EXPORT, { dir });
+      expect(dataset.neiItemOrder).toEqual(["fluid:water", "item:minecraft:stone"]);
+      expect(PLACES(dataset)).toMatchObject({ "fluid:water": 0, "item:minecraft:stone": 1 });
+      expect(catalog.resourceOrder).toEqual(dataset.resourceOrder);
+      expect(log).toMatch(/carried from .*resource-index\.json\.gz/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("carries it from the dataset generate-dataset reused icons from", () => {
+    const previous = tempDir();
+    try {
+      runPipeline(ordered, { dir: previous });
+      const { dataset } = runPipeline(EXPORT, { env: { GTNH_PREVIOUS_DATASET_DIR: previous } });
+      expect(dataset.neiItemOrder).toEqual(["fluid:water", "item:minecraft:stone"]);
+    } finally {
+      fs.rmSync(previous, { recursive: true, force: true });
+    }
+  });
+
+  it("says loudly when a dataset ends up with no order", () => {
+    const dir2 = tempDir();
+    try {
+      const stderr = [];
+      const env = { ...process.env, GTNH_DATASET_VERSION_ID: "nei-order", GTNH_DATASET_VERSION_LABEL: "2.9.0" };
+      fs.writeFileSync(path.join(dir2, "oracle-export.json"), JSON.stringify(EXPORT));
+      execFileSync(process.execPath, [script("normalize-oracle-export.mjs"), path.join(dir2, "oracle-export.json"), path.join(dir2, "recipes.json")], { env, stdio: "pipe" });
+      const child = spawnSync(process.execPath, [script("build-resource-index.mjs"), path.join(dir2, "recipes.json")], { env, encoding: "utf8" });
+      stderr.push(child.stderr);
+      expect(stderr.join("")).toMatch(/WARNING: this dataset has NO NEI order/);
+    } finally {
+      fs.rmSync(dir2, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("the order helpers", () => {
   it("take a list only when it was sorted by NEI's default, mods' own rules after it allowed", () => {
