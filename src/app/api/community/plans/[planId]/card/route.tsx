@@ -6,7 +6,7 @@ import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-
 import { PNG } from "pngjs";
 import { GT_TIER_COLORS } from "@/components/flow/tier-colors";
 import { getPlanPreviewPng, getPublicPlanRow, sizePlanPreview } from "@/lib/server/services/plan-preview";
-import { siteHost } from "@/lib/site-url";
+import { siteHost, siteUrl } from "@/lib/site-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -119,7 +119,7 @@ async function loadIconDataUri(iconPath: string | undefined): Promise<string | u
 }
 
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ planId: string }> },
 ) {
   if (!isModAndCommunityOn()) {
@@ -132,8 +132,9 @@ export async function GET(
   ]);
   if (!row) {
     // The site's one generic face, rather than an error a chat would show
-    // as a broken embed.
-    return Response.redirect(new URL("/opengraph-image.png", request.url), 302);
+    // as a broken embed. The origin is the configured site URL: the request's
+    // own origin is the listen address behind the proxy, which no chat can reach.
+    return Response.redirect(new URL("/opengraph-image.png", siteUrl()), 302);
   }
 
   const fonts = await loadFonts();

@@ -12,7 +12,8 @@ vi.mock("@vercel/og", () => ({
   },
 }));
 vi.mock("@/lib/server/services/plan-preview", () => ({
-  getPublicPlanRow: async () => ({ id: "p1", name: "Steel line", game_version: "2.9" }),
+  getPublicPlanRow: async (planId: string) =>
+    planId === "p1" ? { id: "p1", name: "Steel line", game_version: "2.9" } : undefined,
   getPlanPreviewPng: async () => undefined,
   sizePlanPreview: () => undefined,
 }));
@@ -26,9 +27,11 @@ function words(node: unknown): string[] {
   return [];
 }
 
+const ctx = (planId: string) => ({ params: Promise.resolve({ planId }) });
+
 async function cardWords(): Promise<string> {
   rendered.tree = undefined;
-  await GET(new Request("http://localhost/api/community/plans/p1/card"), { params: Promise.resolve({ planId: "p1" }) });
+  await GET(new Request("http://localhost/api/community/plans/p1/card"), ctx("p1"));
   return words(rendered.tree).join(" ");
 }
 
@@ -52,5 +55,14 @@ describe("the community share card", () => {
     const text = await cardWords();
     expect(text).toMatch(/GTNH\s+2\.9/);
     expect(text).not.toMatch(/gtnhplanner|localhost/);
+  });
+
+  it("sends a missing plan to the site's own generic card, on the site's own origin", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://gtnhplanner.com");
+    const answer = await GET(new Request("http://0.0.0.0:3000/api/community/plans/x/card"), ctx("x"));
+    expect([answer.status, answer.headers.get("location")]).toEqual([
+      302,
+      "https://gtnhplanner.com/opengraph-image.png",
+    ]);
   });
 });
