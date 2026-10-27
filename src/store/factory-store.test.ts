@@ -3881,6 +3881,54 @@ describe("board selection editing", () => {
     }
   });
 
+  it("pastes drawers as they were copied: a loose source stays a source, a buffer keeps its wires and rule", () => {
+    const base = useFactoryStore.getState().project;
+    useFactoryStore.getState().setProject({
+      ...base,
+      storages: [
+        ...(base.storages ?? []).map((storage) =>
+          storage.id === "tank" ? { ...storage, targetMode: "exact" as const, capacity: 64 } : storage,
+        ),
+        {
+          id: "ore-src",
+          kind: "item",
+          resourceId: "ore",
+          position: { x: -300, y: 0 },
+          poolSide: "source",
+          targetPerSecond: -2,
+          targetMode: "at-most",
+        },
+      ],
+      edges: [
+        ...base.edges,
+        { id: "t2b", source: "tank", target: "beta", resourceKind: "item", resourceId: "dust" },
+      ],
+    });
+    const payload = captureBoardSelection(useFactoryStore.getState().project, [
+      "alpha",
+      "beta",
+      "tank",
+      "ore-src",
+    ]) as NonNullable<ReturnType<typeof captureBoardSelection>>;
+
+    const pastedIds = useFactoryStore.getState().pasteBoardItems(payload, { x: 40, y: 400 });
+
+    const project = useFactoryStore.getState().project;
+    const pasted = new Set(pastedIds);
+    const copies = (project.storages ?? []).filter((storage) => pasted.has(storage.id));
+    const source = copies.find((storage) => storage.resourceId === "ore");
+    const buffer = copies.find((storage) => storage.resourceId === "dust");
+    // Nothing on the way in re-derives a drawer's role or rule from the board it lands on.
+    expect(source).toMatchObject({ poolSide: "source", targetPerSecond: -2, targetMode: "at-most" });
+    expect(getStorageRole(project, source!.id)).toBe("source");
+    expect(buffer).toMatchObject({ targetMode: "exact", capacity: 64 });
+    expect(getStorageRole(project, buffer!.id)).toBe("buffer");
+    const into = project.edges.filter((edge) => edge.target === buffer!.id);
+    const out = project.edges.filter((edge) => edge.source === buffer!.id);
+    expect(into.map((edge) => pasted.has(edge.source))).toEqual([true]);
+    expect(out.map((edge) => pasted.has(edge.target))).toEqual([true]);
+  });
+
   it("gives a pasted custom-rate card its own recipe copy", () => {
     const project = useFactoryStore.getState().project;
     const dialRecipe = {
