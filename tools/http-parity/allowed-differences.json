@@ -1,0 +1,61 @@
+[
+  {
+    "case": "page /|page /\\?plan=missing|scenario page /\\?plan=",
+    "field": "body*",
+    "reason": "The page HTML outside the metadata tags and the shell markup: framework scripts, preloads, next-size-adjust and the RSC flight. Task 10 compares the metadata tags and the shell separately."
+  },
+  {
+    "case": ".*",
+    "status": 404,
+    "field": "body*",
+    "a": "<!DOCTYPE html>.*",
+    "b": "<!DOCTYPE html>.*",
+    "reason": "The 404 page's HTML outside the metadata tags and the shell markup, wherever a path ends on it (framework markup, as for the page)."
+  },
+  {
+    "case": ".*",
+    "field": "headers.vary",
+    "a": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch(, Accept-Encoding)?",
+    "b": "(Accept-Encoding)?",
+    "reason": "Next's router headers leave vary on HTML and route answers; any other vary must stay."
+  },
+  {
+    "case": ".*",
+    "field": "headers.content-security-policy",
+    "a": "(.*; )?script-src 'self' 'unsafe-inline' .*",
+    "b": "(.*; )?script-src 'self' ('sha256-[A-Za-z0-9+/=]+' )+.*",
+    "reason": "script-src names the boot scripts' hashes instead of 'unsafe-inline', and the worker policy moves from /_next/static/* to /assets/*."
+  },
+  {
+    "case": ".*",
+    "status": 404,
+    "field": "headers.etag",
+    "a": "<etag>|\"[^\"]+\"",
+    "b": "",
+    "reason": "Next's prerendered 404 page carries an ETag."
+  },
+  {
+    "case": "site /_next/image\\?.*",
+    "field": "*",
+    "reason": "The image optimizer is off in Next and the path is gone with it: a plain 404 now."
+  },
+  {
+    "case": "scenario community card missing|route (GET|HEAD) /api/community/plans/\\[planId\\]/card.*",
+    "field": "headers.location",
+    "a": "https://0\\.0\\.0\\.0:3770/opengraph-image\\.png",
+    "b": "http://127\\.0\\.0\\.1:3770/opengraph-image\\.png",
+    "reason": "The intended change (Needs an owner decision 1): the missing card's redirect names siteUrl(), not Next's listen address."
+  },
+  {
+    "case": "cap board image 6 MiB",
+    "field": "headers.connection",
+    "a": "keep-alive",
+    "b": "close",
+    "reason": "Hop by hop: the server closes a connection whose request body it left unread. Caddy drops the header."
+  },
+  {
+    "case": "nextOnly .*",
+    "field": "*",
+    "reason": "The throw and escape fixtures exist only in the Next baseline build (Task 0 step 3)."
+  }
+]

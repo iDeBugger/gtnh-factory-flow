@@ -10,7 +10,7 @@
  *   node tools/perf/stress.mjs --plan plan.json [--label before] [--profile 1]
  *                              [--throttle 1] [--headed 1]
  */
-import { chromium } from "playwright";
+import { chromium } from "playwright-core";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -51,7 +51,8 @@ await page.evaluate(async (plan) => {
   const DB_NAME = "gtnh-factory-flow-designs";
   const open = () =>
     new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 1);
+      // The app's schema version (design-storage.ts DB_VERSION): an older one is refused once the app has opened it.
+      const request = indexedDB.open(DB_NAME, 3);
       request.onupgradeneeded = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains("design-meta")) {
@@ -59,6 +60,9 @@ await page.evaluate(async (plan) => {
         }
         if (!db.objectStoreNames.contains("design-plans")) {
           db.createObjectStore("design-plans", { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains("design-folders")) {
+          db.createObjectStore("design-folders", { keyPath: "id" });
         }
       };
       request.onsuccess = () => resolve(request.result);
