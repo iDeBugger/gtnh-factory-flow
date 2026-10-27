@@ -2237,7 +2237,7 @@ export const useFactoryStore = create<FactoryStore>(withViewerGuard((set, get, w
   },
   addCustomRateNode: () => {
     // Each custom rate node owns its recipe (the rate lives on it). No paint
-    // tag: an unpainted custom rate card gets its own deep blue in RecipeNode,
+    // tag: an unpainted custom rate card wears its own face (special/),
     // which stays a card face you can read rather than a colour from the
     // player's palette. Painting one still works and still wins.
     set((state) =>

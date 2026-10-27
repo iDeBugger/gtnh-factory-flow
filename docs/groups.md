@@ -158,7 +158,7 @@ this the only behaviour. Wires into a group count as wires into its block.
 | --- | --- | --- |
 | Model | `data/flowchart/BoardGroup`, `Groups` (membership, nesting, hiding, fit), `Graph.boardGroups`, `Node.group`, `Drawer.group`, `Note.group` | `FactoryPocket`, `pocketId` (unchanged); `clean/group/group-model.ts` (make, fit, colours) |
 | Edits | `ui/group/GroupEdits` (group, rename, recolour, collapse, resize, ungroup, delete with contents, a drop's landing) | store: `groupSelection`, `renamePocket`, `paintPocket`, `minimizePocket`, `expandPocket`, `dissolvePocket`, `moveBoardItems(moves, fit)` |
-| Drawn | `ui/group/GroupCard` (strip, keys, edges, summary card, menu), `GroupPaint`, `GroupSummary`; bodies under the wires in `BoardCanvas.paintGroupBodies` | `clean/group/CleanGroupFrame`, `CleanGroupSummary`, `GroupFloor` (the body), `GroupSwitch`, `group-summary.ts`, `group.css` |
+| Drawn | `ui/group/GroupCard` (strip, keys, edges, summary card, menu), `GroupPaint`, `GroupSummary`; bodies under the wires in `BoardCanvas.paintGroupBodies` | `clean/group/CleanGroupFrame`, `CleanGroupSummary`, `GroupFloor` (the body), `group-summary.ts`, `group.css` |
 | Dragging in and out | `BoardCanvas.aim` (the aimed group), `endMove` → `GroupEdits.land` | `clean/group/group-drop.ts` (lit target, sounds, `groupUnder`), FactoryFlow's drag handlers |
 | Making | `SelectionBar` (Group key), Ctrl+G in `BoardScreen` | `SelectionBar` in FactoryFlow (Group key), Ctrl+G |
 | Menus | `ui/popup/PickList` everywhere (`GroupCard.openMenu`, `RecipeCard.openActionsAt`, `DrawerCard.ruleRows`, `NoteCard.openMenu`, `BoardCanvas.openBoardMenu`) | `clean/menus/BoardMenu` everywhere (`GroupMenu`, `CardRows`, the drawer's, `NoteMenu`, `AnnotationMenu`, `BoardContextMenu`) |

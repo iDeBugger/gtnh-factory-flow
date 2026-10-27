@@ -12,7 +12,7 @@ import { getRecipeMachineHandlers } from "./recipe-rules";
  *
  * Only TIME is coupled: the solver expands each extra section into a hidden
  * node (`expandSharedMachines`) and adds one row per card capping the sum of
- * the sections' acts at one (equations-core.ts). A section's act IS its share
+ * the sections' acts at one. A section's act IS its share
  * of the machine's time, since its nameplate carries the whole machine count.
  * Nothing else is coupled: GT5U's ProcessingLogic skips a recipe that fails
  * on output space or voltage, so a starved or clogged section hands its time

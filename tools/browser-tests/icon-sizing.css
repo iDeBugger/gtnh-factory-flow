@@ -1,6 +1,6 @@
 @import "tailwindcss" source(none);
 @source "../../src/components/nei/ResourceIcon.tsx";
-@source "../../src/components/flow/EnergyHatchMenu.tsx";
+@source "../../src/components/flow/clean/menus/ArtBox.tsx";
 @source "./icon-sizing.fixture.tsx";
 .minecraft-pixel-art {
   image-rendering: pixelated;

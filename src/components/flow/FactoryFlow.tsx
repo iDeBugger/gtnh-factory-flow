@@ -2024,7 +2024,7 @@ export function FactoryFlow() {
                 ? "board-backdrop"
                 : undefined,
             // Box/arrow interiors must stay click-through; only their
-            // drag-handle elements take pointer events (see AnnotationNode).
+            // drag-handle elements take pointer events (ANNOTATION_DRAG_HANDLE_CLASS).
             dragHandle: annotation.kind === "text" ? undefined : `.${ANNOTATION_DRAG_HANDLE_CLASS}`,
             style: annotation.kind === "text" ? undefined : { pointerEvents: "none" as const },
             data: reuseObjectIdentity(annotationNodeDataCache, annotation.id, { annotation }),

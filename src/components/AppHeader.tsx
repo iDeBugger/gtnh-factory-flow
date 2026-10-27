@@ -38,7 +38,7 @@ export function AppHeader(_props: AppHeaderProps) {
   const [isChangelogOpen, setChangelogOpen] = useState(false);
   // Shift-click the version chip. See DevMenu.
   const [isDevMenuOpen, setDevMenuOpen] = useState(false);
-  // The share dialog lives up here rather than in BoardActions so the compact
+  // The share dialog lives up here rather than in the menu that opens it, so the compact
   // menu can close behind it without unmounting it. The export dialog for the
   // same reason.
   // Open with the mode the Share menu asked for (Save, Update, Save as new post); `false` when closed.

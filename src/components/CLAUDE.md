@@ -138,7 +138,6 @@ The board has its own notes in `flow/CLAUDE.md`.
 - The font is a setting (`src/lib/app-font.ts`), Inter by default. The pixel font's hard
   text shadow and unsmoothed edges are `--pixel-text-shadow` / `--pixel-font-smoothing`,
   set only under it (globals.css); never hard-code them on a component.
-- `DesignTabs` effects that grab refs must depend on `isHydrated`.
 - Sounds are the in-game planner's own files played by its rules (`src/lib/sound/`, its
   `CLAUDE.md` has what plays where). Firefox flushes audio at the end of a task, so the
   player schedules from a task of its own there.
@@ -159,7 +158,6 @@ in `src/store/CLAUDE.md` (Live plans, Task boards).
   people... (`PlanShareDialog`: people who edit this plan with you; greyed signed out, "Sign in to share"); the library
   rows say Publish to library... for a plan not posted yet (`chrome/library-rows.ts`, the dialog's title too). Never fold
   one into the other. Without live plans every row and label is as before. The + tab menu has New task board.
-  `PlanIdentityDrawer`, `DesignTabs` and `BoardActions` keep their live keys but are not on the desktop board.
 - What edits or views the board is the BOARD TOOLBAR (`chrome/BoardToolbar.tsx`): no band. Its keys float over the
   board's top edge (it sits inside the board's box, so the board fills the whole middle column and nothing is reserved;
   not while the Library or Welcome covers it). Left group: Non-recipe, undo, redo. Right group: Arrange, Fit, the rate

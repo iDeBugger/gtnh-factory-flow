@@ -354,7 +354,7 @@ function StickyNoteComponent({ data, selected, width, height }: NodeProps<Sticky
 }
 
 // Position props change every drag frame; this component reads only `data`,
-// `selected` and its size (see AnnotationNode).
+// `selected` and its size.
 export const StickyNote = memo(
   StickyNoteComponent,
   (previous, next) =>

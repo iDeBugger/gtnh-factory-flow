@@ -161,7 +161,7 @@ computes in float: replicate it.
 - Both come from the oracle export's `machine-data/` beside `oracle-export.json` (a port of the
   in-game mod's `call 'machinedata?dir=...'`), then `tools/audits/import-machine-side-data.mjs
   <dir> --gt <GT5U version> [--out <dir>]`; never hand-edit them. Their cards show their
-  working (`formula-lines.ts`, `MachineFormulas`); the in-game mod shows the same lines.
+  working (`formula-lines.ts`); the in-game mod shows the same lines.
   Per-recipe knobs come from `controlsFor` in the machine table.
 
 ## Config controls

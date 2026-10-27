@@ -43,7 +43,7 @@ function CleanRecipeNodeComponent({ data, selected }: { data: RecipeNodeData; se
 /**
  * The recipe card of every board: always the clean look. A node the plain card cannot be (shared machines,
  * generators, the custom rate and fluid tank holders) is `SpecialCleanNode`; everything else is the plain card.
- * The classic `RecipeNode` is no longer reachable from here. Registered as `recipeNode` in FactoryFlow.
+ * Registered as `recipeNode` in FactoryFlow.
  */
 function RecipeNodeSwitchComponent(props: NodeProps<RecipeFlowNode>) {
   const { data, selected } = props;

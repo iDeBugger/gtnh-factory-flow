@@ -48,8 +48,8 @@ export interface PlanHelpers {
 }
 
 /**
- * Everything `calculateThroughput` has built by the time it reaches the
- * solve-mode branch: the project fully expanded (shared sections, hatch
+ * Everything `calculateThroughput` has built by the time it hands over to the
+ * plan solver: the project fully expanded (shared sections, hatch
  * supplies, loose-cell tanks), every enabled node's nameplate report, the
  * storages, and the hidden helpers to strike from the result. The plan solver
  * reads the nameplate flows, so overclocks, parallels, chances and output

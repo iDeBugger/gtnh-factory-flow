@@ -934,8 +934,7 @@ export interface NodeThroughputResult {
   utilization: number;
   /**
    * The build cannot start: underpowered or over-tier hatches. Rates above
-   * stay nameplate - the card keeps its shape - and the equilibrium pins the
-   * node at 0%, exactly like a machine stopped by a bare slot.
+   * stay nameplate - the card keeps its shape - and its power cell says why.
    */
   powerStalled?: boolean;
   /**
