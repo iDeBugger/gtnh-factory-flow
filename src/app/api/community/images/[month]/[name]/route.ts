@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { BOARD_IMAGE_NAME, BOARD_IMAGE_MONTH, BOARD_IMAGE_TYPES } from "@/lib/server/board-images";
 import { datasetBudgetRefusal } from "@/lib/server/limits/dataset-rate";
 import { getFileStore, isFileStoreConfigured } from "@/lib/server/file-store";
@@ -6,8 +5,8 @@ import { getFileStore, isFileStoreConfigured } from "@/lib/server/file-store";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function notFound(): NextResponse {
-  return NextResponse.json(
+function notFound(): Response {
+  return Response.json(
     { error: "Not found." },
     { status: 404, headers: { "Cache-Control": "no-store" } },
   );
@@ -51,7 +50,7 @@ export async function GET(
   if (!bytes) {
     return notFound();
   }
-  return new NextResponse(new Uint8Array(bytes), {
+  return new Response(new Uint8Array(bytes), {
     headers: {
       "Content-Type": contentType,
       "Cache-Control": "public, max-age=31536000, immutable",

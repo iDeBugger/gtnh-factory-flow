@@ -4,7 +4,7 @@ import { withModAndCommunityOn } from "@/test-support/mod-and-community";
 
 // The card's element tree, as handed to the renderer: the words on it are what a chat shows.
 const rendered = vi.hoisted(() => ({ tree: undefined as unknown }));
-vi.mock("next/og", () => ({
+vi.mock("@vercel/og", () => ({
   ImageResponse: class {
     constructor(tree: unknown) {
       rendered.tree = tree;

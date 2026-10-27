@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import { isDatabaseConfigured } from "@/lib/server/services/config";
@@ -26,7 +25,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
     return modAndCommunityOffResponse();
   }
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
+    return Response.json({ error: "Community hub is not configured." }, { status: 503 });
   }
 
   try {
@@ -34,8 +33,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
     const read = await readJsonCapped(request, SMALL_JSON_MAX_BYTES);
     if (!read.ok) {
       return read.status === 413
-        ? NextResponse.json({ error: REQUEST_TOO_BIG_MESSAGE }, { status: 413 })
-        : NextResponse.json({ error: "Invalid vote." }, { status: 400 });
+        ? Response.json({ error: REQUEST_TOO_BIG_MESSAGE }, { status: 413 })
+        : Response.json({ error: "Invalid vote." }, { status: 400 });
     }
     const input = parseVoteInput(read.value);
     if (!input.ok) {
@@ -51,7 +50,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
     }
     // A fixed sentence: the database's own words would say whether the id exists.
     console.error("vote failed", error);
-    return NextResponse.json(
+    return Response.json(
       { error: "Voting failed." },
       { status: 500, headers: { "Cache-Control": "no-store" } },
     );

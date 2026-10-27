@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import { isDatabaseConfigured } from "@/lib/server/services/config";
@@ -22,7 +21,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
     return modAndCommunityOffResponse();
   }
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
+    return Response.json({ error: "Community hub is not configured." }, { status: 503 });
   }
 
   try {
@@ -36,6 +35,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
       return down;
     }
     console.error("view count failed", error);
-    return NextResponse.json({ error: "Counting the view failed." }, { status: 500 });
+    return Response.json({ error: "Counting the view failed." }, { status: 500 });
   }
 }

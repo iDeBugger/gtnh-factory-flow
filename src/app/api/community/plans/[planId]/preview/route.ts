@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { databaseDownResponse, serverErrorResponse } from "@/lib/server/http/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
@@ -42,7 +41,7 @@ export async function POST(
     return modAndCommunityOffResponse();
   }
   if (!isDatabaseConfigured() || !isFileStoreConfigured()) {
-    return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
+    return Response.json({ error: "Community hub is not configured." }, { status: 503 });
   }
 
   try {
@@ -57,17 +56,17 @@ export async function POST(
       BOARD_IMAGE_MAX_BYTES + UPLOAD_FORM_OVERHEAD_BYTES,
     );
     if (!form) {
-      return NextResponse.json(
+      return Response.json(
         { error: "That preview is too big: the limit is 4 MB." },
         { status: 413 },
       );
     }
     const file = form.get("image");
     if (!(file instanceof Blob)) {
-      return NextResponse.json({ error: "No image in the upload." }, { status: 400 });
+      return Response.json({ error: "No image in the upload." }, { status: 400 });
     }
     if (file.size > BOARD_IMAGE_MAX_BYTES) {
-      return NextResponse.json(
+      return Response.json(
         { error: "That preview is too big: the limit is 4 MB." },
         { status: 413 },
       );
@@ -92,7 +91,7 @@ export async function GET(request: Request, context: { params: Promise<{ planId:
   if (!isModAndCommunityOn()) {
     return modAndCommunityOffResponse();
   }
-  const none = NextResponse.json({ error: "No preview." }, { status: 404 });
+  const none = Response.json({ error: "No preview." }, { status: 404 });
   if (!isDatabaseConfigured()) {
     return none;
   }
@@ -115,7 +114,7 @@ export async function GET(request: Request, context: { params: Promise<{ planId:
   if (!png) {
     return none;
   }
-  return new NextResponse(new Uint8Array(png), {
+  return new Response(new Uint8Array(png), {
     headers: {
       "Content-Type": "image/png",
       // Re-sharing overwrites in place, so a short cache keeps a public

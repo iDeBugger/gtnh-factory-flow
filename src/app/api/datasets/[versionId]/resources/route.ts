@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { datasetErrorResponse } from "@/lib/server/http/error-response";
 import { datasetCacheHeaders } from "@/lib/server/http/dataset-cache-headers";
 import { queryDatasetResources } from "@/lib/server/dataset-query";
@@ -41,7 +40,7 @@ export async function GET(
     const result = await meteredDatasetWork(request, () =>
       queryDatasetResources(versionId, { ...searchRequest, popularity }),
     );
-    return NextResponse.json(result, {
+    return Response.json(result, {
       // Popularity is community data, not dataset bytes: the datasetHash
       // fingerprint doesn't pin it, so it must not ride the immutable policy.
       // Before the first sweep lands the order is plain best match, which

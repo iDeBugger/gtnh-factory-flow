@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
@@ -16,7 +15,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
     return modAndCommunityOffResponse();
   }
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
+    return Response.json({ error: "Community hub is not configured." }, { status: 503 });
   }
 
   try {

@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { sessionCookieHeader } from "@/lib/server/auth/sessions";
 import { register } from "@/lib/server/services/accounts";
@@ -15,15 +14,15 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
+    return Response.json({ error: "Community hub is not configured." }, { status: 503 });
   }
 
   try {
     const read = await readJsonCapped(request, SMALL_JSON_MAX_BYTES);
     if (!read.ok) {
       return read.status === 413
-        ? NextResponse.json({ error: REQUEST_TOO_BIG_MESSAGE }, { status: 413 })
-        : NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+        ? Response.json({ error: REQUEST_TOO_BIG_MESSAGE }, { status: 413 })
+        : Response.json({ error: "Invalid request body." }, { status: 400 });
     }
     const body = (read.value ?? {}) as { username?: unknown; password?: unknown };
     const result = await register(

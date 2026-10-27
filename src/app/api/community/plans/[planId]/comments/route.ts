@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
@@ -25,7 +24,7 @@ export async function GET(request: Request, context: RouteContext) {
     return modAndCommunityOffResponse();
   }
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
+    return Response.json({ error: "Community hub is not configured." }, { status: 503 });
   }
   try {
     const { planId } = await context.params;
@@ -41,7 +40,7 @@ export async function POST(request: Request, context: RouteContext) {
     return modAndCommunityOffResponse();
   }
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
+    return Response.json({ error: "Community hub is not configured." }, { status: 503 });
   }
   try {
     const viewer = await readViewer(request);
@@ -54,8 +53,8 @@ export async function POST(request: Request, context: RouteContext) {
     const read = await readJsonCapped(request, COMMENT_BODY_MAX_BYTES);
     if (!read.ok) {
       return read.status === 413
-        ? NextResponse.json({ error: REQUEST_TOO_BIG_MESSAGE }, { status: 413 })
-        : NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+        ? Response.json({ error: REQUEST_TOO_BIG_MESSAGE }, { status: 413 })
+        : Response.json({ error: "Invalid request body." }, { status: 400 });
     }
     const result = await addComment(viewer, planId, access.value.planOwnerId, read.value);
     return serviceResponse(result, (value) => value);

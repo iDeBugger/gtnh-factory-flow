@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { datasetErrorResponse } from "@/lib/server/http/error-response";
 import { datasetCacheHeaders } from "@/lib/server/http/dataset-cache-headers";
 import { getDatasetRecipe } from "@/lib/server/dataset-query";
@@ -19,10 +18,10 @@ export async function GET(
     }
     const recipe = await meteredDatasetWork(request, () => getDatasetRecipe(versionId, recipeId));
     if (!recipe) {
-      return NextResponse.json({ error: "Recipe not found." }, { status: 404 });
+      return Response.json({ error: "Recipe not found." }, { status: 404 });
     }
 
-    return NextResponse.json(recipe, {
+    return Response.json(recipe, {
       headers: datasetCacheHeaders(request),
     });
   } catch (error) {

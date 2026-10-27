@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { datasetErrorResponse } from "@/lib/server/http/error-response";
 import { prewarmDatasetVersion } from "@/lib/server/dataset-query";
 import { getResourcePopularity } from "@/lib/server/services/resource-popularity";
@@ -30,7 +29,7 @@ export async function GET(
     getResourcePopularity();
     await prewarmDatasetVersion(versionId);
 
-    return NextResponse.json(
+    return Response.json(
       {
         ok: true,
         datasetVersionId: versionId,

@@ -1,5 +1,4 @@
 import { randomBytes } from "node:crypto";
-import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
 import { isDatabaseConfigured } from "@/lib/server/services/config";
@@ -51,7 +50,7 @@ function sniffImageType(bytes: Uint8Array): { contentType: string; ext: string }
 
 export async function POST(request: Request) {
   if (!isDatabaseConfigured() || !isFileStoreConfigured()) {
-    return NextResponse.json({ error: "Image hosting is not configured." }, { status: 503 });
+    return Response.json({ error: "Image hosting is not configured." }, { status: 503 });
   }
 
   try {
@@ -62,26 +61,20 @@ export async function POST(request: Request) {
       BOARD_IMAGE_MAX_BYTES + UPLOAD_FORM_OVERHEAD_BYTES,
     );
     if (!form) {
-      return NextResponse.json(
-        { error: "That image is too big: the limit is 4 MB." },
-        { status: 413 },
-      );
+      return Response.json({ error: "That image is too big: the limit is 4 MB." }, { status: 413 });
     }
     const file = form.get("image");
     if (!(file instanceof Blob)) {
-      return NextResponse.json({ error: "No image in the upload." }, { status: 400 });
+      return Response.json({ error: "No image in the upload." }, { status: 400 });
     }
     if (file.size > BOARD_IMAGE_MAX_BYTES) {
-      return NextResponse.json(
-        { error: "That image is too big: the limit is 4 MB." },
-        { status: 413 },
-      );
+      return Response.json({ error: "That image is too big: the limit is 4 MB." }, { status: 413 });
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
     const sniffed = sniffImageType(bytes);
     if (!sniffed) {
-      return NextResponse.json(
+      return Response.json(
         { error: "Only PNG, JPEG, GIF and WebP images can go on the board." },
         { status: 415 },
       );
@@ -89,7 +82,7 @@ export async function POST(request: Request) {
 
     const refusal = await claimImageUpload(request);
     if (refusal) {
-      return NextResponse.json({ error: refusal.error }, { status: refusal.status });
+      return Response.json({ error: refusal.error }, { status: refusal.status });
     }
 
     const month = new Date().toISOString().slice(0, 7);
@@ -98,9 +91,9 @@ export async function POST(request: Request) {
       await getFileStore().put("board-images", `${month}/${name}`, bytes, { overwrite: false });
     } catch (error) {
       console.error("Image upload failed.", error);
-      return NextResponse.json({ error: "Image upload failed." }, { status: 500 });
+      return Response.json({ error: "Image upload failed." }, { status: 500 });
     }
-    return NextResponse.json({ url: `${siteUrl()}/api/community/images/${month}/${name}` });
+    return Response.json({ url: `${siteUrl()}/api/community/images/${month}/${name}` });
   } catch (error) {
     return serverErrorResponse(error, "Image upload failed.");
   }

@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { datasetErrorResponse } from "@/lib/server/http/error-response";
 import { datasetCacheHeaders } from "@/lib/server/http/dataset-cache-headers";
 import { listDatasetEecMobs } from "@/lib/server/dataset-query";
@@ -18,7 +17,7 @@ export async function GET(
       return refusal;
     }
     const result = await meteredDatasetWork(request, () => listDatasetEecMobs(versionId));
-    return NextResponse.json(result, {
+    return Response.json(result, {
       headers: datasetCacheHeaders(request),
     });
   } catch (error) {

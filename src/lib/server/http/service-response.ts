@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import type { ServiceErrorKind, ServiceResult } from "../services/result";
 
 /** The status each kind of service error answers with, unless the error names its own. */
@@ -24,15 +23,15 @@ export function serviceResponse<T>(
   result: ServiceResult<T>,
   toBody: (value: T) => unknown,
   init?: ResponseInit | ((value: T) => ResponseInit),
-): NextResponse {
+): Response {
   if (result.ok) {
     const ready = typeof init === "function" ? init(result.value) : init;
-    return NextResponse.json(toBody(result.value), ready);
+    return Response.json(toBody(result.value), ready);
   }
   const { kind, message, status, body, headers } = result.error;
   // The message first and never replaced: `error` in `body` is dropped.
   const { error: _replaced, ...rest } = body ?? {};
-  return NextResponse.json(
+  return Response.json(
     { error: message, ...rest },
     {
       status: status ?? SERVICE_ERROR_STATUS[kind],

@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { datasetErrorResponse } from "@/lib/server/http/error-response";
 import { datasetCacheHeaders } from "@/lib/server/http/dataset-cache-headers";
 import { DatasetNotFoundError, getDatasetCatalog, prewarmDatasetVersion } from "@/lib/server/dataset-query";
@@ -25,7 +24,7 @@ export async function GET(
       }
     });
     const catalog = await meteredDatasetWork(request, () => getDatasetCatalog(versionId));
-    return NextResponse.json(catalog, {
+    return Response.json(catalog, {
       headers: datasetCacheHeaders(request),
     });
   } catch (error) {

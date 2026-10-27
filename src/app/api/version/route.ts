@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { APP_VERSION } from "@/lib/version";
 
 /**
@@ -14,7 +13,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export function GET() {
-  return NextResponse.json(
+  return Response.json(
     { version: APP_VERSION, build: process.env.NEXT_PUBLIC_GTNH_BUILD_ID ?? "" },
     { headers: { "Cache-Control": "no-store, max-age=0" } },
   );

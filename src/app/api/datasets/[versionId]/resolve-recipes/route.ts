@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { datasetErrorResponse } from "@/lib/server/http/error-response";
 import {
   RESOLVE_RECIPES_MAX_BYTES,
@@ -36,19 +35,19 @@ export async function POST(
     const read = await readJsonCapped(request, RESOLVE_RECIPES_MAX_BYTES);
     if (!read.ok) {
       return read.status === 413
-        ? NextResponse.json({ error: "The request is too big." }, { status: 413 })
-        : NextResponse.json({ error: "The request could not be read." }, { status: 400 });
+        ? Response.json({ error: "The request is too big." }, { status: 413 })
+        : Response.json({ error: "The request could not be read." }, { status: 400 });
     }
     const checked = checkRecipeRefs(read.value);
     if ("refusal" in checked) {
       return checked.refusal === "too-many"
-        ? NextResponse.json(
+        ? Response.json(
             { error: `Too many recipes in one request. The limit is ${RESOLVE_RECIPES_MAX_REFS}.` },
             { status: 400 },
           )
-        : NextResponse.json({ error: "A recipe reference is not valid." }, { status: 400 });
+        : Response.json({ error: "A recipe reference is not valid." }, { status: 400 });
     }
-    return NextResponse.json(
+    return Response.json(
       {
         matches: await meteredDatasetWork(request, () =>
           resolveDatasetRecipeRefs(versionId, checked.refs as DatasetRecipeRef[]),

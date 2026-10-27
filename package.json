@@ -26,6 +26,7 @@
     "build:db": "esbuild tools/db/migrate.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist-db/migrate.mjs --log-level=warning --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\""
   },
   "dependencies": {
+    "@vercel/og": "1.0.3",
     "@xyflow/react": "^12.10.2",
     "gifenc": "^1.0.3",
     "highs": "^1.15.2",
@@ -65,5 +66,8 @@
     "typescript": "^5",
     "vite": "8.3.4",
     "vitest": "^4.1.6"
+  },
+  "overrides": {
+    "fflate": "0.7.5"
   }
 }

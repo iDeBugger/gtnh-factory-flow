@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { readViewer } from "@/lib/server/http/viewer";
 import { isDatabaseConfigured } from "@/lib/server/services/config";
@@ -8,12 +7,12 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ user: null });
+    return Response.json({ user: null });
   }
 
   try {
     const viewer = await readViewer(request);
-    return NextResponse.json(
+    return Response.json(
       { user: viewer.userId ? { username: viewer.username, isAdmin: viewer.isAdmin } : null },
       { headers: { "Cache-Control": "no-store" } },
     );

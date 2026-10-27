@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { sessionCookieHeader } from "@/lib/server/auth/sessions";
 import { SIGN_OUT_EVERYWHERE_FAILED } from "@/lib/community/types";
 import { databaseDownResponse } from "@/lib/server/http/error-response";
@@ -25,7 +24,7 @@ export async function POST(request: Request) {
   const read = await readJsonCapped(request, SMALL_JSON_MAX_BYTES);
   const body = read.ok ? (read.value as { everywhere?: unknown } | null) : undefined;
   if (body?.everywhere !== true) {
-    return NextResponse.json({ ok: true }, { headers: clearing });
+    return Response.json({ ok: true }, { headers: clearing });
   }
   let viewer;
   try {
@@ -33,7 +32,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return (
       databaseDownResponse(error, { status: 503 }) ??
-      NextResponse.json({ error: SIGN_OUT_EVERYWHERE_FAILED }, { status: 503 })
+      Response.json({ error: SIGN_OUT_EVERYWHERE_FAILED }, { status: 503 })
     );
   }
   return serviceResponse(await signOutEverywhere(viewer), () => ({ ok: true }), {

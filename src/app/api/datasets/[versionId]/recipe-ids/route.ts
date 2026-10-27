@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { datasetErrorResponse } from "@/lib/server/http/error-response";
 import { datasetCacheHeaders } from "@/lib/server/http/dataset-cache-headers";
 import { getDatasetRecipeIds } from "@/lib/server/dataset-query";
@@ -22,7 +21,7 @@ export async function GET(
     if (refusal) {
       return refusal;
     }
-    return NextResponse.json(
+    return Response.json(
       {
         recipeIds: await meteredDatasetWork(request, () => getDatasetRecipeIds(versionId)),
       },

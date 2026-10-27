@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { datasetCacheHeaders } from "@/lib/server/http/dataset-cache-headers";
 import { datasetErrorResponse } from "@/lib/server/http/error-response";
 import { datasetClientFileListing } from "@/lib/server/dataset-client-files";
@@ -26,12 +25,12 @@ export async function GET(
     }
     const listing = await datasetClientFileListing(versionId);
     if (!listing) {
-      return NextResponse.json(
+      return Response.json(
         { error: "Dataset not found." },
         { status: 404, headers: { "Cache-Control": "no-store" } },
       );
     }
-    return NextResponse.json(listing, {
+    return Response.json(listing, {
       headers: listing.complete ? datasetCacheHeaders(request) : { "Cache-Control": "no-store" },
     });
   } catch (error) {

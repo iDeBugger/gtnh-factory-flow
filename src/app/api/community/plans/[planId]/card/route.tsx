@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { ImageResponse } from "next/og";
-import { NextResponse } from "next/server";
+import { ImageResponse } from "@vercel/og";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
 import { PNG } from "pngjs";
@@ -19,7 +18,7 @@ export const dynamic = "force-dynamic";
  * large on its dominant colour, else any resource the plan makes or needs.
  * Inputs and outputs stay in the embed's text (describePlanRow).
  *
- * Rendered with next/og (satori): flexbox only and no cascade, so every box
+ * Rendered with @vercel/og (satori): flexbox only and no cascade, so every box
  * says display:flex, and text truncates by clipping. Icons are upscaled with
  * image-rendering: pixelated to stay sharp.
  */
@@ -134,7 +133,7 @@ export async function GET(
   if (!row) {
     // The site's one generic face, rather than an error a chat would show
     // as a broken embed.
-    return NextResponse.redirect(new URL("/opengraph-image.png", request.url), 302);
+    return Response.redirect(new URL("/opengraph-image.png", request.url), 302);
   }
 
   const fonts = await loadFonts();

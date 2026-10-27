@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import type { FolderUpsertBody } from "@/lib/library/sync-types";
 import {
   readJsonCapped,
@@ -22,11 +21,11 @@ export const PUT = answeringErrors(
   "The folder could not be saved.",
   async (request: Request, context: RouteContext) => {
     if (!isDatabaseConfigured()) {
-      return NextResponse.json({ error: "Cloud storage is not configured." }, { status: 503 });
+      return Response.json({ error: "Cloud storage is not configured." }, { status: 503 });
     }
     const viewer = await readViewer(request);
     if (!isSignedIn(viewer)) {
-      return NextResponse.json({ error: "Sign in to sync your library." }, { status: 401 });
+      return Response.json({ error: "Sign in to sync your library." }, { status: 401 });
     }
     const allowed = await folderSaveAllowed(viewer);
     if (!allowed.ok) {
@@ -35,13 +34,13 @@ export const PUT = answeringErrors(
 
     const { folderId } = await context.params;
     if (!isLibraryId(folderId)) {
-      return NextResponse.json({ error: "Bad folder id." }, { status: 400 });
+      return Response.json({ error: "Bad folder id." }, { status: 400 });
     }
     const read = await readJsonCapped(request, SMALL_JSON_MAX_BYTES);
     if (!read.ok) {
       return read.status === 413
-        ? NextResponse.json({ error: REQUEST_TOO_BIG_MESSAGE }, { status: 413 })
-        : NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+        ? Response.json({ error: REQUEST_TOO_BIG_MESSAGE }, { status: 413 })
+        : Response.json({ error: "Invalid request body." }, { status: 400 });
     }
     const body = (read.value ?? {}) as Partial<FolderUpsertBody>;
     return serviceResponse(await saveFolder(viewer, folderId, body), (saved) => saved);
@@ -52,11 +51,11 @@ export const DELETE = answeringErrors(
   "The folder could not be deleted.",
   async (request: Request, context: RouteContext) => {
     if (!isDatabaseConfigured()) {
-      return NextResponse.json({ error: "Cloud storage is not configured." }, { status: 503 });
+      return Response.json({ error: "Cloud storage is not configured." }, { status: 503 });
     }
     const viewer = await readViewer(request);
     if (!isSignedIn(viewer)) {
-      return NextResponse.json({ error: "Sign in to sync your library." }, { status: 401 });
+      return Response.json({ error: "Sign in to sync your library." }, { status: 401 });
     }
     const { folderId } = await context.params;
     return serviceResponse(await deleteFolder(viewer, folderId), (deleted) => deleted);

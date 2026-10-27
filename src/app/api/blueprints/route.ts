@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { BLUEPRINT_BODY_MAX_BYTES } from "@/lib/blueprints/types";
 import { readJsonCapped } from "@/lib/server/http/request-body";
 import { answeringErrors } from "@/lib/server/http/error-response";
@@ -22,10 +21,10 @@ export const dynamic = "force-dynamic";
  */
 export const GET = answeringErrors("Blueprints could not be loaded.", async (request: Request) => {
   if (new URL(request.url).searchParams.get("scope") === "public") {
-    return NextResponse.json({ error: "There is no public blueprint list." }, { status: 404 });
+    return Response.json({ error: "There is no public blueprint list." }, { status: 404 });
   }
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ error: "Cloud storage is not configured." }, { status: 503 });
+    return Response.json({ error: "Cloud storage is not configured." }, { status: 503 });
   }
   const viewer = await readViewer(request);
   return serviceResponse(await listBlueprints(viewer), (value) => value);
@@ -34,11 +33,11 @@ export const GET = answeringErrors("Blueprints could not be loaded.", async (req
 /** Saves a new blueprint to the signed-in account (`saveBlueprint`). */
 export const POST = answeringErrors("Blueprint could not be saved.", async (request: Request) => {
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ error: "Cloud storage is not configured." }, { status: 503 });
+    return Response.json({ error: "Cloud storage is not configured." }, { status: 503 });
   }
   const viewer = await readViewer(request);
   if (!isSignedIn(viewer)) {
-    return NextResponse.json({ error: "Sign in to save blueprints." }, { status: 401 });
+    return Response.json({ error: "Sign in to save blueprints." }, { status: 401 });
   }
   const allowed = await blueprintSaveAllowed(viewer);
   if (!allowed.ok) {
@@ -48,8 +47,8 @@ export const POST = answeringErrors("Blueprint could not be saved.", async (requ
   const read = await readJsonCapped(request, BLUEPRINT_BODY_MAX_BYTES);
   if (!read.ok) {
     return read.status === 413
-      ? NextResponse.json({ error: "Blueprint is too large to save." }, { status: 413 })
-      : NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+      ? Response.json({ error: "Blueprint is too large to save." }, { status: 413 })
+      : Response.json({ error: "Invalid request body." }, { status: 400 });
   }
   const body = (read.value ?? {}) as BlueprintBody;
   return serviceResponse(await saveBlueprint(viewer, body), (value) => value);

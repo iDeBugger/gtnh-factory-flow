@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { answeringErrors } from "@/lib/server/http/error-response";
 import { serviceResponse } from "@/lib/server/http/service-response";
 import { isSignedIn, readViewer } from "@/lib/server/http/viewer";
@@ -15,11 +14,11 @@ export const dynamic = "force-dynamic";
  */
 export const GET = answeringErrors("Your plans could not be loaded.", async (request: Request) => {
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ error: "Cloud storage is not configured." }, { status: 503 });
+    return Response.json({ error: "Cloud storage is not configured." }, { status: 503 });
   }
   const viewer = await readViewer(request);
   if (!isSignedIn(viewer)) {
-    return NextResponse.json({ error: "Sign in to sync your library." }, { status: 401 });
+    return Response.json({ error: "Sign in to sync your library." }, { status: 401 });
   }
   return serviceResponse(await listLibrary(viewer), (library) => library);
 });

@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { datasetBudgetRefusal } from "@/lib/server/limits/dataset-rate";
 import { getResourcePopularity } from "@/lib/server/services/resource-popularity";
 
@@ -21,7 +20,7 @@ export async function GET(request: Request) {
   }
   const popularity = getResourcePopularity();
   const countOnly = new URL(request.url).searchParams.get("count") === "1";
-  return NextResponse.json(
+  return Response.json(
     countOnly ? { count: popularity.size } : { entries: [...popularity.entries()] },
     { headers: { "Cache-Control": popularity.size ? "public, max-age=1800" : "no-store" } },
   );

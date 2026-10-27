@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { isAccountId } from "@/lib/live/protocol";
 import { requestedOwner } from "@/lib/server/cloud-plans";
 import { answeringErrors } from "@/lib/server/http/error-response";
@@ -23,14 +22,14 @@ async function prepare(request: Request, context: RouteContext) {
   if (!isDatabaseConfigured()) {
     return {
       ok: false as const,
-      response: NextResponse.json({ error: "Cloud storage is not configured." }, { status: 503 }),
+      response: Response.json({ error: "Cloud storage is not configured." }, { status: 503 }),
     };
   }
   const viewer = await readViewer(request);
   if (!isSignedIn(viewer)) {
     return {
       ok: false as const,
-      response: NextResponse.json({ error: "Sign in to share plans." }, { status: 401 }),
+      response: Response.json({ error: "Sign in to share plans." }, { status: 401 }),
     };
   }
   const { designId, userId: rawUserId } = await context.params;
@@ -38,7 +37,7 @@ async function prepare(request: Request, context: RouteContext) {
   if (!ownerId || !isLibraryId(designId) || !isAccountId(rawUserId)) {
     return {
       ok: false as const,
-      response: NextResponse.json({ error: "Bad plan or account id." }, { status: 400 }),
+      response: Response.json({ error: "Bad plan or account id." }, { status: 400 }),
     };
   }
   const allowed = await sharingAllowed(viewer);

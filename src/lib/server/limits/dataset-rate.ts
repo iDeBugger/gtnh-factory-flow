@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { clientAddress, NO_ADDRESS } from "../http/client-address";
 
 /**
@@ -133,7 +132,7 @@ export function datasetBudgetRefusal(request: Request, cost: number): Response |
   if (takeDatasetBudget(address, cost)) {
     return undefined;
   }
-  return NextResponse.json(
+  return Response.json(
     { error: DATASET_BUDGET_REFUSAL },
     { status: 429, headers: { "Retry-After": "10", "Cache-Control": "no-store" } },
   );

@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { COMMUNITY_DB_DOWN_MESSAGE } from "../db/errors";
 import { DatasetNotFoundError } from "../dataset-query";
 
@@ -14,14 +13,14 @@ export function serverErrorResponse(
   error: unknown,
   fallback: string,
   init: { status?: number; headers?: Record<string, string> } = {},
-): NextResponse {
+): Response {
   const status = init.status ?? 500;
   const down = databaseDownResponse(error, init);
   if (down) {
     return down;
   }
   console.error(fallback, error);
-  return NextResponse.json({ error: fallback }, { status, headers: init.headers });
+  return Response.json({ error: fallback }, { status, headers: init.headers });
 }
 
 /**
@@ -32,9 +31,9 @@ export function serverErrorResponse(
 export function databaseDownResponse(
   error: unknown,
   init: { status?: number; headers?: Record<string, string> } = {},
-): NextResponse | undefined {
+): Response | undefined {
   if (error instanceof Error && error.message.includes(COMMUNITY_DB_DOWN_MESSAGE)) {
-    return NextResponse.json(
+    return Response.json(
       { error: COMMUNITY_DB_DOWN_MESSAGE },
       { status: init.status ?? 500, headers: init.headers },
     );
@@ -67,9 +66,9 @@ export function datasetErrorResponse(
   error: unknown,
   fallback: string,
   headers?: Record<string, string>,
-): NextResponse {
+): Response {
   if (error instanceof DatasetNotFoundError) {
-    return NextResponse.json({ error: error.message }, { status: 404, headers });
+    return Response.json({ error: error.message }, { status: 404, headers });
   }
   return serverErrorResponse(error, fallback, { headers });
 }

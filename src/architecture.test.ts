@@ -905,6 +905,15 @@ describe("the layers", () => {
     expect(next.map((edge) => `${edge.from} -> ${edge.to}`)).toEqual([]);
   });
 
+  it("no route handler or server module imports next/server or next/og", () => {
+    const offenders = [...graph.values()]
+      .filter((f) => !isExempt(f.path) && (isRouteHandler(f.path) || isServer(f.path)))
+      .flatMap((f) =>
+        f.edges.filter((e) => /^pkg:next\/(server|og)$/.test(e.to)).map((e) => `${f.path} -> ${e.to}`),
+      );
+    expect(offenders).toEqual([]);
+  });
+
   it("only the data layer sends a query", () => {
     expect(queriesOutsideDataLayer(graph)).toEqual([]);
   });

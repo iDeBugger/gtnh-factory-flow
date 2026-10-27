@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises";
-import { NextResponse } from "next/server";
 import { isSafePathSegment, resolveDatasetChildPath } from "@/lib/server/dataset-static-file";
 
 export const runtime = "nodejs";
@@ -18,7 +17,7 @@ export async function GET(
 ) {
   const { versionId, assetPath } = await params;
   if (!isSafePathSegment(versionId) || !isSafeAssetPath(assetPath)) {
-    return NextResponse.json({ error: "Invalid texture path." }, { status: 400, headers: uncached });
+    return Response.json({ error: "Invalid texture path." }, { status: 400, headers: uncached });
   }
 
   // Undefined is a texture that is not there or a link out of the version's directory: both a miss.
@@ -35,7 +34,7 @@ export async function GET(
       },
     });
   } catch {
-    return NextResponse.json({ error: "Texture not found." }, { status: 404, headers: uncached });
+    return Response.json({ error: "Texture not found." }, { status: 404, headers: uncached });
   }
 }
 

@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
@@ -22,7 +21,7 @@ export async function GET(request: Request) {
     return modAndCommunityOffResponse();
   }
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
+    return Response.json({ error: "Community hub is not configured." }, { status: 503 });
   }
 
   try {
@@ -44,7 +43,7 @@ export async function POST(request: Request) {
     return modAndCommunityOffResponse();
   }
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
+    return Response.json({ error: "Community hub is not configured." }, { status: 503 });
   }
 
   try {
@@ -52,7 +51,7 @@ export async function POST(request: Request) {
     // limit in characters, which is what the client counts.
     const raw = await readTextCapped(request, COMMUNITY_UPLOAD_BODY_MAX_BYTES);
     if (raw === undefined || raw.length > COMMUNITY_UPLOAD_MAX_BYTES) {
-      return NextResponse.json({ error: "Upload too large." }, { status: 413 });
+      return Response.json({ error: "Upload too large." }, { status: 413 });
     }
     const body = JSON.parse(raw) as PlanPostBody;
     const viewer = await readViewer(request);

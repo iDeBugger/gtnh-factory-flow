@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { serverErrorResponse } from "@/lib/server/http/error-response";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 import { modAndCommunityOffResponse } from "@/lib/server/http/mod-and-community-gate";
@@ -18,7 +17,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const unconfigured = () =>
-  NextResponse.json({ error: "Community hub is not configured." }, { status: 503 });
+  Response.json({ error: "Community hub is not configured." }, { status: 503 });
 
 /**
  * Plan detail. A read that writes nothing: a view is counted by
@@ -58,7 +57,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ plan
     const { planId } = await params;
     const raw = await readTextCapped(request, COMMUNITY_UPLOAD_BODY_MAX_BYTES);
     if (raw === undefined || raw.length > COMMUNITY_UPLOAD_MAX_BYTES) {
-      return NextResponse.json({ error: "Upload too large." }, { status: 413 });
+      return Response.json({ error: "Upload too large." }, { status: 413 });
     }
     const body = JSON.parse(raw) as PlanPostBody;
     const viewer = await readViewer(request);

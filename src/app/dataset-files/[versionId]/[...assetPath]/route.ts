@@ -2,7 +2,6 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { createGunzip } from "node:zlib";
-import { NextResponse } from "next/server";
 
 import {
   CLIENT_FILE_NAME,
@@ -60,10 +59,7 @@ export async function GET(
   const { versionId, assetPath } = await params;
   const segments = allowedSegments(assetPath);
   if (!isSafePathSegment(versionId) || !segments) {
-    return NextResponse.json(
-      { error: "Invalid dataset path." },
-      { status: 400, headers: uncached },
-    );
+    return Response.json({ error: "Invalid dataset path." }, { status: 400, headers: uncached });
   }
 
   if (segments[0] === CLIENT_FILES_DIRECTORY && segments[1] !== undefined) {
@@ -83,7 +79,7 @@ export async function GET(
       requestHeaders: request.headers,
     });
   } catch {
-    return NextResponse.json(
+    return Response.json(
       { error: texture ? "Texture not found." : "Dataset file not found." },
       { status: 404, headers: uncached },
     );
@@ -156,10 +152,7 @@ async function serveClientFile(request: Request, versionId: string, name: string
   const gzipPath = await resolveClientFilePath(versionId, `${name}.gz`);
   const stats = gzipPath ? await stat(gzipPath).catch(() => undefined) : undefined;
   if (!gzipPath || !stats?.isFile()) {
-    return NextResponse.json(
-      { error: "Dataset file not found." },
-      { status: 404, headers: uncached },
-    );
+    return Response.json({ error: "Dataset file not found." }, { status: 404, headers: uncached });
   }
   const body = Readable.toWeb(
     createReadStream(gzipPath).pipe(createGunzip()),

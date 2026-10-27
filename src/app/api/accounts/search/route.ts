@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { answeringErrors } from "@/lib/server/http/error-response";
 import { serviceResponse } from "@/lib/server/http/service-response";
 import { readViewer } from "@/lib/server/http/viewer";
@@ -14,7 +13,7 @@ export const dynamic = "force-dynamic";
  */
 export const GET = answeringErrors("Accounts could not be searched.", async (request: Request) => {
   if (!isDatabaseConfigured()) {
-    return NextResponse.json({ error: "Accounts are not configured." }, { status: 503 });
+    return Response.json({ error: "Accounts are not configured." }, { status: 503 });
   }
   const viewer = await readViewer(request);
   const result = await searchAccounts(viewer, new URL(request.url).searchParams.get("q") ?? "");
