@@ -246,6 +246,9 @@ describe("Precise Auto-Assembler power and casing support", () => {
     };
     const stopped = calculateThroughput(project);
     expect(stopped.nodes.machine.powerStalled).toBe(true);
+    // The plan solver sizes a stalled card like any other: the stall is the card's to say (its power cell), not the
+    // flows'.
+    expect(stopped.edges.ship.transferredPerSecond).toBeGreaterThan(0);
     const running = calculateThroughput({ ...project, nodes: [node] });
     expect(running.nodes.machine.powerStalled).toBe(false);
     expect(running.edges.ship.transferredPerSecond).toBeGreaterThan(0);

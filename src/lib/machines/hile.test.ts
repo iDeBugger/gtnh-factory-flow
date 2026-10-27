@@ -202,6 +202,9 @@ describe("HILE issue #50", () => {
     };
     const stalled = calculateThroughput(project);
     expect(stalled.nodes.hile.powerStalled).toBe(true);
+    // The plan solver sizes a stalled card like any other: the stall is the card's to say (its power cell), not the
+    // flows'.
+    expect(stalled.edges.ship.transferredPerSecond).toBeGreaterThan(0);
     const working = calculateThroughput({
       ...project,
       nodes: [{ ...lowSource, machineConfigTiers: { laserSource: "luv-256" } }],

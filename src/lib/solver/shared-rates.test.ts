@@ -66,6 +66,35 @@ describe("drawer rates", () => {
     expect(r.storages.ingot.producedPerSecond).toBeCloseTo(3);
     expect(r.storages.ingot.targetUnreachable).not.toBe(true);
   });
+  it("holds an output at its ceiling and reports the exact input it cannot take", () => {
+    const p = fixture();
+    p.storages![1].targetMode = "at-most";
+    p.storages![1].targetPerSecond = 3;
+    const r = calculateThroughput(p);
+    expect(r.storages.ingot.producedPerSecond).toBeCloseTo(3);
+    expect(r.storages.ore.consumedPerSecond).toBeCloseTo(6);
+    expect(r.storages.ore.targetUnreachable).toBe(true);
+  });
+  it("runs an Up to pin at what an input ceiling feeds, and says the pin is starved", () => {
+    const p = fixture();
+    p.storages![0].targetMode = "at-most";
+    p.nodes[0].solvePin = 6;
+    const r = calculateThroughput(p);
+    expect(r.storages.ore.consumedPerSecond).toBeCloseTo(10);
+    expect(r.nodes.smelt.theoreticalMachinesRequired).toBeCloseTo(5);
+    expect(r.plan?.upTo?.smelt).toMatchObject({ capacity: 6, reason: "STARVED" });
+  });
+  it("keeps an exact pin above an input ceiling and names the pin as what breaks the ceiling", () => {
+    const p = fixture();
+    p.storages![0].targetMode = "at-most";
+    p.nodes[0].solvePin = 6;
+    p.nodes[0].solvePinExact = true;
+    const r = calculateThroughput(p);
+    expect(r.storages.ore.consumedPerSecond).toBeCloseTo(12);
+    expect(r.plan?.shortfalls).toEqual([
+      expect.objectContaining({ drawerId: "ore", rule: "AT_MOST", target: 10, reachable: 12, limitingCards: ["smelt"] }),
+    ]);
+  });
   it("permits zero output ceilings", () => {
     const p = fixture();
     p.storages![1].targetMode = "at-most";

@@ -86,6 +86,9 @@ describe("per-card hatch input", () => {
     };
     const stalled = calculateThroughput(p);
     expect(stalled.nodes.a.powerStalled).toBe(true);
+    // The plan solver sizes a stalled card like any other: the stall is the card's to say (its power cell), not the
+    // flows'.
+    expect(stalled.edges.ship.transferredPerSecond).toBeGreaterThan(0);
     const raw = calculateThroughput({
       ...p,
       nodes: p.nodes.map((n) => ({ ...n, powerInputMode: "eut" as const })),

@@ -155,8 +155,8 @@ describe("energy hatches", () => {
   });
 
   it("reads a wired underpowered node as power-stalled without hiding its shape", () => {
-    // The card must stay a machine at zero, not a blank: nameplate rates keep
-    // the ports and wires drawn while the equilibrium pins the node still.
+    // The card stays a machine, not a blank: nameplate rates keep the ports and
+    // wires drawn, and the power cell says why it cannot start.
     const recipe = {
       id: "stall-lcr",
       name: "LCR stall test",
@@ -214,6 +214,8 @@ describe("energy hatches", () => {
     // Nameplate shape survives - one op per second, 100 L in, 150 L out.
     expect(reactor.inputs["fluid:ethylene"].amountPerSecond).toBeCloseTo(100);
     expect(reactor.outputs["fluid:polyethylene"].amountPerSecond).toBeCloseTo(150);
+    // The plan solver sizes a stalled card like any other: the stall is the card's to say, not the flows'.
+    expect(stalled.edges.ship.transferredPerSecond).toBeCloseTo(150);
     expect(reactor.warnings.some((warning) => warning.includes("Underpowered"))).toBe(true);
 
     // The same build with a second hatch runs.
