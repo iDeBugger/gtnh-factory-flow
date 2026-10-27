@@ -1,12 +1,12 @@
 // Points the power maps (src/lib/power/data) at a built dataset version:
 //
-//   node tools/dataset-pipeline/scripts/refresh-power-maps.mjs <dataset version dir> [--data <power data dir>]
+//   node tools/dataset-pipeline/scripts/refresh-power-maps.mjs <dataset version dir> [--id <id>] [--data <dir>] [--check]
 //
 // Each map names a resource by kind and id (tools/power-machine-icons.mjs and
 // tools/power-resource-map.mjs choose them); its icon, colour and name are the build's record for
-// that id. build-datasets.mjs runs this after each install, so a map never cites an icon its
-// dataset does not draw. A map for another version is left alone. An id the build lacks fails the
-// run: the map's choice needs the tools again.
+// that id. build-datasets.mjs checks a build with --check before installing it and writes the maps
+// after, so a map never cites an icon its dataset does not draw. A map for another version is left
+// alone. An id the build lacks fails the run and writes nothing: the map's choice needs the tools again.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -54,37 +54,48 @@ export function readRecords(versionDir) {
   return new Map((catalog.resourceIndex ?? catalog.resources).map((record) => [`${record.kind}:${record.id}`, record]));
 }
 
-export function refreshPowerMaps(versionDir, dataDir = path.join(repoRoot, "src", "lib", "power", "data")) {
-  const id = path.basename(path.resolve(versionDir));
+/**
+ * Refreshes every map made for the version against its records. With `write`, the maps are written only when no
+ * map names an id the build lacks: a failing refresh changes nothing. `id` names the version when the directory
+ * does not (a build checked before it is installed).
+ */
+export function refreshPowerMaps(versionDir, dataDir = path.join(repoRoot, "src", "lib", "power", "data"), { id, write = true } = {}) {
+  const versionId = id ?? path.basename(path.resolve(versionDir));
   const records = readRecords(versionDir);
   const report = [];
   for (const file of MAP_FILES) {
     const full = path.join(dataDir, file);
     if (!fs.existsSync(full)) continue;
     const map = JSON.parse(fs.readFileSync(full, "utf8"));
-    if (map.datasetVersionId !== id) continue;
-    const result = refreshPowerMap(map, records);
-    if (result.changed > 0) fs.writeFileSync(full, `${JSON.stringify(result.map, null, 1)}\n`);
-    report.push({ file, ...result });
+    if (map.datasetVersionId !== versionId) continue;
+    report.push({ file, full, ...refreshPowerMap(map, records) });
   }
-  return report;
+  if (write && report.every((entry) => entry.missing.length === 0)) {
+    for (const entry of report) {
+      if (entry.changed > 0) fs.writeFileSync(entry.full, `${JSON.stringify(entry.map, null, 1)}\n`);
+    }
+  }
+  return report.map(({ full, ...entry }) => entry);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const args = process.argv.slice(2);
+  const value = (flag) => (args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined);
   const versionDir = args[0];
-  const dataDir = args.includes("--data") ? path.resolve(args[args.indexOf("--data") + 1]) : undefined;
-  if (!versionDir) {
-    console.error("Usage: refresh-power-maps.mjs <dataset version dir> [--data <power data dir>]");
+  const dataDir = value("--data") ? path.resolve(value("--data")) : undefined;
+  const check = args.includes("--check");
+  if (!versionDir || versionDir.startsWith("--")) {
+    console.error("Usage: refresh-power-maps.mjs <dataset version dir> [--id <version id>] [--data <power data dir>] [--check]");
     process.exit(2);
   }
-  let failed = false;
-  for (const { file, missing, changed } of refreshPowerMaps(versionDir, dataDir)) {
-    console.log(`power map ${file}: ${changed} entr${changed === 1 ? "y" : "ies"} updated`);
+  const report = refreshPowerMaps(versionDir, dataDir, { id: value("--id"), write: !check });
+  const failed = report.some((entry) => entry.missing.length > 0);
+  for (const { file, missing, changed } of report) {
+    console.log(`power map ${file}: ${changed} entr${changed === 1 ? "y" : "ies"} ${check || failed ? "to update" : "updated"}`);
     if (missing.length > 0) {
-      failed = true;
       console.error(`power map ${file}: ${missing.length} id(s) not in ${versionDir}: ${missing.join(", ")}`);
     }
   }
+  if (failed) console.error("No power map was written: run tools/power-machine-icons.mjs or tools/power-resource-map.mjs for the missing ids.");
   process.exit(failed ? 1 : 0);
 }

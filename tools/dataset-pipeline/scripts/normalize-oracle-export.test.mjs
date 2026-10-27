@@ -1552,9 +1552,18 @@ describe("a stand-in is chosen by the game's rules, never by export order", () =
     expect(catalogEntry(plain, "gregtech:gt.metatool.01@12").displayName).toBe("Hammer");
   });
 
-  it("shows NEI's first listed stack for an item NEI lists", () => {
+  it("keeps the rule's stand-in whole when NEI's first stack was never drawn: one stack's name, NBT and icon", () => {
+    const drawn = (nbt, name, icon) => ({ ...hammer(nbt, name), iconPath: icon });
     const dataset = normalize({
-      domains: [{ id: "smelting", recipes: [smelt("a", item("minecraft:stone", 1, "Stone"), hammer("{Material:Zinc}", "Zinc Hammer"))] }],
+      domains: [
+        {
+          id: "smelting",
+          recipes: [
+            smelt("a", item("minecraft:stone", 1, "Stone"), drawn("{Material:Iron}", "Iron Hammer", "/iron.png")),
+            smelt("b", item("minecraft:sand", 1, "Sand"), drawn("{Material:Zinc}", "Zinc Hammer", "/zinc.png")),
+          ],
+        },
+      ],
       neiItemList: {
         status: "exported",
         sort: NEI_SORT,
@@ -1563,8 +1572,39 @@ describe("a stand-in is chosen by the game's rules, never by export order", () =
       },
     });
     const entry = catalogEntry(dataset, "gregtech:gt.metatool.01@12");
-    expect(entry.displayName).toBe("Steel Hammer");
-    expect(entry.tooltip).toEqual(["NBT: {Material:Steel}"]);
+    expect([entry.displayName, entry.tooltip, entry.iconPath]).toEqual(["Iron Hammer", ["NBT: {Material:Iron}"], "/iron.png"]);
+  });
+
+  it("takes NEI's first stack with its own icon when the export drew it", () => {
+    const dataset = normalize({
+      domains: [
+        { id: "smelting", recipes: [smelt("a", item("minecraft:stone", 1, "Stone"), { ...hammer("{Material:Iron}", "Iron Hammer"), iconPath: "/iron.png" })] },
+      ],
+      neiItemList: {
+        status: "exported",
+        sort: NEI_SORT,
+        stacks: ["item:gregtech:gt.metatool.01@12"],
+        firstStacks: [{ ...hammer("{Material:Steel}", "Steel Hammer"), iconPath: "/steel.png" }],
+      },
+    });
+    const entry = catalogEntry(dataset, "gregtech:gt.metatool.01@12");
+    expect([entry.displayName, entry.tooltip, entry.iconPath]).toEqual(["Steel Hammer", ["NBT: {Material:Steel}"], "/steel.png"]);
+  });
+
+  it("takes an iconed stack whole over a better-ranked stack with no icon", () => {
+    const dataset = normalize({
+      domains: [
+        {
+          id: "smelting",
+          recipes: [
+            smelt("a", item("minecraft:stone", 1, "Stone"), hammer(undefined, "Hammer")),
+            smelt("b", item("minecraft:sand", 1, "Sand"), { ...hammer("{Material:Zinc}", "Zinc Hammer"), iconPath: "/zinc.png" }),
+          ],
+        },
+      ],
+    });
+    const entry = catalogEntry(dataset, "gregtech:gt.metatool.01@12");
+    expect([entry.displayName, entry.iconPath]).toEqual(["Zinc Hammer", "/zinc.png"]);
   });
 
   it("lists an ore dictionary tag's members GregTech's unification target first, then in NEI's order, then by id", () => {

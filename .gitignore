@@ -68,8 +68,9 @@ public/highs.wasm
 public/highs.js
 tools/parity/out/
 
-# the live service bundle (npm run build:live)
+# the live service bundle (npm run build:live) and the migration runner (npm run build:db)
 /dist-live/
+/dist-db/
 
 # Deploy targets: hosts and logins stay on the deploying machine.
 /tools/deploy/targets/*.env

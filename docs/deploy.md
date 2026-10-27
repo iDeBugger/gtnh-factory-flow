@@ -1,6 +1,6 @@
 # Deploying GTNH Planner
 
-The site, the live service, Postgres and PostgREST run as one Docker compose project, `gtnh`, on the owner's
+The site, the live service and Postgres run as one Docker compose project, `gtnh`, on the owner's
 server tungsten, behind the host's Caddy. The app repo builds the images and deploys them
 (`tools/deploy/`); the server side (directories, the `.env`, the Caddy vhost, firewall lines, backups) is the
 infra repo's `gtnh` role, applied by the owner. Deploy only when the owner says so, once per instruction.
@@ -26,15 +26,18 @@ infra commit first.
 |---|---|---|---|---|---|
 | `postgres` (`gtnh-postgres`) | postgres 17, pinned by digest, as `5432:5432` | backend | none | `/srv/gtnh/postgres` (owned `5432:5432`, 0700) | 2 GB |
 | `migrate` (one-shot, profile `tools`) | `gtnh-migrate:<tag>` | backend | none | none | |
-| `postgrest` (`gtnh-postgrest`) | PostgREST v13, pinned by digest | backend | none | none | 256 MB |
 | `site` (`gtnh-site`) | `gtnh-site:<tag>` | edge, backend | `127.0.0.1:3300` | datasets (read-only), `files`, `client-files` | 4 GB |
 | `live` (`gtnh-live`) | `gtnh-live:<tag>` | edge, backend | `127.0.0.1:3301` | `live-journal` | 600 MB |
 
 - Networks: `edge` is a bridge on `172.30.61.0/24` (gateway `172.30.61.1`), the only one with a way out;
   `backend` is internal on `172.30.62.0/24`. The subnets are fixed because
   the firewall and `LIVE_TRUSTED_PROXIES` name them.
+- The site and live reach Postgres over `backend` directly (Kysely over `pg`), each as its own login role:
+  `gtnh_site` and `gtnh_live`, with the rights `db/grants.sql` gives (Migrations, below). `DATABASE_URL` is built in
+  compose from the role's password, so `.env` holds passwords only. Postgres publishes no port; only the migrate
+  run and the backup use the superuser.
 - Only site and live publish ports, on loopback; nothing binds a public or ZeroTier address. The site trusts
-  `X-Client-Ip` from any peer (`src/lib/server/client-address.ts`), which is safe only because Caddy and the
+  `X-Client-Ip` from any peer (`src/lib/server/http/client-address.ts`), which is safe only because Caddy and the
   stack's own containers are its only peers. Besides the loopback port, the site container answers on its edge
   address (`172.30.61.x:3000`) to host processes and to the live container; remote hosts are kept off it only by
   Docker's direct-routing guard and the firewall.
@@ -47,7 +50,7 @@ infra commit first.
   site image also sets `TINI_KILL_PROCESS_GROUP=1`), `no-new-privileges`, no capabilities (`cap_drop: ALL`), `restart: unless-stopped`, json-file logs of
   3 x 10 MB. Every container's root filesystem is read-only: site and live with tmpfs `/tmp` (and the site's
   `.next/cache`), postgres with tmpfs `/tmp` and its socket directory. Site and live run as uid 1000 over
-  root-owned files. PostgREST's admin server is off (nothing reads it, and every backend container could). The
+  root-owned files. The
   site keeps revalidated pages (the sitemap, llms.txt) in memory (`isrFlushToDisk: false`), since its `.next` is
   read-only. The site stops within its 20 s grace; live within 30 s, storing every open plan and releasing
   its leases on SIGTERM.
@@ -68,11 +71,10 @@ and how to make it.
 
 | Variable | Who | When | Value |
 |---|---|---|---|
-| `POSTGRES_PASSWORD` | postgres, migrate | run | `openssl rand -hex 32` |
-| `POSTGREST_AUTHENTICATOR_PASSWORD` | migrate, postgrest | run | `openssl rand -hex 32` |
-| `POSTGREST_JWT_SECRET` | postgrest | run | `openssl rand -hex 32` (at least 32 characters) |
-| `POSTGREST_SERVICE_TOKEN` | site, live | run | `printf %s "$POSTGREST_JWT_SECRET" \| node tools/deploy/service-token.mjs` |
-| `POSTGREST_URL` | site, live | run | `http://postgrest:3000` (set by compose) |
+| `POSTGRES_PASSWORD` | postgres, migrate | run | `openssl rand -hex 32`; the superuser, for the migrate run and the backup |
+| `GTNH_SITE_DB_PASSWORD` | migrate, site | run | `openssl rand -hex 32`; the `gtnh_site` login (1Password `site-db-password`) |
+| `GTNH_LIVE_DB_PASSWORD` | migrate, live | run | `openssl rand -hex 32`; the `gtnh_live` login (1Password `live-db-password`) |
+| `DATABASE_URL` | site, live | run | `postgres://gtnh_site:<password>@postgres:5432/postgres` (live: `gtnh_live`), set by compose |
 | `COMMUNITY_HASH_SALT` | site, live | run | `openssl rand -hex 32`; changing it signs everyone out |
 | `LIVE_INTERNAL_TOKEN` | site, live | run | `openssl rand -hex 32` |
 | `LIVE_INTERNAL_URL` | site | run | `http://live:3001` (set by compose) |
@@ -90,14 +92,16 @@ and how to make it.
 
 The images set the rest: `NODE_ENV=production`, `PORT`, `GTNH_PREWARM_ON_STARTUP=1`, `FILE_STORE_DIR=/data/files`,
 `GTNH_CLIENT_FILES_DIR=/data/client-files`, `LIVE_HOST=0.0.0.0`, `LIVE_PORT=3001`,
-`LIVE_JOURNAL_DIR=/data/live-journal`. Never set: `LOCAL_DB` (with `NODE_ENV=production` neither process
-starts), `NODE_ENV` in `.env`, and the old `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` (unread; the site warns).
+`LIVE_JOURNAL_DIR=/data/live-journal`. Never set: `LOCAL_DB` and `NODE_ENV` in `.env` (the env check refuses
+both), a variable of the old REST layer (the env check refuses each by name), and the old `SUPABASE_URL` /
+`SUPABASE_SERVICE_ROLE_KEY` (unread; the site warns).
 
 The image carries its build values as labels: `org.gtnh.build`, `org.gtnh.mod-and-community`,
-`org.gtnh.site-url`. `tools/deploy/check-env.mjs` refuses a missing or short secret, a service token PostgREST
-would not accept, `LOCAL_DB` or `NODE_ENV`, a mod-and-community value that differs from the image's label (every
-mod and community route would stay 404), a non-https live origin, and a trusted proxy subnet wider than /24. It
-names the variable, never the value.
+`org.gtnh.site-url`. `tools/deploy/check-env.mjs` refuses a missing or short secret (the two role passwords
+included, at least 32 characters), a password a connection URI would break on, a leftover variable of the old REST
+layer, `LOCAL_DB` or `NODE_ENV`, a mod-and-community value
+that differs from the image's label (every mod and community route would stay 404), a non-https live origin, and
+a trusted proxy subnet wider than /24. It names the variable, never the value.
 
 ## Server side (infra repo)
 
@@ -155,7 +159,9 @@ down (below).
 4. The env check runs in a one-off `gtnh-site:$TAG` container against `/opt/gtnh/.env`, with the image's
    mod-and-community label; the image's site URL must be the target's.
 5. `release.env` gets `GTNH_TAG=$TAG` and the previous tag (0600, written through a temp file).
-6. postgres (waited healthy), postgrest, then `docker compose run --rm migrate`.
+6. postgres (`up -d --wait`, waited healthy), then `docker compose run --rm migrate`, which applies new migrations
+   and sets the roles and grants (Migrations, below). A migration that fails stops the deploy before site and live
+   restart.
 7. live, waited healthy; then the site, waited healthy (its restart costs the prewarm, which Caddy's
    `lb_try_duration` covers).
 8. From the Mac: `/api/version` answers this version AND this build (`build` field) within 300 s, and
@@ -170,7 +176,7 @@ The Dockerfile is laid out so a deploy rebuilds and rewrites only what its commi
 
 - `.dockerignore` keeps docs, notes (`*.md`), test files (`*.test.*`, `src/test-support`), the solver's test corpus
   (`src/lib/solver/plan/__fixtures__/corpus`; the other fixtures stay, `/dev/clean-card` imports one), `tools/` (but
-  the prebuild step, the env check, the service token, `live-deps.mjs` and `tools/deploy/db`), the Dockerfile and
+  the prebuild step, the env check, `live-deps.mjs` and `tools/db/migrate.ts`), the Dockerfile and
   the bake file out of the context: they are neither sent nor hashed. `next build` still runs on every deploy, as
   the build id is baked into the bundles, but from its cache (next bullet). Tailwind scans the same files in a
   checkout (`@source` in `src/app/globals.css`), so a checkout's build and the image's have the same CSS.
@@ -227,14 +233,47 @@ role's `gtnh_trusted_proxies` and here.
 
 ## Migrations
 
-`supabase/schema.sql` and every file in `supabase/migrations/` are additive and idempotent, and the migrate image
-applies all of them on every deploy (`tools/deploy/db/migrate.sh`): `db/roles.sql` (`service_role` nologin
-bypassrls, `authenticator` login noinherit with the configured password), `schema.sql`, the migrations in name
-order, `db/grants.sql` (everything in `public` to `service_role`, also by default), then
-`notify pgrst, 'reload schema'`. The authenticator's password reaches psql through the environment
-(`\getenv` in `roles.sql`), never its command line, which shows in the host's process list. Row security stays on with no policies; there is no anon role, so a request
-without the token is 401. A new migration must survive a second run, as the local database also loads every file
-on every open.
+The migrate image runs the migration runner (`tools/db/migrate.ts`, bundled with `pg` inside to
+`dist-db/migrate.mjs` by `npm run build:db`) over the image's copy of `db/`, on every deploy. It prints
+`migrate: <file>` for each file it applies and `migrate: done`; a rerun prints only `migrate: done`. On a failure it
+prints `migrate: <message>`, naming the file, and exits 1. `npm run db:migrate` runs the same from a checkout
+(`PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`, and both role passwords).
+
+- One run at a time: it holds advisory lock 7361, and a run that cannot take it within 2 minutes fails ("another
+  migration run holds the lock").
+- Each file in `db/migrations/` (`NNNN-words.sql`, numbered from 0001 with no gaps) that the ledger
+  `schema_migrations` does not hold is applied in its own transaction, which also writes its ledger row with its
+  sha256 (of the text with LF line ends, so a CRLF checkout matches). A failing file rolls back alone.
+- An applied file that has changed is refused by name: a schema change is always a new file.
+- The transaction is the runner's, so a file holds no `begin`, `commit`, `rollback`, `abort`, `end`,
+  `start transaction`, `savepoint`, `release` or `prepare transaction`, and nothing `concurrently`.
+- A file leaves `standard_conforming_strings` and `backslash_quote` alone: every file shares the runner's one
+  session, and the check reads strings with their defaults.
+- Those checks read the file's text, with comments, string literals, quoted names and dollar bodies skipped. SQL
+  built at run time, such as an `execute` of a concatenated string, is not read: the checks stop accidents, not a
+  file written to get past them.
+- Refused by name before anything is applied: a file breaking these rules, and any file in `db/migrations/` not
+  named `NNNN-words.sql` (hidden files are passed over).
+- Refused as a database: one whose `public` schema holds tables but no ledger ("this database was not set up by
+  the migration runner"), and one that has Supabase's `anon` or `authenticated` role, where row security is what
+  keeps tables off the public API key.
+
+`0001-baseline.sql` is the whole schema for a fresh database. Then, every run, the runner makes the two logins the
+direct client uses (`DATABASE_URL`, built by compose) with the passwords from `GTNH_SITE_DB_PASSWORD` and
+`GTNH_LIVE_DB_PASSWORD`, and applies `db/grants.sql`, which revokes and grants their rights again in the same
+transaction, so a grant the file drops is gone after the next deploy. A password reaches the server only as a
+bound parameter, with statement, duration and parameter logging off for that transaction, and is never printed:
+
+- `gtnh_site`: select, insert, update and delete on every app table and usage on the sequences; nothing on the
+  ledger, no DDL, no truncate. Neither role may create temporary tables (`temporary` is revoked from `public`).
+- `gtnh_live`: the columns the live store uses: select `id, username, is_admin, session_epoch` on
+  `community_users`; select on `library_design_members`; select `user_id, id, plan, seq, plan_bytes, deleted_at,
+  live_lease_until, live_lease_token` and update `plan, seq, plan_updated_at, updated_at, live_lease_until,
+  live_lease_token` on `library_designs`. Nothing else.
+
+Row security is off: with no policies it would hide every row from these roles, and who may see which rows is the
+server's rules (`src/lib/server/services/access.ts`). `db-roles.test.ts` pins the grants and `migrations.test.ts`
+the runner; a new table needs its line in `db/grants.sql`, or `db-roles.test.ts` fails.
 
 ## Datasets
 
@@ -271,22 +310,37 @@ itself is the infra role's.
 ## Rehearsal on a workstation
 
 `tools/deploy/compose.rehearsal.yml` runs the real compose file on OrbStack or Docker Desktop with its volumes
-under `scratch/rehearsal/`, the site and live on `127.0.0.1:3480` and `:3481`, and PostgREST on `:3482`:
+under `scratch/rehearsal/`, the site and live on `127.0.0.1:3480` and `:3481`, and, in the rehearsal only, Postgres
+published on `127.0.0.1:3482` for the tests against the real roles:
 
 1. Build the three images from HEAD as the deploy does: in a directory holding `git archive HEAD`,
-   `TAG=<tag> SITE_URL=http://127.0.0.1:3480 docker buildx bake -f tools/deploy/docker-bake.hcl`.
+   `TAG=<tag> SITE_URL=http://127.0.0.1:3480 docker buildx bake -f tools/deploy/docker-bake.hcl --load`
+   (`MOD_AND_COMMUNITY=on` for a build with the switch on; then `.env` says `on` too).
 2. `scratch/rehearsal/.env` from `env.example` with real random values, `LIVE_ALLOWED_ORIGINS=http://127.0.0.1:3480`;
    `release.env` with `GTNH_TAG=<tag>`; `scratch/rehearsal/postgres` owned `5432:5432` (a non-root postgres cannot
-   chown its directory, so a root-owned bind mount or named volume fails its initdb).
+   chown its directory, so a root-owned bind mount or named volume fails its initdb; `docker run --rm -v
+   "$PWD/scratch/rehearsal/postgres:/d" alpine chown 5432:5432 /d` sets it); `scratch/rehearsal/datasets` a copy of
+   `public/datasets/gtnh` (`cp -cR` clones it on APFS).
 3. `docker compose -f tools/deploy/docker-compose.yml -f tools/deploy/compose.rehearsal.yml --env-file
    scratch/rehearsal/.env --env-file scratch/rehearsal/release.env ...`: `up -d --wait postgres`, `run --rm migrate`
-   (twice: the same output, no error), `up -d postgrest live site`.
-4. `REAL_POSTGREST_URL=http://127.0.0.1:3482 REAL_POSTGREST_TOKEN=<service token> npx vitest run
-   src/lib/server/local-db/postgrest-real.local.test.ts --config vitest.local.config.ts`.
+   twice (the first prints `migrate: 0001-baseline.sql` and `migrate: done`, the second only `migrate: done`),
+   `up -d --wait live site`.
+4. The repository cases under the real roles:
+   `REAL_DATABASE_URL=postgres://gtnh_site:<GTNH_SITE_DB_PASSWORD>@127.0.0.1:3482/postgres
+   REAL_LIVE_DATABASE_URL=postgres://gtnh_live:<GTNH_LIVE_DB_PASSWORD>@127.0.0.1:3482/postgres npx vitest run
+   src/lib/server/db/pg-real.local.test.ts --config vitest.local.config.ts`. It writes rows under fresh account
+   names and deletes them after.
 5. `check-env.mjs ... --rehearsal` accepts the http origin. A target file with `DEPLOY_SSH=local` runs
    `publish-datasets.sh` against `scratch/rehearsal`.
 6. `node tools/deploy/smoke.mjs --base http://127.0.0.1:3480 --live http://127.0.0.1:3481`.
-7. `docker compose ... --profile tools down`, then remove `scratch/rehearsal`.
+7. A database restart under load: rerun the smoke in a loop, with a signed-in `GET /api/library` polled every
+   200 ms, and `docker restart gtnh-postgres` (or `docker stop`, a few seconds, `docker start`). Requests during the
+   outage answer 500 with the down sentence ("The community database is not responding. Try again in a few
+   minutes."), the site answers again within 30 s of Postgres being back (at most the breaker's 15 s), site and
+   live keep their `StartedAt` and restart count, and a live room opens again (`tools/live/test-client.mjs`). The
+   smoke signs up twice a run against the register limit (5 an hour per address): between runs, `delete from
+   community_events where action = 'register'` as `postgres`, in the rehearsal database only.
+8. `docker compose ... --profile tools down`, remove the images, then remove `scratch/rehearsal`.
 
 ## Smoke test
 
@@ -304,13 +358,24 @@ On the server, in `/opt/gtnh`:
 
 ```bash
 docker compose --env-file .env --env-file release.env ps
-docker compose --env-file .env --env-file release.env logs --tail 200 site    # or live, postgres, postgrest
+docker compose --env-file .env --env-file release.env logs --tail 200 site    # or live, postgres
+docker logs gtnh-site 2>&1 | grep '\[db\]'          # dropped connections, a missing DATABASE_URL, unread variables
 docker logs gtnh-site 2>&1 | grep 'neither X-Client-Ip nor CF-Connecting-IP'    # requests without Caddy's header
 docker logs gtnh-live 2>&1 | grep 'untrusted peer'       # LIVE_TRUSTED_PROXIES misses the proxy
+docker exec gtnh-postgres psql -U postgres -Atc "select name, applied_at from schema_migrations"
+docker exec gtnh-postgres psql -U postgres -c "select application_name, state, count(*) from pg_stat_activity
+  where usename in ('gtnh_site', 'gtnh_live') group by 1, 2"    # pool use: at most 10 site and 6 live
 ```
 
 Caddy's JSON log for the vhost is `/var/log/caddy/gtnh-stage.log`. A slow first API call after a start means the
 prewarm or the deploy regressed; the site's healthcheck allows 180 s before counting failures.
+
+Every route answering 500 "The community database is not responding. Try again in a few minutes." means the site
+cannot reach Postgres or it does not answer in time (5 s to connect, 15 s a statement): after 5 such failures in a
+row the site stops sending for 15 s, then tries again, so it recovers by itself once Postgres is back; no site or
+live restart is needed. A 503 from the library or accounts with Postgres up means the site has no `DATABASE_URL`
+(the startup log says so). "permission denied" in a log is a query outside its role's grants: the grant belongs in
+`db/grants.sql`, applied by the next migrate run.
 
 ## Cloudflare later
 
@@ -328,6 +393,6 @@ Not done yet; for the public site:
 - `LIVE_ALLOWED_ORIGINS` gains the public origin; the public site is its own build and target.
 - Board image reads (`GET /api/community/images/...`, up to 4 MB from disk each) spend one unit of the address's
   dataset budget; floods from many addresses need Cloudflare's cache (the answers are `immutable`) or a rate rule.
-- Moving the public site off the hosted Supabase project is a data step: dump and restore the community tables,
-  copy the `plan-previews` objects into the file store (the code no longer reads Supabase
-  Storage), and accept that stored plans' board images keep their `supabase.co` URLs while that bucket exists.
+- The public site moves to this stack with a fresh database: no data is copied from the hosted project it runs
+  on today, so accounts, posts and library plans start empty, and a plan whose board images point at the old
+  host's storage is not supported.

@@ -63,6 +63,7 @@ export const USAGE = `Usage: node tools/dataset-pipeline/scripts/build-datasets.
   --export           run the client export first (needed once per pack, and after an oracle change)
   --carry-nei-order  install an export whose NEI item list failed, carrying the installed copy's order
   --fresh-icons      render every icon again (empties the pack's icon cache): needed after a renderer change
+  --power-maps       point src/lib/power/data at the build even with --out elsewhere (default: only for the default out)
   --out <dir>        where the datasets are installed (default public/datasets/gtnh)
   --work <dir>       raw exports, builds and caches (default .pipeline/datasets)`;
 
@@ -72,6 +73,7 @@ export function parseArgs(argv, cwd = process.cwd()) {
   let exportFirst = false;
   let carryNeiOrder = false;
   let freshIcons = false;
+  let powerMaps;
   let outDir = path.join(repoRoot, "public", "datasets", "gtnh");
   let workDir = path.join(repoRoot, ".pipeline", "datasets");
   for (let index = 0; index < argv.length; index += 1) {
@@ -85,6 +87,8 @@ export function parseArgs(argv, cwd = process.cwd()) {
       carryNeiOrder = true;
     } else if (arg === "--fresh-icons") {
       freshIcons = true;
+    } else if (arg === "--power-maps") {
+      powerMaps = true;
     } else if (arg === "--out" || arg === "--work") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
@@ -114,7 +118,9 @@ export function parseArgs(argv, cwd = process.cwd()) {
   if (freshIcons && !exportFirst) {
     return { error: "--fresh-icons renders icons, so it needs --export." };
   }
-  return { packs: [...new Set(packs)], exportFirst, carryNeiOrder, freshIcons, outDir, workDir };
+  // The repo's power maps name the installed datasets: a build installed elsewhere leaves them alone unless asked.
+  powerMaps ??= path.resolve(outDir) === path.join(repoRoot, "public", "datasets", "gtnh");
+  return { packs: [...new Set(packs)], exportFirst, carryNeiOrder, freshIcons, powerMaps, outDir, workDir };
 }
 
 /** Whether a version directory's resource-index.json.gz carries NEI's order. */
@@ -396,31 +402,60 @@ async function rebuildPack(pack, { workDir, outDir, image, run }) {
 }
 
 /** One pack end to end; returns undefined when installed, else why not. */
+/**
+ * One pack end to end: { installed, problems }. A refusal (the publish checks, or a power map naming an id the build
+ * lacks) comes before the swap, so a pack is either installed or untouched; a problem after the swap leaves it
+ * installed and is reported as such.
+ */
 async function buildPack(pack, options) {
-  const { workDir, outDir, exportFirst, carryNeiOrder, run } = options;
+  const { workDir, outDir, exportFirst, carryNeiOrder, powerMaps, run } = options;
   if (exportFirst) {
     console.log(`\n== ${pack.id}: client export`);
     const status = await exportPack(pack, options);
     console.log(`${pack.id}: NEI item list ${status}`);
     // The list is what an export is for: one that failed is installed only when asked to carry the old order.
     if (status !== "exported" && !carryNeiOrder) {
-      return [`the export's NEI item list is ${status} (see the export log); --carry-nei-order installs it with the installed copy's order.`];
+      return {
+        installed: false,
+        problems: [`the export's NEI item list is ${status} (see the export log); --carry-nei-order installs it with the installed copy's order.`],
+      };
     }
   }
   console.log(`\n== ${pack.id}: rebuild`);
   await rebuildPack(pack, options);
+  const builtDir = path.join(workDir, pack.id, "dataset");
+  const refresh = (dir, extra) => run("node", ["tools/dataset-pipeline/scripts/refresh-power-maps.mjs", dir, "--id", pack.id, ...extra]);
+  if (powerMaps) {
+    try {
+      await refresh(builtDir, ["--check"]);
+    } catch {
+      return {
+        installed: false,
+        problems: [
+          "a power map names an id this build lacks (see above); run tools/power-machine-icons.mjs or tools/power-resource-map.mjs for it.",
+          `the build stays in ${builtDir}.`,
+        ],
+      };
+    }
+  }
   const problems = await installBuilt({
-    builtDir: path.join(workDir, pack.id, "dataset"),
+    builtDir,
     outDir,
     id: pack.id,
     replacedDir: path.join(workDir, pack.id, "replaced"),
     allowLoss: process.env.GTNH_ALLOW_NO_NEI_ORDER === "1",
   });
   if (problems.length > 0) {
-    return [...problems, `the build stays in ${path.join(workDir, pack.id, "dataset")}.`];
+    return { installed: false, problems: [...problems, `the build stays in ${builtDir}.`] };
   }
-  await run("node", ["tools/dataset-pipeline/scripts/refresh-power-maps.mjs", path.join(outDir, pack.id)]);
-  return undefined;
+  if (powerMaps) {
+    try {
+      await refresh(path.join(outDir, pack.id), []);
+    } catch (error) {
+      return { installed: true, problems: [`installed, but the power maps were not refreshed: ${error?.message ?? error}`] };
+    }
+  }
+  return { installed: true, problems: [] };
 }
 
 /**
@@ -445,22 +480,24 @@ export async function main(argv, { run = runCommand } = {}) {
   await run("docker", ["build", "-t", image, path.join(repoRoot, "tools", "dataset-pipeline", "docker")]);
 
   const failed = [];
+  const done = [];
   let installed = 0;
   for (const pack of packs) {
     const started = Date.now();
-    let problems;
+    let result;
     try {
-      problems = await buildPack(pack, { ...options, image, run });
+      result = await buildPack(pack, { ...options, image, run });
     } catch (error) {
-      problems = [error?.message ?? String(error)];
+      result = { installed: false, problems: [error?.message ?? String(error)] };
     }
-    if (problems) {
-      for (const problem of problems) console.error(`${pack.id}: ${problem}`);
+    for (const problem of result.problems) console.error(`${pack.id}: ${problem}`);
+    if (result.problems.length > 0) failed.push(pack.id);
+    if (!result.installed) {
       console.error(`${pack.id}: NOT installed.`);
-      failed.push(pack.id);
       continue;
     }
     installed += 1;
+    done.push(pack.id);
     console.log(`${pack.id}: installed in ${path.join(outDir, pack.id)} (${Math.round((Date.now() - started) / 1000)} s)`);
   }
   if (installed > 0) {
@@ -469,7 +506,7 @@ export async function main(argv, { run = runCommand } = {}) {
     });
   }
   console.log(
-    `\nInstalled: ${installed > 0 ? packs.filter((pack) => !failed.includes(pack.id)).map((pack) => pack.id).join(", ") : "none"}` +
+    `\nInstalled: ${done.length > 0 ? done.join(", ") : "none"}` +
       (failed.length > 0 ? `; failed: ${failed.join(", ")}` : ""),
   );
   return failed.length > 0 ? 1 : 0;

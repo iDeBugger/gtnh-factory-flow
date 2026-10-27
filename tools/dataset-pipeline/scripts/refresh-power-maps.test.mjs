@@ -55,4 +55,24 @@ describe("refresh-power-maps", () => {
     expect(JSON.parse(fs.readFileSync(path.join(data, "machine-icons.json"), "utf8")).machines.turbine.iconPath).toBe("/t-new.png");
     expect(JSON.parse(fs.readFileSync(path.join(data, "2.8.1", "machine-icons.json"), "utf8"))).toEqual(other);
   });
+
+  it("writes nothing when a map names an id the build lacks, and checks without writing", () => {
+    const root = tempDir();
+    const version = path.join(root, "build");
+    fs.mkdirSync(version);
+    fs.writeFileSync(path.join(version, "resource-index.json.gz"), gzipSync(JSON.stringify({ resourceIndex: [...records.values()] })));
+    const data = path.join(root, "data");
+    fs.mkdirSync(data);
+    const machines = { datasetVersionId: "local-x", machines: { turbine: { id: "gt:turbine", iconPath: "/t-old.png" } } };
+    const resources = { datasetVersionId: "local-x", resources: { Gone: { kind: "item", id: "gt:gone", iconPath: "/g.png" } } };
+    fs.writeFileSync(path.join(data, "machine-icons.json"), JSON.stringify(machines));
+    fs.writeFileSync(path.join(data, "resource-map.json"), JSON.stringify(resources));
+    const report = refreshPowerMaps(version, data, { id: "local-x" });
+    expect(report.find((entry) => entry.file === "resource-map.json").missing).toEqual(["Gone"]);
+    expect(JSON.parse(fs.readFileSync(path.join(data, "machine-icons.json"), "utf8"))).toEqual(machines);
+    fs.writeFileSync(path.join(data, "resource-map.json"), JSON.stringify({ ...resources, resources: {} }));
+    const checked = refreshPowerMaps(version, data, { id: "local-x", write: false });
+    expect(checked.find((entry) => entry.file === "machine-icons.json").changed).toBe(1);
+    expect(JSON.parse(fs.readFileSync(path.join(data, "machine-icons.json"), "utf8"))).toEqual(machines);
+  });
 });

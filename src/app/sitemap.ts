@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { getCommunityDb, isCommunityConfigured } from "@/lib/server/community";
+import { publicPlansByScore } from "@/lib/server/services/community-plans";
+import { isDatabaseConfigured } from "@/lib/server/services/config";
 import { siteUrl } from "@/lib/site-url";
 
 /** Re-query the plan list at most hourly, so crawl bursts cost one DB read. */
@@ -20,19 +21,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/`, lastModified: new Date(), changeFrequency: "weekly", priority: 1 },
   ];
 
-  if (!isModAndCommunityOn() || !isCommunityConfigured()) {
+  if (!isModAndCommunityOn() || !isDatabaseConfigured()) {
     return entries;
   }
 
   try {
-    const { data } = await getCommunityDb()
-      .from("community_plans")
-      .select("id,created_at,updated_at")
-      .or("is_public.eq.true,is_public.is.null")
-      .order("score", { ascending: false })
-      .limit(1000)
-      .returns<{ id: string; created_at: string; updated_at: string | null }[]>();
-    for (const row of data ?? []) {
+    const rows = await publicPlansByScore(1000, "links");
+    for (const row of rows) {
       entries.push({
         url: `${base}/?plan=${encodeURIComponent(row.id)}`,
         lastModified: new Date(row.updated_at ?? row.created_at),

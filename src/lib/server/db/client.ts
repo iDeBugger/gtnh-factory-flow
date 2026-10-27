@@ -1,0 +1,56 @@
+import { Kysely, PostgresDialect } from "kysely";
+import pg from "pg";
+import { GuardedDialect } from "./guard";
+import { DB_TYPE_PARSERS } from "./parsers";
+import type { Database } from "./schema";
+import { dbSettings, type DbEnv, type DbService } from "./settings";
+
+/**
+ * The direct client: Kysely over a `pg` pool at `DATABASE_URL`, behind the
+ * breaker (`GuardedDialect`). Only `db/index.ts` makes one; repositories
+ * take it from `getDb()`.
+ */
+
+export interface DirectDbClient {
+  db: Kysely<Database>;
+  pool: pg.Pool;
+}
+
+/** `pg`'s text parsers with ours over them, so the pool reads values as PGlite does. */
+const typeParsers: pg.CustomTypesConfig = {
+  getTypeParser: ((oid: number, format?: "text" | "binary") =>
+    (format !== "binary" && DB_TYPE_PARSERS[oid]) ||
+    pg.types.getTypeParser(oid, format)) as pg.CustomTypesConfig["getTypeParser"],
+};
+
+/**
+ * Listens for every connection the pool holds, idle or in use. A connection
+ * the server drops (a restart, the idle-in-transaction timeout) emits
+ * `error`; unheard, Node raises it as an uncaught exception, which ends the
+ * live service. The pool only listens while a connection is idle, so each one
+ * gets its own listener as it connects. The work holding it then fails as
+ * down, and the pool discards it on release and connects afresh next time.
+ */
+export function hearConnectionErrors(pool: pg.Pool, label: string): void {
+  pool.on("error", (error) => {
+    console.error(`[${label}] idle connection lost: ${error.message}`);
+  });
+  pool.on("connect", (client) => {
+    client.on("error", (error) => {
+      console.error(`[${label}] connection lost: ${error.message}`);
+    });
+  });
+}
+
+export function createDbClient(service: DbService, env: DbEnv): DirectDbClient {
+  const settings = dbSettings(service, env);
+  if (!settings.connectionString) {
+    throw new Error("The database is not configured: set DATABASE_URL");
+  }
+  const pool = new pg.Pool({ ...settings, types: typeParsers });
+  hearConnectionErrors(pool, "db");
+  const db = new Kysely<Database>({
+    dialect: new GuardedDialect(new PostgresDialect({ pool })),
+  });
+  return { db, pool };
+}

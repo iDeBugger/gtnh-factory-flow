@@ -42,15 +42,12 @@ export function normalizeBlueprintTags(raw: unknown): string[] {
 }
 
 export const BLUEPRINT_NAME_MAX_LENGTH = 60;
-export const BLUEPRINT_DESCRIPTION_MAX_LENGTH = 500;
 /** A blueprint is a fragment, not a whole plan; half the community cap. */
 export const BLUEPRINT_PAYLOAD_MAX_BYTES = 1_500_000;
 /** The whole save body on the wire: the payload plus a name, tags, two stat lists and an icon. */
 export const BLUEPRINT_BODY_MAX_BYTES = 2 * 1024 * 1024;
 /** Per user. Generous — the list UI stays honest well past this. */
 export const BLUEPRINT_MAX_PER_USER = 200;
-/** One page of the public shelf. */
-export const PUBLIC_BLUEPRINT_PAGE_SIZE = 30;
 
 export interface BlueprintSummary {
   id: string;
@@ -61,7 +58,12 @@ export interface BlueprintSummary {
   edgeCount: number;
   pocketCount: number;
   machineCount: number;
-  /** Published to the network. Private rows always carry false. */
+  /**
+   * The row's publish flag and the public standing below (description,
+   * author, votes, downloads) are part of the answer's shape and carry what
+   * the table holds; no route writes them, since a blueprint is its owner's
+   * alone.
+   */
   isPublic: boolean;
   description: string;
   authorName?: string;
@@ -70,9 +72,9 @@ export interface BlueprintSummary {
   downvotes: number;
   score: number;
   downloads: number;
-  /** Public listings: this row belongs to the session user. */
+  /** This row belongs to the session user. */
   isMine?: boolean;
-  /** Public listings: the vote this browser has cast, if any. */
+  /** The vote this browser has cast, if any. */
   myVote?: 1 | -1;
   /** The stat card: external needs and unconsumed outputs at save time. */
   needs: BlueprintResourceStat[];
@@ -92,23 +94,6 @@ export interface BlueprintDetail extends BlueprintSummary {
 
 export interface BlueprintListResponse {
   blueprints: BlueprintSummary[];
-  /** Public scope only: another page exists past this one. */
-  hasMore?: boolean;
-}
-
-export interface BlueprintVoteResponse {
-  upvotes: number;
-  downvotes: number;
-  score: number;
-  myVote?: 1 | -1;
 }
 
 export type BlueprintSort = "newest" | "oldest" | "name" | "largest";
-
-export type PublicBlueprintSort = "top" | "newest" | "downloads";
-
-export interface PublicBlueprintListRequest {
-  sort?: PublicBlueprintSort;
-  search?: string;
-  page?: number;
-}

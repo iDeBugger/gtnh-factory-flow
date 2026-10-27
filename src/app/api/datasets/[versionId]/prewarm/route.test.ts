@@ -5,7 +5,7 @@ import { GET } from "./route";
 vi.mock("@/lib/server/dataset-query", () => ({
   prewarmDatasetVersion: vi.fn(async () => undefined),
 }));
-vi.mock("@/lib/server/resource-popularity", () => ({
+vi.mock("@/lib/server/services/resource-popularity", () => ({
   getResourcePopularity: vi.fn(() => undefined),
 }));
 

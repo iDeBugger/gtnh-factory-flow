@@ -9,9 +9,9 @@ import type { LiveOp, LivePlan } from "@/lib/live/ops";
 import { plansEqual } from "@/lib/live/ops";
 import { docKey, type ServerFrame } from "@/lib/live/protocol";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { forgetSessionUsers, getCommunityDb, makeSessionToken } from "@/lib/server/community";
+import { useTestDb } from "@/test-support/test-db";
+import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
+import { json } from "@/lib/server/db";
 import * as designRoute from "@/app/api/library/designs/[designId]/route";
 import * as memberRoute from "@/app/api/library/designs/[designId]/members/[userId]/route";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
@@ -46,7 +46,7 @@ function countingStore(): { store: PlanStore; calls: Record<string, number> } {
 const ORIGIN = "http://localhost:3000";
 const INTERNAL_TOKEN = "live-test-internal";
 
-let local: LocalDatabase;
+const testDb = useTestDb();
 const users: Record<string, { id: string; cookie: string }> = {};
 const journalDirs: string[] = [];
 const services: LiveService[] = [];
@@ -181,12 +181,11 @@ async function startService(
 }
 
 async function makeUser(username: string) {
-  const { data } = await getCommunityDb()
-    .from("community_users")
-    .insert({ username, password_hash: "x:y" })
-    .select("id")
-    .single();
-  const id = (data as { id: string }).id;
+  const { id } = await testDb()
+    .db.insertInto("community_users")
+    .values({ username, password_hash: "x:y" })
+    .returning("id")
+    .executeTakeFirstOrThrow();
   users[username] = { id, cookie: `gtnh_session=${makeSessionToken(id)}` };
 }
 
@@ -210,28 +209,26 @@ async function makeDesign(
     tasks: [{ id: "t1", title: "First", status: "todo", order: "a0" }],
     ...extra,
   };
-  const db = getCommunityDb();
-  const { error } = await db.from("library_designs").insert({
-    user_id: users.ann!.id,
-    id: designId,
-    name: "Live test",
-    plan,
-  });
-  expect(error).toBeNull();
+  const { db } = testDb();
   await db
-    .from("library_design_members")
-    .insert({ owner_id: users.ann!.id, design_id: designId, member_id: users.bob!.id });
+    .insertInto("library_designs")
+    .values({ user_id: users.ann!.id, id: designId, name: "Live test", plan: json(plan) })
+    .execute();
+  await db
+    .insertInto("library_design_members")
+    .values({ owner_id: users.ann!.id, design_id: designId, member_id: users.bob!.id })
+    .execute();
   return { designId, doc: docKey(users.ann!.id, designId), plan };
 }
 
 async function storedRow(designId: string) {
-  const { data } = await getCommunityDb()
-    .from("library_designs")
-    .select("plan,seq,live_lease_until,deleted_at")
-    .eq("user_id", users.ann!.id)
-    .eq("id", designId)
-    .single();
-  return data as {
+  const data = await testDb()
+    .db.selectFrom("library_designs")
+    .select(["plan", "seq", "live_lease_until", "deleted_at"])
+    .where("user_id", "=", users.ann!.id)
+    .where("id", "=", designId)
+    .executeTakeFirstOrThrow();
+  return data as unknown as {
     plan: LivePlan;
     seq: number;
     live_lease_until: string | null;
@@ -291,10 +288,7 @@ async function rawUpgrade(
 }
 
 beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
   vi.stubEnv("COMMUNITY_HASH_SALT", "live-service-test-salt");
-  local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
   for (const name of ["ann", "bob", "carol"]) {
     await makeUser(name);
   }
@@ -306,8 +300,6 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  useInProcessLocalDb(undefined);
-  await local?.close();
   for (const dir of journalDirs) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -1195,15 +1187,15 @@ describe("the live service", { timeout: 30_000 }, () => {
         const username = `many-${at}`;
         await makeUser(username);
         const designId = `design-many-${at}`;
-        const { error } = await getCommunityDb()
-          .from("library_designs")
-          .insert({
+        await testDb()
+          .db.insertInto("library_designs")
+          .values({
             user_id: users[username]!.id,
             id: designId,
             name: "Many",
-            plan: { schemaVersion: PROJECT_SCHEMA_VERSION, id: `many-${at}`, notes: "n".repeat(100_000) },
-          });
-        expect(error).toBeNull();
+            plan: json({ schemaVersion: PROJECT_SCHEMA_VERSION, id: `many-${at}`, notes: "n".repeat(100_000) }),
+          })
+          .execute();
         return { username, doc: docKey(users[username]!.id, designId) };
       }),
     );
@@ -1272,12 +1264,12 @@ describe("the live service", { timeout: 30_000 }, () => {
     await member.hello();
     await owner.join(other);
     await member.join(other);
-    await getCommunityDb()
-      .from("library_design_members")
-      .delete()
-      .eq("owner_id", users.ann!.id)
-      .eq("design_id", designId)
-      .eq("member_id", users.bob!.id);
+    await testDb()
+      .db.deleteFrom("library_design_members")
+      .where("owner_id", "=", users.ann!.id)
+      .where("design_id", "=", designId)
+      .where("member_id", "=", users.bob!.id)
+      .execute();
     expect(await member.next("kicked", () => true, 5000)).toEqual({
       t: "kicked",
       doc: other,
@@ -1351,7 +1343,7 @@ describe("the live service", { timeout: 30_000 }, () => {
     await bob.hello();
     // What the website does on Sign out everywhere: the row's epoch moves, then the notice.
     const epoch = Date.now();
-    await getCommunityDb().from("community_users").update({ session_epoch: epoch }).eq("id", users.ann!.id);
+    await testDb().db.updateTable("community_users").set({ session_epoch: epoch }).where("id", "=", users.ann!.id).execute();
     const notice = await fetch(`http://127.0.0.1:${port}/internal/signed-out`, {
       method: "POST",
       headers: { authorization: `Bearer ${INTERNAL_TOKEN}`, "content-type": "application/json" },
@@ -1378,7 +1370,7 @@ describe("the live service", { timeout: 30_000 }, () => {
     expect(JSON.parse(welcome).t).toBe("welcome");
     fresh.close();
     // Ann's cookie in the other tests was made under epoch 0.
-    await getCommunityDb().from("community_users").update({ session_epoch: 0 }).eq("id", users.ann!.id);
+    await testDb().db.updateTable("community_users").set({ session_epoch: 0 }).where("id", "=", users.ann!.id).execute();
     forgetSessionUsers();
   });
 

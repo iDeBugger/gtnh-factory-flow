@@ -1,11 +1,8 @@
-import { assertLocalDbAllowed } from "./local-db/client";
-
 /**
  * What the website's server checks as it starts (src/instrumentation.ts,
  * which exits the process when a check throws, so nothing serves
  * half-configured and the restart policy sees the failure):
  *
- * - LOCAL_DB=1 never runs in production: it throws.
  * - COMMUNITY_HASH_SALT missing or blank: it warns. The secret accessor in
  *   session.ts refuses to sign or check anything in production without it, so
  *   sign-in, the library and blueprints are off while the planner keeps
@@ -16,10 +13,14 @@ import { assertLocalDbAllowed } from "./local-db/client";
  * - GTNH_MAX_LOADED_RECIPE_SHARDS is no longer read (the shard cache is bounded
  *   by bytes): it warns and names GTNH_MAX_LOADED_RECIPE_SHARD_MB, so a unit
  *   that still sets it does not believe it is in effect.
- * - SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY set: it warns and names
- *   POSTGREST_URL and POSTGREST_SERVICE_TOKEN, the variables the database
- *   client reads, so an old environment file does not leave the server
- *   without a database while looking configured.
+ * - DATABASE_URL missing in production: it warns. Accounts, the library and
+ *   blueprints answer that they are off while the planner keeps serving.
+ * - A variable of an earlier database setup set (SUPABASE_URL,
+ *   SUPABASE_SERVICE_ROLE_KEY, LOCAL_DB): it warns and names DATABASE_URL,
+ *   the one variable the database client reads, so an old environment file
+ *   does not leave the server without a database while looking configured.
+ *   The deployed stack's env check refuses the REST client's variables by
+ *   name before anything starts (tools/deploy/check-env.mjs).
  */
 export const SHORT_SECRET_LENGTH = 16;
 
@@ -39,8 +40,14 @@ export function checkServerSetupOrExit(): void {
   }
 }
 
+/** Variables no database client reads any more. */
+const UNREAD_DB_VARIABLES = [
+  "SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "LOCAL_DB",
+] as const;
+
 export function checkServerSetup(warn: (message: string) => void = console.warn): void {
-  assertLocalDbAllowed();
   const salt = process.env.COMMUNITY_HASH_SALT;
   if (salt === undefined || salt.trim() === "") {
     warn(
@@ -56,9 +63,12 @@ export function checkServerSetup(warn: (message: string) => void = console.warn)
       "[datasets] GTNH_MAX_LOADED_RECIPE_SHARDS is ignored: the recipe shard cache is bounded in MB by GTNH_MAX_LOADED_RECIPE_SHARD_MB.",
     );
   }
-  if (process.env.SUPABASE_URL || process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    warn(
-      "[db] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not read: set POSTGREST_URL and POSTGREST_SERVICE_TOKEN.",
-    );
+  if (process.env.NODE_ENV === "production" && !process.env.DATABASE_URL) {
+    warn("[db] DATABASE_URL is not set: accounts, the library and blueprints are off.");
+  }
+  for (const name of UNREAD_DB_VARIABLES) {
+    if (process.env[name]) {
+      warn(`[db] ${name} is not read: set DATABASE_URL.`);
+    }
   }
 }

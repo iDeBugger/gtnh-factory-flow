@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { datasetBudgetRefusal } from "@/lib/server/dataset-rate";
-import { getResourcePopularity } from "@/lib/server/resource-popularity";
+import { datasetBudgetRefusal } from "@/lib/server/limits/dataset-rate";
+import { getResourcePopularity } from "@/lib/server/services/resource-popularity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

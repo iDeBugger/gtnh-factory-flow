@@ -29,13 +29,15 @@ the game is `docs/design/cloud-live.md` in the game's repository: frames and ops
   refused as the batch is read (`readOps`).
 - The server writes comment stamps and a task's `createdBy`; the client's values are replaced.
 - Flushes, renewals and lease takes only touch designs that are not tombstoned: a deleted plan is never written back.
-- Sessions: `src/lib/server/session.ts`, the website's own check (constant time); a token whose epoch is not the
+  A release clears the room's lease on a tombstone too: it writes no plan, and a lease left behind would refuse the
+  plan body of a newer save reviving the design until it ran out (`store-grants.test.ts`).
+- Sessions: `src/lib/server/auth/session.ts`, the website's own check (constant time); a token whose epoch is not the
   account's (signed out everywhere) is refused as no sign-in (4001). Origins: `LIVE_ALLOWED_ORIGINS`; a
   client sending no Origin (the game) is let in only while `NEXT_PUBLIC_MOD_AND_COMMUNITY` is `on`
   (`isModAndCommunityOn`, read at runtime here); off, that upgrade, a `client:"game"` hello and `/live/nearby` are
   refused. Tests of the game paths turn it on with `withModAndCommunityOn()` (`src/test-support/`). Limits that
   need no database come before any lookup (upgrades per address and account, sockets per account); accounts are
-  cached a minute. The client address is read by the site's shared rule (`src/lib/server/client-address.ts`:
+  cached a minute. The client address is read by the site's shared rule (`src/lib/server/http/client-address.ts`:
   `X-Client-Ip`, else `CF-Connecting-IP`, IP literals only, IPv6 on its /64) only on requests from loopback
   or from a peer `LIVE_TRUSTED_PROXIES` names (`trusted-proxies.ts`; in Docker it is the `edge` network's gateway,
   the address docker-proxy dials from); any other peer is its own address, and one sending `X-Client-Ip` is warned
@@ -49,4 +51,19 @@ the game is `docs/design/cloud-live.md` in the game's repository: frames and ops
 - `/internal/*` (Bearer `LIVE_INTERNAL_TOKEN`) is for the Next.js routes; Caddy routes only `/live` and `/live/*` here.
 - Production runs the bundle `npm run build:live` makes (`dist-live/live.mjs`, gitignored); development runs the
   sources with tsx (`npm run live`, `npm run dev:local`).
-- Exam: `service.test.ts` (in-process, real sockets, the local database). Run it after any change here.
+- The store (`store.ts`, `PlanStore`) holds no SQL: it is an adapter over the site's repositories
+  (`src/lib/server/repos/designs.ts` for every lease and plan write, `design-members`, `accounts`) and
+  `services/design-role.ts`, so the REST save and the live service share one writer for the lease
+  (`src/lib/server/CLAUDE.md`, Database). Each lease take, renewal, flush and release is one statement.
+- The service logs in as `gtnh_live` (`DATABASE_URL`, built by compose), which holds only the columns the store
+  uses (`db/grants.sql`): select `id, username, is_admin, session_epoch` on `community_users`; select on
+  `library_design_members`; select `user_id, id, plan, seq, plan_bytes, deleted_at, live_lease_until,
+  live_lease_token` and update `plan, seq, plan_updated_at, updated_at, live_lease_until, live_lease_token` on
+  `library_designs`. Nothing else, no password hashes. A query the store gains must work under those grants, or
+  `store-grants.test.ts` fails; a column it needs is a line in `db/grants.sql`.
+- `main.ts` refuses to start without `DATABASE_URL` ("No database: set DATABASE_URL."), opens the pool as the live
+  service (`configureDb({ service: "live" })`: 6 connections, `application_name` `gtnh-live`) and closes it after
+  the SIGTERM flush. A database restart fails the work in flight as down (`COMMUNITY_DB_DOWN_MESSAGE`, the breaker
+  in `db/breaker.ts`); the pool reconnects on its own and rooms reopen without a restart of the service.
+- Exam: `service.test.ts` (in-process, real sockets, the local database), `store-grants.test.ts` (every store call
+  as `gtnh_live`), `main.test.ts`. Run them after any change here.

@@ -1,0 +1,335 @@
+{
+  "edges": [
+    {
+      "from": "src/lib/model/board-windows.ts",
+      "to": "src/lib/board-grid.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/model/cell-wires.ts",
+      "to": "src/components/flow/board-placement.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/model/cell-wires.ts",
+      "to": "src/lib/board-grid.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/model/project-normalize.ts",
+      "to": "src/lib/board-grid.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/search/resource-search-engine.ts",
+      "to": "src/lib/server/bounded-lru.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/solver/hatch-supply.ts",
+      "to": "src/components/flow/resource-handles.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/clean/clean-model.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/clean/rail/notices.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/clean/rail/rail-model.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/node-verdict.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/resource-handles.ts",
+      "rule": "1"
+    },
+    {
+      "from": "src/lib/blueprints/types.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "2"
+    },
+    {
+      "from": "src/app/api/community/plans/[planId]/card/route.tsx",
+      "to": "src/components/flow/tier-colors.ts",
+      "rule": "4"
+    },
+    {
+      "from": "src/lib/search/resource-search-engine.ts",
+      "to": "src/lib/server/bounded-lru.ts",
+      "rule": "6"
+    },
+    {
+      "from": "src/store/design-store.ts",
+      "to": "src/components/flow/board-view.ts",
+      "rule": "7"
+    },
+    {
+      "from": "src/store/factory-store.ts",
+      "to": "src/components/flow/board-placement.ts",
+      "rule": "7"
+    },
+    {
+      "from": "src/store/factory-store.ts",
+      "to": "src/components/flow/clean/group/group-model.ts",
+      "rule": "7"
+    },
+    {
+      "from": "src/store/solve-books.worker.ts",
+      "to": "src/components/flow/clog-lock.ts",
+      "rule": "7"
+    },
+    {
+      "from": "src/lib/arrange-job.ts",
+      "to": "src/components/flow/grid-edge-router.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/arrange-job.ts",
+      "to": "src/components/flow/router-tuning.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/blueprints/client.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/blueprints/io-stats.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/blueprints/types.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/board-arrange-free.ts",
+      "to": "src/components/flow/router-tuning.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/board-arrange-optimize.ts",
+      "to": "src/components/flow/grid-edge-router.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/board-arrange-optimize.ts",
+      "to": "src/components/flow/router-tuning.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/board-arrange.ts",
+      "to": "src/components/flow/router-tuning.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/community/open-post.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/community/open-post.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/community/plan-preview-capture.ts",
+      "to": "src/components/flow/board-view.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/community/plan-preview-capture.ts",
+      "to": "src/components/flow/canvas-themes.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/datasets/convert-action.ts",
+      "to": "src/components/flow/clean/rail/NoticeBar.tsx",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/datasets/convert-action.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/datasets/convert-action.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/datasets/convert-payload-version.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/designs/design-camera.ts",
+      "to": "src/components/flow/board-camera.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/import-export/open-plan-file.ts",
+      "to": "src/components/flow/clean/rail/NoticeBar.tsx",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/import-export/open-plan-file.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/import-export/open-plan-file.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/import-export/recipe-migration.ts",
+      "to": "src/components/flow/resource-handles.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/library/library-sync.ts",
+      "to": "src/store/community-auth-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/library/library-sync.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/library/library-sync.ts",
+      "to": "src/store/live-edit-gate.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/library/open-shared.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/model/cell-wires.ts",
+      "to": "src/components/flow/board-placement.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/open-plan-code.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/plan-view.ts",
+      "to": "src/components/flow/board-view.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/plan-view.ts",
+      "to": "src/components/flow/canvas-themes.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/plan-view.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/route-judge.ts",
+      "to": "src/components/flow/grid-edge-router.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/route-judge.ts",
+      "to": "src/components/flow/router-tuning.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/solver/hatch-supply.ts",
+      "to": "src/components/flow/resource-handles.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/clean/clean-model.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/clean/rail/notices.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/clean/rail/rail-model.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/node-verdict.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/solver/plan/parity/scenario-kit.ts",
+      "to": "src/components/flow/resource-handles.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/make-task.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/make-task.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/make-task.ts",
+      "to": "src/store/live-session.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/open-link.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/open-link.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/open-link.ts",
+      "to": "src/store/live-session.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/task-link-index.ts",
+      "to": "src/store/design-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/task-link-index.ts",
+      "to": "src/store/factory-store.ts",
+      "rule": "8"
+    },
+    {
+      "from": "src/lib/tasks/task-link-index.ts",
+      "to": "src/store/live-session.ts",
+      "rule": "8"
+    }
+  ],
+  "queriesInApp": []
+}

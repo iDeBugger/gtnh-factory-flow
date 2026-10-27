@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { makeActorKey } from "./community";
+import { makeActorKey } from "./auth/keys";
 
 /** A request as the rate limits see it: only the address matters. */
 function from(address: string, deviceId?: string): Request {

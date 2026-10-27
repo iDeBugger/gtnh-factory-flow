@@ -4,7 +4,7 @@
 #
 #   docker build --target site --build-arg NEXT_PUBLIC_SITE_URL=https://... --build-arg GTNH_BUILD_ID=<version>-<sha8> .
 #   docker build --target live ... .
-#   docker build --target migrate --build-arg GTNH_BUILD_ID=... .
+#   docker build --target migrate --build-arg GTNH_BUILD_ID=... .   (no site URL: it skips the Next build)
 #
 # Both run as the image's `node` user (uid 1000) with root-owned, read-only
 # application files. Datasets, uploaded files, client files and the live
@@ -19,8 +19,6 @@
 
 # Node 24 as CI. Pinned by digest: a tag can be moved, a digest cannot.
 ARG NODE_IMAGE=node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
-# The same image as the database's (tools/deploy/docker-compose.yml), for psql.
-ARG POSTGRES_IMAGE=postgres:17.10-bookworm@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f
 
 FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
@@ -82,7 +80,7 @@ COPY --from=build /app/.next/standalone/node_modules ./node_modules
 COPY --from=build /app/public ./public
 COPY --from=build /app/src/app/fonts ./src/app/fonts
 # The deploy runs the env check in this image, against the server's .env.
-COPY --from=build /app/tools/deploy/check-env.mjs /app/tools/deploy/service-token.mjs ./deploy/
+COPY --from=build /app/tools/deploy/check-env.mjs ./deploy/
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/.next/standalone/server.js /app/.next/standalone/package.json ./
 COPY --from=build /app/.next/standalone/.next ./.next
@@ -139,14 +137,24 @@ USER node
 EXPOSE 3001
 CMD ["node", "dist-live/live.mjs"]
 
+# The migration runner, bundled with `pg` inside (npm run build:db), from
+# the two files it is made of: it never waits for the Next build or needs
+# its build arguments.
+FROM deps AS db-build
+COPY tools/db/migrate.ts ./tools/db/migrate.ts
+COPY src/lib/server/db/migrations.ts ./src/lib/server/db/migrations.ts
+RUN npm run build:db
+
 # The database's setup, run once per deploy (`docker compose run --rm
-# migrate`): the SQL travels in the image, so the server needs no checkout.
-FROM ${POSTGRES_IMAGE} AS migrate
-COPY supabase/schema.sql /deploy/schema.sql
-COPY supabase/migrations/ /deploy/migrations/
-COPY tools/deploy/db/ /deploy/db/
-RUN chmod -R a+rX,go-w /deploy && chmod 0755 /deploy/db/migrate.sh
+# migrate`): the runner, which needs no node_modules, and the SQL it applies
+# (db/), so the server needs no checkout.
+FROM ${NODE_IMAGE} AS migrate
+COPY --from=db-build /app/dist-db/migrate.mjs /deploy/migrate.mjs
+COPY db/ /deploy/db/
+RUN chmod -R a+rX,go-w /deploy
+# Declared here, after every RUN and COPY: a build argument in scope is part
+# of each later RUN's cache key, and the build id changes with every commit.
 ARG GTNH_BUILD_ID
 LABEL org.gtnh.build=$GTNH_BUILD_ID
-USER postgres
-CMD ["sh", "/deploy/db/migrate.sh"]
+USER node
+CMD ["node", "/deploy/migrate.mjs", "/deploy/db"]

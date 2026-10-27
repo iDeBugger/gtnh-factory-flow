@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { datasetErrorResponse } from "@/lib/server/error-response";
-import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
+import { datasetErrorResponse } from "@/lib/server/http/error-response";
+import { datasetCacheHeaders } from "@/lib/server/http/dataset-cache-headers";
 import { getDatasetRecipe } from "@/lib/server/dataset-query";
-import { datasetBudgetRefusal, meteredDatasetWork } from "@/lib/server/dataset-rate";
+import { datasetBudgetRefusal, meteredDatasetWork } from "@/lib/server/limits/dataset-rate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

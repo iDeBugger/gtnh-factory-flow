@@ -17,13 +17,46 @@ before changing that area; it names the tests that pin its behaviour.
 | Domain model: resources, cells vs fluids, oredict context, sections, boards | `src/lib/model/CLAUDE.md` |
 | Power generation | `src/lib/power/CLAUDE.md` |
 | Designs, tabs, saving, account sync, plan import/export, public view | `src/store/CLAUDE.md` |
-| Server, recipe API, database (PostgREST), file store, cloud plans, local database | `src/lib/server/CLAUDE.md` |
+| Server, recipe API, database (`src/lib/server/{db,repos,services}`: Postgres direct, the layers, migrations and roles in `db/`), file store, cloud plans, local database | `src/lib/server/CLAUDE.md` |
 | Live service: live plan editing over WebSockets | `src/live/CLAUDE.md`, `docs/live.md` |
 | Dataset pipeline: export, normalize, rebuild, publish | `tools/dataset-pipeline/CLAUDE.md` |
 | Deploy: Docker images, compose stack, deploy and dataset publish scripts | `docs/deploy.md` |
 
 Longer references, read on demand: `docs/power-planner-math.md` (the decoded power workbook),
 `docs/COMMUNITY.md`.
+
+## Layers
+
+`src/architecture.test.ts` holds these over the import graph of `src/` and `tools/`
+(tests, `__fixtures__/`, `test-support/` and `src/app/dev/` exempt):
+
+1. The domain (`src/lib/{model,machines,power,solver,search,board}`) imports the domain and
+   `src/lib/<feature>/types.ts` only, and no React, Zustand, React Flow, Node, Next, `ws` or
+   database package.
+2. Contracts (feature `types.ts`, `library/sync-types.ts`, `datasets/resolve-recipes-limits.ts`,
+   `live/{ops,protocol,validate}.ts`) import the domain and contracts only.
+3. `src/lib/server/**` never imports `src/{components,store,app,live}` or React.
+4. Route handlers never import the database layer (`lib/server/db`, `lib/server/repos`), the UI
+   or the stores, and send no query themselves (no `.from("`, no database package).
+5. `src/live` uses `lib/server/repos`, `services/design-role.ts`,
+   `auth/{session,secret,sessions}.ts`, `db/index.ts` and `http/client-address.ts` only, never
+   the app, the UI or the stores.
+6. Browser code (the UI, the stores, every `"use client"` file and worker, and what they load
+   at run time) never reaches `src/lib/server` or a Node built-in.
+7. The stores never import the UI.
+8. Non-UI `src/lib` never imports the UI or the stores.
+9. Only the data layer (`lib/server/{db,repos}`) in `src/` loads `kysely`, `pg` or
+   `db/client.ts`.
+
+Services (`lib/server/services`) never import `next/*`, with no exceptions, and the live service
+never loads `auth/passwords.ts`. The data layer alone holds queries and SQL; the rules that keep it
+so (rules 10 to 13 and the SQL-text checks) are in `src/lib/server/CLAUDE.md`, Database.
+
+Today's exceptions to the rules are listed in `src/architecture-allowlist.json`, and the list only
+shrinks: a fixed edge still listed fails, the dump (`ARCH_DUMP=1 npx vitest run
+src/architecture.test.ts`) only removes fixed entries, and `MAX_ALLOWED` in the test caps each
+rule's count, so a new exception needs an edit to the test in the same diff. Lower the cap when
+you remove entries.
 
 ## Commands
 

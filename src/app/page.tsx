@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { FactoryPlannerApp } from "@/components/FactoryPlannerApp";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { describePlanRow, getPublicPlanRow } from "@/lib/server/plan-preview";
+import { describePlanRow, getPublicPlanRow } from "@/lib/server/services/plan-preview";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;

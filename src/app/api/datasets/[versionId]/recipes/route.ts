@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { datasetErrorResponse } from "@/lib/server/error-response";
-import { datasetCacheHeaders } from "@/lib/server/dataset-cache-headers";
+import { datasetErrorResponse } from "@/lib/server/http/error-response";
+import { datasetCacheHeaders } from "@/lib/server/http/dataset-cache-headers";
 import { queryDatasetRecipes } from "@/lib/server/dataset-query";
 import {
   datasetBudgetRefusal,
   meteredDatasetWork,
   searchRequestCost,
-} from "@/lib/server/dataset-rate";
+} from "@/lib/server/limits/dataset-rate";
 import { parseSearchQuery } from "@/lib/search/text-search";
 import {
   MAX_RECIPE_QUERY_CLAUSES,

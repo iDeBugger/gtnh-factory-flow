@@ -23,13 +23,11 @@ export interface PlanSearch {
 export const PLAN_SEARCH_MAX_LENGTH = 120;
 
 /**
- * ilike patterns and PostgREST's or() syntax both have magic characters;
- * stripping them beats escaping them for a search box. The or() template
- * puts the text in unquoted, so `,` `(` `)` would end the value and start a
- * filter of the reader's own; `%` `_` and `*` (PostgREST reads it as `%`)
- * only widen a match; `\` escapes nothing there. Applied to free text and
- * tags, never to the author, whose underscores are real (it goes to eq(),
- * a parameter of its own).
+ * Tags and free text lose their pattern and punctuation characters rather
+ * than match them: `%`, `_` and `*` never widen a match, and `,` `(` `)`
+ * `\` never reach the query. The server also binds each term as a
+ * parameter and escapes LIKE's own characters. Never applied to the author,
+ * whose underscores are real; `withTag` relies on `_` reading as a space.
  */
 function scrub(term: string): string {
   return term.replace(/[,()%_\\*]/g, " ").trim();
@@ -83,34 +81,4 @@ export function withAuthor(raw: string, name: string): string {
     .split(/\s+/)
     .filter((token) => token && !token.startsWith("@"));
   return [...kept, `@${name.trim()}`].join(" ").trim();
-}
-
-/**
- * The smallest slice of a PostgREST query builder the search needs, so the
- * narrowing can be exercised against a recorder in tests.
- */
-export interface PlanSearchQuery<T> {
-  ilike(column: string, pattern: string): T;
-  eq(column: string, value: string): T;
-  or(filters: string): T;
-}
-
-/** Narrows `query` by every part of the search; returns the narrowed query. */
-export function applyPlanSearch<T extends PlanSearchQuery<T>>(query: T, search: PlanSearch): T {
-  let next = query;
-  for (const tag of search.tags) {
-    next = next.ilike("tags_text", `%${tag}%`);
-  }
-  if (search.author) {
-    next = next.eq("author_name", search.author);
-  } else if (search.bareAuthor) {
-    // A bare @ narrows to nobody rather than to everything.
-    next = next.eq("author_name", "");
-  }
-  if (search.text) {
-    next = next.or(
-      `name.ilike.%${search.text}%,description.ilike.%${search.text}%,tags_text.ilike.%${search.text}%`,
-    );
-  }
-  return next;
 }

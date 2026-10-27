@@ -268,7 +268,8 @@ function landOnNothing(set: (partial: Partial<DesignStore>) => void, rest?: Part
   openLibrary();
 }
 
-function currentProject(): FactoryProject {
+/** The plan on the canvas, which runs ahead of the stored record by autosave's wait. */
+export function currentProject(): FactoryProject {
   return useFactoryStore.getState().project;
 }
 

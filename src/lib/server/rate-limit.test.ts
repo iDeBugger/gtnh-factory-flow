@@ -1,25 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { openLocalDatabase, type LocalDatabase } from "@/lib/server/local-db/database";
-import { useInProcessLocalDb } from "@/lib/server/local-db/client";
-import { checkRateLimit, serially } from "./community";
+import { useTestDb } from "@/test-support/test-db";
+import { checkRateLimit, serially } from "./limits/rate-limit";
 
 /**
  * The database-backed limits count then record, so requests for one key that
  * arrive together must take turns or they all read a count under the limit.
  */
 
-let local: LocalDatabase;
+useTestDb();
 
-beforeAll(async () => {
-  vi.stubEnv("LOCAL_DB", "1");
+beforeAll(() => {
   vi.stubEnv("COMMUNITY_HASH_SALT", "rate-limit-test-salt");
-  local = await openLocalDatabase();
-  useInProcessLocalDb(local.handle);
-}, 60_000);
+});
 
-afterAll(async () => {
-  useInProcessLocalDb(undefined);
-  await local?.close();
+afterAll(() => {
   vi.unstubAllEnvs();
 });
 

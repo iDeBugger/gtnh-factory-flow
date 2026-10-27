@@ -1,19 +1,20 @@
 import { NextResponse } from "next/server";
-import { serverErrorResponse } from "@/lib/server/error-response";
-import { getSessionUser, isCommunityConfigured } from "@/lib/server/community";
+import { serverErrorResponse } from "@/lib/server/http/error-response";
+import { readViewer } from "@/lib/server/http/viewer";
+import { isDatabaseConfigured } from "@/lib/server/services/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  if (!isCommunityConfigured()) {
+  if (!isDatabaseConfigured()) {
     return NextResponse.json({ user: null });
   }
 
   try {
-    const user = await getSessionUser(request);
+    const viewer = await readViewer(request);
     return NextResponse.json(
-      { user: user ? { username: user.username, isAdmin: user.is_admin } : null },
+      { user: viewer.userId ? { username: viewer.username, isAdmin: viewer.isAdmin } : null },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

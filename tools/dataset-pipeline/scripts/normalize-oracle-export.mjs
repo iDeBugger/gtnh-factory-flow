@@ -2260,8 +2260,8 @@ function choiceResource(rawResource) {
 /**
  * The catalog's stand-in for an id is chosen by rule, never by which stack the export met first:
  * the stack with no NBT, else the smallest NBT (compareStandIns), and NEI's own first listed stack
- * over both where NEI lists the item (applyNeiStandIns). An icon the stand-in lacks comes from the
- * best-ranked stack that has one.
+ * over both where NEI lists the item and the export drew that stack (applyNeiStandIns). A record is always one
+ * stack: a stand-in with no icon gives way to the best-ranked stack that has one, name and NBT with it.
  */
 function addResource(resource) {
   if (!resource?.kind || !resource?.id) {
@@ -2279,26 +2279,23 @@ function addResource(resource) {
   }
 }
 
-/** Fills missing icons from the best iconed stack, then lays NEI's first listed stack over each item it lists. */
+/**
+ * Each record is one stack, its name, NBT, icon and colour together. NEI's first listed stack stands for an item
+ * NEI lists when the export drew that stack (the oracle draws nothing new for the list). Otherwise the rule-chosen
+ * stand-in stays whole: the best-ranked stack with an icon (compareStandIns), else the best-ranked stack.
+ */
 function applyNeiStandIns() {
   for (const [key, entry] of resources) {
-    const iconed = standInIcons.get(key);
-    if (!entry.iconPath && iconed) {
-      entry.iconPath = iconed.iconPath;
-      entry.dominantColor = iconed.dominantColor;
-    }
     const first = neiFirstStacks.get(key);
     const nei = first ? resourceAmount(first) : undefined;
-    if (!nei) {
+    const stack = nei?.iconPath ? nei : standInIcons.get(key) ?? standIns.get(key);
+    if (!stack || stack === standIns.get(key)) {
       continue;
     }
-    entry.displayName = nei.displayName ?? entry.displayName;
-    if (nei.modId) entry.modId = nei.modId;
-    if (nei.tooltip) entry.tooltip = nei.tooltip;
-    else delete entry.tooltip;
-    if (nei.iconPath) {
-      entry.iconPath = nei.iconPath;
-      entry.dominantColor = nei.dominantColor;
+    entry.displayName = stack.displayName ?? entry.displayName;
+    for (const field of ["modId", "tooltip", "iconPath", "dominantColor"]) {
+      if (stack[field] !== undefined) entry[field] = stack[field];
+      else delete entry[field];
     }
   }
 }

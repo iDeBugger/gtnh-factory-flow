@@ -11,6 +11,6 @@
  * slow sender (Node's own `requestTimeout` is 300 s).
  *
  * Beside next.config.ts, which imports nothing from `src/` (the site image
- * ships no `src/`); `src/lib/server/request-body.ts` re-exports it.
+ * ships no `src/`); `src/lib/server/http/request-body.ts` re-exports it.
  */
 export const PROXY_BODY_MAX_BYTES = 4.5 * 1024 * 1024;

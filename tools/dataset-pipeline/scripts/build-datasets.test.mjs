@@ -156,12 +156,17 @@ describe("build-datasets install", () => {
  * A stand-in for Docker and node: the export writes a raw export (or fails, per pack), the build
  * writes a dataset that passes the checks, and every call is recorded.
  */
-function fakeRun(workDir, { failExport = [], neiStatus = {} } = {}) {
+function fakeRun(workDir, { failExport = [], neiStatus = {}, failRefresh } = {}) {
   const calls = [];
   const env = (args, key) => args.find((arg) => arg.startsWith(`${key}=`))?.slice(key.length + 1);
   const host = (containerPath) => path.join(workDir, containerPath.replace(/^\/work\/?/, ""));
   const run = async (command, args) => {
     calls.push([command, ...args].join(" "));
+    if (command === "node" && args[0].endsWith("refresh-power-maps.mjs")) {
+      const mode = args.includes("--check") ? "check" : "write";
+      if (failRefresh === mode) throw new Error(`refresh-power-maps.mjs exited with 1 (${mode})`);
+      return;
+    }
     if (command !== "docker" || args[0] !== "run") return;
     const id = env(args, "GTNH_DATASET_VERSION_ID");
     if (args.includes("tools/dataset-pipeline/scripts/run-gtnh-oracle-export.sh")) {
@@ -224,9 +229,8 @@ describe("build-datasets main", () => {
     // The failed export left the last good one where it was.
     expect(rawMarker(path.join(raw29, "oracle-export.json"))).toBe("last good");
     expect(calls.filter((call) => call.includes("rebuild-manifest.mjs"))).toHaveLength(1);
-    expect(calls.filter((call) => call.includes("refresh-power-maps.mjs"))).toEqual([
-      `node tools/dataset-pipeline/scripts/refresh-power-maps.mjs ${path.join(out, "local-2.8.1")}`,
-    ]);
+    // Installed elsewhere than the default root: the repo's power maps are left alone.
+    expect(calls.filter((call) => call.includes("refresh-power-maps.mjs"))).toEqual([]);
   });
 
   it("keeps the last good export as raw-export.previous after a good one", async () => {
@@ -321,5 +325,81 @@ describe("build-datasets pack zips and export checks", () => {
     expect(await neiListStatus(file)).toBe("failed");
     fs.writeFileSync(file, `{"domains":[]}`);
     expect(await neiListStatus(file)).toBe("absent");
+  });
+});
+
+describe("build-datasets and the power maps", () => {
+  const quiet = () => {
+    const saved = [console.log, console.error, console.warn];
+    const errors = [];
+    console.log = console.warn = () => {};
+    console.error = (line) => errors.push(String(line));
+    return { errors, restore: () => ([console.log, console.error, console.warn] = saved) };
+  };
+  const setUp = () => {
+    const root = tempDir();
+    const work = path.join(root, "work");
+    const out = path.join(root, "out");
+    const raw = path.join(work, "local-2.8.1", "raw-export");
+    fs.mkdirSync(raw, { recursive: true });
+    fs.writeFileSync(path.join(raw, "oracle-export.json"), JSON.stringify({ marker: "good" }));
+    writeVersion(path.join(out, "local-2.8.1"), { marker: "old" });
+    return { work, out };
+  };
+
+  it("checks the maps against the build before the swap, and writes them after it", async () => {
+    const { work, out } = setUp();
+    const { run, calls } = fakeRun(work);
+    const log = quiet();
+    let code;
+    try {
+      code = await main(["2.8.1", "--power-maps", "--out", out, "--work", work], { run });
+    } finally {
+      log.restore();
+    }
+    expect(code).toBe(0);
+    expect(calls.filter((call) => call.includes("refresh-power-maps.mjs"))).toEqual([
+      `node tools/dataset-pipeline/scripts/refresh-power-maps.mjs ${path.join(work, "local-2.8.1", "dataset")} --id local-2.8.1 --check`,
+      `node tools/dataset-pipeline/scripts/refresh-power-maps.mjs ${path.join(out, "local-2.8.1")} --id local-2.8.1`,
+    ]);
+  });
+
+  it("refuses a build a power map cannot follow before anything is swapped", async () => {
+    const { work, out } = setUp();
+    const { run, calls } = fakeRun(work, { failRefresh: "check" });
+    const log = quiet();
+    let code;
+    try {
+      code = await main(["2.8.1", "--power-maps", "--out", out, "--work", work], { run });
+    } finally {
+      log.restore();
+    }
+    expect(code).toBe(1);
+    expect(fs.readFileSync(path.join(out, "local-2.8.1", "marker.txt"), "utf8")).toBe("old");
+    expect(log.errors.join("\n")).toMatch(/NOT installed/);
+    expect(calls.some((call) => call.includes("rebuild-manifest.mjs"))).toBe(false);
+  });
+
+  it("counts a pack whose maps failed after the swap as installed, and rebuilds the manifest", async () => {
+    const { work, out } = setUp();
+    const { run, calls } = fakeRun(work, { failRefresh: "write" });
+    const log = quiet();
+    let code;
+    try {
+      code = await main(["2.8.1", "--power-maps", "--out", out, "--work", work], { run });
+    } finally {
+      log.restore();
+    }
+    expect(code).toBe(1);
+    expect(fs.readFileSync(path.join(out, "local-2.8.1", "marker.txt"), "utf8")).toBe("new");
+    expect(log.errors.join("\n")).not.toMatch(/NOT installed/);
+    expect(log.errors.join("\n")).toMatch(/installed, but the power maps were not refreshed/);
+    expect(calls.filter((call) => call.includes("rebuild-manifest.mjs"))).toHaveLength(1);
+  });
+
+  it("refreshes the maps by default only for the default out", () => {
+    expect(parseArgs(["2.9"]).powerMaps).toBe(true);
+    expect(parseArgs(["2.9", "--out", "/tmp/elsewhere"]).powerMaps).toBe(false);
+    expect(parseArgs(["2.9", "--out", "/tmp/elsewhere", "--power-maps"]).powerMaps).toBe(true);
   });
 });
