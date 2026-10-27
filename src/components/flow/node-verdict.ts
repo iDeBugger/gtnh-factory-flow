@@ -61,7 +61,7 @@ function clamp01(value: number | undefined, fallback: number): number {
  * raised. Deliberately throttled consumers (demand-set) never beg. Everything
  * the UI says about hunger must go through here, never the damped figure.
  */
-export function honestEdgeAskPerSecond(
+function honestEdgeAskPerSecond(
   edgeResult: EdgeThroughput | undefined,
   targetResult?: NodeThroughputResult,
   edge?: Pick<ProjectEdge, "resourceKind" | "resourceId" | "targetHandle">,
@@ -103,7 +103,7 @@ export function honestEdgeAskPerSecond(
  * While the tank covers everyone it stays Infinity, so a buffer never becomes
  * a false ceiling. A tank with no inbound lines is hand-stocked: never dry.
  */
-export function bufferRelaySupplyPerSecond(
+function bufferRelaySupplyPerSecond(
   project: FactoryProject,
   result: ThroughputResult | undefined,
   storageId: string,
@@ -230,7 +230,7 @@ function honestInboundAvailablePerSecond(
  * - otherwise the allocation figure, least trusted: the ask coupling drags
  *   innocent lines' allocations down to the binder's level.
  */
-export function honestEdgeAvailablePerSecond(
+function honestEdgeAvailablePerSecond(
   edgeResult: EdgeThroughput | undefined,
   sourceIsStorage: boolean,
   sourceHasSoleOutlet = false,
@@ -248,7 +248,7 @@ export function honestEdgeAvailablePerSecond(
 }
 
 /** How many outgoing lines each source has per resource — the sole-outlet test. */
-export function countSourceOutlets(project: FactoryProject): Map<string, number> {
+function countSourceOutlets(project: FactoryProject): Map<string, number> {
   const counts = new Map<string, number>();
   for (const edge of project.edges) {
     const key = `${edge.source}|${edge.resourceKind}|${edge.resourceId}`;

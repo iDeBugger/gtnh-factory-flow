@@ -7,7 +7,7 @@ import type {
   ThroughputResult,
 } from "@/lib/model/types";
 import { buildRailPorts, deriveNodeVerdict } from "./node-verdict";
-import { formatSlotRateOrNull } from "./flow-explainers";
+import { formatSlotRate } from "./flow-explainers";
 
 // Rate wording and port rows: solver numbers in. Fixtures mirror node-verdict.test.ts.
 
@@ -136,10 +136,8 @@ function sulfuricFixture() {
 }
 
 describe("format helpers", () => {
-  it("suppresses numbers below the display noise floor", () => {
-    expect(formatSlotRateOrNull(0.0002, "fluid")).toBeNull();
-    expect(formatSlotRateOrNull(0, "item")).toBeNull();
-    expect(formatSlotRateOrNull(0.5, "item")).toBe("0.5/s");
+  it("words a rate in the board's unit", () => {
+    expect(formatSlotRate(0.5, "item")).toBe("0.5/s");
   });
 });
 

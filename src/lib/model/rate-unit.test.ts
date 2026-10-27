@@ -1,12 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { formatPowerValue } from "./resources";
 
-import {
-  formatPortRate,
-  formatSlotRate,
-  formatSlotRateOrNull,
-  portReadsEnergy,
-} from "@/components/flow/flow-explainers";
+import { formatEnergyPerUnitParts, formatSlotRate, portReadsEnergy } from "@/components/flow/flow-explainers";
 import {
   energyPerUnit,
   energyPerUnitDisplayValue,
@@ -74,9 +69,9 @@ describe("rate units", () => {
     // A chanced output at 0.004/s is a line that runs. Per tick it is twenty
     // times smaller, and a noise floor meant to hide zero must not swallow it.
     setActiveRateUnit("second");
-    expect(formatSlotRateOrNull(0.004, "item")).toBe("0.004/s");
+    expect(formatSlotRate(0.004, "item")).toBe("0.004/s");
     setActiveRateUnit("tick");
-    expect(formatSlotRateOrNull(0.004, "item")).toBe("0.0002/t");
+    expect(formatSlotRate(0.004, "item")).toBe("0.0002/t");
   });
 });
 
@@ -100,15 +95,14 @@ describe("EU per unit made", () => {
     const fedInput = { kind: "item", energyPerUnit: 800 } as const;
     setActiveRateUnit("second");
     expect(isEnergyRateUnit()).toBe(false);
-    expect(formatPortRate(output, 10)).toBe("10/s");
+    expect(portReadsEnergy(output)).toBe(false);
     setActiveRateUnit("eu");
     expect(isEnergyRateUnit()).toBe(true);
     expect(portReadsEnergy(output)).toBe(true);
-    expect(formatPortRate(output, 10)).toBe("200 EU/Item");
-    expect(formatPortRate({ kind: "fluid", energyPerUnit: 2.5 }, 1000)).toBe("2.5 EU/L");
-    expect(formatPortRate(fedInput, 2.5)).toBe("800 EU/Item");
+    expect(formatEnergyPerUnitParts(output.energyPerUnit, output.kind)).toEqual({ value: "200", unit: "EU/Item" });
+    expect(formatEnergyPerUnitParts(2.5, "fluid")).toEqual({ value: "2.5", unit: "EU/L" });
+    expect(portReadsEnergy(fedInput)).toBe(true);
     expect(portReadsEnergy(input)).toBe(false);
-    expect(formatPortRate(input, 10)).toBe("10/s");
     // Everything else on the board reads per second while the unit is on.
     expect(rateUnitMultiplier()).toBe(1);
     expect(rateUnitSuffix(true)).toBe(" L/s");
@@ -124,11 +118,11 @@ describe("EU per unit under the amps dial", () => {
     setActiveRateUnit("eu");
     setActivePowerDisplayUnit("LV");
     // 200 EU an item over LV's 32 EU/t is 6.25 LV amps an item.
-    expect(formatPortRate({ kind: "item", energyPerUnit: 200 }, 10)).toBe("6.25 A LV/Item");
+    expect(formatEnergyPerUnitParts(200, "item")).toEqual({ value: "6.25", unit: "A LV/Item" });
     expect(energyPerUnitDisplayValue(200)).toBeCloseTo(6.25);
     // The plain pair the recipe browser reads never follows the dial.
     expect(energyPerUnitSuffix("item")).toBe(" EU/Item");
     setActivePowerDisplayUnit("eu");
-    expect(formatPortRate({ kind: "item", energyPerUnit: 200 }, 10)).toBe("200 EU/Item");
+    expect(formatEnergyPerUnitParts(200, "item")).toEqual({ value: "200", unit: "EU/Item" });
   });
 });
