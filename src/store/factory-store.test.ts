@@ -5,6 +5,7 @@ import type { Recipe } from "@/lib/model/types";
 import { getStorageRole } from "@/lib/model/storage-role";
 import { PROJECT_SCHEMA_VERSION, type FactoryProject } from "@/lib/model/types";
 import { makeResourceHandleId } from "@/components/flow/resource-handles";
+import { computeBoardLevelView, computeOpenBoardRects } from "@/lib/model/board-windows";
 import { captureBoardSelection, replaceDatasetCacheForTests, useFactoryStore } from "./factory-store";
 
 describe("factory resource links", () => {
@@ -4088,6 +4089,70 @@ describe("minimized boards (the whole pocket story)", () => {
     expect(project.nodes.find((node) => node.id === "melt-a")?.position).toEqual({ x: 300, y: 0 });
   });
 
+  it("captures a group as its whole contents", () => {
+    const groupId = useFactoryStore.getState().groupSelection(["alpha", "beta"]) as string;
+
+    const payload = captureBoardSelection(useFactoryStore.getState().project, [groupId]);
+    expect(payload?.pockets.map((pocket) => pocket.id)).toEqual([groupId]);
+    expect(payload?.nodes.map((node) => node.id).sort()).toEqual(["alpha", "beta"]);
+    // alpha→beta runs between two captured cards, so it comes along.
+    expect(payload?.edges.map((edge) => edge.id)).toEqual(["a2b"]);
+  });
+
+  it("pastes a group as a fresh copy and selects only the group itself", () => {
+    const groupId = useFactoryStore.getState().groupSelection(["alpha", "beta"]) as string;
+    const payload = captureBoardSelection(useFactoryStore.getState().project, [groupId]) as NonNullable<
+      ReturnType<typeof captureBoardSelection>
+    >;
+
+    const pastedIds = useFactoryStore.getState().pasteBoardItems(payload, { x: 40, y: 40 });
+
+    const project = useFactoryStore.getState().project;
+    expect(project.pockets).toHaveLength(2);
+    const copy = project.pockets?.find((pocket) => pocket.id !== groupId);
+    // Only the group surfaces at the root; its members ride inside it.
+    expect(pastedIds).toEqual([copy?.id]);
+    expect(project.nodes.filter((node) => node.pocketId === copy?.id)).toHaveLength(2);
+    // The interior wire is remapped onto the copies.
+    const copyIds = new Set(project.nodes.filter((node) => node.pocketId === copy?.id).map((node) => node.id));
+    expect(project.edges.filter((edge) => copyIds.has(edge.source) && copyIds.has(edge.target))).toHaveLength(1);
+  });
+
+  it("deleting a group deletes everything in it", () => {
+    const groupId = useFactoryStore.getState().groupSelection(["alpha", "beta"]) as string;
+    useFactoryStore.getState().deleteBoardSelection({ nodeIds: [groupId] });
+
+    const { project, undoHistory } = useFactoryStore.getState();
+    expect(project.pockets).toHaveLength(0);
+    expect(project.nodes).toHaveLength(0);
+    expect(project.edges.filter((edge) => edge.source === "alpha" || edge.target === "beta")).toHaveLength(0);
+    // Group + delete = two undo entries.
+    expect(undoHistory).toHaveLength(2);
+  });
+
+  it("a drawer dragged off a member's port joins the member's group", () => {
+    const groupId = useFactoryStore.getState().groupSelection(["beta"]) as string;
+    const corner = computeOpenBoardRects(
+      computeBoardLevelView(useFactoryStore.getState().project).openBoards,
+    ).find((frame) => frame.id === groupId) as { x: number; y: number };
+
+    useFactoryStore
+      .getState()
+      .addStorageForConnection(
+        { kind: "item", id: "plate", displayName: "Plate" },
+        "beta",
+        "output",
+        { x: 600, y: 0 },
+        makeResourceHandleId("output", { kind: "item", id: "plate" }, 0),
+      );
+
+    const plate = useFactoryStore.getState().project.storages?.find((storage) => storage.resourceId === "plate");
+    expect(plate?.pocketId).toBe(groupId);
+    // The drop point converts into the frame's own space, so the drawer stands where it was
+    // dropped, give or take the grid snap of its frame-relative position.
+    expect(Math.abs(corner.x + (plate?.position.x ?? 0) - 600)).toBeLessThanOrEqual(10);
+    expect(Math.abs(corner.y + (plate?.position.y ?? 0) - 0)).toBeLessThanOrEqual(10);
+  });
 });
 
 describe("boards (pockets standing open)", () => {
