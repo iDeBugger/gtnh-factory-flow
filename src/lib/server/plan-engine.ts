@@ -26,8 +26,8 @@ const PLAN_STATS_BUDGET_MS = 5_000;
 
 let limitsSet = false;
 
-/** The routes pass the plan they are about to solve; every plan solves on HiGHS, so it is not read. */
-export async function ensurePlanEngine(_plan?: FactoryProject): Promise<void> {
+/** Every plan solves on HiGHS: load it before the first stats solve, with the server's limits set. */
+export async function ensurePlanEngine(): Promise<void> {
   if (!limitsSet) {
     setLpSolveDefaults({ timeLimitSeconds: LP_TIME_LIMIT_SECONDS, maxMipNodes: MAX_MIP_NODES });
     limitsSet = true;

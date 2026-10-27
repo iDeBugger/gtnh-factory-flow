@@ -1263,7 +1263,7 @@ describe("posting to the community", () => {
     expect(counts.pulls).toBe(0);
   });
 
-  it("stores a plan-mode post whose stats solve ran out of time, with the failed plan's stats", async () => {
+  it("stores a post whose stats solve ran out of time, with the failed plan's stats", async () => {
     const plan = JSON.parse(
       readFileSync(
         path.join(process.cwd(), "src/components/flow/__fixtures__/up-to-silicon-line.json"),

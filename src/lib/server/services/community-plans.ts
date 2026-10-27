@@ -304,7 +304,7 @@ async function refreshStaleStats(planId: string, plan: CommunityPlanSummary): Pr
     // The same funnel the board runs a loaded plan through, so the card and
     // the opened tab compute from the identical project.
     const project = normalizeLoadedProject(parsed.data);
-    await ensurePlanEngine(project);
+    await ensurePlanEngine();
     const solve = solvePlanStats(project);
     // The clock is not the plan: a stored card that solved before is better than the failed plan's.
     if (solve.outOfTime) {
@@ -402,7 +402,7 @@ export async function publishPlan(
   }
 
   const solved = normalizeLoadedProject(project);
-  await ensurePlanEngine(solved);
+  await ensurePlanEngine();
   const stats = computeCommunityPlanStats(solved, solvePlanStats(solved).result);
   const id = await plans.insert({
     user_id: viewer.userId,
@@ -488,7 +488,7 @@ export async function editPlan(
       return fail("bad-request", PLAN_EMPTY);
     }
     const solved = normalizeLoadedProject(project);
-    await ensurePlanEngine(solved);
+    await ensurePlanEngine();
     const stats = computeCommunityPlanStats(solved, solvePlanStats(solved).result);
     Object.assign(update, { plan: project, ...statsColumns(stats), stats_version: APP_VERSION });
   }

@@ -527,7 +527,7 @@ Rules:
   stats and tries again on a later view. The solver's island cache never keeps an island the clock stopped, so a busy
   moment cannot fix a failed answer for the life of the process. Every call site goes through `solvePlanStats`, never
   `calculateThroughput` directly. Follow-up: a worker thread, so a slow plan never blocks the loop at all. Exam:
-  `plan-access.test.ts` "stores a plan-mode post whose stats solve ran out of time" and "keeps a stored post's stats
+  `plan-access.test.ts` "stores a post whose stats solve ran out of time" and "keeps a stored post's stats
   when a refresh of them runs out of time" (the real `solvePlanStats`, its budget set per case),
   `plan/lp-deadline.test.ts`.
 
