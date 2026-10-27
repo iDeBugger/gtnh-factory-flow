@@ -93,3 +93,54 @@ describe("plan mode field bounds", () => {
     expect(factoryProjectSchema.safeParse({ ...plan, spareShares: { k: { b: 0.5 } } }).success).toBe(true);
   });
 });
+
+/**
+ * Plans saved before the board modes were merged still carry the mode flags and the
+ * shared-setup view keys that have no control any more. Every board is a plan board now,
+ * so loading drops them: a persisted setting with no visible control would strand the player.
+ */
+describe("a plan saved with the old board modes", () => {
+  function oldPlanJson(): string {
+    const project = JSON.parse(serializeFactoryProject(planProject()));
+    return JSON.stringify({
+      ...project,
+      planMode: true,
+      solveMode: true,
+      poolMode: false,
+      view: {
+        canvasTheme: "dark",
+        rateUnit: "minute",
+        fixedEdgeWidth: true,
+        linePulseMode: true,
+        calmMode: true,
+        glanceMode: "power",
+        showHiddenResources: true,
+        favouritesOnly: true,
+        trendsOpen: true,
+        hiddenResourceKeys: ["item:Bronze%20Ingot"],
+        favouriteResourceKeys: ["fluid:water"],
+        lineHeatMode: true,
+        lineLabelsMode: true,
+      },
+    });
+  }
+
+  function expectCurrentShape(project: FactoryProject) {
+    const loaded = project as unknown as Record<string, unknown>;
+    expect(loaded.planMode).toBeUndefined();
+    expect(loaded.solveMode).toBeUndefined();
+    expect(loaded.poolMode).toBeUndefined();
+    // The keys that still have a control survive; the rest are gone.
+    expect(project.view).toEqual({ canvasTheme: "dark", rateUnit: "minute" });
+    expectFields(project);
+  }
+
+  it("opens from JSON as a plan board with only the live view keys", () => {
+    expectCurrentShape(parseFactoryProjectJson(oldPlanJson()));
+  });
+
+  it("opens from a plan code the same way", async () => {
+    const legacy = JSON.parse(oldPlanJson()) as FactoryProject;
+    expectCurrentShape(await decodePlanCode(await encodePlanCode(legacy)));
+  });
+});
