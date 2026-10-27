@@ -31,7 +31,7 @@ const MAX_ALLOWED: Record<string, number> = {
   "4": 1,
   "5": 0,
   "6": 1,
-  "7": 4,
+  "7": 3,
   "8": 48,
   "9": 0,
   "10": 0,

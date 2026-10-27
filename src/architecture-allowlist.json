@@ -86,11 +86,6 @@
       "rule": "7"
     },
     {
-      "from": "src/store/solve-books.worker.ts",
-      "to": "src/components/flow/clog-lock.ts",
-      "rule": "7"
-    },
-    {
       "from": "src/lib/arrange-job.ts",
       "to": "src/components/flow/grid-edge-router.ts",
       "rule": "8"
