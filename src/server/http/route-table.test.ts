@@ -1,4 +1,5 @@
 import { readdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { CASES, ROUTE_TABLE } from "../../../tools/http-parity/requests.mjs";
@@ -29,21 +30,26 @@ const nextPath = (source: string): string =>
   source.replace(/^src\/app/, "").replace(/\/route\.[jt]sx?$/, "");
 
 /**
- * Whether an Express 5 path from the table matches a concrete path: `:x` takes one segment, `*x` the rest.
- *
- * A stand-in for Express's own matcher, which is not installed yet: unlike path-to-regexp 8 it lets an empty
- * segment match `:x` and `*x`, and it decodes nothing. Once Express is a dependency, the precedence test runs
- * through path-to-regexp's `match` instead.
+ * The path-to-regexp Express's router loads (resolved from `router`, so it is the copy Express runs), with the
+ * options its layers use under this app's settings: case-sensitive, whole path, no trailing slash.
+ */
+const { match } = createRequire(createRequire(import.meta.url).resolve("router/package.json"))(
+  "path-to-regexp",
+) as typeof import("path-to-regexp");
+
+/**
+ * Whether an Express 5 path from the table matches a concrete path, as Express's router decides it. Params are
+ * left encoded: a param that does not decode still claims its request in Express (the router answers its decode
+ * error), so precedence is decided before decoding.
  */
 function matches(pattern: string, concrete: string): boolean {
-  const want = pattern.split("/").slice(1);
-  const have = concrete.split("?")[0].split("/").slice(1);
-  for (let i = 0; i < want.length; i++) {
-    if (want[i].startsWith("*")) return have.length > i;
-    if (i >= have.length) return false;
-    if (!want[i].startsWith(":") && want[i] !== have[i]) return false;
-  }
-  return want.length === have.length;
+  const matcher = match(pattern, {
+    sensitive: true,
+    end: true,
+    trailing: false,
+    decode: (value: string) => value,
+  });
+  return matcher(concrete.split("?")[0]!) !== false;
 }
 
 const h: WebHandler = () => new Response(null);
