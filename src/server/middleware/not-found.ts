@@ -2,7 +2,7 @@
  * The answers Next gave without a route's say: OPTIONS, 405, 404, a decode error in a path param, and its 500.
  * Each matches Next's status and headers (src/server/__fixtures__/next-answers.json, pinned by app.test.ts).
  */
-import type { ErrorRequestHandler, RequestHandler } from "express";
+import type { ErrorRequestHandler, RequestHandler, Response } from "express";
 import { headersForPath, type SecurityHeaderEnv } from "../../../security-headers.config";
 import { RouteHandlerError } from "../http/adapter";
 import { optionsAllow, type RouteModule } from "../http/route-table";
@@ -74,12 +74,35 @@ function isParamDecodeError(error: unknown): boolean {
  * Next's answer to a malformed escape in a path param: its plain-text 500, sent before its header rules ran, so
  * with none of the security headers. The ETag is Next's for this body.
  */
+const NEXT_PLAIN_ERROR_ETAG = '"66fci67lppl"';
 const DECODE_ERROR_HEADERS: [string, string][] = [
   ["cache-control", NOT_FOUND_CACHE_CONTROL],
-  ["etag", '"66fci67lppl"'],
+  ["etag", NEXT_PLAIN_ERROR_ETAG],
   ["content-type", "text/plain"],
   ["vary", "Accept-Encoding"],
 ];
+
+/**
+ * Next's plain-text 500 ("Internal Server Error", its ETag for that body), which it sent when a page it rendered
+ * for an error did not exist. The headers already on the answer stay.
+ */
+export function sendNextPlainError(res: Response): void {
+  res.statusCode = 500;
+  for (const [name, value] of DECODE_ERROR_HEADERS) res.setHeader(name, value);
+  res.end("Internal Server Error");
+}
+
+/**
+ * Next's answer when `send` refused a file it had found (a failed `If-Match` or `If-Unmodified-Since`, a range
+ * that is not satisfiable): it rendered an error page the app router does not have, so the status is 500 with its
+ * plain-text body and that body's ETag. The file's other headers (its type, `Content-Range`) stay.
+ */
+export function sendNextFileError(res: Response): void {
+  res.statusCode = 500;
+  res.setHeader("cache-control", NOT_FOUND_CACHE_CONTROL);
+  res.setHeader("etag", NEXT_PLAIN_ERROR_ETAG);
+  res.end("Internal Server Error");
+}
 
 /**
  * Last in the chain. A param decode error answers as Next did; every other error answers Next's own 500: the
@@ -97,9 +120,7 @@ export function errorHandler(env: SecurityHeaderEnv): ErrorRequestHandler {
         return;
       }
       for (const name of res.getHeaderNames()) res.removeHeader(name);
-      res.statusCode = 500;
-      for (const [name, value] of DECODE_ERROR_HEADERS) res.setHeader(name, value);
-      res.end("Internal Server Error");
+      sendNextPlainError(res);
       return;
     }
     console.error(error instanceof RouteHandlerError ? error.cause : error);

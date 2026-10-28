@@ -1,12 +1,17 @@
 /**
  * The site as an Express 5 app. Its first middlewares do, in Next's order, what Next did without being asked:
  * the 308s for repeated slashes, backslashes and a trailing slash, then the canonical path, then the security
- * headers. Then the route table, each route with its OPTIONS and 405 answers, then 404 and the error answer.
+ * headers, then what Next's proxy did (the dataset path gate and the cross-site write check), then the dataset
+ * backend of a development server, then the static files. Then the route table, each route with its OPTIONS and
+ * 405 answers, then the page, the 404 and the error answer.
  */
 import express, { type Express, type RequestHandler } from "express";
 import type { SecurityHeaderEnv } from "../../security-headers.config";
 import { DEFAULT_DRAIN, handle, type DrainBounds } from "./http/adapter";
 import { ROUTES, type HttpMethod, type RouteEntry } from "./http/route-table";
+import { crossSiteWriteGuard } from "./middleware/cross-site";
+import { datasetBackendProxy } from "./middleware/dataset-backend";
+import { datasetGate } from "./middleware/dataset-gate";
 import {
   canonicalPath,
   repeatedSlashRedirect,
@@ -20,16 +25,21 @@ import {
   revalidatedMethodNotAllowed,
 } from "./middleware/not-found";
 import { securityHeaders } from "./middleware/security-headers";
+import { clientAssets, datasetPublicFiles, publicFiles } from "./middleware/static";
 
 export interface AppOptions {
   env: SecurityHeaderEnv;
+  /** The folder served at `/` (everything under its `datasets` folder excepted). */
   publicDir: string;
+  /** The folder served at `/datasets/gtnh`: the published datasets. */
   datasetsDir: string;
+  /** The client build: its `assets` folder is served at `/assets`. */
   clientDir?: string;
   /** The page handler, after the routes. */
   page?: RequestHandler;
   /** Requests wait for this before anything answers them (the server's start checks and prewarm). */
   ready?: Promise<void>;
+  /** A development server's dataset backend (`GTNH_DATASET_BACKEND_URL`). */
   datasetBackendUrl?: string;
   /** Mounted first, before the ready gate. */
   before?: RequestHandler[];
@@ -101,6 +111,12 @@ export function createApp(options: AppOptions): Express {
   app.use(trailingSlashRedirect());
   app.use(canonicalPath());
   app.use(securityHeaders(options.env));
+  app.use(datasetGate());
+  app.use(crossSiteWriteGuard());
+  if (options.datasetBackendUrl) app.use(datasetBackendProxy(options.datasetBackendUrl));
+  if (options.clientDir) app.use(clientAssets(options.clientDir));
+  app.use(publicFiles(options.publicDir));
+  app.use(datasetPublicFiles(options.datasetsDir));
 
   const drain = options.drain ?? DEFAULT_DRAIN;
   for (const route of [...(options.extraRoutes ?? []), ...ROUTES]) mountRoute(app, route, drain);

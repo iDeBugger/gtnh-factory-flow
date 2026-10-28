@@ -1,0 +1,583 @@
+{
+  "source": "Next 16 at e6fd3ae3 (scratch/r1-off), mode off, NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3770, as the parity harness captured and normalized it (tools/http-parity).",
+  "gateRefused": {
+    "name": "gate local-2.9.0-rc-2 /datasets/gtnh/local-2.9.0-rc-2/recipes%2Ejson",
+    "request": {
+      "method": "GET",
+      "target": "/datasets/gtnh/local-2.9.0-rc-2/recipes%2Ejson"
+    },
+    "status": 400,
+    "headers": [
+      [
+        "content-security-policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+      ],
+      [
+        "x-frame-options",
+        "SAMEORIGIN"
+      ],
+      [
+        "x-content-type-options",
+        "nosniff"
+      ],
+      [
+        "referrer-policy",
+        "strict-origin-when-cross-origin"
+      ],
+      [
+        "strict-transport-security",
+        "max-age=15552000"
+      ],
+      [
+        "cache-control",
+        "no-store"
+      ],
+      [
+        "content-type",
+        "application/json"
+      ],
+      [
+        "vary",
+        "Accept-Encoding"
+      ],
+      [
+        "date",
+        "Wed, 28 Oct 2026 08:44:12 GMT"
+      ],
+      [
+        "connection",
+        "keep-alive"
+      ],
+      [
+        "keep-alive",
+        "timeout=5"
+      ],
+      [
+        "transfer-encoding",
+        "chunked"
+      ]
+    ],
+    "body": {
+      "text": "{\"error\":\"Invalid dataset path.\"}"
+    }
+  },
+  "crossSite": [
+    {
+      "name": "cross-site //api/community/auth/logout",
+      "request": {
+        "method": "POST",
+        "target": "//api/community/auth/logout"
+      },
+      "status": 308,
+      "headers": [
+        [
+          "location",
+          "/api/community/auth/logout"
+        ],
+        [
+          "refresh",
+          "0;url=/api/community/auth/logout"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:13 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "/api/community/auth/logout"
+      }
+    },
+    {
+      "name": "cross-site /api/community/auth/logout",
+      "request": {
+        "method": "POST",
+        "target": "/api/community/auth/logout"
+      },
+      "status": 403,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "vary",
+          "Accept-Encoding"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:13 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "{\"error\":\"Cross-site request refused.\"}"
+      }
+    },
+    {
+      "name": "cross-site /API/community/auth/logout",
+      "request": {
+        "method": "POST",
+        "target": "/API/community/auth/logout"
+      },
+      "status": 404,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "cache-control",
+          "private, no-cache, no-store, max-age=0, must-revalidate"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "x-nextjs-prerender",
+          "1"
+        ],
+        [
+          "x-nextjs-prerender",
+          "1"
+        ],
+        [
+          "x-nextjs-stale-time",
+          "300"
+        ],
+        [
+          "etag",
+          "<etag>"
+        ],
+        [
+          "content-type",
+          "text/html; charset=utf-8"
+        ],
+        [
+          "content-length",
+          "20392"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:13 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ]
+      ],
+      "body": {
+        "text": "<!DOCTYPE html><html lang=\"en\" class=\"AuosRG_variable _0bjUvq_variable _6GV5LG_variable CFtu_q_variable J7MLvW_variable _6KxHjW_variable ok3qBG_variable rL9IyG_variable h-full\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><link rel=\"stylesheet\" href=\"<asset:401f8660>\" data-precedence=\"next\"/><link rel=\"stylesheet\" href=\"<asset:d70d050a>\" data-precedence=\"next\"/><link rel=\"preload\" as=\"script\" fetchPriority=\"low\" href=\"<asset:f6336c96>\"/><script src=\"<asset:d37484ab>\" async=\"\"></script><script src=\"<asset:26e10e84>\" async=\"\"></script><script src=\"<asset:73700e7e>\" async=\"\"></script><script src=\"<asset:b5f9b519>\" async=\"\"></script><script src=\"<asset:c410d0f2>\" async=\"\"></script><script src=\"<asset:85c012ff>\" async=\"\"></script><script src=\"<asset:4fcb910b>\" async=\"\"></script><script src=\"<asset:00b72546>\" async=\"\"></script><script src=\"<asset:815ed1f2>\" async=\"\"></script><meta name=\"robots\" content=\"noindex\"/><meta name=\"theme-color\" content=\"#1b1d21\"/><title>GTNH Planner | GregTech New Horizons Factory Calculator</title><meta name=\"description\" content=\"Plan and optimize GregTech: New Horizons factories on an interactive flowchart. Full recipe data for GTNH 2.9 and 2.8.1, throughput and power calculation, and machine ratios.\"/><meta name=\"application-name\" content=\"GTNH Planner\"/><link rel=\"manifest\" href=\"/manifest.webmanifest\"/><meta name=\"keywords\" content=\"GTNH Planner,GregTech New Horizons planner,GTNH factory planner,GTNH recipe calculator,GTNH throughput calculator,GregTech factory calculator\"/><meta name=\"robots\" content=\"index, follow\"/><meta name=\"googlebot\" content=\"index, follow, max-video-preview:-1, max-image-preview:large, max-snippet:-1\"/><meta name=\"darkreader-lock\" content=\"true\"/><link rel=\"canonical\" href=\"http://127.0.0.1:3770\"/><meta property=\"og:title\" content=\"GTNH Planner | GregTech New Horizons Factory Calculator\"/><meta property=\"og:description\" content=\"Free factory planner for GregTech: New Horizons with full recipe data for GTNH 2.9 and 2.8.1. Draw production chains, balance machine ratios, and find bottlenecks.\"/><meta property=\"og:url\" content=\"http://127.0.0.1:3770\"/><meta property=\"og:site_name\" content=\"GTNH Planner\"/><meta property=\"og:image\" content=\"http://127.0.0.1:3770/opengraph-image.png?opengraph-image.1zh5vazs5ubx0.png\"/><meta property=\"og:image:type\" content=\"image/png\"/><meta property=\"og:image:width\" content=\"1200\"/><meta property=\"og:image:height\" content=\"630\"/><meta property=\"og:image:alt\" content=\"The GTNH Planner board: a Benzene setup drawn as a flowchart, with the item list on the left and the plan totals on the right\n\"/><meta property=\"og:type\" content=\"website\"/><meta name=\"twitter:card\" content=\"summary_large_image\"/><meta name=\"twitter:title\" content=\"GTNH Planner | GregTech New Horizons Factory Calculator\"/><meta name=\"twitter:description\" content=\"Free factory planner for GregTech: New Horizons with full recipe data for GTNH 2.9 and 2.8.1. Draw production chains, balance machine ratios, and find bottlenecks.\"/><meta name=\"twitter:image\" content=\"http://127.0.0.1:3770/opengraph-image.png?opengraph-image.1zh5vazs5ubx0.png\"/><meta name=\"twitter:image:alt\" content=\"The GTNH Planner board: a Benzene setup drawn as a flowchart, with the item list on the left and the plan totals on the right\n\"/><meta name=\"twitter:image:type\" content=\"image/png\"/><meta name=\"twitter:image:width\" content=\"1200\"/><meta name=\"twitter:image:height\" content=\"630\"/><link rel=\"icon\" href=\"/favicon.ico?favicon.2-0gmrvbja5ut.ico\" sizes=\"48x48\" type=\"image/x-icon\"/><link rel=\"icon\" href=\"/icon-192.png\" type=\"image/png\" sizes=\"192x192\"/><link rel=\"icon\" href=\"/icon-512.png\" type=\"image/png\" sizes=\"512x512\"/><link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\"/><meta name=\"next-size-adjust\" content=\"\"/><title>404: This page could not be found.</title><script src=\"<asset:0973c1d6>\" noModule=\"\"></script></head><body class=\"min-h-full\"><div hidden=\"\"><!--$--><!--/$--></div><script>try{var f=localStorage.getItem(\"gtnh-app-font\");if(f&&f!==\"inter\")document.documentElement.setAttribute(\"data-app-font\",f)}catch(e){}</script><script>try{var d=document.documentElement,m=window.matchMedia,p=+localStorage.getItem(\"gtnh-factory-flow.ui-scale.v1\");if(!(p>=60&&p<=200))p=100;var b=m(\"(max-width: 899.98px), (max-height: 559.98px)\").matches?0.9:1.17;var s=Math.round(p/100*b*1000)/1000;d.style.setProperty(\"--ui-scale\",s);d.style.setProperty(\"--ui-scale-inverse\",\"calc(1 / \"+s+\")\");var k=Math.min(s,1);if(m(\"(max-width: \"+(900*k-0.02)+\"px), (max-height: \"+(560*k-0.02)+\"px), (max-width: \"+(800*s-0.02)+\"px), (max-height: \"+(440*s-0.02)+\"px)\").matches)d.setAttribute(\"data-compact\",\"\");if(m(\"(max-width: \"+(1280*s-0.02)+\"px)\").matches)d.setAttribute(\"data-snug\",\"\")}catch(e){}</script><script type=\"application/ld+json\">{\"@context\":\"https://schema.org\",\"@graph\":[{\"@type\":\"WebSite\",\"@id\":\"http://127.0.0.1:3770/#website\",\"url\":\"http://127.0.0.1:3770/\",\"name\":\"GTNH Planner\"},{\"@type\":\"WebApplication\",\"@id\":\"http://127.0.0.1:3770/#app\",\"url\":\"http://127.0.0.1:3770/\",\"name\":\"GTNH Planner\",\"alternateName\":\"GregTech New Horizons Factory Planner\",\"description\":\"Free factory planner and recipe calculator for GregTech: New Horizons. Draw production chains on a flowchart, balance machine ratios, compute power and throughput, and share plans.\",\"applicationCategory\":\"GameApplication\",\"operatingSystem\":\"Any\",\"browserRequirements\":\"Requires JavaScript\",\"image\":\"http://127.0.0.1:3770/icon-512.png\",\"offers\":{\"@type\":\"Offer\",\"price\":\"0\",\"priceCurrency\":\"USD\"},\"about\":{\"@type\":\"VideoGame\",\"name\":\"GregTech: New Horizons\",\"gamePlatform\":\"Minecraft\"}}]}</script><div style=\"font-family:system-ui,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif,&quot;Apple Color Emoji&quot;,&quot;Segoe UI Emoji&quot;;height:100vh;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center\"><div><style>body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}</style><h1 class=\"next-error-h1\" style=\"display:inline-block;margin:0 20px 0 0;padding:0 23px 0 0;font-size:24px;font-weight:500;vertical-align:top;line-height:49px\">404</h1><div style=\"display:inline-block\"><h2 style=\"font-size:14px;font-weight:400;line-height:49px;margin:0\">This page could not be found.</h2></div></div></div><!--$--><!--/$--><div class=\"ui-zoom\"></div><script id=\"_R_\">(globalThis[\"TURBOPACK\"] || (globalThis[\"TURBOPACK\"] = [])).push({\"otherChunks\":[\"static/chunks/3333gs1h_w689.js\",\"static/chunks/25hib9mpse381.js\",\"static/chunks/2nii411saqstq.js\",\"static/chunks/2fu-1lvx5ldto.js\"],\"runtimeModuleIds\":[94553]});</script><script src=\"<asset:f6336c96>\" async=\"\"></script><script>(self.__next_f=self.__next_f||[]).push([0])</script><script>self.__next_f.push([1,\"1:\\\"$Sreact.fragment\\\"\\n2:\\\"<asset:c410d0f2>\\\"\\n3:I[39756,[\\\"$2\\\"],\\\"default\\\"]\\n4:I[37457,[\\\"$2\\\"],\\\"default\\\"]\\nf:\\\"<asset:85c012ff>\\\"\\n10:\\\"<asset:4fcb910b>\\\"\\n11:\\\"<asset:00b72546>\\\"\\n12:\\\"<asset:815ed1f2>\\\"\\n13:I[68027,[\\\"$f\\\",\\\"$10\\\",\\\"$11\\\",\\\"$12\\\"],\\\"default\\\",1]\\n:HL[\\\"<asset:401f8660>\\\",\\\"style\\\"]\\n:HL[\\\"<asset:d70d050a>\\\",\\\"style\\\"]\\nb:X\\nc:[[\\\"children\\\",{\\\"s\\\":\\\"__PAGE__\\\",\\\"h\\\":512,\\\"d\\\":{\\\"r\\\":\\\"$Ld\\\",\\\"p\\\":false,\\\"v\\\":null}}]]\\n9:[[\\\"children\\\",{\\\"s\\\":\\\"/_not-found\\\",\\\"h\\\":512,\\\"d\\\":{\\\"r\\\":\\\"$La\\\",\\\"p\\\":false,\\\"v\\\":\\\"$b\\\"},\\\"c\\\":\\\"$Qc\\\"}]]\\n0:{\\\"P\\\":null,\\\"c\\\":[\\\"\\\",\\\"_not-found\\\"],\\\"q\\\":\\\"\\\",\\\"i\\\":false,\\\"t\\\":{\\\"t\\\":{\\\"s\\\":\\\"\\\",\\\"h\\\":528,\\\"d\\\":{\\\"r\\\":[\\\"$\\\",\\\"$1\\\",\\\"c\\\",{\\\"children\\\":[[[\\\"$\\\",\\\"link\\\",\\\"0\\\",{\\\"rel\\\":\\\"stylesheet\\\",\\\"href\\\":\\\"<asset:401f8660>\\\",\\\"precedence\\\":\\\"next\\\",\\\"crossOrigin\\\":\\\"$undefined\\\",\\\"nonce\\\":\\\"$undefined\\\"}],[\\\"$\\\",\\\"link\\\",\\\"1\\\",{\\\"rel\\\":\\\"stylesheet\\\",\\\"href\\\":\\\"<asset:d70d050a>\\\",\\\"precedence\\\":\\\"next\\\",\\\"crossOrigin\\\":\\\"$undefined\\\",\\\"nonce\\\":\\\"$undefined\\\"}],[\\\"$\\\",\\\"script\\\",\\\"script-0\\\",{\\\"src\\\":\\\"<asset:85c012ff>\\\",\\\"async\\\":true,\\\"nonce\\\":\\\"$undefined\\\"}],[\\\"$\\\",\\\"script\\\",\\\"script-1\\\",{\\\"src\\\":\\\"<asset:4fcb910b>\\\",\\\"async\\\":true,\\\"nonce\\\":\\\"$undefined\\\"}],[\\\"$\\\",\\\"script\\\",\\\"script-2\\\",{\\\"src\\\":\\\"<asset:00b72546>\\\",\\\"async\\\":true,\\\"nonce\\\":\\\"$undefined\\\"}],[\\\"$\\\",\\\"script\\\",\\\"script-3\\\",{\\\"src\\\":\\\"<asset:815ed1f2>\\\",\\\"async\\\":true,\\\"nonce\\\":\\\"$undefined\\\"}]],[\\\"$\\\",\\\"html\\\",null,{\\\"lang\\\":\\\"en\\\",\\\"className\\\":\\\"AuosRG_variable _0bjUvq_variable _6GV5LG_variable CFtu_q_variable J7MLvW_variable _6KxHjW_variable ok3qBG_variable rL9IyG_variable h-full\\\",\\\"suppressHydrationWarning\\\":true,\\\"children\\\":[\\\"$\\\",\\\"body\\\",null,{\\\"className\\\":\\\"min-h-full\\\",\\\"children\\\":[[\\\"$\\\",\\\"script\\\",null,{\\\"dangerouslySetInnerHTML\\\":{\\\"__html\\\":\\\"try{var f=localStorage.getItem(\\\\\\\"gtnh-app-font\\\\\\\");if(f\\u0026\\u0026f!==\\\\\\\"inter\\\\\\\")document.documentElement.setAttribute(\\\\\\\"data-app-font\\\\\\\",f)}catch(e){}\\\"}}],[\\\"$\\\",\\\"script\\\",null,{\\\"dangerouslySetInnerHTML\\\":{\\\"__html\\\":\\\"try{var d=document.documentElement,m=window.matchMedia,p=+localStorage.getItem(\\\\\\\"gtnh-factory-flow.ui-scale.v1\\\\\\\");if(!(p\\u003e=60\\u0026\\u0026p\\u003c=200))p=100;var b=m(\\\\\\\"(max-width: 899.98px), (max-height: 559.98px)\\\\\\\").matches?0.9:1.17;var s=Math.round(p/100*b*1000)/1000;d.style.setProperty(\\\\\\\"--ui-scale\\\\\\\",s);d.style.setProperty(\\\\\\\"--ui-scale-inverse\\\\\\\",\\\\\\\"calc(1 / \\\\\\\"+s+\\\\\\\")\\\\\\\");var k=Math.min(s,1);if(m(\\\\\\\"(max-width: \\\\\\\"+(900*k-0.02)+\\\\\\\"px), (max-height: \\\\\\\"+(560*k-0.02)+\\\\\\\"px), (max-width: \\\\\\\"+(800*s-0.02)+\\\\\\\"px), (max-height: \\\\\\\"+(440*s-0.02)+\\\\\\\"px)\\\\\\\").matches)d.setAttribute(\\\\\\\"data-compact\\\\\\\",\\\\\\\"\\\\\\\");if(m(\\\\\\\"(max-width: \\\\\\\"+(1280*s-0.02)+\\\\\\\"px)\\\\\\\").matches)d.setAttribute(\\\\\\\"data-snug\\\\\\\",\\\\\\\"\\\\\\\")}catch(e){}\\\"}}],[\\\"$\\\",\\\"script\\\",null,{\\\"type\\\":\\\"application/ld+json\\\",\\\"dangerouslySetInnerHTML\\\":{\\\"__html\\\":\\\"{\\\\\\\"@context\\\\\\\":\\\\\\\"https://schema.org\\\\\\\",\\\\\\\"@graph\\\\\\\":[{\\\\\\\"@type\\\\\\\":\\\\\\\"WebSite\\\\\\\",\\\\\\\"@id\\\\\\\":\\\\\\\"http://127.0.0.1:3770/#website\\\\\\\",\\\\\\\"url\\\\\\\":\\\\\\\"http://127.0.0.1:3770/\\\\\\\",\\\\\\\"name\\\\\\\":\\\\\\\"GTNH Planner\\\\\\\"},{\\\\\\\"@type\\\\\\\":\\\\\\\"WebApplication\\\\\\\",\\\\\\\"@id\\\\\\\":\\\\\\\"http://127.0.0.1:3770/#app\\\\\\\",\\\\\\\"url\\\\\\\":\\\\\\\"http://127.0.0.1:3770/\\\\\\\",\\\\\\\"name\\\\\\\":\\\\\\\"GTNH Planner\\\\\\\",\\\\\\\"alternateName\\\\\\\":\\\\\\\"GregTech New Horizons Factory Planner\\\\\\\",\\\\\\\"description\\\\\\\":\\\\\\\"Free factory planner and recipe calculator for GregTech: New Horizons. Draw production chains on a flowchart, balance machine ratios, compute power and throughput, and share plans.\\\\\\\",\\\\\\\"applicationCategory\\\\\\\":\\\\\\\"GameApplication\\\\\\\",\\\\\\\"operatingSystem\\\\\\\":\\\\\\\"Any\\\\\\\",\\\\\\\"browserRequirements\\\\\\\":\\\\\\\"Requires JavaScript\\\\\\\",\\\\\\\"image\\\\\\\":\\\\\\\"http://127.0.0.1:3770/icon-512.png\\\\\\\",\\\\\\\"offers\\\\\\\":{\\\\\\\"@type\\\\\\\":\\\\\\\"Offer\\\\\\\",\\\\\\\"price\\\\\\\":\\\\\\\"0\\\\\\\",\\\\\\\"priceCurrency\\\\\\\":\\\\\\\"USD\\\\\\\"},\\\\\\\"about\\\\\\\":{\\\\\\\"@type\\\\\\\":\\\\\\\"VideoGame\\\\\\\",\\\\\\\"name\\\\\\\":\\\\\\\"GregTech: New Horizons\\\\\\\",\\\\\\\"gamePlatform\\\\\\\":\\\\\\\"Minecraft\\\\\\\"}}]}\\\"}}],[\\\"$\\\",\\\"$L3\\\",null,{\\\"parallelRouterKey\\\":\\\"children\\\",\\\"error\\\":\\\"$undefined\\\",\\\"errorStyles\\\":\\\"$undefined\\\",\\\"errorScripts\\\":\\\"$undefined\\\",\\\"template\\\":[\\\"$\\\",\\\"$L4\\\",null,{}],\\\"templateStyles\\\":\\\"$undefined\\\",\\\"templateScripts\\\":\\\"$undefined\\\",\\\"notFound\\\":[[[\\\"$\\\",\\\"title\\\",null,{\\\"children\\\":\\\"404: This page could not be found.\\\"}],[\\\"$\\\",\\\"div\\\",null,{\\\"style\\\":{\\\"fontFamily\\\":\\\"system-ui,\\\\\\\"Segoe UI\\\\\\\",Roboto,Helvetica,Arial,sans-serif,\\\\\\\"Apple Color Emoji\\\\\\\",\\\\\\\"Segoe UI Emoji\\\\\\\"\\\",\\\"height\\\":\\\"100vh\\\",\\\"textAlign\\\":\\\"center\\\",\\\"display\\\":\\\"flex\\\",\\\"flexDirection\\\":\\\"column\\\",\\\"alignItems\\\":\\\"center\\\",\\\"justifyContent\\\":\\\"center\\\"},\\\"children\\\":[\\\"$\\\",\\\"div\\\",null,{\\\"children\\\":[[\\\"$\\\",\\\"style\\\",null,{\\\"dangerouslySetInnerHTML\\\":{\\\"__html\\\":\\\"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}\\\"}}],[\\\"$\\\",\\\"h1\\\",null,{\\\"className\\\":\\\"next-error-h1\\\",\\\"style\\\":{\\\"display\\\":\\\"inline-block\\\",\\\"margin\\\":\\\"0 20px 0 0\\\",\\\"padding\\\":\\\"0 23px 0 0\\\",\\\"fontSize\\\":24,\\\"fontWeight\\\":500,\\\"verticalAlign\\\":\\\"top\\\",\\\"lineHeight\\\":\\\"49px\\\"},\\\"children\\\":404}],\\\"$L5\\\"]}]}]],[]],\\\"forbidden\\\":\\\"$undefined\\\",\\\"unauthorized\\\":\\\"$undefined\\\"}],\\\"$L6\\\",\\\"$L7\\\",\\\"$L8\\\"]}]}]]}],\\\"p\\\":false,\\\"v\\\":null},\\\"c\\\":\\\"$Q9\\\"},\\\"h\\\":{\\\"r\\\":\\\"$Le\\\",\\\"p\\\":false,\\\"v\\\":null}},\\\"m\\\":\\\"$undefined\\\",\\\"G\\\":[\\\"$13\\\",[\\\"$L14\\\",\\\"$L15\\\"]],\\\"S\\\":true,\\\"r\\\":\\\"$undefined\\\",\\\"s\\\":\\\"$undefined\\\",\\\"a\\\":\\\"$undefined\\\",\\\"l\\\":\\\"$undefined\\\",\\\"p\\\":\\\"$undefined\\\",\\\"d\\\":\\\"$undefined\\\",\\\"b\\\":\\\"4eDzYMmHyb3gahRDp0mJg\\\"}\\n16:I[1960,[\\\"$f\\\",\\\"$10\\\",\\\"$11\\\",\\\"$12\\\"],\\\"WhatsNewGate\\\"]\\n17:I[2790,[\\\"$f\\\",\\\"$10\\\",\\\"$11\\\",\\\"$12\\\"],\\\"AppFontRestore\\\"]\\n18:\\\"GlobalTitleTooltip\\\"\\n19:I[49483,[\\\"$f\\\",\\\"$10\\\",\\\"$11\\\",\\\"$12\\\"],\\\"$18\\\"]\\n1a:I[97367,[\\\"$2\\\"],\\\"OutletBoundary\\\"]\\n1b:\\\"$Sreact.suspense\\\"\\n1d:\\\"ViewportBoundary\\\"\\n1e:I[97367,[\\\"$2\\\"],\\\"$1d\\\"]\\n20:\\\"MetadataBoundary\\\"\\n21:I[97367,[\\\"$2\\\"],\\\"$20\\\"]\\n5:[\\\"$\\\",\\\"div\\\",null,{\\\"style\\\":{\\\"display\\\":\\\"inline-block\\\"},\\\"children\\\":[\\\"$\\\",\\\"h2\\\",null,{\\\"style\\\":{\\\"fontSize\\\":14,\\\"fontWeight\\\":400,\\\"lineHeight\\\":\\\"49px\\\",\\\"margin\\\":0},\\\"children\\\":\\\"This page could not be found.\\\"}]}]\\n6:[\\\"$\\\",\\\"div\\\",null,{\\\"className\\\":\\\"ui-zoom\\\",\\\"children\\\":[\\\"$\\\",\\\"$L16\\\",null,{}]}]\\n7:[\\\"$\\\",\\\"$L17\\\",null,{}]\\n8:[\\\"$\\\",\\\"$L19\\\",null,{}]\\na:[\\\"$\\\",\\\"$1\\\",\\\"c\\\",{\\\"children\\\":[null,[\\\"$\\\",\\\"$L3\\\",null,{\\\"parallelRouterKey\\\":\\\"children\\\",\\\"error\\\":\\\"$undefined\\\",\\\"errorStyles\\\":\\\"$undefined\\\",\\\"errorScripts\\\":\\\"$undefined\\\",\\\"template\\\":[\\\"$\\\",\\\"$L4\\\",null,{}],\\\"templateStyles\\\":\\\"$undefined\\\",\\\"templateScripts\\\":\\\"$undefined\\\",\\\"notFound\\\":\\\"$undefined\\\",\\\"forbidden\\\":\\\"$undefined\\\",\\\"unauthorized\\\":\\\"$undefined\\\"}]]}]\\nd:[\\\"$\\\",\\\"$1\\\",\\\"c\\\",{\\\"children\\\":[[[\\\"$\\\",\\\"title\\\",null,{\\\"children\\\":\\\"404: This page could not be found.\\\"}],[\\\"$\\\",\\\"div\\\",null,{\\\"style\\\":\\\"$0:t:t:d:r:props:children:1:props:children:props:children:3:props:notFound:0:1:props:style\\\",\\\"children\\\":[\\\"$\\\",\\\"div\\\",null,{\\\"children\\\":[[\\\"$\\\",\\\"style\\\",null,{\\\"dangerouslySetInnerHTML\\\":{\\\"__html\\\":\\\"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}\\\"}}],[\\\"$\\\",\\\"h1\\\",null,{\\\"className\\\":\\\"next-error-h1\\\",\\\"style\\\":\\\"$0:t:t:d:r:props:children:1:props:children:props:children:3:props:notFound:0:1:props:children:props:children:1:props:style\\\",\\\"children\\\":404}],[\\\"$\\\",\\\"div\\\",null,{\\\"style\\\":\\\"$5:props:style\\\",\\\"children\\\":[\\\"$\\\",\\\"h2\\\",null,{\\\"style\\\":\\\"$5:props:children:props:style\\\",\\\"children\\\":\\\"This page could not be found.\\\"}]}]]}]}]],null,[\\\"$\\\",\\\"$L1a\\\",null,{\\\"children\\\":[\\\"$\\\",\\\"$1b\\\",null,{\\\"name\\\":\\\"Next.MetadataOutlet\\\",\\\"children\\\":\\\"$@1c\\\"}]}]]}]\\ne:[\\\"$\\\",\\\"$1\\\",\\\"h\\\",{\\\"children\\\":[[\\\"$\\\",\\\"meta\\\",null,{\\\"name\\\":\\\"robots\\\",\\\"content\\\":\\\"noindex\\\"}],[\\\"$\\\",\\\"$L1e\\\",null,{\\\"children\\\":\\\"$L1f\\\"}],[\\\"$\\\",\\\"$L21\\\",null,{\\\"children\\\":[[\\\"$\\\",\\\"div\\\",null,{\\\"hidden\\\":true,\\\"children\\\":[\\\"$\\\",\\\"$1b\\\",null,{\\\"name\\\":\\\"Next.Metadata\\\",\\\"children\\\":\\\"$L22\\\"}]}],null]}],[\\\"$\\\",\\\"meta\\\",null,{\\\"name\\\":\\\"next-size-adjust\\\",\\\"content\\\":\\\"\\\"}]]}]\\n14:[\\\"$\\\",\\\"link\\\",\\\"0\\\",{\\\"rel\\\":\\\"stylesheet\\\",\\\"href\\\":\\\"<asset:401f8660>\\\",\\\"precedence\\\":\\\"next\\\",\\\"crossOrigin\\\":\\\"$undefined\\\",\\\"nonce\\\":\\\"$undefined\\\"}]\\n15:[\\\"$\\\",\\\"link\\\",\\\"1\\\",{\\\"rel\\\":\\\"stylesheet\\\",\\\"href\\\":\\\"<asset:d70d050a>\\\",\\\"precedence\\\":\\\"next\\\",\\\"crossOrigin\\\":\\\"$undefined\\\",\\\"nonce\\\":\\\"$undefined\\\"}]\\nb:C\\n1f:[[\\\"$\\\",\\\"meta\\\",\\\"0\\\",{\\\"charSet\\\":\\\"utf-8\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"1\\\",{\\\"name\\\":\\\"viewport\\\",\\\"content\\\":\\\"width=device-width, initial-scale=1\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"2\\\",{\\\"name\\\":\\\"theme-color\\\",\\\"content\\\":\\\"#1b1d21\\\"}]]\\n23:I[27201,[\\\"$2\\\"],\\\"IconMark\\\"]\\n1c:null\\n22:[[\\\"$\\\",\\\"title\\\",\\\"0\\\",{\\\"children\\\":\\\"GTNH Planner | GregTech New Horizons Factory Calculator\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"1\\\",{\\\"name\\\":\\\"description\\\",\\\"content\\\":\\\"Plan and optimize GregTech: New Horizons factories on an interactive flowchart. Full recipe data for GTNH 2.9 and 2.8.1, throughput and power calculation, and machine ratios.\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"2\\\",{\\\"name\\\":\\\"application-name\\\",\\\"content\\\":\\\"GTNH Planner\\\"}],[\\\"$\\\",\\\"link\\\",\\\"3\\\",{\\\"rel\\\":\\\"manifest\\\",\\\"href\\\":\\\"/manifest.webmanifest\\\",\\\"crossOrigin\\\":\\\"$undefined\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"4\\\",{\\\"name\\\":\\\"keywords\\\",\\\"content\\\":\\\"GTNH Planner,GregTech New Horizons planner,GTNH factory planner,GTNH recipe calculator,GTNH throughput calculator,GregTech factory calculator\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"5\\\",{\\\"name\\\":\\\"robots\\\",\\\"content\\\":\\\"index, follow\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"6\\\",{\\\"name\\\":\\\"googlebot\\\",\\\"content\\\":\\\"index, follow, max-video-preview:-1, max-image-preview:large, max-snippet:-1\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"7\\\",{\\\"name\\\":\\\"darkreader-lock\\\",\\\"content\\\":\\\"true\\\"}],[\\\"$\\\",\\\"link\\\",\\\"8\\\",{\\\"rel\\\":\\\"canonical\\\",\\\"href\\\":\\\"http://127.0.0.1:3770\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"9\\\",{\\\"property\\\":\\\"og:title\\\",\\\"content\\\":\\\"GTNH Planner | GregTech New Horizons Factory Calculator\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"10\\\",{\\\"property\\\":\\\"og:description\\\",\\\"content\\\":\\\"Free factory planner for GregTech: New Horizons with full recipe data for GTNH 2.9 and 2.8.1. Draw production chains, balance machine ratios, and find bottlenecks.\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"11\\\",{\\\"property\\\":\\\"og:url\\\",\\\"content\\\":\\\"http://127.0.0.1:3770\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"12\\\",{\\\"property\\\":\\\"og:site_name\\\",\\\"content\\\":\\\"GTNH Planner\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"13\\\",{\\\"property\\\":\\\"og:image\\\",\\\"content\\\":\\\"http://127.0.0.1:3770/opengraph-image.png?opengraph-image.1zh5vazs5ubx0.png\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"14\\\",{\\\"property\\\":\\\"og:image:type\\\",\\\"content\\\":\\\"image/png\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"15\\\",{\\\"property\\\":\\\"og:image:width\\\",\\\"content\\\":\\\"1200\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"16\\\",{\\\"property\\\":\\\"og:image:height\\\",\\\"content\\\":\\\"630\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"17\\\",{\\\"property\\\":\\\"og:image:alt\\\",\\\"content\\\":\\\"The GTNH Planner board: a Benzene setup drawn as a flowchart, with the item list on the left and the plan totals on the right\\\\n\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"18\\\",{\\\"property\\\":\\\"og:type\\\",\\\"content\\\":\\\"website\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"19\\\",{\\\"name\\\":\\\"twitter:card\\\",\\\"content\\\":\\\"summary_large_image\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"20\\\",{\\\"name\\\":\\\"twitter:title\\\",\\\"content\\\":\\\"GTNH Planner | GregTech New Horizons Factory Calculator\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"21\\\",{\\\"name\\\":\\\"twitter:description\\\",\\\"content\\\":\\\"Free factory planner for GregTech: New Horizons with full recipe data for GTNH 2.9 and 2.8.1. Draw production chains, balance machine ratios, and find bottlenecks.\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"22\\\",{\\\"name\\\":\\\"twitter:image\\\",\\\"content\\\":\\\"http://127.0.0.1:3770/opengraph-image.png?opengraph-image.1zh5vazs5ubx0.png\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"23\\\",{\\\"name\\\":\\\"twitter:image:alt\\\",\\\"content\\\":\\\"The GTNH Planner board: a Benzene setup drawn as a flowchart, with the item list on the left and the plan totals on the right\\\\n\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"24\\\",{\\\"name\\\":\\\"twitter:image:type\\\",\\\"content\\\":\\\"image/png\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"25\\\",{\\\"name\\\":\\\"twitter:image:width\\\",\\\"content\\\":\\\"1200\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"26\\\",{\\\"name\\\":\\\"twitter:image:height\\\",\\\"content\\\":\\\"630\\\"}],[\\\"$\\\",\\\"link\\\",\\\"27\\\",{\\\"rel\\\":\\\"icon\\\",\\\"href\\\":\\\"/favicon.ico?favicon.2-0gmrvbja5ut.ico\\\",\\\"sizes\\\":\\\"48x48\\\",\\\"type\\\":\\\"image/x-icon\\\"}],[\\\"$\\\",\\\"link\\\",\\\"28\\\",{\\\"rel\\\":\\\"icon\\\",\\\"href\\\":\\\"/icon-192.png\\\",\\\"type\\\":\\\"image/png\\\",\\\"sizes\\\":\\\"192x192\\\"}],[\\\"$\\\",\\\"link\\\",\\\"29\\\",{\\\"rel\\\":\\\"icon\\\",\\\"href\\\":\\\"/icon-512.png\\\",\\\"type\\\":\\\"image/png\\\",\\\"sizes\\\":\\\"512x512\\\"}],[\\\"$\\\",\\\"link\\\",\\\"30\\\",{\\\"rel\\\":\\\"apple-touch-icon\\\",\\\"href\\\":\\\"/apple-touch-icon.png\\\"}],[\\\"$\\\",\\\"$L23\\\",\\\"31\\\",{}]]\\n\"])</script></body></html>"
+      }
+    },
+    {
+      "name": "cross-site /api/community/auth/logout/",
+      "request": {
+        "method": "POST",
+        "target": "/api/community/auth/logout/"
+      },
+      "status": 308,
+      "headers": [
+        [
+          "location",
+          "/api/community/auth/logout"
+        ],
+        [
+          "refresh",
+          "0;url=/api/community/auth/logout"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:13 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "/api/community/auth/logout"
+      }
+    },
+    {
+      "name": "cross-site /x/../api/community/auth/logout",
+      "request": {
+        "method": "POST",
+        "target": "/x/../api/community/auth/logout"
+      },
+      "status": 403,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "vary",
+          "Accept-Encoding"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:13 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "{\"error\":\"Cross-site request refused.\"}"
+      }
+    },
+    {
+      "name": "cross-site /x/%2e%2e/api/community/auth/logout",
+      "request": {
+        "method": "POST",
+        "target": "/x/%2e%2e/api/community/auth/logout"
+      },
+      "status": 403,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "vary",
+          "Accept-Encoding"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:13 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "{\"error\":\"Cross-site request refused.\"}"
+      }
+    },
+    {
+      "name": "cross-site Sec-Fetch-Site",
+      "request": {
+        "method": "POST",
+        "target": "/api/community/auth/logout"
+      },
+      "status": 403,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "vary",
+          "Accept-Encoding"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:13 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "{\"error\":\"Cross-site request refused.\"}"
+      }
+    },
+    {
+      "name": "same-site Origin",
+      "request": {
+        "method": "POST",
+        "target": "/api/community/auth/logout"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "content-type",
+          "application/json"
+        ],
+        [
+          "set-cookie",
+          "gtnh_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:13 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "{\"ok\":true}"
+      }
+    }
+  ],
+  "publicFileOptions": {
+    "name": "OPTIONS /icon-192.png",
+    "request": {
+      "method": "OPTIONS",
+      "target": "/icon-192.png"
+    },
+    "status": 500,
+    "headers": [
+      [
+        "content-security-policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+      ],
+      [
+        "x-frame-options",
+        "SAMEORIGIN"
+      ],
+      [
+        "x-content-type-options",
+        "nosniff"
+      ],
+      [
+        "referrer-policy",
+        "strict-origin-when-cross-origin"
+      ],
+      [
+        "strict-transport-security",
+        "max-age=15552000"
+      ],
+      [
+        "allow",
+        "GET"
+      ],
+      [
+        "allow",
+        "HEAD"
+      ],
+      [
+        "cache-control",
+        "private, no-cache, no-store, max-age=0, must-revalidate"
+      ],
+      [
+        "etag",
+        "\"66fci67lppl\""
+      ],
+      [
+        "content-type",
+        "text/plain"
+      ],
+      [
+        "content-length",
+        "21"
+      ],
+      [
+        "vary",
+        "Accept-Encoding"
+      ],
+      [
+        "date",
+        "Wed, 28 Oct 2026 08:43:33 GMT"
+      ],
+      [
+        "connection",
+        "keep-alive"
+      ],
+      [
+        "keep-alive",
+        "timeout=5"
+      ]
+    ],
+    "body": {
+      "text": "Internal Server Error"
+    }
+  }
+}

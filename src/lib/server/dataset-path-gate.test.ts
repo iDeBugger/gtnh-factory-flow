@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { extraGateCases, harnessGateCases } from "@/test-support/dataset-gate-cases";
 import { decideDatasetPath } from "./dataset-path-gate";
 
 const V = "local-2.9.0-rc-2";
@@ -47,7 +48,9 @@ describe("the dataset path gate", () => {
 
   it("sends the content-named textures to the dataset-files route, the other textures not", () => {
     for (const root of ["rendered", "icons"]) {
-      expect(decideDatasetPath(`/datasets/gtnh/${V}/textures/${root}/copper-a50d21cdeb41.png`)).toEqual({
+      expect(
+        decideDatasetPath(`/datasets/gtnh/${V}/textures/${root}/copper-a50d21cdeb41.png`),
+      ).toEqual({
         kind: "rewrite",
         pathname: `/dataset-files/${V}/textures/${root}/copper-a50d21cdeb41.png`,
       });
@@ -98,5 +101,11 @@ describe("the dataset path gate", () => {
     expect(decideDatasetPath("/api/datasets/x/recipes")).toEqual({ kind: "pass" });
     expect(decideDatasetPath("/")).toEqual({ kind: "pass" });
     expect(decideDatasetPath("/plans/some%20name")).toEqual({ kind: "pass" });
+  });
+
+  it("decides every shared spelling of a dataset path as the cases say, read as a pathname", () => {
+    for (const { target, decision } of [...harnessGateCases(V), ...extraGateCases(V)]) {
+      expect(decideDatasetPath(target).kind, target).toBe(decision);
+    }
   });
 });

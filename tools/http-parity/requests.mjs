@@ -25,6 +25,7 @@
  */
 import { readFileSync } from "node:fs";
 import { PNG } from "pngjs";
+import { harnessGateCases } from "../../src/test-support/dataset-gate-cases.ts";
 
 export const VERSIONS = ["local-2.9.0-rc-2", "local-2.8.1"];
 const V0 = VERSIONS[0];
@@ -1004,50 +1005,16 @@ for (const v of VERSIONS) {
   });
 }
 
-// The dataset path gate: the encoded spellings of dataset-path-gate.test.ts, then the spellings around it.
+// The dataset path gate: the encoded spellings of dataset-path-gate.test.ts, then the spellings around it, as
+// src/test-support/dataset-gate-cases.ts lists them for every reader.
 for (const v of VERSIONS) {
-  const gate = (label, target, extra = {}) =>
-    add({ name: `gate ${v} ${label}`, method: "GET", target, ...extra });
-  for (const target of [
-    `/datasets/gtnh/${v}/client%2Fcatalog.json`,
-    `/datasets/gtnh/${v}/client/../recipes.json`,
-    `/datasets/gtnh/${v}/recipes%2Ejson`,
-    `/datasets/gtnh/${v}/recipes%2ejson`,
-    `/datasets/gtnh/${v}/%72ecipes.json`,
-    `/datasets/gtnh/${v}%2Frecipes.json`,
-    `/datasets/gtnh/${v}/recipes%252Ejson`,
-    `/%64atasets/gtnh/${v}/recipes.json`,
-    `/datasets%2Fgtnh/${v}/recipes.json`,
-    `/datasets/gtnh/${v}/recipes%2Ejson.gz`,
-    `/datasets/gtnh/${v}/recipes-shards%2Fshard-0000.json.gz`,
-    `/datasets/gtnh/${v}/textures/rendered/x%2Epng`,
-    `/dataset-files/${v}/recipes%2Ejson.gz`,
-    `/datasets/gtnh/${v}/%E0%A4%A`,
-    `/datasets/gtnh/${v}/../${v}/recipes.json`,
-    `/datasets/gtnh/${v}/./recipes.json`,
-    `/datasets/gtnh//${v}/recipes.json`,
-    `/datasets/gtnh/${v}/oracle/oracle-report.json`,
-    `/dataset-files/${v}/recipes.json.gz`,
-  ]) {
-    gate(target, target, { localOnly: true });
-  }
-  for (const target of [
-    `/DATASETS/gtnh/${v}/recipes.json`,
-    `/datasets/gtnh/${v}/RECIPES.JSON`,
-    `/datasets/gtnh/${v}/recipes.json/`,
-  ]) {
-    gate(target, target);
-  }
-  for (const target of [
-    `//datasets/gtnh/${v}/recipe-lookup-index.json.gz`,
-    `/%2fdatasets/gtnh/${v}/recipes.json`,
-    `/%2Fdatasets/gtnh/${v}/recipes.json`,
-    `/x/..%2fdatasets/gtnh/${v}/recipes.json`,
-    `\\datasets\\gtnh\\${v}\\recipe-lookup-index.json.gz`,
-    `/datasets/gtnh/${v}/x/../recipe-lookup-index.json.gz`,
-    `/datasets/gtnh/${v}/%2e/recipe-lookup-index.json.gz`,
-  ]) {
-    gate(target, target, { localOnly: true });
+  for (const { target, localOnly } of harnessGateCases(v)) {
+    add({
+      name: `gate ${v} ${target}`,
+      method: "GET",
+      target,
+      ...(localOnly ? { localOnly } : {}),
+    });
   }
 }
 
