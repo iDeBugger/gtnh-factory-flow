@@ -5,11 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { createServer, isFileLoadingAllowed, type ResolvedConfig, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { devListenHost } from "./dev-host";
+import { devListenHost, setDevBuildEnv } from "./dev-env";
 
 const ROOT = path.resolve(__dirname, "../..");
 
-describe("the dev server's exposure", () => {
+describe("the dev server's environment and exposure", () => {
   it("listens on loopback unless HOSTNAME names an address", () => {
     expect(devListenHost({})).toBe("127.0.0.1");
     expect(devListenHost({ HOSTNAME: "" })).toBe("127.0.0.1");
@@ -56,6 +56,20 @@ describe("the dev server's exposure", () => {
       await res.arrayBuffer();
       return res.status;
     };
+
+    it("gives the server the build id and switch that Vite inlines into the browser code", () => {
+      const env: NodeJS.ProcessEnv = {};
+      setDevBuildEnv(env, vite.config.define);
+      const inlined = vite.config.define!;
+      expect(env.NEXT_PUBLIC_GTNH_BUILD_ID).toMatch(/\S/);
+      expect(JSON.stringify(env.NEXT_PUBLIC_GTNH_BUILD_ID)).toBe(
+        inlined["process.env.NEXT_PUBLIC_GTNH_BUILD_ID"],
+      );
+      expect(JSON.stringify(env.NEXT_PUBLIC_MOD_AND_COMMUNITY)).toBe(
+        inlined["process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY"],
+      );
+      expect(() => setDevBuildEnv({}, {})).toThrow(/defines no NEXT_PUBLIC_GTNH_BUILD_ID/);
+    });
 
     it("serves the browser code", async () => {
       expect(await status("src/client/fonts.css")).toBe(200);

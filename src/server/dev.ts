@@ -15,7 +15,7 @@ import http from "node:http";
 import path from "node:path";
 import type { RequestHandler } from "express";
 import type { ViteDevServer } from "vite";
-import { devListenHost } from "./dev-host";
+import { devListenHost, setDevBuildEnv } from "./dev-env";
 import type { PageTemplate } from "./page/template";
 
 const ROOT = path.resolve(__dirname, "../..");
@@ -50,8 +50,17 @@ async function devTemplate(
 async function main(): Promise<void> {
   // Before the app's modules load: packages pick their development build, and the server code its dev paths.
   (process.env as Record<string, string | undefined>).NODE_ENV ??= "development";
+  const { createServer } = await import("vite");
+  const server = http.createServer();
+  const vite = await createServer({
+    configFile: path.join(ROOT, "vite.config.ts"),
+    // The HMR socket shares the site's port, so the page's connect-src 'self' covers it.
+    server: { middlewareMode: true, hmr: { server } },
+    appType: "custom",
+  });
+  // Also before the app's modules load: they read the build id and the switch once.
+  setDevBuildEnv(process.env, vite.config.define);
   const [
-    { createServer },
     { checkServerSetupOrExit },
     { prewarmDatasetVersions },
     { writeServedDatasetClientFiles },
@@ -60,7 +69,6 @@ async function main(): Promise<void> {
     { startWork },
     { homePage },
   ] = await Promise.all([
-    import("vite"),
     import("@/lib/server/startup-checks"),
     import("@/lib/server/dataset-query"),
     import("@/lib/server/dataset-client-files"),
@@ -71,13 +79,6 @@ async function main(): Promise<void> {
   ]);
   checkServerSetupOrExit();
 
-  const server = http.createServer();
-  const vite = await createServer({
-    configFile: path.join(ROOT, "vite.config.ts"),
-    // The HMR socket shares the site's port, so the page's connect-src 'self' covers it.
-    server: { middlewareMode: true, hmr: { server } },
-    appType: "custom",
-  });
   const ready = startWork(prewarmDatasetVersions, writeServedDatasetClientFiles);
   // The clean card harness (src/client/dev/clean-card), a dev-only page with the site's head: GET and HEAD.
   const cleanCard = homePage(
