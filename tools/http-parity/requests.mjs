@@ -29,6 +29,9 @@ import { PNG } from "pngjs";
 export const VERSIONS = ["local-2.9.0-rc-2", "local-2.8.1"];
 const V0 = VERSIONS[0];
 
+/** Whether a version has crop-farm recipes: 2.8.1 has none, so there is no crop id to look up. */
+const HAS_CROPS = { "local-2.9.0-rc-2": true, "local-2.8.1": false };
+
 /** One content-named texture that exists in each version. */
 const RENDERED_TEXTURE = {
   "local-2.9.0-rc-2": "0_wall_marking-70819c300142.png",
@@ -666,6 +669,16 @@ for (const target of [
 }
 add({ name: "manifest", method: "GET", target: "/datasets/gtnh/datasets.manifest.json" });
 
+// HEAD and OPTIONS outside the route files: the page, a public file, a dataset file and a texture.
+for (const target of [
+  "/",
+  "/icon-192.png",
+  `/datasets/gtnh/${V0}/recipe-lookup-index.json.gz`,
+  `/datasets/gtnh/${V0}/textures/rendered/${RENDERED_TEXTURE[V0]}`,
+]) {
+  for (const method of ["HEAD", "OPTIONS"]) add({ name: `${method} ${target}`, method, target });
+}
+
 // Dataset files, per version.
 for (const v of VERSIONS) {
   const root = `/datasets/gtnh/${v}`;
@@ -710,6 +723,20 @@ for (const v of VERSIONS) {
     name: `files ${v} rendered texture`,
     method: "GET",
     target: `${root}/textures/rendered/${RENDERED_TEXTURE[v]}`,
+  });
+  for (const file of ["recipe-index.json.gz", "resource-index.json.gz", "recipes.json.gz"]) {
+    add({ name: `files ${v} ${file}`, method: "GET", target: `${root}/${file}` });
+  }
+  // The gate lets these through to the public files: a texture report and a texture deeper than a root.
+  add({
+    name: `files ${v} texture report`,
+    method: "GET",
+    target: `${root}/textures/icon-report.json`,
+  });
+  add({
+    name: `files ${v} deeper texture`,
+    method: "GET",
+    target: `${root}/textures/rendered/deeper/x.png`,
   });
   add({
     name: `files ${v} atlas texture`,
@@ -945,7 +972,7 @@ for (const v of VERSIONS) {
         : undefined,
     });
   }
-  sweep("recipe by id crop", `${api}/recipes/{crop-id:${v}|uri}`);
+  if (HAS_CROPS[v]) sweep("recipe by id crop", `${api}/recipes/{crop-id:${v}|uri}`);
   sweep("recipe by id mob", `${api}/recipes/{mob-id:${v}|uri}`);
   sweep("recipe by id missing", `${api}/recipes/no-such-recipe`);
   add({
@@ -1287,6 +1314,25 @@ step({
 });
 
 step({
+  name: "scenario design delete",
+  method: "DELETE",
+  target: "/api/library/designs/parity-design-1",
+  headers: as("a"),
+});
+step({
+  name: "scenario folder delete",
+  method: "DELETE",
+  target: "/api/library/folders/parity-folder-1",
+  headers: as("a"),
+});
+step({
+  name: "scenario library list after deletes",
+  method: "GET",
+  target: "/api/library",
+  headers: as("a"),
+});
+
+step({
   name: "scenario blueprint save",
   method: "POST",
   target: "/api/blueprints",
@@ -1305,6 +1351,13 @@ step({
   method: "GET",
   target: "/api/blueprints/{blueprintId}",
   headers: as("a"),
+});
+step({
+  name: "scenario blueprint edit",
+  method: "PUT",
+  target: "/api/blueprints/{blueprintId}",
+  headers: jsonAs("a"),
+  body: blueprintBody.replace('"Parity blueprint"', '"Parity blueprint edited"'),
 });
 step({
   name: "scenario blueprint public list",
@@ -1428,6 +1481,34 @@ community({
   method: "GET",
   target: "/api/community/plans/{planId}",
   headers: as("a"),
+});
+community({
+  name: "scenario community edit",
+  method: "PUT",
+  target: "/api/community/plans/{planId}",
+  headers: jsonAs("a"),
+  body: publishBody.replace('"A plan for the parity run."', '"An edited plan for the parity run."'),
+});
+// The account's shares: 10 an hour, so the first publish and 9 more pass, and the next is refused.
+for (let index = 2; index <= 11; index += 1) {
+  community({
+    name: `scenario community publish limit ${index}`,
+    method: "POST",
+    target: "/api/community/plans",
+    headers: jsonAs("a"),
+    body: publishBody.replace('"Parity plan"', `"Parity plan ${index}"`),
+  });
+}
+community({
+  name: "scenario community delete",
+  method: "DELETE",
+  target: "/api/community/plans/{planId}",
+  headers: as("a"),
+});
+community({
+  name: "scenario community detail after delete",
+  method: "GET",
+  target: "/api/community/plans/{planId}",
 });
 
 step({
