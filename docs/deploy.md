@@ -363,8 +363,18 @@ published on `127.0.0.1:3482` for the tests against the real roles:
    REAL_LIVE_DATABASE_URL=postgres://gtnh_live:<GTNH_LIVE_DB_PASSWORD>@127.0.0.1:3482/postgres npx vitest run
    src/lib/server/db/pg-real.local.test.ts --config vitest.local.config.ts`. It writes rows under fresh account
    names and deletes them after.
-5. `check-env.mjs ... --rehearsal` accepts the http origin. A target file with `DEPLOY_SSH=local` runs
-   `publish-datasets.sh` against `scratch/rehearsal`.
+5. The env check, in the image as the deploy runs it (beside the image's `dist/client/build.json`), with
+   `--rehearsal` so it accepts the http origin:
+
+   ```bash
+   label="$(docker image inspect -f '{{index .Config.Labels "org.gtnh.mod-and-community"}}' gtnh-site:<tag>)"
+   docker run --rm --read-only --network none -v "$PWD/scratch/rehearsal/.env:/run/gtnh.env:ro" \
+     --entrypoint node gtnh-site:<tag> /app/deploy/check-env.mjs /run/gtnh.env \
+     --image-label "$label" --set GTNH_TAG=<tag> --rehearsal
+   ```
+
+   Run from a checkout instead, it needs `--build-json <file>` naming a `build.json` built with the same values. A
+   target file with `DEPLOY_SSH=local` runs `publish-datasets.sh` against `scratch/rehearsal`.
 6. `node tools/deploy/smoke.mjs --base http://127.0.0.1:3480 --live http://127.0.0.1:3481`.
 7. A database restart under load: rerun the smoke in a loop, with a signed-in `GET /api/library` polled every
    200 ms, and `docker restart gtnh-postgres` (or `docker stop`, a few seconds, `docker start`). Requests during the
