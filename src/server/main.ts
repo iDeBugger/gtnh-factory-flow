@@ -122,7 +122,6 @@ export async function startServer(options: StartOptions = {}): Promise<StartedSe
     });
   });
   const bound = (server.address() as AddressInfo).port;
-  console.info(`GTNH Planner listening on http://${host}:${bound}`);
 
   const shutdown = installShutdown(server, {
     graceMs: options.graceMs ?? GRACE_MS,
@@ -133,5 +132,7 @@ export async function startServer(options: StartOptions = {}): Promise<StartedSe
     process.on("SIGTERM", () => void shutdown("SIGTERM"));
     process.on("SIGINT", () => void shutdown("SIGINT"));
   }
+  // Only once the stop is in place: whoever waits for this line may send SIGTERM at once.
+  console.info(`GTNH Planner listening on http://${host}:${bound}`);
   return { server, ready, port: bound, shutdown };
 }
