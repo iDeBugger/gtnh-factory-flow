@@ -1154,11 +1154,12 @@ it("sends the Link preload header Next sent, by asset bytes", async () => { /* p
     still resolves), and then `writeClientFiles()` runs in the background.
   - `headersTimeout` and `keepAliveTimeout` keep Node's defaults, as Next does.
   - `NODE_ENV` is `production` before any import is evaluated, as Next's `server.js` sets it (with `=`, whatever
-    the caller set) before it requires anything. ESM evaluates every static import before the module body, and externals such as `react/jsx-runtime`
-    pick their dev or prod build when they load, so a first line in the bundle runs too late. The fix is a two-file
-    entry:
+    the caller set) before it requires anything. ESM evaluates every static import before the module body, and
+    externals such as `react/jsx-runtime` pick their dev or prod build when they load, so a first line in the bundle
+    runs too late. The fix is a two-file entry:
     - `dist/server/server.mjs`, written by `build-server.mjs` (`writeEntry(outDir)`), holds only
-      `process.env.NODE_ENV = "production"; const { startServer } = await import("./app.mjs"); await startServer();`.
+      `process.env.NODE_ENV = "production"; const { startServer } = await import("./app.mjs");`
+      `await startServer();`.
       The assignment is `=`, not `??=`: a caller's `NODE_ENV=development` must not give the bundle the development
       policy;
     - `dist/server/app.mjs` is the esbuild bundle of `main.ts`.
@@ -1222,7 +1223,10 @@ it("starts the server from server.mjs", async () => {
   // port 0 and prints the port. Spawned: the printed port accepts a connection and answers; then SIGTERM
 });
 it("does not listen when main.ts is imported", async () => { /* import ./main: no new listening handle, no port bound */ });
-it("exits 143 on a real SIGTERM", async () => { /* spawn tsx src/server/test-support/start.ts with PORT=0 and fixture dirs; kill SIGTERM; code 143 */ });
+it("exits 143 on a real SIGTERM", async () => {
+  /* spawn node --import <tsx>/dist/loader.mjs src/server/test-support/start.ts (one process, so a failed test's kill
+     leaves none behind) with PORT=0 and fixture dirs; kill SIGTERM; code 143 */
+});
 ```
 
 - [ ] **Step 2: Run, implement, rerun.** Then build and smoke-start:
@@ -1248,13 +1252,17 @@ that pins it.
 - [ ] **Step 2: Compare.**
   `node tools/http-parity/compare.mjs scratch/parity/next-<mode> scratch/parity/express-<mode> --allow tools/http-parity/allowed-differences.json`.
   Expected: exit 0. Any other difference is fixed, or put to the reviewer with a reason before it goes on the list.
-- [ ] **Step 3: Compare the metadata tags and the shell.**
-  - Metadata tags: from both captures of `/`, `/?plan=<id>` and `/?plan=missing`, take the `<head>`, filter out the
-    framework tags (the Task 1 step 7 rule), and compare the rest tag by tag, in order.
+- [ ] **Step 3: Compare the metadata tags and the shell.** `node tools/http-parity/head-compare.mjs
+  scratch/parity/next-<mode> scratch/parity/express-<mode>`, on `/`, `/?plan=<id>`, `/?plan=missing` and every
+  HTML 404:
+  - Metadata tags: filter out the framework tags (the Task 1 step 7 rule), and compare the rest tag by tag, in
+    document order wherever they sit.
+  - The page's own inline scripts (boot and JSON-LD), in order.
   - Shell: compare the markup inside `<body>` up to the first framework script, with Next's suspense comments
     (`<!--$-->`, `<!--/$-->`) and the `#root` wrapper removed.
 
-  Expected: identical.
+  Expected: identical, except the cases ruled to the site's plain 404 (`/community` with the switch off,
+  `/dev/clean-card`), which the tool reports.
 - [ ] **Step 4: Golden harness (dataset evidence only).**
   `npx vitest run src/lib/server/dataset-responses.local.test.ts --config vitest.local.config.ts` in the express
   worktree. Expected: every hash matches the Task 0 baseline. This shows that the dataset query layer is untouched.
