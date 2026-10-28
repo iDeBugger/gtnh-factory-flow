@@ -50,6 +50,21 @@ describe("the route table", () => {
     for (const route of ROUTES) expect(route.path).toBe(routePathForFile(route.source));
   });
 
+  /*
+   * routePathForFile maps plain, `[x]` and `[...x]` folders only. Next gives other names their own meaning
+   * (a `(group)` leaves the URL, a `_private` folder is never routed, `%5F` decodes, `[[...x]]` also matches its
+   * parent, `[file-name]` is one param), and the plain mapping would get each of them wrong, some silently.
+   * Such a folder must fail here until the mapping learns it.
+   */
+  it("finds no route folder whose name the path mapping does not cover", () => {
+    const segment = /^([a-z0-9.-]+|\[[A-Za-z_$][\w$]*\]|\[\.\.\.[A-Za-z_$][\w$]*\])$/;
+    for (const file of globRouteFiles("src/app")) {
+      for (const folder of nextPath(file).split("/").slice(1)) {
+        expect(folder, file).toMatch(segment);
+      }
+    }
+  });
+
   it("derives Express 5 paths from Next folder names", () => {
     expect(routePathForFile("src/app/api/a/[id]/route.ts")).toBe("/api/a/:id");
     expect(routePathForFile("src/app/dataset-files/[versionId]/[...assetPath]/route.ts")).toBe(
