@@ -28,7 +28,13 @@ function globRouteFiles(dir: string): string[] {
 const nextPath = (source: string): string =>
   source.replace(/^src\/app/, "").replace(/\/route\.[jt]sx?$/, "");
 
-/** Whether an Express 5 path from the table matches a concrete path: `:x` takes one segment, `*x` the rest. */
+/**
+ * Whether an Express 5 path from the table matches a concrete path: `:x` takes one segment, `*x` the rest.
+ *
+ * A stand-in for Express's own matcher, which is not installed yet: unlike path-to-regexp 8 it lets an empty
+ * segment match `:x` and `*x`, and it decodes nothing. Once Express is a dependency, the precedence test runs
+ * through path-to-regexp's `match` instead.
+ */
 function matches(pattern: string, concrete: string): boolean {
   const want = pattern.split("/").slice(1);
   const have = concrete.split("?")[0].split("/").slice(1);
