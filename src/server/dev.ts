@@ -43,9 +43,10 @@ async function main(): Promise<void> {
     { createServer },
     { checkServerSetupOrExit },
     { prewarmDatasetVersions },
-    files,
+    { writeServedDatasetClientFiles },
     { HEAD_LEAD },
     { createApp },
+    { startWork },
   ] = await Promise.all([
     import("vite"),
     import("@/lib/server/startup-checks"),
@@ -53,6 +54,7 @@ async function main(): Promise<void> {
     import("@/lib/server/dataset-client-files"),
     import("@/lib/server/site/head"),
     import("./app"),
+    import("./main"),
   ]);
   checkServerSetupOrExit();
 
@@ -63,16 +65,7 @@ async function main(): Promise<void> {
     server: { middlewareMode: true, hmr: { server } },
     appType: "custom",
   });
-  const ready = (async () => {
-    if (process.env.GTNH_PREWARM_ON_STARTUP !== "1") return;
-    try {
-      await prewarmDatasetVersions();
-      console.info("GTNH default dataset prewarmed; other versions load in the background.");
-    } catch (error) {
-      console.error("GTNH dataset cache prewarm failed.", error);
-    }
-    void files.writeServedDatasetClientFiles();
-  })();
+  const ready = startWork(prewarmDatasetVersions, writeServedDatasetClientFiles);
   const publicDir = path.join(ROOT, "public");
   const app = createApp({
     env: {

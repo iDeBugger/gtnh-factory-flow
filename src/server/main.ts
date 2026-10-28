@@ -52,11 +52,11 @@ const REQUEST_TIMEOUT_MS = 300_000;
 const GRACE_MS = 15_000;
 
 /**
- * The work requests wait for, as instrumentation.ts did it: with `GTNH_PREWARM_ON_STARTUP=1`, the default
+ * The work requests wait for, in production and dev alike: with `GTNH_PREWARM_ON_STARTUP=1`, the default
  * dataset version's prewarm (a failure is logged and requests are let through all the same), then the static
  * dataset answers in the background, which requests never wait for.
  */
-async function startWork(
+export async function startWork(
   prewarm: () => Promise<void>,
   writeClientFiles: () => Promise<void>,
 ): Promise<void> {
