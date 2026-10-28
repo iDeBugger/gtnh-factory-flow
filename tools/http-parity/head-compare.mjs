@@ -187,7 +187,12 @@ export function compareHeads(a, b) {
       continue;
     }
     ruled.push(...found);
-    if (!isHtml404(b.get(name))) continue;
+    const answer = b.get(name);
+    if (!isHtml404(answer)) {
+      const type = answer?.headers?.find(([key]) => key === "content-type")?.[1];
+      differences.push({ name, field: "own 404 status", a: 404, b: `${answer?.status} ${type}` });
+      continue;
+    }
     const plain = b.get(PLAIN_404_CASE)?.body?.text;
     if (typeof plain !== "string") {
       differences.push({ name, field: "own 404 case", a: "missing", b: "string" });

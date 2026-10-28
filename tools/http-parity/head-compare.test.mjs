@@ -117,6 +117,21 @@ describe("head-compare", () => {
       expect(own.length, other).toBeGreaterThan(0);
       expect(own.every((d) => d.field.startsWith("own 404 "))).toBe(true);
     }
+    for (const [status, type] of [
+      [200, "text/html; charset=utf-8"],
+      [404, "application/json"],
+      [500, "text/html; charset=utf-8"],
+    ]) {
+      const answer = page("site /dev/clean-card", status, EXPRESS);
+      answer[1].headers = [["content-type", type]];
+      const express = new Map([answer, page("page /no-such-page", 404, EXPRESS)]);
+      const own = compareHeads(next, express).differences.filter(
+        (d) => d.name === "site /dev/clean-card",
+      );
+      expect(own, `${status} ${type}`).toMatchObject([
+        { name: "site /dev/clean-card", field: "own 404 status", b: `${status} ${type}` },
+      ]);
+    }
     const alone = compareHeads(next, new Map([page("site /dev/clean-card", 404, EXPRESS)]));
     expect(alone.differences).toMatchObject([
       { name: "site /dev/clean-card", field: "own 404 case" },
