@@ -163,6 +163,9 @@ export function createApp(options: AppOptions): Express {
   }
 
   const template = options.template;
+  // Rendered once here, so a page template the not-found page cannot be cut from stops the start instead of
+  // turning every 404 into a 500. Each answer still renders its own, with the site address it reads then.
+  renderNotFoundPage(template);
   app.use(notFound(() => renderNotFoundPage(template)));
   app.use(errorHandler(env, drain));
   return app;

@@ -264,6 +264,22 @@ describe("the page template", () => {
     );
     expect(() => createApp({ ...options, template })).not.toThrow();
   });
+
+  it("stops an app whose page the not-found page cannot be cut from, rather than answer each 404 with a 500", () => {
+    const options = {
+      env: { production: true, siteUrl: SITE },
+      publicDir: path.join(root, "public"),
+      datasetsDir: path.join(root, "public", "datasets", "gtnh"),
+    };
+    const noModule = template.html.replace(/<script type="module"[^>]*>[\s\S]*?<\/script>/g, "");
+    expect(() => createApp({ ...options, template: { ...template, html: noModule } })).toThrow(
+      /no module script/,
+    );
+    const noRoot = template.html.replace('<div id="root" style="display: contents">', "<div>");
+    expect(() => createApp({ ...options, template: { ...template, html: noRoot } })).toThrow(
+      /must hold <div id="root"/,
+    );
+  });
 });
 
 describe("with the community switch off", () => {

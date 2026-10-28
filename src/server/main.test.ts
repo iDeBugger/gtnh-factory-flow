@@ -23,7 +23,8 @@ function writeRoot(dir: string): void {
   mkdirSync(client, { recursive: true });
   writeFileSync(
     path.join(client, "index.html"),
-    '<!doctype html><html lang="en"><head><!--app-head--></head><body><div id="root"></div></body></html>',
+    '<!doctype html><html lang="en"><head><!--app-head--><script type="module" src="/assets/index-T.js"></script></head>' +
+      '<body><div id="root" style="display: contents"></div></body></html>',
   );
   writeFileSync(
     path.join(client, "page.json"),
