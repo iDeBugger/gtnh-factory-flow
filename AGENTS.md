@@ -36,9 +36,10 @@ Longer references, read on demand: `docs/power-planner-math.md` (the decoded pow
 2. Contracts (feature `types.ts`, `library/sync-types.ts`, `datasets/resolve-recipes-limits.ts`,
    `live/{ops,protocol,validate}.ts`) import the domain and contracts only.
 3. `src/lib/server/**` never imports `src/{components,store,client,server,live}` or React.
-4. The web server (`src/server/**` but the dev entry `dev.ts`: routes, middleware, adapter, page,
-   production entry) never imports the database layer (`lib/server/db`, `lib/server/repos`), the
-   UI, the stores or `src/client`, and sends no query itself (no `.from("`, no database package).
+4. The web server (`src/server/**`: routes, middleware, adapter, page, both entries) never imports
+   the database layer (`lib/server/db`, `lib/server/repos`), the UI, the stores or `src/client`
+   (the dev entry `dev.ts` alone may import `src/client`), and sends no query itself (no `.from("`,
+   no database package).
 5. `src/live` uses `lib/server/repos`, `services/design-role.ts`,
    `auth/{session,secret,sessions}.ts`, `db/index.ts` and `http/client-address.ts` only, never
    the web server, the client, the UI or the stores.

@@ -224,12 +224,11 @@ const isContract = (file: string): boolean =>
 
 const isServer = (file: string): boolean => file.startsWith("src/lib/server/");
 
-/**
- * The web server: its routes, middleware, adapter, page and production entry. The dev entry is the one file
- * under src/server that loads the client (its boot scripts, through Vite).
- */
-const isWebServer = (file: string): boolean =>
-  file.startsWith("src/server/") && file !== "src/server/dev.ts";
+/** The web server: its routes, middleware, adapter, page, and its production and dev entries. */
+const isWebServer = (file: string): boolean => file.startsWith("src/server/");
+
+/** The dev entry renders the dev page from the client's boot scripts, so it alone may import src/client. */
+const DEV_ENTRY = "src/server/dev.ts";
 
 const isUiOrStore = (file: string): boolean => /^src\/(components|store)\//.test(file);
 
@@ -323,9 +322,13 @@ const RULES: Record<string, (edge: Edge) => boolean> = {
     if (name) return /^(react|react-dom)(\/|$)/.test(name);
     return /^src\/(components|store|client|server|live)\//.test(to);
   },
-  // 4. The web server never reaches the database layer, the UI, the stores or the client.
+  // 4. The web server never reaches the database layer, the UI, the stores or the client (the dev entry may
+  //    reach the client).
   "4": ({ from, to }) =>
-    isWebServer(from) && (isDatabaseLayer(to) || isUiOrStore(to) || to.startsWith("src/client/")),
+    isWebServer(from) &&
+    (isDatabaseLayer(to) ||
+      isUiOrStore(to) ||
+      (to.startsWith("src/client/") && from !== DEV_ENTRY)),
   // 5. The live service uses the repositories and the files `isLiveServerTarget` names only.
   "5": ({ from, to }) => {
     if (!from.startsWith("src/live/")) return false;
@@ -369,7 +372,7 @@ const RULES: Record<string, (edge: Edge) => boolean> = {
     if (/^next(\/|$)/.test(name)) return true;
     if (from.startsWith("tools/")) return false;
     if (/^express(\/|$)/.test(name)) return !from.startsWith("src/server/");
-    if (/^vite(\/|$)/.test(name)) return from !== "src/server/dev.ts";
+    if (/^vite(\/|$)/.test(name)) return from !== DEV_ENTRY;
     return false;
   },
 };
@@ -964,6 +967,29 @@ describe("the layers", () => {
       "14|src/server/next-fixture.ts|pkg:next/server",
       "14|src/server/vite-fixture.ts|pkg:vite",
       "14|tools/next-fixture.mjs|pkg:next",
+    ]);
+  });
+
+  it("lets only the dev entry import the client, and holds it to the database and UI clauses", () => {
+    const fixtures: Record<string, string> = {
+      [DEV_ENTRY]: [
+        'import { appFontBootScript } from "../client/boot";',
+        'import { getDb } from "@/lib/server/db";',
+        'import { useFactoryStore } from "@/store/factory-store";',
+      ].join("\n"),
+      "src/server/page/client-fixture.ts": 'import { appFontBootScript } from "../../client/boot";',
+    };
+    const bad = new Map(
+      Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
+    );
+    expect(
+      breaks(bad)
+        .filter((edge) => edge.rule === "4")
+        .map(key),
+    ).toEqual([
+      "4|src/server/dev.ts|src/lib/server/db/index.ts",
+      "4|src/server/dev.ts|src/store/factory-store.ts",
+      "4|src/server/page/client-fixture.ts|src/client/boot.ts",
     ]);
   });
 

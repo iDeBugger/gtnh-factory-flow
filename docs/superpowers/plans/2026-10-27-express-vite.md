@@ -1390,7 +1390,7 @@ that pins it.
 
 | Rule | Was | Becomes |
 |---|---|---|
-| classifier `isRouteHandler` | `src/app/**/route.ts(x)` or `src/app/sitemap.ts` | `src/server/**` other than `src/server/dev.ts` and tests: the web server (routes, middleware, adapter, page, entries) |
+| classifier `isRouteHandler` | `src/app/**/route.ts(x)` or `src/app/sitemap.ts` | `src/server/**` but tests: the web server (routes, middleware, adapter, page, both entries); in rule 4 only `src/server/dev.ts` may import `src/client`, and its database and UI/store clauses still apply |
 | 1 | the domain loads no React, Zustand, React Flow, Node, Next, `ws` or database package | the same list with `express` and `vite` added, `next` kept (`isImpurePackage`) |
 | 3 | `src/lib/server/**` never imports `src/{components,store,app,live}` or React | never imports `src/{components,store,client,server,live}` or React |
 | 4 | route handlers never import the database layer, the UI or the stores, and send no query | the web server never imports the database layer, the UI, the stores or `src/client`, and sends no query (`queryingAppFiles` reads `src/server/`). It releases the pool through `src/lib/server/lifecycle.ts` (Task 9), so no exception is needed |
