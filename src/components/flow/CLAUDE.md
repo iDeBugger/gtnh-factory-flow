@@ -126,8 +126,9 @@ The board must stay smooth with 100+ cards on weak PCs.
 - Every dial is in `router-tuning.ts` (`DEFAULT_ROUTER_TUNING`), editable per device in the
   dev menu. Arrange dials are left out of `routerTuningKey` so they never re-route.
 - Past `ASYNC_ROUTE_EDGE_LIMIT` wires, routing runs in a worker (`grid-route-solve.ts`).
-  A worker file must never import the module that spawns it: the worker bundle would carry the spawner and its
-  `new Worker(...)`, referencing itself and loading the main thread's imports.
+  A worker file must never import the module that spawns it. Vite builds that without a warning: the worker bundle
+  carries the spawner and its imports, and its `new Worker(...)` becomes `new Worker(self.location.href)`, so the
+  worker can start a copy of itself.
 - Crossing hops (`wire-hops.ts`) are measured along the whole wire; arrows avoid hops.
 - Count crossings with `measureWireRoutes` (`src/lib/route-metrics.ts`), which counts them
   at bends and run ends too. Tools: `router-replay.local.test.ts`,

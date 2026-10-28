@@ -13,10 +13,10 @@ import { DEFAULT_ROUTER_TUNING, type RouterTuning } from "./router-tuning";
  * back (encode/decode), and how it runs. Pure and worker-safe, and in its
  * own file on purpose: this is everything `grid-route.worker.ts` needs, and
  * the worker must NOT import `grid-route-solve.ts`, the module that spawns
- * it. A worker bundle that reaches back into its spawner carries the
- * spawner and its `new Worker(...)`, so the worker chunk references itself
- * and loads the main thread's imports. The solver worker
- * (`solve-books.worker.ts`) has the same shape.
+ * it. The build does not refuse that: the worker bundle would carry the
+ * spawner and its imports, and its `new Worker(...)` would become
+ * `new Worker(self.location.href)`, a worker that can start a copy of
+ * itself. The solver worker (`solve-books.worker.ts`) has the same shape.
  */
 
 
