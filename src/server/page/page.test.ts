@@ -292,14 +292,10 @@ describe("with the community switch off", () => {
   });
 
   it("404s /community with the switch off, where Next's 404 alone was cached for a year", async () => {
+    // The year of shared caching is the one difference, and the allow list names it (R149).
     for (const name of ["page /community", "page /community?plan=x"]) {
-      expect(await againstNext(server, "off", name), name).toEqual([
-        {
-          field: "headers.cache-control",
-          a: "s-maxage=31536000",
-          b: "private, no-cache, no-store, max-age=0, must-revalidate",
-        },
-      ]);
+      expect(await againstNext(server, "off", name), name).toEqual([]);
+      expect(NEXT.off[name]!.headers).toContainEqual(["cache-control", "s-maxage=31536000"]);
     }
   });
 
@@ -362,16 +358,14 @@ describe("with the community switch on", () => {
     for (const name of ["page /community", "page /community?plan=x"]) {
       // Next's 307 also preloaded its error document's two stylesheets, which a browser following the redirect
       // never uses. The page's stylesheet is a file of the build, so the 307 names only the font.
-      const differences = await againstNext(server, "on", name);
-      expect(differences, name).toEqual([
-        {
-          field: "headers.link",
-          a: `${NEXT.on[name]!.headers.find(([key]) => key === "link")![1]}`,
-          b: `<${INTER_ASSET}>; rel=preload; as="font"; crossorigin=""; type="font/woff2"`,
-        },
-      ]);
-      expect((differences[0] as { a: string }).a).toMatch(
+      // The allow list names that drop (R149), and the fonts follow I27.
+      expect(await againstNext(server, "on", name), name).toEqual([]);
+      expect(NEXT.on[name]!.headers.find(([key]) => key === "link")![1]).toMatch(
         /<<asset:c9407645>>; rel=preload; as="font"; crossorigin=""; type="font\/woff2", .*, <<asset:401f8660>>; rel=preload; as="style", <<asset:d70d050a>>; rel=preload; as="style"$/,
+      );
+      const answer = await call(server.port, "GET", name.slice("page ".length));
+      expect(header(answer, "link")).toBe(
+        `</assets/inter-latin-T.woff2>; rel=preload; as="font"; crossorigin=""; type="font/woff2"`,
       );
     }
     const cases: [string, string, string, number, string | undefined][] = [
