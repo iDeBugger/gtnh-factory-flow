@@ -68,6 +68,23 @@ function deferred(): { promise: Promise<void>; resolve(): void } {
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 20));
 
+/**
+ * Watches the server's connections from now on. The returned wait resolves once `count` connections are open and
+ * the server has read from each: a connection it has read nothing from is idle, and a stop closes it at once. The
+ * bound stays under vitest's 5 s test timeout, so a failure names the wait.
+ */
+function watchReads(server: StartedServer): (count: number, label: string) => Promise<void> {
+  const accepted: net.Socket[] = [];
+  server.server.on("connection", (socket) => accepted.push(socket));
+  return async (count, label) => {
+    const began = Date.now();
+    while (accepted.length < count || accepted.some((socket) => socket.bytesRead === 0)) {
+      if (Date.now() - began > 3_000) throw new Error(`the server never read ${label}`);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  };
+}
+
 /** Whether a new connection to the port is accepted. */
 function connects(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -195,8 +212,9 @@ describe("startServer", () => {
       order.push("close");
     });
     const server = await start({ prewarm: () => warm.promise, exit, close });
+    const reads = watchReads(server);
     const open = call(server.port, "GET", "/api/version");
-    await tick();
+    await reads(1, "the open request");
     const stopped = server.shutdown("SIGTERM");
     await tick();
     expect(await connects(server.port)).toBe(false);
@@ -211,19 +229,12 @@ describe("startServer", () => {
   it("says Connection: close on every answer sent after the stop began", async () => {
     const warm = deferred();
     const server = await start({ prewarm: () => warm.promise });
-    const accepted: net.Socket[] = [];
-    server.server.on("connection", (socket) => accepted.push(socket));
+    const reads = watchReads(server);
     // Open when the stop begins, its head not yet written.
     const held = call(server.port, "GET", "/api/version");
     // Its head still arriving when the stop begins.
     const late = sendRaw(server.port, "GET /api/version HTTP/1.1\r\nHost: 127.0.0.1\r\n");
-    // Both read before the stop: a connection the server has read nothing from is idle, and the stop closes it.
-    // The bound stays under vitest's 5 s test timeout, so a failure says which wait it was.
-    const began = Date.now();
-    while (accepted.length < 2 || accepted.some((socket) => socket.bytesRead === 0)) {
-      if (Date.now() - began > 3_000) throw new Error("the server never read both requests");
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    }
+    await reads(2, "both requests");
     const stopped = server.shutdown();
     late.socket.write("Connection: keep-alive\r\n\r\n");
     warm.resolve();
@@ -243,6 +254,7 @@ describe("startServer", () => {
     vi.stubEnv("DATABASE_URL", "postgres://127.0.0.1:1/unused");
     const exit = vi.fn();
     const server = await start({ exit });
+    const reads = watchReads(server);
     const body = JSON.stringify({ username: "", password: "" });
     const half = Math.floor(body.length / 2);
     const { socket, closed } = sendRaw(
@@ -250,7 +262,7 @@ describe("startServer", () => {
       `POST ${LOGIN} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\n` +
         `Content-Length: ${body.length}\r\n\r\n${body.slice(0, half)}`,
     );
-    await tick();
+    await reads(1, "the half-sent body");
     const stopped = server.shutdown();
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(exit).not.toHaveBeenCalled();
@@ -267,9 +279,10 @@ describe("startServer", () => {
   it("exits 143 within the grace when a client holds a connection open", async () => {
     const exit = vi.fn();
     const server = await start({ exit, graceMs: 200 });
+    const reads = watchReads(server);
     // Half a request head: the connection is busy, so closing the idle ones leaves it open.
     const { closed } = sendRaw(server.port, "GET /api/version HTTP/1.1\r\nHost: x\r\n");
-    await tick();
+    await reads(1, "the half head");
     const began = Date.now();
     await server.shutdown();
     expect(exit).toHaveBeenCalledWith(143);
@@ -288,9 +301,12 @@ describe("startServer", () => {
         close: () => new Promise(() => {}),
         prewarm: graceMs === 100 ? () => new Promise(() => {}) : async () => {},
       });
+      const reads = watchReads(server);
       if (graceMs !== 100) await server.ready;
-      if (graceMs === 100) void call(server.port, "GET", "/api/version").catch(() => {});
-      await tick();
+      if (graceMs === 100) {
+        void call(server.port, "GET", "/api/version").catch(() => {});
+        await reads(1, "the held request");
+      }
       const began = Date.now();
       await server.shutdown();
       expect(exit, `grace ${graceMs}`).toHaveBeenCalledWith(143);
@@ -301,8 +317,9 @@ describe("startServer", () => {
   it("exits 143 on shutdown while the prewarm is still running", async () => {
     const exit = vi.fn();
     const server = await start({ exit, graceMs: 200, prewarm: () => new Promise(() => {}) });
+    const reads = watchReads(server);
     const held = call(server.port, "GET", "/api/version").catch((error: unknown) => error);
-    await tick();
+    await reads(1, "the held request");
     await server.shutdown();
     expect(exit).toHaveBeenCalledWith(143);
     expect(await held).toBeInstanceOf(Error);
@@ -311,8 +328,9 @@ describe("startServer", () => {
   it("exits at once on a second signal, and with 130 on SIGINT", async () => {
     const exit = vi.fn();
     const server = await start({ exit, graceMs: 10_000, prewarm: () => new Promise(() => {}) });
+    const reads = watchReads(server);
     void call(server.port, "GET", "/api/version").catch(() => {});
-    await tick();
+    await reads(1, "the held request");
     void server.shutdown("SIGINT");
     await tick();
     expect(exit).not.toHaveBeenCalled();
