@@ -240,6 +240,21 @@ describe("the page template", () => {
     expect(() => loadPageTemplate(dir)).toThrow(/<!--app-head-->/);
   });
 
+  it("refuses a head whose inline script spans lines, which joining the lines would change", () => {
+    const dir = path.join(root, "multi-line-script");
+    writeClient(dir);
+    const html = readFileSync(path.join(dir, "index.html"), "utf8");
+    const withScript = (script: string) =>
+      writeFileSync(
+        path.join(dir, "index.html"),
+        html.replace("<!--app-head-->", () => `<!--app-head-->\n    ${script}\n`),
+      );
+    withScript("<script>\n  boot();\n</script>");
+    expect(() => loadPageTemplate(dir)).toThrow(/spans lines/);
+    withScript("<script>boot();</script>");
+    expect(renderPage(loadPageTemplate(dir), "")).toContain("<script>boot();</script>");
+  });
+
   it("refuses a page.json whose script hashes are missing, empty or malformed", () => {
     const dir = path.join(root, "no-hashes");
     writeClient(dir);

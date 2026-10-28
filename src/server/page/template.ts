@@ -44,10 +44,23 @@ function arrangeHead(html: string, fontPreloads: FontPreload[]): string {
     .split("\n")
     .map((line) => line.trim())
     .join("");
+  // The build hashed each inline script as it wrote it; joining the lines must leave every one unchanged.
+  if (inlineScripts(buildTags).join("\0") !== inlineScripts(after).join("\0")) {
+    throw new Error(
+      "An inline script in the page template's head spans lines: joining the head's lines would change it, and its build hash would no longer match.",
+    );
+  }
   const head = HEAD_LEAD + fontPreloads.map(preloadTag).join("") + buildTags + HEAD_MARK;
   return (
     html.slice(0, match.index) + `<head>${head}</head>` + html.slice(match.index + match[0].length)
   );
+}
+
+/** The text of each inline script (one without `src`) in `html`, in order. */
+function inlineScripts(html: string): string[] {
+  return [...html.matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
+    .filter((match) => !/\ssrc\s*=/i.test(match[1] ?? ""))
+    .map((match) => match[2]!);
 }
 
 function preloadTag(font: FontPreload): string {
