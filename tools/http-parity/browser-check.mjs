@@ -12,6 +12,7 @@
  * 1 when there is one.
  */
 import { chromium, firefox } from "playwright-core";
+import { policyListener, policyViolations, watchConsole } from "./page-listeners.mjs";
 
 const APP_FONT_STORAGE_KEY = "gtnh-app-font";
 const SAVED_FONT = "minecraft";
@@ -27,18 +28,13 @@ const findings = [];
 const notes = [];
 
 /**
- * Installed before any page script: the policy listener, and an observer that records the first `data-app-font`
- * value with whether the module entry had started by then. A hidden pane never fires requestAnimationFrame, so it
- * is shimmed with a timer.
+ * Installed before any page script, after the policy listener (page-listeners.mjs): an observer that records the
+ * first `data-app-font` value with whether the module entry had started by then. A hidden pane never fires
+ * requestAnimationFrame, so it is shimmed with a timer.
  */
 function initScript() {
-  const check = { violations: [], font: undefined };
+  const check = { font: undefined };
   Object.defineProperty(window, "__browserCheck", { value: check });
-  document.addEventListener("securitypolicyviolation", (event) => {
-    check.violations.push(
-      `${event.violatedDirective} blocked ${event.blockedURI || "inline"} ${event.sample || ""}`.trim(),
-    );
-  });
   const record = () => {
     const value = document.documentElement.getAttribute("data-app-font");
     if (value !== null && check.font === undefined) {
@@ -58,9 +54,6 @@ function initScript() {
       : real(callback);
 }
 
-/** React's production errors for a hydration mismatch, and any message that names hydration. */
-const HYDRATION = /hydrat|Minified React error #(418|419|421|422|423|425)\b/i;
-
 async function checkEngine(name, engine) {
   const browser = await engine.launch({ headless: true });
   const label = (text) => `${name}: ${text}`;
@@ -69,18 +62,13 @@ async function checkEngine(name, engine) {
     /** A fresh profile: its own storage, so each visit starts as a first visit. */
     const open = async () => {
       const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+      await context.addInitScript(policyListener);
       await context.addInitScript(initScript);
       const page = await context.newPage();
       page.setDefaultTimeout(60_000);
       const requests = [];
       page.on("pageerror", (error) => findings.push(label(`page error: ${error.message}`)));
-      page.on("console", (message) => {
-        const text = message.text();
-        if (HYDRATION.test(text)) findings.push(label(`hydration: ${text}`));
-        if (message.type() === "error" && /Content.Security.Policy|CSP/i.test(text)) {
-          findings.push(label(`policy console error: ${text}`));
-        }
-      });
+      watchConsole(page, (finding) => findings.push(label(finding)));
       // The context sees the workers' requests too (the solver fetches highs.wasm from its worker).
       context.on("response", (response) => {
         requests.push({ url: response.url().replace(BASE, ""), status: response.status() });
@@ -91,11 +79,10 @@ async function checkEngine(name, engine) {
           findings.push(label(`${target} answered ${response?.status()}`));
         }
         await page.waitForTimeout(1500);
-        const check = await page.evaluate(() => window.__browserCheck);
-        for (const violation of check.violations) {
+        for (const violation of await policyViolations(page)) {
           findings.push(label(`${target} policy: ${violation}`));
         }
-        return check;
+        return page.evaluate(() => window.__browserCheck);
       };
       return { context, page, requests, visit };
     };
@@ -110,8 +97,9 @@ async function checkEngine(name, engine) {
     notes.push(
       label(`/?plan= title: ${await planVisit.page.title()}; ${planTabs} design tab(s) open`),
     );
-    const planCheck = await planVisit.page.evaluate(() => window.__browserCheck);
-    for (const violation of planCheck.violations) findings.push(label(`plan policy: ${violation}`));
+    for (const violation of await policyViolations(planVisit.page)) {
+      findings.push(label(`plan policy: ${violation}`));
+    }
     await planVisit.context.close();
 
     // 2. The home page on a fresh profile.
@@ -163,8 +151,9 @@ async function checkEngine(name, engine) {
         () => document.querySelectorAll(".react-flow__node").length,
       );
       notes.push(label(`${cards} card(s) on the board`));
-      const check = await page.evaluate(() => window.__browserCheck);
-      for (const violation of check.violations) findings.push(label(`board policy: ${violation}`));
+      for (const violation of await policyViolations(page)) {
+        findings.push(label(`board policy: ${violation}`));
+      }
     }
 
     // 3. The saved font is stamped by the boot script, before the entry runs.

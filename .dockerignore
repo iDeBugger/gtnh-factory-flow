@@ -1,6 +1,6 @@
 # What the images never read. The deploy sends `git archive HEAD` (docs/deploy.md); whatever is left
 # out here is neither sent nor hashed, and a commit that changes only these files leaves `COPY . .`
-# and `next build` cached. Generated and local files (a build from a working tree):
+# and the build cached. Generated and local files (a build from a working tree):
 node_modules
 .next
 dist
@@ -35,9 +35,9 @@ src/lib/solver/plan/__fixtures__/corpus
 vitest.config.ts
 vitest.local.config.ts
 eslint.config.mjs
-# Of tools/, the build needs its prebuild step and the build identity next.config.ts
-# imports, the site image the env check, the live image its package list, the
-# migrate image the migration runner.
+# Of tools/, the build needs its prebuild step and tools/build (the defines, the build
+# identity, the prerender and the server build), the site and live images the env check and
+# the package list, the migrate image the migration runner.
 tools/*
 !tools/build/
 !tools/copy-highs-wasm.mjs

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// The live image's packages: the ones the live bundle leaves external (esbuild's metafile) and everything
-// they need at run time, read from package-lock.json the way Node resolves them. Copies each into
-// <out>/node_modules (the Dockerfile's live-deps stage):
+// A run image's packages: the ones a bundle leaves external (esbuild's metafile) and everything they need at
+// run time, read from package-lock.json the way Node resolves them. Copies each into <out>/node_modules (the
+// Dockerfile's live-deps stage for the live bundle, its site-deps stage for the site's):
 //
 //   node tools/deploy/live-deps.mjs <package-lock.json> <metafile.json> <installed root> <out>
 //
@@ -61,7 +61,7 @@ function resolve(packages, from, name) {
 export function runtimeClosure(lock, roots, installed = () => true) {
   const packages = lock.packages ?? {};
   const found = new Set();
-  const queue = roots.map((name) => ({ from: "", name, optional: false, by: "the live bundle" }));
+  const queue = roots.map((name) => ({ from: "", name, optional: false, by: "the bundle" }));
   while (queue.length > 0) {
     const { from, name, optional, by } = queue.shift();
     const key = resolve(packages, from, name);
@@ -80,7 +80,7 @@ export function runtimeClosure(lock, roots, installed = () => true) {
     }
     const entry = packages[key];
     if (entry.link) {
-      throw new Error(`${key} is a link; the live image copies installed packages only.`);
+      throw new Error(`${key} is a link; the image copies installed packages only.`);
     }
     found.add(key);
     const optionalPeers = entry.peerDependenciesMeta ?? {};
@@ -108,7 +108,7 @@ function main([lockFile, metaFile, root, out]) {
   for (const key of keys) {
     cpSync(path.join(root, key), path.join(out, key), { recursive: true, verbatimSymlinks: true });
   }
-  console.log(`live packages: ${roots.join(" ")}; copied ${keys.length}: ${keys.map((k) => k.slice(13)).join(" ")}`);
+  console.log(`bundle packages: ${roots.join(" ")}; copied ${keys.length}: ${keys.map((k) => k.slice(13)).join(" ")}`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {

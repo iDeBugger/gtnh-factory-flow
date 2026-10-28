@@ -1,5 +1,5 @@
 # Typecheck + tests on every pull request and every push to main — the same
-# two commands AGENTS.md names as the verification suite. The full suite is
+# two commands AGENTS.md names as the verification suite — and the build. The full suite is
 # expected green: there are no tolerated failures, so any red here is a real
 # regression (or a test left pinning copy that changed — update the pin in the
 # same PR that changes the copy).
@@ -62,6 +62,24 @@ jobs:
       - run: npm run test
         env:
           GTNH_TEST_POSTGRES_URL: postgres://postgres:race@127.0.0.1:5432/postgres
+
+  # The production build (the Vite client, the prerendered page and the server bundle), so a change that
+  # breaks it fails here and not at deploy. The values stand in for a target's: the build refuses none.
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.21.0
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          GTNH_BUILD_ID: ci-${{ github.sha }}
 
   icon-browsers:
     name: Icon sizing in Chromium and Firefox

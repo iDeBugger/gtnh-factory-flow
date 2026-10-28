@@ -46,14 +46,17 @@ infra commit first.
   plus 150 MB; its heap is 480 MB under 600 MB.
 - One site container and one live service, never replicas: the rate limits serialise in process, and one live
   service owns each database's leases.
-- Every container runs under `init: true` (tini, which hands SIGTERM to the site's `server.js` and to live; the
-  site image also sets `TINI_KILL_PROCESS_GROUP=1`), `no-new-privileges`, no capabilities (`cap_drop: ALL`), `restart: unless-stopped`, json-file logs of
-  3 x 10 MB. Every container's root filesystem is read-only: site and live with tmpfs `/tmp` (and the site's
-  `.next/cache`), postgres with tmpfs `/tmp` and its socket directory. Site and live run as uid 1000 over
-  root-owned files. The
-  site keeps revalidated pages (the sitemap, llms.txt) in memory (`isrFlushToDisk: false`), since its `.next` is
-  read-only. The site stops within its 20 s grace; live within 30 s, storing every open plan and releasing
-  its leases on SIGTERM.
+- Every container runs under `init: true` (tini, which hands SIGTERM to the site's `dist/server/server.mjs` and to
+  live; the site image also sets `TINI_KILL_PROCESS_GROUP=1`), `no-new-privileges`, no capabilities
+  (`cap_drop: ALL`), `restart: unless-stopped`, json-file logs of 3 x 10 MB. Every container's root filesystem is
+  read-only: site and live with tmpfs `/tmp`, postgres with tmpfs `/tmp` and its socket directory. The site writes
+  nothing in its image: the sitemap and llms.txt are held in memory for an hour, and the `.next/cache` tmpfs
+  compose still mounts is left empty. Site and live run as uid 1000 over root-owned files.
+- On SIGTERM the site stops taking connections, closes its idle keep-alive connections, lets open requests finish
+  (each of those answers says `Connection: close`, so Caddy never reuses a socket about to close), releases the
+  database pool (at most 2 s) and exits 143. After 15 s it closes every connection still open. A SIGTERM during the
+  prewarm waits for the prewarm's current step first: the worst stop measured was 19.3 s. Live stops within
+  30 s, storing every open plan and releasing its leases.
 - The images run `npm ci` with their own npm (11.19), which needs lockfile entries an older npm leaves out (the
   `@emnapi` packages): a lockfile an older npm rewrote fails the image build. Regenerate it with the image's npm:
   `docker run --rm -v "$PWD":/w -w /w <the Dockerfile's NODE_IMAGE> npm install --package-lock-only --ignore-scripts`.
@@ -129,10 +132,15 @@ here uses sudo or edits a file the role manages.
   - `/live` and `/live/*` only go to `127.0.0.1:3301`, so the live service's `/internal/*` stays unreachable,
     with `X-Client-Ip {client_ip}` set and `CF-Connecting-IP` dropped. No body limit or body timeout on this
     route: a read timeout on an upgraded socket would cut a live session.
-  - Everything else goes to `127.0.0.1:3300` with the same headers, `request_body max_size 8MB` for every request
-    (the largest legitimate body is a 4 MB image or plan upload) and a 30 s body read timeout for
-    POST, PUT and PATCH only (the app cannot stop Next waiting for a slow body's end), and `lb_try_duration 30s`
-    to hold requests while the site restarts.
+  - Everything else goes to `127.0.0.1:3300` with the same headers, `encode zstd gzip` (the site never compresses;
+    an answer that already has a `Content-Encoding`, such as a client file served br or gzip, is left alone),
+    `request_body max_size 8MB` for every request (the largest legitimate body is a 4 MB image or plan upload), a
+    30 s body read timeout for POST, PUT and PATCH only, and `lb_try_duration 30s` to hold requests while the site
+    restarts. On a body over a route's cap the site answers the 413 at once, then reads and discards the rest up to
+    its drain bound (the 4.5 MiB hard cap, `PROXY_BODY_MAX_BYTES`, plus 4 MiB; 31 s without a byte, 35 s in all; both timers above Caddy's 30 s, so
+    Caddy fires first and a stalled upload still gets the 413 rather than a 502) and closes. It stops reading at
+    that bound, not at the route's cap, and an answer past the byte bound may be lost; Caddy's 8 MB limit and its
+    30 s body timeout stay the outer bounds.
   - The Host header is passed through unchanged: the site's same-origin check compares Origin with Host.
   - JSON log in `/var/log/caddy/gtnh-stage.log`.
 - `roles/firewall/templates/tungsten/rules.v4.j2`: drops traffic to `127.0.0.1:3300` and `:3301` arriving on
@@ -141,6 +149,16 @@ here uses sudo or edits a file the role manages.
   stack: live sockets drop and reconnect, and the site prewarms again.
 - Caddy's `stream_close_delay 5m` keeps upgraded live sockets open across a Caddy reload, so a vhost change
   does not cut live sessions.
+
+What the infra side needs for the Express site, before or with its first deploy:
+
+- Caddy: `encode zstd gzip` on the site route (above). It is harmless while an older image runs, since Caddy leaves
+  an answer that already has a `Content-Encoding` alone.
+- Compose: the site's `stop_grace_period` at 30 s. The worst stop, a SIGTERM during the prewarm with a request held
+  plus the 15 s grace, was measured at 19.3 s, too close to today's 20 s. `tools/deploy/docker-compose.yml`
+  changes first and the role's byte copy follows, as for any compose change.
+- `KEEP_ALIVE_TIMEOUT` is no longer read. The server's own keep-alive and headers timeouts apply (Node's 5 s
+  keep-alive, 60 s for the headers, 300 s for a request); a role that sets it should drop it.
 - `roles/backup/files/server-backup`: a `pg_dump -Fc` of `gtnh-postgres` into `/srv/gtnh/backups/gtnh.dump`
   before restic, and `/opt/gtnh`, `/srv/gtnh/backups`, `/srv/gtnh/files` in the backup. Not backed up: the
   Postgres directory (the dump is the backup), the datasets (republished from the Mac), client files (the site
@@ -184,31 +202,36 @@ The Dockerfile is laid out so a deploy rebuilds and rewrites only what its commi
 
 - `.dockerignore` keeps docs, notes (`*.md`), test files (`*.test.*`, `src/test-support`), the solver's test corpus
   (`src/lib/solver/plan/__fixtures__/corpus`; the other fixtures stay, `/dev/clean-card` imports one), `tools/` (but
-  the prebuild step, the env check, `live-deps.mjs` and `tools/db/migrate.ts`), the Dockerfile and
-  the bake file out of the context: they are neither sent nor hashed. `next build` still runs on every deploy, as
-  the build id is baked into the bundles, but from its cache (next bullet). Tailwind scans the same files in a
-  checkout (`@source` in `src/app/globals.css`), so a checkout's build and the image's have the same CSS.
+  the prebuild step, `tools/build/`, the env check, `live-deps.mjs` and `tools/db/migrate.ts`), the Dockerfile and
+  the bake file out of the context: they are neither sent nor hashed. The site build runs on every deploy, as the
+  build id is baked into the bundles. Tailwind scans the same files in a checkout (`@source` in
+  `src/app/globals.css`), so a checkout's build and the image's have the same CSS.
 - `npm ci` depends on `package.json` and `package-lock.json` alone, with npm's download cache in a BuildKit cache
   mount (`gtnh-npm`): a deploy with the same lockfile reuses the install.
-- `next build` keeps `.next/cache` (Turbopack's cache and the type check's state) in a cache mount
-  (`gtnh-next-cache`), so it compiles only what changed.
-- The site image is Next's standalone output (`output: "standalone"` in `next.config.ts`): `server.js`, the traced
-  server files and only the packages they load (about 60 MB, against the 470 MB the whole run-time install was),
-  then `.next/static` and `public/`. The config is serialized into `server.js` at build;
-  nothing reads `next.config.ts` at run time. The layers that rarely change (packages, public files) come
-  first, so a deploy that leaves them alone reuses them.
+- `npm run build` builds the client with Vite, prerenders the page and bundles the server with esbuild, in one `RUN`
+  with one env; there is no build cache mount. The server build also takes every build value from the client's
+  `dist/client/build.json` and fails on a different one (Environment, above).
+- The site image is the server bundle and what it reads from its working folder `/app`: `dist/server/server.mjs`
+  and `app.mjs`, `dist/client` (the page template, `page.json` with the script hashes, `build.json` and
+  `/assets`), `public/`, the two site files `src/app/favicon.ico` and `src/app/opengraph-image.png`, the env check
+  in `deploy/`, and in `node_modules` only the packages the bundle leaves external (express, pg, kysely, zod,
+  highs) with their whole run-time closure, collected the way the live image's are (`live-deps.mjs` over
+  `dist/server/meta.json`, the `site-deps` stage). The highs route and the solver read
+  `node_modules/highs/build` from the working folder. As a smoke test, the build imports every package the bundle
+  imports. The layers that rarely change (packages, public files) come first, so a deploy that leaves them alone
+  reuses them.
 - The live image holds `dist-live/` and only the packages it can load: the ones its bundle leaves external
   (esbuild's metafile names them) and their whole run-time closure from `package-lock.json`, dependencies, optional
   dependencies and peers, however late each is loaded (`tools/deploy/live-deps.mjs`, the `live-deps` stage). The
   layer changes only with the lockfile or the bundle's imports. As a smoke test, the build then imports every
   package the bundle imports.
-- Nothing is pruned at build: the old `npm prune --omit=dev` after `next build` ran on every deploy.
+- Nothing is pruned at build: each run image copies only the packages its bundle loads.
 
 The cache lives in the server's BuildKit store, bounded only by dockerd's builder garbage collection; step 9 removes
-old image tags, not build cache. Watch it with `docker buildx du` (the two cache mounts are a few hundred MB; the
+old image tags, not build cache. Watch it with `docker buildx du` (the npm cache mount is a few hundred MB; the
 rest is old layers). To trim it, `docker builder prune --filter until=168h` drops what no build used for a week and
-keeps what the last deploys share; after a week without a deploy that includes the two cache mounts, and the next
-deploy builds cold. A full `docker builder prune` always empties them. Either way the next deploy is correct, only
+keeps what the last deploys share; after a week without a deploy that includes the cache mount, and the next
+deploy builds cold. A full `docker builder prune` always empties it. Either way the next deploy is correct, only
 slower.
 
 ### Downtime
@@ -353,11 +376,16 @@ published on `127.0.0.1:3482` for the tests against the real roles:
 ## Smoke test
 
 `node tools/deploy/smoke.mjs --base https://stage.gtnhplanner.idebugger.net --caddy` checks the version and build,
-live health, headers (nosniff, HSTS over https, the image optimizer off), the dataset gate, the live service's
-internal routes kept off the site, board image uploads (a URL on this site, served `image/png`, nosniff, immutable;
-a text file 415; a 9 MB body 413 at the edge), the mod-and-community switch, two throwaway accounts (a design saved
-by one session read by another; a foreign Origin 403) and a headless browser pass (Welcome, a new design, a recipe
-card, `highs.wasm`, a 2.8.1 plan asking the 2.8.1 dataset, no page errors). Live editing end to end is
+live health, headers (nosniff, HSTS over https, the security headers on an unknown path's 404), a page policy that
+allows its scripts by hash and never by `'unsafe-inline'` (`--no-expect-hashed-csp` skips that for a build older
+than the Express site), the 308 with `Refresh` for `/api/version/` and `//api/version`, `/API/version` 404, a
+cross-site POST to `/API/community/auth/logout` refused, the dataset gate, the live service's internal routes kept
+off the site, board image uploads (a URL on this site, served `image/png`, nosniff, immutable; a text file 415; a
+9 MB body 413 at the edge), the mod-and-community switch, two throwaway accounts (a design saved by one session read
+by another; a foreign Origin 403) and a headless browser pass (Welcome, a new design, a recipe card, `highs.wasm`,
+a 2.8.1 plan asking the 2.8.1 dataset, no page errors, no policy violation, no hydration message). With `--caddy`
+it also checks that `/` and a script under `/assets/` come gzip-encoded when asked, and that a lookup index's bytes
+are the same with and without `Accept-Encoding`. Live editing end to end is
 `tools/live/test-client.mjs --base <site>`: register, create, share, `join --for 150`, send, unshare.
 
 ## Diagnose

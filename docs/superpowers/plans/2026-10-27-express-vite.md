@@ -1328,7 +1328,8 @@ that pins it.
 - Produces: an image whose `site` target serves Express, with the same ports, env, labels and healthcheck.
 
 - [ ] **Step 1: Write the failing test.** In `tools/deploy/live-deps.test.mjs`: "collects the site bundle's closure,
-  with `highs` and `@vercel/og` in it" (the highs route and the card read files from `node_modules` at run time).
+  with `highs` in it" (the highs route reads files from `node_modules` at run time).
+  > **Removed by I31:** the share card and `@vercel/og` are gone, so the test names `highs` alone.
 - [ ] **Step 2: Make the changes above.** Run `npm run typecheck && npm run test && npm run build`.
 - [ ] **Step 3: Build the image the way the deploy does.** In a directory holding `git archive HEAD`:
   `TAG=rehearsal-express SITE_URL=http://127.0.0.1:3480 docker buildx bake -f tools/deploy/docker-bake.hcl --load`.

@@ -42,7 +42,10 @@ const pgLock = {
     "node_modules/split2": {},
     "node_modules/ws": {
       peerDependencies: { bufferutil: "^4.0.1", "utf-8-validate": ">=5.0.2" },
-      peerDependenciesMeta: { bufferutil: { optional: true }, "utf-8-validate": { optional: true } },
+      peerDependenciesMeta: {
+        bufferutil: { optional: true },
+        "utf-8-validate": { optional: true },
+      },
     },
     "node_modules/xtend": {},
     "node_modules/next": { dependencies: { "styled-jsx": "5.1.6" } },
@@ -78,7 +81,9 @@ describe("the live image's packages", () => {
   });
 
   it("takes pg's whole run-time closure, the lazily loaded pgpass and split2 too, and nothing else", () => {
-    const keys = runtimeClosure(pgLock, ["kysely", "pg", "ws"]).map((key) => key.slice("node_modules/".length));
+    const keys = runtimeClosure(pgLock, ["kysely", "pg", "ws"]).map((key) =>
+      key.slice("node_modules/".length),
+    );
     expect(keys).toEqual([
       "kysely",
       "pg",
@@ -133,7 +138,10 @@ describe("the live image's packages", () => {
       packages: {
         "node_modules/sharp": {
           dependencies: { "detect-libc": "^2" },
-          optionalDependencies: { "@img/sharp-linux-x64": "0.34.5", "@img/sharp-linux-arm64": "0.34.5" },
+          optionalDependencies: {
+            "@img/sharp-linux-x64": "0.34.5",
+            "@img/sharp-linux-arm64": "0.34.5",
+          },
         },
         "node_modules/detect-libc": {},
         "node_modules/@img/sharp-linux-x64": { optional: true, os: ["linux"], cpu: ["x64"] },
@@ -145,7 +153,12 @@ describe("the live image's packages", () => {
         "node_modules/native": { optional: true },
       },
     };
-    const onDisk = new Set(["node_modules/sharp", "node_modules/detect-libc", "node_modules/@img/sharp-linux-arm64", "node_modules/w"]);
+    const onDisk = new Set([
+      "node_modules/sharp",
+      "node_modules/detect-libc",
+      "node_modules/@img/sharp-linux-arm64",
+      "node_modules/w",
+    ]);
     expect(runtimeClosure(lock, ["sharp", "w"], (key) => onDisk.has(key))).toEqual([
       "node_modules/@img/sharp-linux-arm64",
       "node_modules/detect-libc",
@@ -166,8 +179,51 @@ describe("the live image's packages", () => {
     );
   });
 
+  it("collects the site bundle's closure, with highs in it", () => {
+    // The site bundle's externals as esbuild writes them: static imports, and highs loaded on demand. The
+    // solver and the highs route read highs's build files from node_modules at run time.
+    const meta = {
+      outputs: {
+        "dist/server/app.mjs": {
+          imports: [
+            { path: "node:http", kind: "import-statement", external: true },
+            { path: "zod", kind: "import-statement", external: true },
+            { path: "kysely", kind: "import-statement", external: true },
+            { path: "pg", kind: "import-statement", external: true },
+            { path: "express", kind: "import-statement", external: true },
+            { path: "highs", kind: "dynamic-import", external: true },
+          ],
+        },
+      },
+    };
+    const roots = externalPackages(meta);
+    expect(roots).toEqual(["express", "highs", "kysely", "pg", "zod"]);
+    const lock = JSON.parse(
+      readFileSync(new URL("../../package-lock.json", import.meta.url), "utf8"),
+    );
+    const keys = runtimeClosure(lock, roots);
+    for (const key of [
+      "node_modules/highs",
+      "node_modules/express",
+      "node_modules/router",
+      "node_modules/path-to-regexp",
+      "node_modules/body-parser",
+      "node_modules/pg",
+      "node_modules/pgpass",
+      "node_modules/kysely",
+      "node_modules/zod",
+    ]) {
+      expect(keys).toContain(key);
+    }
+    for (const key of ["node_modules/next", "node_modules/react", "node_modules/vite"]) {
+      expect(keys).not.toContain(key);
+    }
+  });
+
   it("covers today's live bundle from the repo's lockfile", () => {
-    const lock = JSON.parse(readFileSync(new URL("../../package-lock.json", import.meta.url), "utf8"));
+    const lock = JSON.parse(
+      readFileSync(new URL("../../package-lock.json", import.meta.url), "utf8"),
+    );
     const keys = runtimeClosure(lock, ["kysely", "pg", "ws", "zod"]);
     expect(keys).toEqual([
       "node_modules/kysely",

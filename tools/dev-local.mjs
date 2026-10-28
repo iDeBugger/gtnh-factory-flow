@@ -15,11 +15,11 @@
  *    player clicking around, and dev-local says so;
  * 2. the live service (`src/live/main.ts`) on :3001, journal in
  *    scratch/local-db/live-journal;
- * 3. `next dev` on :3000, uploaded files in scratch/local-db/files. With
- *    `--express`, the Express dev server (src/server/dev.ts, Vite in
- *    middleware mode, under `tsx watch`) instead.
+ * 3. the site's dev server on :3000 (src/server/dev.ts: Express with Vite in
+ *    middleware mode, under `tsx watch`), uploaded files in
+ *    scratch/local-db/files.
  *
- * Next.js and the live service run with that DATABASE_URL and a
+ * The site and the live service run with that DATABASE_URL and a
  * development-only COMMUNITY_HASH_SALT, so sign-ins made here work only here. Ctrl+C stops
  * everything; the database closes cleanly first.
  */
@@ -127,12 +127,8 @@ const dockerAnswers = () =>
   process.env.LOCAL_DB_PGLITE !== "1" &&
   spawnSync("docker", ["info", "--format", "{{.ServerVersion}}"], { timeout: 10_000 }).status === 0;
 
-/** `--express`: the site runs on the Express dev server instead of `next dev`. */
-const express = process.argv.includes("--express");
-
 const bin = {
   tsx: path.join(root, "node_modules", "tsx", "dist", "cli.mjs"),
-  next: path.join(root, "node_modules", "next", "dist", "bin", "next"),
 };
 
 const children = [];
@@ -236,7 +232,7 @@ try {
     dbEnv.LOCAL_DB_POSTGRES_URL = directUrl;
     console.log(`[dev-local] Postgres in Docker (${CONTAINER}) on 127.0.0.1:${pgPort}`);
   } else {
-    // The PGlite socket allows 4 connections: 2 each for Next and the live
+    // The PGlite socket allows 4 connections: 2 each for the site and the live
     // service, released after a second idle so the other can take its turn.
     Object.assign(shared, { DATABASE_POOL_MAX: "2", DATABASE_POOL_IDLE_MS: "1000" });
     const why =
@@ -259,19 +255,17 @@ try {
     });
   }
 
-  const site = express
-    ? [
-        bin.tsx,
-        "watch",
-        "--clear-screen=false",
-        "--include",
-        "src/server",
-        "--include",
-        "src/lib/server",
-        "src/server/dev.ts",
-      ]
-    : [bin.next, "dev", "--port", String(webPort)];
-  start(express ? "site" : "next", site, {
+  const site = [
+    bin.tsx,
+    "watch",
+    "--clear-screen=false",
+    "--include",
+    "src/server",
+    "--include",
+    "src/lib/server",
+    "src/server/dev.ts",
+  ];
+  start("site", site, {
     ...shared,
     PORT: String(webPort),
     NEXT_PUBLIC_LIVE_URL: `ws://localhost:${livePort}/live`,

@@ -3,25 +3,36 @@
  * The smoke test of a deployed stack (docs/deploy.md), runnable alone:
  *
  *   node tools/deploy/smoke.mjs --base https://stage.gtnhplanner.idebugger.net [--caddy] [--skip-accounts]
+ *     [--no-expect-hashed-csp]
  *
  * Without Caddy in front (a workstation rehearsal), --live <url> names the
  * live service's own port for /live/health.
  *
- * HTTP: the version and live health, the security headers, the dataset gate,
- * the live service's internal routes kept off the site, board image uploads,
- * the mod-and-community switch. Browser (headless, fresh profile): Welcome, a
- * new design, a recipe card, the solver's wasm, a 2.8.1 plan asking the 2.8.1
- * dataset, no page errors. Accounts: two throwaway accounts, a design saved by
- * one session and read by another, a foreign Origin refused.
+ * HTTP: the version and live health, the security headers (on an unknown
+ * path's 404 too), a page policy whose scripts are allowed by hash and never
+ * by 'unsafe-inline' (--no-expect-hashed-csp skips this for an older build),
+ * the 308s for a trailing slash and a doubled slash, case-sensitive paths, a
+ * cross-site write refused, the dataset gate, the live service's internal
+ * routes kept off the site, board image uploads, the mod-and-community switch.
+ * Browser (headless, fresh profile): Welcome, a new design, a recipe card, the
+ * solver's wasm, a 2.8.1 plan asking the 2.8.1 dataset, no page errors, no
+ * policy violation and no hydration message. Accounts: two throwaway accounts,
+ * a design saved by one session and read by another, a foreign Origin refused.
  *
  * --caddy adds what only the edge answers (HSTS over https, the prewarm 404,
- * the 8 MB body cap). Screenshots go to scratch/probes/ (look, then delete
- * them). Prints every check and exits 1 when one fails.
+ * the 8 MB body cap, compression of the page and a script, and a dataset
+ * file's bytes the same with and without compression). Screenshots go to
+ * scratch/probes/ (look, then delete them). Prints every check and exits 1
+ * when one fails.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
+import nodeHttp from "node:http";
+import nodeHttps from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { gunzipSync } from "node:zlib";
+import { policyListener, policyViolations, watchConsole } from "../http-parity/page-listeners.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -31,6 +42,7 @@ const option = (name, fallback) => {
 };
 const BASE = (option("--base", "http://127.0.0.1:3300") ?? "").replace(/\/+$/, "");
 const CADDY = flag("--caddy");
+const EXPECT_HASHED_CSP = !flag("--no-expect-hashed-csp");
 const LIVE = (option("--live", BASE) ?? BASE).replace(/\/+$/, "");
 const VERSIONS = (option("--versions", "local-2.9.0-rc-2,local-2.8.1") ?? "").split(",");
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -62,6 +74,35 @@ async function http(url, init = {}) {
   }
 }
 const header = (response, name) => response.headers.get(name) ?? "";
+
+/**
+ * One GET whose answer is read as sent: fetch would decompress it and hide the Content-Encoding. Resolves with
+ * status 0 when there is no answer.
+ */
+function rawGet(target, headers = {}) {
+  const url = new URL(`${BASE}${target}`);
+  const client = url.protocol === "https:" ? nodeHttps : nodeHttp;
+  return new Promise((resolve) => {
+    const request = client.get(url, { headers, timeout: 60_000 }, (response) => {
+      const chunks = [];
+      response.on("data", (chunk) => chunks.push(chunk));
+      response.on("end", () =>
+        resolve({
+          status: response.statusCode,
+          headers: response.headers,
+          body: Buffer.concat(chunks),
+        }),
+      );
+      response.on("error", () => resolve({ status: 0, headers: {}, body: Buffer.alloc(0) }));
+    });
+    request.on("timeout", () => request.destroy());
+    request.on("error", () => resolve({ status: 0, headers: {}, body: Buffer.alloc(0) }));
+  });
+}
+const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+/** A raw answer's body as the client reads it: gunzipped when it was sent gzip-encoded. */
+const decoded = (answer) =>
+  answer.headers["content-encoding"] === "gzip" ? gunzipSync(answer.body) : answer.body;
 
 // ---- Version and health -------------------------------------------------------------------
 const version = await http("/api/version");
@@ -97,10 +138,61 @@ if (CADDY && BASE.startsWith("https://")) {
     header(home, "strict-transport-security"),
   );
 }
+const unknown = await http(`/smoke-missing-${randomUUID()}`);
 check(
-  (await http("/_next/image?url=/site-icon.png&w=64&q=75")).status === 404,
-  "/_next/image is off",
+  unknown.status === 404 &&
+    header(unknown, "x-content-type-options") === "nosniff" &&
+    header(unknown, "content-security-policy").includes("default-src"),
+  "an unknown path answers 404 with the security headers",
+  `${unknown.status} ${header(unknown, "x-content-type-options")}`,
 );
+if (EXPECT_HASHED_CSP) {
+  const scriptSrc =
+    /(?:^|;)\s*script-src ([^;]*)/.exec(header(home, "content-security-policy"))?.[1] ?? "";
+  check(
+    /'sha256-[A-Za-z0-9+/]{43}='/.test(scriptSrc) && !scriptSrc.includes("'unsafe-inline'"),
+    "the page's scripts are allowed by hash, not 'unsafe-inline'",
+    scriptSrc,
+  );
+}
+for (const target of ["/api/version/", "//api/version"]) {
+  const moved = await http(target);
+  check(
+    moved.status === 308 &&
+      header(moved, "location") === "/api/version" &&
+      header(moved, "refresh") === "0;url=/api/version",
+    `${target} is a 308 to /api/version with Refresh`,
+    `${moved.status} ${header(moved, "location")} ${header(moved, "refresh")}`,
+  );
+}
+check((await http("/API/version")).status === 404, "/API/version is 404: paths are case-sensitive");
+const crossSite = await http("/API/community/auth/logout", {
+  method: "POST",
+  headers: { origin: "https://evil.example", "content-type": "application/json" },
+  body: "{}",
+});
+check(
+  crossSite.status < 200 || crossSite.status > 299,
+  "a cross-site POST to /API/community/auth/logout is not 2xx",
+  String(crossSite.status),
+);
+if (CADDY) {
+  const page = await rawGet("/", { "accept-encoding": "gzip" });
+  check(
+    page.status === 200 && page.headers["content-encoding"] === "gzip",
+    "/ is compressed at the edge",
+    `${page.status} ${page.headers["content-encoding"] ?? "no content-encoding"}`,
+  );
+  const script = /\/assets\/[A-Za-z0-9._-]+\.js/.exec(decoded(page).toString())?.[0];
+  if (check(Boolean(script), "the page names a script under /assets/")) {
+    const asset = await rawGet(script, { "accept-encoding": "gzip" });
+    check(
+      asset.status === 200 && asset.headers["content-encoding"] === "gzip",
+      `${script} is compressed at the edge`,
+      `${asset.status} ${asset.headers["content-encoding"] ?? "no content-encoding"}`,
+    );
+  }
+}
 const wasm = await http("/highs.wasm");
 check(
   wasm.status === 200 && header(wasm, "content-type").startsWith("application/wasm"),
@@ -134,6 +226,19 @@ for (const id of VERSIONS) {
     `${index.status}`,
   );
   await index.arrayBuffer().catch(() => undefined);
+  if (CADDY) {
+    // The bytes a player gets, decoded as sent, are the same whether the edge compressed them or not.
+    const target = `/dataset-files/${id}/recipe-lookup-index.json.gz`;
+    const plain = await rawGet(target, { "accept-encoding": "identity" });
+    const packed = await rawGet(target, { "accept-encoding": "gzip" });
+    check(
+      plain.status === 200 &&
+        packed.status === 200 &&
+        sha256(decoded(plain)) === sha256(decoded(packed)),
+      `${id} lookup index bytes are the same with and without Accept-Encoding`,
+      `${plain.status}/${packed.status} ${packed.headers["content-encoding"] ?? "no content-encoding"}`,
+    );
+  }
   const catalog = await http(`/api/datasets/${id}/catalog`);
   check(catalog.status === 200, `${id} catalog`, String(catalog.status));
   const body = await catalog.text();
@@ -313,10 +418,13 @@ try {
         ? window.setTimeout(() => cb(performance.now()), 16)
         : real(cb);
   });
+  await context.addInitScript(policyListener);
   const page = await context.newPage();
   const pageErrors = [];
+  const pageFindings = [];
   const requests = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
+  watchConsole(page, (finding) => pageFindings.push(finding));
   page.on("request", (request) => requests.push(request.url().replace(BASE, "")));
   await page.goto(BASE, { waitUntil: "load" });
   const welcome = page.locator("button:has-text('New design')").first();
@@ -400,6 +508,12 @@ try {
     }
   }
   check(pageErrors.length === 0, "no page errors", pageErrors.slice(0, 3).join(" | "));
+  pageFindings.push(...(await policyViolations(page)).map((violation) => `policy: ${violation}`));
+  check(
+    pageFindings.length === 0,
+    "no policy violation and no hydration message",
+    pageFindings.slice(0, 3).join(" | "),
+  );
 } finally {
   await browser.close();
 }

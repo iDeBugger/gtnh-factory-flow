@@ -1,5 +1,5 @@
 /**
- * `npm run dev:express`: the site on Express with Vite in middleware mode, on `PORT` (3000). The browser code
+ * `npm run dev`: the site on Express with Vite in middleware mode, on `PORT` (3000). The browser code
  * comes from Vite with hot reload; the server code runs under `tsx watch`, which restarts this process when a
  * route or server module changes. The page is the template with the boot scripts and no shell (main.tsx then
  * renders instead of hydrating), and the policy is development's (`'unsafe-inline'` and `'unsafe-eval'`).
