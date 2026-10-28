@@ -20,6 +20,8 @@ const METADATA_CACHE_CONTROL = "public, max-age=0, must-revalidate";
 export interface SiteRoutesOptions {
   /** The folder holding `favicon.ico` and `opengraph-image.png`. */
   filesDir: string;
+  /** For tests only: the clock the in-memory files age by. */
+  now?: () => number;
 }
 
 /**
@@ -31,8 +33,12 @@ export interface SiteRoutesOptions {
  */
 export function siteRoutes(options: SiteRoutesOptions): Router {
   const router = express.Router({ caseSensitive: true, strict: true });
-  const sitemap = ttlMemo(SITE_FILE_TTL_MS, async () => sitemapXml(await sitemapEntries()));
-  const llms = ttlMemo(SITE_FILE_TTL_MS, llmsText);
+  const sitemap = ttlMemo(
+    SITE_FILE_TTL_MS,
+    async () => sitemapXml(await sitemapEntries()),
+    options.now,
+  );
+  const llms = ttlMemo(SITE_FILE_TTL_MS, llmsText, options.now);
   const favicon = readFileSync(path.join(options.filesDir, "favicon.ico"));
   const ogImage = readFileSync(path.join(options.filesDir, "opengraph-image.png"));
 

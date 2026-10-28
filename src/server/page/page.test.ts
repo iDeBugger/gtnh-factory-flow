@@ -19,9 +19,11 @@ import type { RawAnswer } from "../../../tools/http-parity/requests.mjs";
 import { documentPolicy } from "@/lib/server/http/security-headers";
 import nextAnswers from "../__fixtures__/next-answers.json";
 import pageAnswers from "../__fixtures__/next-page-answers.json";
+import express from "express";
 import { createApp } from "../app";
 import { call, listen, type Listening } from "../test-support/serve";
 import { NOT_FOUND_BODY, renderNotFoundPage } from "./not-found-page";
+import { SITE_FILE_TTL_MS, siteRoutes } from "./site-routes";
 import { loadPageTemplate, renderPage, type PageTemplate } from "./template";
 
 const getPublicPlanRow = vi.fn<(id: string) => Promise<PlanRow | undefined>>();
@@ -416,6 +418,22 @@ describe("with the community switch on", () => {
     expect(head).toContain(
       "<title>&lt;/title&gt;&lt;script&gt;x()&lt;/script&gt;&quot;&amp;&#x27;$&amp; | GTNH Planner</title>",
     );
+    const escaped = "&lt;/title&gt;&lt;script&gt;x()&lt;/script&gt;&quot;&amp;&#x27;$&amp;";
+    expect(head).toContain(`<meta property="og:title" content="${escaped}"/>`);
+    expect(head).toContain(`<meta name="twitter:title" content="${escaped}"/>`);
+
+    getPublicPlanRow.mockResolvedValue({ ...row, description: `"/><script>y()</script>&` });
+    const described = (await call(server.port, "GET", `/?plan=${PLAN_ID}`)).body.toString("utf8");
+    const describedHead = /<head>([\s\S]*?)<\/head>/.exec(described)![1]!;
+    expect(describedHead).not.toContain("<script>y()");
+    const words = "&quot;/&gt;&lt;script&gt;y()&lt;/script&gt;&amp;";
+    for (const tag of [
+      `<meta name="description" content="${words}"/>`,
+      `<meta property="og:description" content="${words}"/>`,
+      `<meta name="twitter:description" content="${words}"/>`,
+    ]) {
+      expect(describedHead).toContain(tag);
+    }
   });
 
   it("gives a repeated plan the site head, as Next did", async () => {
@@ -479,6 +497,34 @@ describe("with the community switch on", () => {
       });
     } finally {
       await fresh.close();
+    }
+  });
+
+  it("loads the sitemap and llms.txt again once an hour has passed, serving the held copy meanwhile", async () => {
+    let clock = 0;
+    const app = express();
+    app.use(siteRoutes({ filesDir: SITE_FILES, now: () => clock }));
+    const files = await listen(app);
+    try {
+      const start = { ...loads };
+      const counted = () => ({
+        sitemap: loads.sitemap - start.sitemap,
+        llms: loads.llms - start.llms,
+      });
+      for (const target of ["/sitemap.xml", "/llms.txt", "/sitemap.xml", "/llms.txt"]) {
+        expect((await call(files.port, "GET", target)).status, target).toBe(200);
+      }
+      clock = SITE_FILE_TTL_MS - 1;
+      await call(files.port, "GET", "/sitemap.xml");
+      await call(files.port, "GET", "/llms.txt");
+      expect(counted()).toEqual({ sitemap: 1, llms: 1 });
+      clock = SITE_FILE_TTL_MS;
+      const held = await call(files.port, "GET", "/sitemap.xml");
+      await call(files.port, "GET", "/llms.txt");
+      expect(held.status).toBe(200);
+      expect(counted()).toEqual({ sitemap: 2, llms: 2 });
+    } finally {
+      await files.close();
     }
   });
 
