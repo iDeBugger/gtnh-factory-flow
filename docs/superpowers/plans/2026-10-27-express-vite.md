@@ -171,7 +171,7 @@ The assessment read `main` at 5be99d75 and the `db-direct` worktree. Rechecked a
    - past the drain's byte bound the server stops reading and closes, and the client may get the 413 or a reset.
      Caddy's 8 MB limit keeps production under the bound;
    - a slow sender is cut at Node's 300 s request timeout;
-   - SIGTERM always exits 143 within the 20 s grace.
+   - SIGTERM always exits 143 within the 30 s stop timeout.
 
    Pinned in Task 5 (`adapter.test.ts`) and Task 9 (`main.test.ts`).
 
@@ -1148,7 +1148,7 @@ it("sends the Link preload header Next sent, by asset bytes", async () => { /* p
     - `port`: `PORT` or 3000;
     - `host`: `HOSTNAME` or `0.0.0.0`, as Next's `server.js`;
     - `requestTimeoutMs`: 300,000, Node's and Next's default, set explicitly;
-    - `graceMs`: 15,000, under compose's 20 s;
+    - `graceMs`: 15,000, under compose's 30 s;
     - `exit`: `process.exit`;
     - `signals`: true.
   - `setupCheck()` runs first. Then the server listens at once and holds requests behind `ready`, as Next held them
@@ -1459,7 +1459,8 @@ into `main` (fast-forward) and pushed.
      prints `gzip`.
    - Then run the **old** smoke: `git show 3a41db6d:tools/deploy/smoke.mjs > scratch/smoke-old.mjs && node scratch/smoke-old.mjs --base https://stage.gtnhplanner.idebugger.net --caddy`.
      The new smoke expects the hashed policy, which Next does not send.
-   - The compose file does not change in this release, so the deploy's byte-copy check needs no infra commit.
+   - The compose file changes in this release (the site's `stop_grace_period` goes to 30 s). It lands in this repo
+     first; the infra role's byte copy follows before the deploy, or the deploy's byte-copy check stops.
 2. **Pre-deploy capture.** Run
    `capture.mjs --base https://stage.gtnhplanner.idebugger.net --host stage.gtnhplanner.idebugger.net --no-forwarded --mode off --only '^(page|static|datasets|version|gate|path)'`
    into `scratch/parity/stage-next`. That is TLS with the real `Host`, and the `localOnly` cases are skipped. Read-only cases only: stage has real accounts, so no scenario run.

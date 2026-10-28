@@ -29,7 +29,7 @@ export interface StartOptions {
   setupCheck?: () => void;
   /** Node's and Next's 300 s, set explicitly: a sender that has not finished its request by then is cut. */
   requestTimeoutMs?: number;
-  /** How long open requests may run on after SIGTERM: under compose's 20 s stop timeout. */
+  /** How long open requests may run on after SIGTERM: under compose's 30 s stop timeout. */
   graceMs?: number;
   exit?: (code: number) => void;
   /** What the stop releases after the last request: the database pool. */

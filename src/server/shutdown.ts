@@ -11,7 +11,7 @@ export interface ShutdownOptions {
   drain?: DrainBounds;
 }
 
-/** The longest the release may take, so a hung pool never outlives the stop (grace + this stays under 20 s). */
+/** The longest the release may take, so a hung pool never outlives the stop (grace + this stays under compose's 30 s stop timeout). */
 const CLOSE_BOUND_MS = 2_000;
 
 /** The exit code of a process stopped by the signal, 128 plus its number, as Next's server exits. */
@@ -21,7 +21,7 @@ const SIGNAL_EXIT: Record<"SIGTERM" | "SIGINT", number> = { SIGTERM: 143, SIGINT
  * The stop a SIGTERM or SIGINT runs: stop accepting, close the idle keep-alive connections, let open requests
  * finish (each connection closes as its answer ends), then release the resources (within `CLOSE_BOUND_MS`) and
  * exit. Past `graceMs` every connection is closed and the stop goes on. A second signal exits at once. The grace stays under the
- * compose stop timeout (20 s), so the stop is the server's own and never Docker's kill.
+ * compose stop timeout (30 s) with room for a held prewarm, so the stop is the server's own and never Docker's kill.
  */
 export function installShutdown(
   server: http.Server,

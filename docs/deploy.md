@@ -157,8 +157,9 @@ What the infra side needs for the Express site, before or with its first deploy:
 - Caddy: `encode zstd gzip` on the site route (above). It is harmless while an older image runs, since Caddy leaves
   an answer that already has a `Content-Encoding` alone.
 - Compose: the site's `stop_grace_period` at 30 s. The worst stop, a SIGTERM during the prewarm with a request held
-  plus the 15 s grace, was measured at 19.3 s, too close to today's 20 s. `tools/deploy/docker-compose.yml`
-  changes first and the role's byte copy follows, as for any compose change.
+  plus the 15 s grace, was measured at 19.3 s, too close to a 20 s timeout. `tools/deploy/docker-compose.yml` in
+  this repo carries the 30 s first; the role's byte copy follows before the deploy, since the deploy stops on a
+  server compose file that differs from HEAD's.
 - `KEEP_ALIVE_TIMEOUT` is no longer read. The server's own keep-alive and headers timeouts apply (Node's 5 s
   keep-alive, 60 s for the headers, 300 s for a request); a role that sets it should drop it.
 - `roles/backup/files/server-backup`: a `pg_dump -Fc` of `gtnh-postgres` into `/srv/gtnh/backups/gtnh.dump`
