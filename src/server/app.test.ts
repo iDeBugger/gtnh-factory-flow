@@ -342,6 +342,17 @@ describe("the app's routing rules", () => {
     }
   });
 
+  it("answers a target the router cannot parse with the site's 404 and the security headers", async () => {
+    for (const method of ["GET", "POST"]) {
+      const answer = await call(server.port, method, "http://[/x");
+      expect(answer.status, method).toBe(404);
+      expect(header(answer, "content-type"), method).toMatch(/^text\/html/);
+      for (const name of SECURITY_HEADERS) expect(header(answer, name), name).toBeDefined();
+      expect(header(answer, "content-security-policy")).not.toBe("default-src 'none'");
+      expect(answer.body.toString()).not.toContain("Cannot ");
+    }
+  });
+
   it("is case-sensitive: /API/version is a 404", async () => {
     expect((await call(server.port, "GET", "/API/version")).status).toBe(404);
     expect((await call(server.port, "GET", "/api/Version")).status).toBe(404);

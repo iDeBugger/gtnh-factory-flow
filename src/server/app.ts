@@ -5,6 +5,7 @@
  * backend and the own middlewares (Vite's) of a development server, then the static files. Then the site files, the route table (each route with
  * its OPTIONS and 405 answers), the page and `/community`, the 404 and the error answer.
  */
+import type { IncomingMessage, ServerResponse } from "node:http";
 import express, { type Express, type RequestHandler } from "express";
 import { documentPolicy, type SecurityHeaderEnv } from "@/lib/server/http/security-headers";
 import { DEFAULT_DRAIN, handle, type DrainBounds } from "./http/adapter";
@@ -15,6 +16,7 @@ import { datasetGate } from "./middleware/dataset-gate";
 import {
   canonicalPath,
   repeatedSlashRedirect,
+  routableTarget,
   trailingSlashRedirect,
 } from "./middleware/normalize-path";
 import {
@@ -97,6 +99,8 @@ function mountRoute(app: Express, route: RouteEntry, drain: DrainBounds): void {
   app.all(route.path, methodNotAllowed());
 }
 
+type AppHandle = (req: IncomingMessage, res: ServerResponse, next?: unknown) => void;
+
 /** What Next put on a force-static route's answer that named no Cache-Control: a year in shared caches. */
 const STATIC_CACHE_CONTROL = "s-maxage=31536000";
 
@@ -125,6 +129,14 @@ export function createApp(options: AppOptions): Express {
   // instead of failing every answer.
   documentPolicy(env);
   const app = express();
+  // Before the router: a target it cannot parse would skip every middleware, so it is given one it can.
+  // Express's types leave out `handle`, the method `app(req, res)` calls.
+  const routed = app as unknown as { handle: AppHandle };
+  const handle = routed.handle.bind(app);
+  routed.handle = (req, res, next) => {
+    req.url = routableTarget(req.url ?? "/");
+    handle(req, res, next);
+  };
   // Settings before any middleware: Next's router is case-sensitive and strict about a trailing slash (the
   // redirect handles that), sends no X-Powered-By and no ETag on a route answer, and its query is plain.
   app.set("case sensitive routing", true);

@@ -13,6 +13,7 @@
  * target there) is read nowhere, so no check can be passed by spelling a path differently.
  */
 import querystring from "node:querystring";
+import { parse as legacyParse } from "node:url";
 import type { RequestHandler, Response } from "express";
 
 declare global {
@@ -29,6 +30,28 @@ declare global {
        */
       canonicalUrl?: string;
     }
+  }
+}
+
+/**
+ * What a target that the router cannot parse is answered as: a path no route matches, so it gets the site's 404
+ * with the security headers. Express's router reads the path with `parseurl`, which throws on a target such as
+ * `http://[/x`, and then runs no middleware at all (its bare 404 carries none of the site's headers).
+ */
+export const UNPARSED_TARGET = "/__unparsed-target";
+
+/**
+ * The target the router is given: the one sent, or `UNPARSED_TARGET` when the router could not parse it. A target
+ * that starts with `/` always parses (`parseurl`'s fast path); any other goes through the legacy `url.parse`, as
+ * `parseurl` sends it.
+ */
+export function routableTarget(target: string): string {
+  if (target.startsWith("/")) return target;
+  try {
+    legacyParse(target);
+    return target;
+  } catch {
+    return UNPARSED_TARGET;
   }
 }
 
