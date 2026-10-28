@@ -54,16 +54,43 @@
     "reason": "Next's prerendered 404 page carries an ETag."
   },
   {
-    "case": "site /_next/image\\?.*",
-    "field": "*",
-    "reason": "The image optimizer is off in Next and the path is gone with it: a plain 404 now."
-  },
-  {
     "case": "cap board image 6 MiB",
     "field": "headers.connection",
     "a": "keep-alive",
     "b": "close",
     "reason": "Hop by hop: the server closes a connection whose request body it left unread. Caddy drops the header."
+  },
+  {
+    "case": "cap login 17 KiB chunked",
+    "field": "headers.connection",
+    "a": "keep-alive",
+    "b": "close",
+    "reason": "R128. Hop by hop: the body is over the route's 16 KiB cap and its end (the last chunk) had not arrived when the 413 was written, so the server drains it and closes. Next read the whole body before the route ran. Sent in one write, the same request keeps the connection on both servers. Caddy drops the header."
+  },
+  {
+    "case": "page /community(\\?plan=x)?|site /dev/clean-card",
+    "status": 404,
+    "field": "headers.cache-control",
+    "a": "s-maxage=31536000",
+    "b": "private, no-cache, no-store, max-age=0, must-revalidate",
+    "reason": "R149. Next served these pages' prerendered 404 (/community with the switch off, the dev page in production) from its static cache with a year of shared caching. Express answers its plain no-store 404."
+  },
+  {
+    "case": "spelling /api/%76ersion",
+    "status": 404,
+    "field": "headers.cache-control",
+    "a": "s-maxage=31536000",
+    "b": "private, no-cache, no-store, max-age=0, must-revalidate",
+    "reason": "R140. Next looked the decoded path up in its prerender cache and put the cached route's s-maxage on the 404 of an escaped path. Express answers its plain no-store 404."
+  },
+  {
+    "case": "page /community(\\?plan=x)?|scenario page /community\\?plan=",
+    "status": 307,
+    "field": "headers.link",
+    "transform": "link-keep-fonts",
+    "keep": ["<asset:c9407645>"],
+    "dropAs": ["style"],
+    "reason": "R149 and I27. Next's 307 from /community listed its error document's stylesheet preloads; a browser following the redirect never uses them, and Express sends none. The font items follow I27 as on the page."
   },
   {
     "case": "nextOnly .*",

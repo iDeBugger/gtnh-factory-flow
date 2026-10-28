@@ -189,6 +189,68 @@ describe("diffCases", () => {
       );
     });
 
+    it("takes the stylesheet preloads out of the /community 307's Link only", () => {
+      const font = (hash) =>
+        `<<asset:${hash}>>; rel=preload; as="font"; crossorigin=""; type="font/woff2"`;
+      const style = '<<asset:401f8660>>; rel=preload; as="style"';
+      const answer = (name, status, ...items) =>
+        stored({ name, status, headers: [["link", items.join(", ")]] });
+      const express = (name, status = 307) => answer(name, status, font("c9407645"));
+      for (const name of [
+        "page /community",
+        "page /community?plan=x",
+        "scenario page /community?plan=",
+      ]) {
+        const next = answer(name, 307, font("1e06740a"), font("c9407645"), style);
+        expect(diffCases(next, express(name), ALLOW), name).toEqual([]);
+        expect(diffCases(next, answer(name, 307), ALLOW), name).toHaveLength(1);
+      }
+      const page = answer("page /", 200, font("c9407645"), style);
+      expect(diffCases(page, express("page /", 200), ALLOW)).toHaveLength(1);
+    });
+
+    it("allows the year of shared caching only on the 404s Next served from its cache (R140, R149)", () => {
+      const NO_STORE = "private, no-cache, no-store, max-age=0, must-revalidate";
+      const cached = (name, status, value) =>
+        stored({ name, status, headers: [["cache-control", value]] });
+      for (const name of [
+        "page /community",
+        "page /community?plan=x",
+        "site /dev/clean-card",
+        "spelling /api/%76ersion",
+      ]) {
+        expect(
+          diffCases(cached(name, 404, "s-maxage=31536000"), cached(name, 404, NO_STORE), ALLOW),
+          name,
+        ).toEqual([]);
+        expect(
+          diffCases(cached(name, 200, "s-maxage=31536000"), cached(name, 200, NO_STORE), ALLOW),
+          name,
+        ).toHaveLength(1);
+      }
+      expect(
+        diffCases(
+          cached("route GET /api/version", 404, "s-maxage=31536000"),
+          cached("route GET /api/version", 404, NO_STORE),
+          ALLOW,
+        ),
+      ).toHaveLength(1);
+    });
+
+    it("allows Connection: close only on the two over-cap uploads (R128)", () => {
+      const connection = (name, value) =>
+        stored({ name, status: 413, headers: [["connection", value]] });
+      for (const name of ["cap login 17 KiB chunked", "cap board image 6 MiB"]) {
+        expect(diffCases(connection(name, "keep-alive"), connection(name, "close"), ALLOW)).toEqual(
+          [],
+        );
+      }
+      const length = "cap login 17 KiB Content-Length";
+      expect(
+        diffCases(connection(length, "keep-alive"), connection(length, "close"), ALLOW),
+      ).toHaveLength(1);
+    });
+
     it("allows the 404 page's body under either doctype casing, and the /community 307's body only", () => {
       const page = (name, status, text, headers = []) =>
         stored({ name, status, headers, body: { text } });

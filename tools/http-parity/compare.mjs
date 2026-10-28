@@ -127,13 +127,18 @@ export const TRANSFORMS = {
    * I27: only the named font files keep their preload. Side A's `Link` items
    * are filtered to its non-font items and the kept fonts, in order, and must
    * then equal side B's exactly, so a dropped or added stylesheet preload, or
-   * any other font, still fails.
+   * any other font, still fails. An entry's `dropAs` (for example
+   * `["style"]`) also takes side A's preloads of those kinds out, for an
+   * answer where they are meant to go.
    */
   "link-keep-fonts": (a, b, entry) => {
     const keep = new Set(entry.keep ?? []);
+    const dropAs = new Set(entry.dropAs ?? []);
     const items = a.split(/,\s*(?=<)/);
     const kept = items.filter((item) => {
-      if (!/;\s*as="?font"?/.test(item)) return true;
+      const kind = /;\s*as="?([a-z]+)"?/.exec(item)?.[1];
+      if (kind !== undefined && dropAs.has(kind)) return false;
+      if (kind !== "font") return true;
       const url = /^<(.*?)>\s*;/.exec(item)?.[1];
       return url !== undefined && keep.has(url);
     });
