@@ -28,7 +28,7 @@ import type { PlanStore } from "./store";
 import { LOOPBACK_ONLY, type TrustedProxies } from "./trusted-proxies";
 
 /**
- * The live service: one process beside Next.js holding every open plan in
+ * The live service: one process beside the site's server holding every open plan in
  * memory (`Room`), speaking the live protocol over WebSockets at `/live`,
  * plus a little HTTP on the same port:
  *
@@ -36,7 +36,7 @@ import { LOOPBACK_ONLY, type TrustedProxies } from "./trusted-proxies";
  *   Minecraft names the asker sees there (see `nearby`).
  * - `GET /live/health`: rooms and connections, for checks after a deploy.
  * - `POST /internal/members`, `/internal/deleted` and `/internal/signed-out`
- *   (LIVE_INTERNAL_TOKEN): the Next.js routes reporting sharing changes,
+ *   (LIVE_INTERNAL_TOKEN): the site's routes reporting sharing changes,
  *   deleted plans and accounts signed out everywhere.
  *
  * One live service per database: it takes plan leases without asking whose

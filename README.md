@@ -36,7 +36,8 @@ or place a dataset and its `datasets.manifest.json` under `public/datasets/gtnh/
   dataset the app reads. Recipe data never comes from wikis or hand-written tables.
 - `src/lib/`: the domain model, machine math (overclocks, parallels, curated per-machine
   behaviour checked against the mod source) and an LP-based solver.
-- `src/components/`, `src/store/`: the Next.js + React Flow UI and Zustand stores.
+- `src/components/`, `src/store/`: the React + React Flow UI and Zustand stores, served by
+  an Express server (`src/server`) with a Vite client build (`src/client`).
 
 Working notes for contributors and AI agents are in [AGENTS.md](AGENTS.md) and the
 `CLAUDE.md` file in each area's folder.

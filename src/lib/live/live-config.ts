@@ -5,7 +5,8 @@ import { liveSocketUrl } from "./protocol";
  * time. Unset, every live feature (live editing, sharing, presence, the task
  * board) stays out of sight and the site behaves exactly as before.
  *
- * The variable is read by its literal name so Next.js inlines it.
+ * The variable is read by its literal name so the build inlines it
+ * (tools/build/define.mjs).
  */
 export function isLiveConfigured(): boolean {
   return Boolean(process.env.NEXT_PUBLIC_LIVE_URL?.trim());

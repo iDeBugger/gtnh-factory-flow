@@ -3,8 +3,7 @@
  * how it runs. Pure and worker-safe, and in its own file because it is
  * everything `arrange.worker.ts` needs: it must not import
  * `arrange-solve.ts`, which SPAWNS the worker (a worker bundle that reaches
- * back into its spawner references itself and hangs Turbopack's production
- * build - see grid-route-job.ts).
+ * back into its spawner references itself - see grid-route-job.ts).
  *
  * The host cannot hand a worker its judge function, so it hands the
  * judge's INPUTS - the board's route requests, obstacles and tuning - and

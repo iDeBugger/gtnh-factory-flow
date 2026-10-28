@@ -1,5 +1,5 @@
 /**
- * The local development database, served so the Next.js dev server and the
+ * The local development database, served so the site's dev server and the
  * live service (two processes) share one copy over Postgres's wire protocol
  * on 127.0.0.1:54330 (LOCAL_DB_PG_PORT), their `DATABASE_URL`. A small
  * control listener on 127.0.0.1:54329 (LOCAL_DB_PORT) answers

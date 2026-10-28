@@ -30,8 +30,8 @@ interface DbState {
   testDb?: Kysely<Database>;
 }
 
-// One per process, not per module copy: Next bundles instrumentation apart
-// from the routes, and a dev reload would otherwise open a pool per reload.
+// One per process, not per module copy: a second copy of this module (a bundle
+// that splits it, a test's fresh import) shares the pool instead of opening another.
 const STATE = Symbol.for("gtnh.db");
 type WithState = typeof globalThis & { [STATE]?: DbState };
 
