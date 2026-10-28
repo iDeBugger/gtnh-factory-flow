@@ -4,9 +4,8 @@ import prettier from "eslint-config-prettier";
 import globals from "globals";
 
 /*
- * The JavaScript files only, with ESLint's own recommended rules. TypeScript and TSX need the typescript-eslint
- * parser and the React hooks rules, which arrive with their own packages; until then they are not linted here
- * (`npm run typecheck` still checks them).
+ * The JavaScript files only, with ESLint's own recommended rules. TS, TSX and MTS are not linted by this config;
+ * `npm run typecheck` checks them.
  */
 const eslintConfig = defineConfig([
   globalIgnores([

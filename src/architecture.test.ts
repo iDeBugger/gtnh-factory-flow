@@ -45,7 +45,7 @@ const MAX_ALLOWED: Record<string, number> = {
 const ROOT = path.resolve(__dirname, "..");
 const ALLOWLIST_FILE = path.join(ROOT, "src/architecture-allowlist.json");
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".mjs"];
-// `.next` stays while old checkouts still hold a Next build.
+// `.next`: a checkout may hold an old build folder, which is not source.
 const SKIPPED_DIRECTORIES = new Set([
   "node_modules",
   "dist",
@@ -999,7 +999,7 @@ describe("the layers", () => {
       "src/lib/site-url.ts":
         'import { x } from "@/lib/server/http/viewer";\nimport fs from "node:fs";',
       "src/lib/arrange.worker.ts": 'import { y } from "@/lib/server/http/client-address";',
-      // A "use client" line no longer makes a root, and a file nothing in the browser loads is not reached.
+      // A "use client" line makes no root, and a file nothing in the browser loads is not reached.
       "src/lib/app-font.ts": '"use client";\nimport { z } from "@/lib/server/http/request-body";',
     };
     const bad = new Map(
