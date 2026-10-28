@@ -1,9 +1,10 @@
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { REQUEST_TOO_BIG_MESSAGE } from "@/lib/server/http/request-body";
 import { startServer, type StartedServer, type StartOptions } from "./main";
@@ -102,7 +103,13 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
+/** Every process a test spawned: one a failed or timed-out test left running is killed before the next test. */
+const children: ChildProcess[] = [];
+
 afterEach(async () => {
+  for (const child of children.splice(0)) {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+  }
   for (const { server } of started.splice(0)) {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -310,10 +317,13 @@ describe("startServer", () => {
 
 describe("the source entry", () => {
   it("exits 143 on a real SIGTERM", async () => {
+    // tsx's loader in this process, not its CLI: the CLI runs the source in a second process, which a kill of
+    // the CLI on a failed test would leave running.
     const child = spawn(
       process.execPath,
       [
-        path.join(REPO, "node_modules", "tsx", "dist", "cli.mjs"),
+        "--import",
+        pathToFileURL(path.join(REPO, "node_modules", "tsx", "dist", "loader.mjs")).href,
         path.join(REPO, "src/server/test-support/start.ts"),
       ],
       {
@@ -330,6 +340,7 @@ describe("the source entry", () => {
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
+    children.push(child);
     let output = "";
     child.stderr.on("data", (chunk: Buffer) => (output += chunk.toString()));
     const port = await new Promise<number>((resolve, reject) => {

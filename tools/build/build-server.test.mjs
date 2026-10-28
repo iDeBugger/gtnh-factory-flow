@@ -28,6 +28,7 @@ function run(dir, env, onOutput) {
     env: childEnv,
     stdio: ["ignore", "pipe", "inherit"],
   });
+  children.push(child);
   let output = "";
   child.stdout.on("data", (chunk) => {
     output += chunk.toString();
@@ -38,7 +39,13 @@ function run(dir, env, onOutput) {
   );
 }
 
+/** Every server a test spawned: one a failed or timed-out test left running is killed before the next test. */
+const children = [];
+
 afterEach(() => {
+  for (const child of children.splice(0)) {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+  }
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
@@ -184,6 +191,7 @@ describe("the built server", () => {
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
+    children.push(child);
     let output = "";
     child.stderr.on("data", (chunk) => (output += chunk));
     const exited = new Promise((resolve) => child.once("exit", resolve));
