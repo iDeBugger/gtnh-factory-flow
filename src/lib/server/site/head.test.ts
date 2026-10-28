@@ -127,6 +127,32 @@ describe("with the community switch on", () => {
     expect(html).toContain(`<meta name="twitter:title" content="${escaped}"/>`);
   });
 
+  it("writes no tag for an empty value, as Next does", () => {
+    const empty = planHead({ ...row, name: "" });
+    const html = renderHead(
+      {
+        ...empty,
+        title: "",
+        description: "",
+        openGraph: { ...empty.openGraph, description: "" },
+        twitter: { ...empty.twitter, description: "" },
+      },
+      ORIGIN,
+    );
+    expect(html).not.toContain("<title>");
+    expect(html).not.toMatch(/content=""/);
+    for (const name of [
+      "description",
+      "og:title",
+      "og:description",
+      "twitter:title",
+      "twitter:description",
+    ]) {
+      expect(html, name).not.toMatch(new RegExp(`(name|property)="${name}"`));
+    }
+    expect(html).toContain('<meta property="og:site_name" content="GTNH Planner"/>');
+  });
+
   it("links a plan id that needs escaping as Next's URL resolution writes it", () => {
     const html = renderHead(planHead({ ...row, id: `a b&"'` }), ORIGIN);
     expect(html).toContain(`<link rel="canonical" href="${ORIGIN}/?plan=a%20b%26%22%27"/>`);

@@ -145,8 +145,11 @@ function versioned(path: string, version: string | undefined): string {
   return version ? `${path}?${version}` : path;
 }
 
+/** A meta tag, or nothing when its value is empty: Next writes no tag for an empty value. */
 const meta = (key: "name" | "property", name: string, content: string) =>
-  `<meta ${key}="${escapeAttribute(name)}" content="${escapeAttribute(content)}"/>`;
+  content === ""
+    ? ""
+    : `<meta ${key}="${escapeAttribute(name)}" content="${escapeAttribute(content)}"/>`;
 
 const link = (attributes: [string, string][]) =>
   `<link ${attributes.map(([name, value]) => `${name}="${escapeAttribute(value)}"`).join(" ")}/>`;
@@ -186,7 +189,7 @@ export function renderMetadataTags(
 ): string {
   const tags = [
     meta("name", "theme-color", THEME_COLOR),
-    `<title>${escapeHtml(head.title)}</title>`,
+    head.title === "" ? "" : `<title>${escapeHtml(head.title)}</title>`,
     meta("name", "description", head.description),
     meta("name", "application-name", SITE_NAME),
     link([
