@@ -14,7 +14,7 @@ export interface ShutdownOptions {
 /** The longest the release may take, so a hung pool never outlives the stop (grace + this stays under compose's 30 s stop timeout). */
 const CLOSE_BOUND_MS = 2_000;
 
-/** The exit code of a process stopped by the signal, 128 plus its number, as Next's server exits. */
+/** The exit code of a process stopped by the signal, 128 plus its number, the shell's convention, as `docker stop` reports it. */
 const SIGNAL_EXIT: Record<"SIGTERM" | "SIGINT", number> = { SIGTERM: 143, SIGINT: 130 };
 
 /**

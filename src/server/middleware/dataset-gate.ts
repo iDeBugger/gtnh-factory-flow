@@ -7,7 +7,7 @@ const REFUSED_BODY = JSON.stringify({ error: "Invalid dataset path." });
 /**
  * The dataset path gate (dataset-path-gate.ts) on the canonical path: the WHATWG pathname Next's proxy saw, dot
  * segments resolved and every percent escape kept, so each encoded spelling is still refused.
- * - A refusal answers 400 no-store. It varies on the encoding, as Next's compression marked its proxy's answers.
+ * - A refusal answers 400 no-store, varying on the encoding (`Vary: Accept-Encoding`), as the parity fixtures pin.
  * - A rewrite points the request at the dataset-files route, the original query kept. As Next's proxy did, the
  *   answer names the new path in `x-middleware-rewrite`.
  */

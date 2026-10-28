@@ -261,7 +261,8 @@ function clientWentAway(res: ExpressResponse): boolean {
 
 /**
  * The headers a route's answer adds to what is already on the answer. Any other header the answer already carries
- * (the security headers) wins over the route's own of the same name, as in Next's `sendResponse`.
+ * (the security headers) wins over the route's own of the same name, so a route can never weaken the site's
+ * headers (the parity fixtures pin it).
  */
 const REPEATABLE_HEADERS = new Set([
   "set-cookie",

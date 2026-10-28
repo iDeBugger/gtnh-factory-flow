@@ -104,7 +104,11 @@ export const workerPolicy =
  */
 export const STRICT_TRANSPORT_SECURITY = "max-age=15552000";
 
-/** The paths whose answers carry `workerPolicy`: the client build's assets. */
+/**
+ * The paths whose answers carry `workerPolicy`: the client build's assets. Matched case-sensitively, as the router
+ * matches the asset mount: any other spelling (`/ASSETS/x.js`) is the site's HTML 404, which keeps the page's
+ * stricter policy.
+ */
 const WORKER_POLICY_PREFIXES = ["/assets"];
 
 /**

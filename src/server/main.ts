@@ -20,7 +20,7 @@ import { installShutdown } from "./shutdown";
 export interface StartOptions {
   /** `PORT`, else 3000. 0 takes a free port (the result names it). */
   port?: number;
-  /** `HOSTNAME`, else 0.0.0.0, as Next's `server.js` listens. */
+  /** `HOSTNAME`, else 0.0.0.0: in the container, Caddy reaches the server through the published port. */
   host?: string;
   /** The folder holding `dist/client`, `public` and the site files. */
   cwd?: string;

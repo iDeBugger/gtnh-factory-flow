@@ -75,7 +75,7 @@ Options and steps:
    1. Textures first, additively, straight into the served directory: `rsync -a --ignore-existing`. Never
       `--delete`, never a staged swap of `textures/`, never removing a file there. Texture URLs
       are served immutable for a year: a browser or Cloudflare holding an old URL keeps asking
-      for it, and saved plans' own icons, card overrides, OG cards, cached recipe responses and
+      for it, and saved plans' own icons, card overrides, cached recipe responses and
       the power maps (`src/lib/power/data/*.json`) name old files. A content name never changes
       its bytes, so `--ignore-existing` is safe, and the served directory grows by the changed
       icons on each publish. The first publish with content names renames every icon once.

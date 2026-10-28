@@ -1,7 +1,7 @@
 /**
- * A value loaded at most once per `ttlMs`, held in memory only, as Next's
- * revalidation does with `isrFlushToDisk: false` (the sitemap and llms.txt,
- * `revalidate = 3600`):
+ * A value loaded at most once per `ttlMs`, held in memory only, never on
+ * disk, since the image's filesystem is read-only (the sitemap and llms.txt,
+ * for an hour):
  * - the first call waits for the load, and calls during it share that load;
  * - once the value is older than `ttlMs`, a call gets the old value at once
  *   and starts one reload in the background;

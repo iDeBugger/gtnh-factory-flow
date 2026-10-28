@@ -14,7 +14,7 @@ function headerOf(req: Request, name: string): string | null {
  * Refuses a cross-site write to the API (cross-site.ts) with 403. It reads the canonical path only, the pathname
  * Next's proxy checked: `/x/../api/...` and `/x/%2e%2e/api/...` are the API, `/API/...` is not (it matches no
  * route and answers 404), and the `//` and trailing-slash spellings were redirected before this runs. The
- * answer says it varies on the encoding, as Next's compression marked its proxy's answers.
+ * answer says it varies on the encoding (`Vary: Accept-Encoding`), as the parity fixtures pin.
  */
 export function crossSiteWriteGuard(): RequestHandler {
   return (req, res, next) => {

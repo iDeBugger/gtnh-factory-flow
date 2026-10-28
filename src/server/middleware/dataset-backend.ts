@@ -1,6 +1,6 @@
 /**
  * A development server without datasets of its own forwards the dataset requests to another instance of this app
- * (`GTNH_DATASET_BACKEND_URL`), as Next's `beforeFiles` rewrites did. It runs after the dataset gate, so the index
+ * (`GTNH_DATASET_BACKEND_URL`), before the static files are looked up. It runs after the dataset gate, so the index
  * gzips, the shards, the client files and the raw recipes file have already gone to the local dataset-files route;
  * only the content-named textures among them are forwarded from there.
  *
@@ -33,7 +33,7 @@ const HOP_BY_HOP = new Set([
   "upgrade",
 ]);
 
-/** How long the backend may take to answer, as Next's proxy allowed. */
+/** How long the backend may take to answer before the request fails. */
 const BACKEND_TIMEOUT_MS = 30_000;
 
 /** The backend path a request path is forwarded to, or undefined when it stays local. */

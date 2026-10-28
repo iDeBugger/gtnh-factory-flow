@@ -50,8 +50,9 @@ Longer references, read on demand: `docs/power-planner-math.md` (the decoded pow
 8. Non-UI `src/lib` never imports the UI or the stores.
 9. Only the data layer (`lib/server/{db,repos}`) in `src/` loads `kysely`, `pg` or
    `db/client.ts`.
-14. Only `src/server/**` (and `tools/`) imports `express`; only `src/server/dev.ts` (and
-    `tools/`, `vite.config.ts`) imports `vite`; nothing imports `next`. No exceptions.
+
+Rule 14: only `src/server/**` (and `tools/`) imports `express`; only `src/server/dev.ts` (and
+`tools/`, `vite.config.ts`) imports `vite`; nothing imports `next`. No exceptions.
 
 Services (`lib/server/services`) never import `express` or `next`, with no exceptions, and the
 live service never loads `auth/passwords.ts`. The data layer alone holds queries and SQL; the rules
