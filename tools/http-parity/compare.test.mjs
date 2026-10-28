@@ -175,7 +175,7 @@ describe("diffCases", () => {
       expect(diffCases(vary(router), vary("Accept-Encoding"), ALLOW)).toHaveLength(1);
     });
 
-    it("lets only the default font keep its preload in Link (I27)", () => {
+    it("lets only the default font keep its preload in Link", () => {
       const font = (hash) =>
         `<<asset:${hash}>>; rel=preload; as="font"; crossorigin=""; type="font/woff2"`;
       const style = '<<asset:5151aaaa>>; rel=preload; as="style"';
@@ -209,7 +209,7 @@ describe("diffCases", () => {
       expect(diffCases(page, express("page /", 200), ALLOW)).toHaveLength(1);
     });
 
-    it("allows the year of shared caching only on the 404s Next served from its cache (R140, R149)", () => {
+    it("allows the year of shared caching only on the 404s Next served from its cache", () => {
       const NO_STORE = "private, no-cache, no-store, max-age=0, must-revalidate";
       const cached = (name, status, value) =>
         stored({ name, status, headers: [["cache-control", value]] });
@@ -237,7 +237,7 @@ describe("diffCases", () => {
       ).toHaveLength(1);
     });
 
-    it("allows Connection: close only on the two over-cap uploads (R128)", () => {
+    it("allows Connection: close only on the two over-cap uploads", () => {
       const connection = (name, value) =>
         stored({ name, status: 413, headers: [["connection", value]] });
       for (const name of ["cap login 17 KiB chunked", "cap board image 6 MiB"]) {

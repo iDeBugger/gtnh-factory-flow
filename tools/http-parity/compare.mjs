@@ -124,7 +124,7 @@ export const TRANSFORMS = {
     ];
   },
   /**
-   * I27: only the named font files keep their preload. Side A's `Link` items
+   * Only the named font files keep their preload (the default face). Side A's `Link` items
    * are filtered to its non-font items and the kept fonts, in order, and must
    * then equal side B's exactly, so a dropped or added stylesheet preload, or
    * any other font, still fails. An entry's `dropAs` (for example

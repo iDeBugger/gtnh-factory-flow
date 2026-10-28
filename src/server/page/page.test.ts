@@ -332,7 +332,7 @@ describe("with the community switch off", () => {
   });
 
   it("404s /community with the switch off, where Next's 404 alone was cached for a year", async () => {
-    // The year of shared caching is the one difference, and the allow list names it (R149).
+    // The year of shared caching is the one difference, and the allow list names it as intended.
     for (const name of ["page /community", "page /community?plan=x"]) {
       expect(await againstNext(server, "off", name), name).toEqual([]);
       expect(NEXT.off[name]!.headers).toContainEqual(["cache-control", "s-maxage=31536000"]);
@@ -398,7 +398,7 @@ describe("with the community switch on", () => {
     for (const name of ["page /community", "page /community?plan=x"]) {
       // Next's 307 also preloaded its error document's two stylesheets, which a browser following the redirect
       // never uses. The page's stylesheet is a file of the build, so the 307 names only the font.
-      // The allow list names that drop (R149), and the fonts follow I27.
+      // The allow list names that drop as intended, and only the default face keeps its font preload.
       expect(await againstNext(server, "on", name), name).toEqual([]);
       expect(NEXT.on[name]!.headers.find(([key]) => key === "link")![1]).toMatch(
         /<<asset:c9407645>>; rel=preload; as="font"; crossorigin=""; type="font\/woff2", .*, <<asset:401f8660>>; rel=preload; as="style", <<asset:d70d050a>>; rel=preload; as="style"$/,
@@ -509,7 +509,7 @@ describe("with the community switch on", () => {
   it("sends the Link preload header Next sent, by asset bytes", async () => {
     const answer = await call(server.port, "GET", "/");
     const link = header(answer, "link")!.replace("/assets/inter-latin-T.woff2", INTER_ASSET);
-    // Inter's latin file is the item Next sent as <asset:c9407645>, the one I27 keeps.
+    // Inter's latin file is the item Next sent as <asset:c9407645>, the one font whose preload stays.
     expect(link).toBe(
       '<<asset:c9407645>>; rel=preload; as="font"; crossorigin=""; type="font/woff2"',
     );

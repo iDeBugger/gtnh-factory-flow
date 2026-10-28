@@ -43,7 +43,7 @@
     "field": "headers.link",
     "transform": "link-keep-fonts",
     "keep": ["<asset:c9407645>"],
-    "reason": "I27: only the default face keeps its preload (Inter's latin file, which Next names 83afe278b6a6bb3c-s.p.*.woff2). Every other Link item stays compared."
+    "reason": "Only the default face keeps its font preload, as intended (Inter's latin file, which Next names 83afe278b6a6bb3c-s.p.*.woff2). Every other Link item stays compared."
   },
   {
     "case": ".*",
@@ -65,7 +65,7 @@
     "field": "headers.connection",
     "a": "keep-alive",
     "b": "close",
-    "reason": "R128. Hop by hop: the body is over the route's 16 KiB cap and its end (the last chunk) had not arrived when the 413 was written, so the server drains it and closes. Next read the whole body before the route ran. Sent in one write, the same request keeps the connection on both servers. Caddy drops the header."
+    "reason": "Hop by hop, ruled as intended: the body is over the route's 16 KiB cap and its end (the last chunk) had not arrived when the 413 was written, so the server drains it and closes. Next read the whole body before the route ran. Sent in one write, the same request keeps the connection on both servers. Caddy drops the header."
   },
   {
     "case": "page /community(\\?plan=x)?|site /dev/clean-card",
@@ -73,7 +73,7 @@
     "field": "headers.cache-control",
     "a": "s-maxage=31536000",
     "b": "private, no-cache, no-store, max-age=0, must-revalidate",
-    "reason": "R149. Next served these pages' prerendered 404 (/community with the switch off, the dev page in production) from its static cache with a year of shared caching. Express answers its plain no-store 404."
+    "reason": "Ruled as intended: Next served these pages' prerendered 404 (/community with the switch off, the dev page in production) from its static cache with a year of shared caching. Express answers its plain no-store 404."
   },
   {
     "case": "spelling /api/%76ersion",
@@ -81,7 +81,7 @@
     "field": "headers.cache-control",
     "a": "s-maxage=31536000",
     "b": "private, no-cache, no-store, max-age=0, must-revalidate",
-    "reason": "R140. Next looked the decoded path up in its prerender cache and put the cached route's s-maxage on the 404 of an escaped path. Express answers its plain no-store 404."
+    "reason": "Ruled as intended: Next looked the decoded path up in its prerender cache and put the cached route's s-maxage on the 404 of an escaped path. Express answers its plain no-store 404."
   },
   {
     "case": "page /community(\\?plan=x)?|scenario page /community\\?plan=",
@@ -90,7 +90,7 @@
     "transform": "link-keep-fonts",
     "keep": ["<asset:c9407645>"],
     "dropAs": ["style"],
-    "reason": "R149 and I27. Next's 307 from /community listed its error document's stylesheet preloads; a browser following the redirect never uses them, and Express sends none. The font items follow I27 as on the page."
+    "reason": "Ruled as intended: Next's 307 from /community listed its error document's stylesheet preloads; a browser following the redirect never uses them, and Express sends none. Only the default face keeps its font preload, as on the page."
   },
   {
     "case": "nextOnly .*",
