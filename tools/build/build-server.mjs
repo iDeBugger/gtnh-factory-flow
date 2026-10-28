@@ -12,14 +12,18 @@ import { serverDefines } from "./define.mjs";
  *
  * The bundle is two files:
  * - `app.mjs`, the bundle of src/server/main.ts, which exports `startServer` and never listens on import;
- * - `server.mjs` (`writeEntry`), which sets NODE_ENV and only then imports `app.mjs`. ESM evaluates every
+ * - `server.mjs` (`writeEntry`), which sets NODE_ENV to production and only then imports `app.mjs`. ESM evaluates every
  *   static import before a module's body, and a package such as `react/jsx-runtime` picks its development or
  *   production build when it loads, so a first line inside the bundle would run too late. Next's `server.js`
  *   sets NODE_ENV before it requires anything for the same reason.
  */
 
-/** The entry's text: NODE_ENV first, a value the caller set kept, then the server. */
-export const ENTRY_SOURCE = `process.env.NODE_ENV ??= "production";
+/**
+ * The entry's text: NODE_ENV first, then the server. It is production whatever the caller set, as Next's
+ * `server.js` assigns it: the bundle is a production build, and a stray NODE_ENV in a container's env would
+ * otherwise load React's development builds and serve the development policy ('unsafe-inline', 'unsafe-eval').
+ */
+export const ENTRY_SOURCE = `process.env.NODE_ENV = "production";
 const { startServer } = await import("./app.mjs");
 await startServer();
 `;
@@ -69,11 +73,12 @@ export function serverEnv(clientDir, env) {
 }
 
 /**
- * @param {{ root?: string, outDir?: string, env?: Record<string, string | undefined> }} [options]
+ * @param {{ root?: string, outDir?: string, clientDir?: string, env?: Record<string, string | undefined> }} [options]
  */
 export async function buildServer({
   root = process.cwd(),
   outDir = path.join(root, "dist", "server"),
+  clientDir = path.join(root, "dist", "client"),
   env = process.env,
 } = {}) {
   await build({
@@ -86,7 +91,7 @@ export async function buildServer({
     packages: "external",
     outfile: path.join(outDir, "app.mjs"),
     metafile: true,
-    define: serverDefines(serverEnv(path.join(root, "dist", "client"), env)),
+    define: serverDefines(serverEnv(clientDir, env)),
     logLevel: "warning",
   }).then((result) => {
     writeFileSync(path.join(outDir, "meta.json"), JSON.stringify(result.metafile));
