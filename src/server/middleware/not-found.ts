@@ -54,21 +54,17 @@ export function revalidatedMethodNotAllowed(): RequestHandler {
 /** Next's no-store rule for its not-found page. */
 const NOT_FOUND_CACHE_CONTROL = "private, no-cache, no-store, max-age=0, must-revalidate";
 
-/** What Next's not-found page says, as a page of its own. */
-const NOT_FOUND_PAGE =
-  '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
-  '<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">' +
-  "<title>404: This page could not be found.</title></head>" +
-  "<body><h1>404</h1><h2>This page could not be found.</h2></body></html>";
-
-/** Any path no route, file or page answered. */
-export function notFound(): RequestHandler {
+/**
+ * Any path no route, file or page answered. `page` renders the not-found page (page/not-found-page.ts) per
+ * answer, as the home page renders its head, so it reads the site's address and community switch when it answers.
+ */
+export function notFound(page: () => string): RequestHandler {
   return (_req, res) => {
     res.statusCode = 404;
     res.setHeader("cache-control", NOT_FOUND_CACHE_CONTROL);
     res.setHeader("vary", "Accept-Encoding");
     res.setHeader("content-type", "text/html; charset=utf-8");
-    res.end(NOT_FOUND_PAGE);
+    res.end(page());
   };
 }
 

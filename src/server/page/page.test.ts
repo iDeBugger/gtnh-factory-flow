@@ -11,11 +11,17 @@ import {
   type AllowEntry,
   type StoredCase,
 } from "../../../tools/http-parity/compare.mjs";
+import {
+  metadataTags as harnessTags,
+  shellMarkup,
+} from "../../../tools/http-parity/head-compare.mjs";
 import type { RawAnswer } from "../../../tools/http-parity/requests.mjs";
 import { documentPolicy } from "../../../security-headers.config";
+import nextAnswers from "../__fixtures__/next-answers.json";
 import pageAnswers from "../__fixtures__/next-page-answers.json";
 import { createApp } from "../app";
 import { call, listen, type Listening } from "../test-support/serve";
+import { NOT_FOUND_BODY, renderNotFoundPage } from "./not-found-page";
 import { loadPageTemplate, renderPage, type PageTemplate } from "./template";
 
 const getPublicPlanRow = vi.fn<(id: string) => Promise<PlanRow | undefined>>();
@@ -48,6 +54,9 @@ vi.mock("@/lib/server/site/site-files", async (importOriginal) => {
 
 const ALLOW = allowJson as AllowEntry[];
 const NEXT = pageAnswers as unknown as Record<"off" | "on", Record<string, StoredCase>>;
+/** Next's not-found page as captured, the whole HTML (`__fixtures__/next-answers.json`). */
+const NEXT_NOT_FOUND = (nextAnswers as unknown as { notFound: { body: { text: string } } }).notFound
+  .body.text;
 const SITE = "http://127.0.0.1:3770";
 const PLAN_ID = "00000000-0000-4000-8000-0000000000c1";
 const HASHES = [
@@ -264,6 +273,37 @@ describe("with the community switch off", () => {
     server = await serve("off");
   });
   afterAll(() => server.close());
+
+  it("answers a missing page with Next's not-found head and markup, and runs no module script", async () => {
+    const answer = await call(server.port, "GET", "/no-such-page");
+    expect(answer.status).toBe(404);
+    const html = answer.body.toString("utf8");
+    // The site head with noindex first and the 404 title last, tag for tag as Next wrote it.
+    expect(harnessTags(html)).toEqual(harnessTags(NEXT_NOT_FOUND));
+    expect(harnessTags(html)[2]).toBe('<meta name="robots" content="noindex"/>');
+    expect(harnessTags(html)[4]).toBe(
+      "<title>GTNH Planner | GregTech New Horizons Factory Calculator</title>",
+    );
+    expect(harnessTags(html).at(-1)).toBe("<title>404: This page could not be found.</title>");
+    expect(shellMarkup(NEXT_NOT_FOUND).endsWith(NOT_FOUND_BODY)).toBe(true);
+    expect(shellMarkup(html)).toBe(
+      `<body class="min-h-full"><script>boot()</script>${NOT_FOUND_BODY}`,
+    );
+    expect(html).not.toContain('type="module"');
+    expect(html).toContain('<link rel="stylesheet" crossorigin href="/assets/index-T.css">');
+  });
+
+  it("gives a bare app without the built page the same not-found head and markup", () => {
+    const html = renderNotFoundPage();
+    // Without the built page there are no cache-buster queries to name.
+    const unversioned = harnessTags(NEXT_NOT_FOUND).map((tag) =>
+      tag.replace(/\?(?:opengraph-image|favicon)\.<hash>/, ""),
+    );
+    expect(harnessTags(html)).toEqual(unversioned);
+    expect(shellMarkup(html)).toBe(
+      `<body class="min-h-full">${NOT_FOUND_BODY}</body>`.replace("</body>", ""),
+    );
+  });
 
   it("serves / with the site head, the shell and Next's cache-control", async () => {
     for (const name of ["page /", "HEAD /", "OPTIONS /"]) {

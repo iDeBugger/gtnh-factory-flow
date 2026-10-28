@@ -27,6 +27,7 @@ import {
 } from "./middleware/not-found";
 import { securityHeaders } from "./middleware/security-headers";
 import { clientAssets, datasetPublicFiles, publicFiles } from "./middleware/static";
+import { renderNotFoundPage } from "./page/not-found-page";
 import { communityRedirect } from "./page/community";
 import { homePage } from "./page/home";
 import { siteRoutes } from "./page/site-routes";
@@ -161,7 +162,8 @@ export function createApp(options: AppOptions): Express {
     app.all("/community", communityRedirect(options.template));
   }
 
-  app.use(notFound());
+  const template = options.template;
+  app.use(notFound(() => renderNotFoundPage(template)));
   app.use(errorHandler(env, drain));
   return app;
 }
