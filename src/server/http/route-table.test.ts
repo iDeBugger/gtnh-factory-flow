@@ -57,7 +57,7 @@ const h: WebHandler = () => new Response(null);
 describe("the route table", () => {
   it("registers every route file under src/app at the path its folders name", () => {
     const files = globRouteFiles("src/app");
-    expect(files.length).toBe(38);
+    expect(files.length).toBe(37);
     expect(ROUTES.map((r) => r.source).sort()).toEqual(files.sort());
     for (const route of ROUTES) expect(route.path).toBe(routePathForFile(route.source));
   });
@@ -82,7 +82,7 @@ describe("the route table", () => {
     expect(routePathForFile("src/app/dataset-files/[versionId]/[...assetPath]/route.ts")).toBe(
       "/dataset-files/:versionId/*assetPath",
     );
-    expect(routePathForFile("src/app/llms.txt/route.ts")).toBe("/llms.txt");
+    expect(routePathForFile("src/app/robots.txt/route.ts")).toBe("/robots.txt");
     expect(routePathForFile("src/app/api/version/route.tsx")).toBe("/api/version");
     expect(routePathForFile("src/app/api/version/route.js")).toBe("/api/version");
     expect(routePathForFile("src/app/api/version/route.jsx")).toBe("/api/version");
@@ -124,7 +124,6 @@ describe("the route table", () => {
     }
     expect(ROUTES.filter((route) => route.serving).map((route) => route.source)).toEqual([
       "src/app/api/highs/[file]/route.ts",
-      "src/app/llms.txt/route.ts",
     ]);
   });
 

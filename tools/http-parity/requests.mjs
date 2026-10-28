@@ -569,16 +569,6 @@ const ROUTES = [
       ],
     },
   },
-  {
-    route: "/llms.txt",
-    path: "/llms.txt",
-    methods: {
-      GET: [
-        ["valid", {}],
-        ["invalid", { suffix: "?x=1" }],
-      ],
-    },
-  },
 ];
 
 export const ROUTE_TABLE = ROUTES.map(({ route, path, methods }) => ({
@@ -617,6 +607,18 @@ for (const spec of ROUTES) {
     method: "OPTIONS",
     target: spec.path,
   });
+}
+
+// llms.txt is a site file, answered from memory ahead of the routes, but keeps the route case names and methods
+// it was captured under.
+for (const [name, method, target] of [
+  ["route GET /llms.txt valid", "GET", "/llms.txt"],
+  ["route GET /llms.txt invalid", "GET", "/llms.txt?x=1"],
+  ["route PATCH /llms.txt unexported", "PATCH", "/llms.txt"],
+  ["route HEAD /llms.txt", "HEAD", "/llms.txt"],
+  ["route OPTIONS /llms.txt", "OPTIONS", "/llms.txt"],
+]) {
+  add({ name, method, target });
 }
 
 // Pages and site files.

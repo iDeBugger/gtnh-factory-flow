@@ -41,7 +41,6 @@ import * as apiResourcePopularity from "@/app/api/resource-popularity/route";
 import * as apiVersion from "@/app/api/version/route";
 import * as datasetFilesVersionIdAssetPath from "@/app/dataset-files/[versionId]/[...assetPath]/route";
 import * as datasetsGtnhVersionIdTexturesAssetPath from "@/app/datasets/gtnh/[versionId]/textures/[...assetPath]/route";
-import * as llmsTxt from "@/app/llms.txt/route";
 
 export type HttpMethod = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
 
@@ -52,14 +51,11 @@ export type WebHandler = (request: Request, context: RouteContext) => Response |
 export type RouteModule = Partial<Record<HttpMethod, WebHandler>>;
 
 /**
- * How Next served a route its segment config made static, which shows on the wire. Named in the table by hand;
- * the test holds it to each file's segment config.
- * - `"static"` (`dynamic = "force-static"`): every method gets the GET answer, and an answer with no
- *   Cache-Control of its own gets `s-maxage=31536000`;
- * - `"revalidate"` (`revalidate` above 0): GET and HEAD only; any other method, OPTIONS included, answers 405
- *   with `Allow: GET` and `Allow: HEAD` as two lines and the body `Method Not Allowed`.
+ * How Next served a route its segment config made static, which shows on the wire. Named in the table by hand:
+ * `"static"` (`dynamic = "force-static"`) gives every method the GET answer, and an answer with no Cache-Control
+ * of its own gets `s-maxage=31536000`.
  */
-export type NextServing = "static" | "revalidate";
+export type NextServing = "static";
 
 export interface RouteEntry {
   /** The Express 5 path: `:name` for `[name]`, `*name` for `[...name]`. */
@@ -74,7 +70,7 @@ const METHODS: readonly HttpMethod[] = ["GET", "HEAD", "POST", "PUT", "PATCH", "
 
 /**
  * The Express 5 path a route file's folders name: `[id]` becomes `:id` and
- * `[...rest]` becomes `*rest`. Other folder names, `llms.txt` included, are
+ * `[...rest]` becomes `*rest`. Other folder names, dotted ones included, are
  * literal segments.
  */
 export function routePathForFile(file: string): string {
@@ -228,5 +224,4 @@ export const ROUTES: readonly RouteEntry[] = [
     "src/app/datasets/gtnh/[versionId]/textures/[...assetPath]/route.ts",
     datasetsGtnhVersionIdTexturesAssetPath,
   ),
-  entry("src/app/llms.txt/route.ts", llmsTxt, "revalidate"),
 ];

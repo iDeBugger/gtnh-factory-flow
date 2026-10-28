@@ -99,6 +99,7 @@ beforeAll(async () => {
       ...options,
       before: [libraryErrors],
       extraRoutes: [throwing, param, handlerUriError],
+      siteFilesDir: path.resolve(import.meta.dirname, "../app"),
     }),
   );
   const deferred = new Promise<void>((resolve) => {
@@ -247,7 +248,8 @@ describe("the app against Next's answers", () => {
   /*
    * Next served these two from its prerender cache, and the cache shows on the wire: the force-static HiGHS route
    * answers every method with the GET answer and puts a year's s-maxage on a 404 that names no Cache-Control,
-   * and the revalidating llms.txt answers any other method with the cache's own 405.
+   * and the revalidating llms.txt (a site file now, answered from memory) answers any other method with the
+   * cache's own 405.
    */
   it("answers the routes Next served from its cache as Next did, for every method", async () => {
     expect(NEXT.served.length).toBe(10);

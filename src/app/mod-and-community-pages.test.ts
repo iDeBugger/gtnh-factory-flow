@@ -29,7 +29,7 @@ vi.mock("@/components/FactoryPlannerApp", () => ({ FactoryPlannerApp: () => null
 
 import sitemap from "./sitemap";
 import robots from "./robots";
-import { GET as llms } from "./llms.txt/route";
+import { llmsText } from "@/lib/server/site/site-files";
 import Home, { generateMetadata } from "./page";
 import { renderToStaticMarkup } from "react-dom/server";
 import CommunityRedirect from "./community/page";
@@ -93,7 +93,7 @@ describe("copy names both served versions", () => {
     const noscript = renderToStaticMarkup(Home());
     expect(noscript).toContain("full recipe data for GTNH 2.9 and 2.8.1,");
     expect(noscript.toLowerCase()).not.toContain("community");
-    const text = await (await llms()).text();
+    const text = await llmsText();
     expect(text).toContain("- Carries full recipe data for GTNH 2.9 and 2.8.1, exported from the game itself");
   });
 });
@@ -113,7 +113,7 @@ describe("with the setting unset", () => {
   });
 
   it("llms.txt names no community plan and no community", async () => {
-    const text = await (await llms()).text();
+    const text = await llmsText();
     expect(text).not.toContain("?plan=");
     expect(text.toLowerCase()).not.toContain("community");
     expect(text).toContain("balance machine ratios, and compute EU/t power draw and throughput. No account");
@@ -151,7 +151,7 @@ describe("with the setting on", () => {
     const entries = await sitemap();
     expect(entries.map((entry) => entry.url)).toContain(`https://stage.gtnhplanner.idebugger.net/?plan=${PUBLIC_ID}`);
     expect(entries.map((entry) => entry.url)).not.toContain(`https://stage.gtnhplanner.idebugger.net/?plan=${PRIVATE_ID}`);
-    const text = await (await llms()).text();
+    const text = await llmsText();
     expect(text).toContain("## Popular community plans");
     expect(text).toContain(`- [Steel line](https://stage.gtnhplanner.idebugger.net/?plan=${PUBLIC_ID}): Makes steel`);
     expect(text).not.toContain(PRIVATE_ID);
@@ -166,9 +166,7 @@ describe("with the setting on", () => {
       try {
         const entries = await sitemap();
         expect(entries.map((entry) => entry.url)).toEqual(["https://stage.gtnhplanner.idebugger.net/"]);
-        const answer = await llms();
-        expect(answer.status).toBe(200);
-        const text = await answer.text();
+        const text = await llmsText();
         expect(text).not.toContain("## Popular community plans");
         expect(text).not.toContain("?plan=");
         expect(text).toContain("share plans with the community");

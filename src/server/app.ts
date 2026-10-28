@@ -22,7 +22,6 @@ import {
   methodNotAllowed,
   notFound,
   optionsAnswer,
-  revalidatedMethodNotAllowed,
   ServerNotReadyError,
 } from "./middleware/not-found";
 import { securityHeaders } from "./middleware/security-headers";
@@ -91,11 +90,6 @@ function mountRoute(app: Express, route: RouteEntry, drain: DrainBounds): void {
     );
     return;
   }
-  if (route.serving === "revalidate") {
-    if (route.module.GET) app.get(route.path, handle(route.module.GET, { drain }));
-    app.all(route.path, revalidatedMethodNotAllowed());
-    return;
-  }
   for (const [method, handler] of Object.entries(route.module)) {
     if (handler) app[EXPRESS_METHOD[method as HttpMethod]](route.path, handle(handler, { drain }));
   }
@@ -153,7 +147,6 @@ export function createApp(options: AppOptions): Express {
   app.use(publicFiles(options.publicDir));
   app.use(datasetPublicFiles(options.datasetsDir));
 
-  // Ahead of the table: llms.txt is answered here from memory, and its table entry is never reached.
   if (options.siteFilesDir) app.use(siteRoutes({ filesDir: options.siteFilesDir }));
   const drain = options.drain ?? DEFAULT_DRAIN;
   for (const route of [...(options.extraRoutes ?? []), ...ROUTES]) mountRoute(app, route, drain);

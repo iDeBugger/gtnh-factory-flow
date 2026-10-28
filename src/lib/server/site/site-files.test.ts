@@ -94,4 +94,29 @@ describe("with the community switch on", () => {
     expect(text).toContain("## Popular community plans");
     expect(text).toContain(`- [Steel](${ORIGIN}/?plan=p%201): Makes steel`);
   });
+
+  it("lists a plan whose name and description hold markdown as one plain link line", async () => {
+    const kept = plans.splice(0, plans.length, {
+      id: "p1",
+      name: "Evil](https://evil.example) [x",
+      description: "Line one\n\n- [Injected](https://evil.example)",
+      updated_at: null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      machine_count: 3,
+    });
+    try {
+      const body = await llmsText();
+      const planLines = body
+        .split("\n")
+        .filter((line) => line.startsWith("- [") && line.includes("?plan="));
+      expect(planLines).toHaveLength(1);
+      expect(planLines[0]).toMatch(
+        /^- \[Evil\\\]\\\(https:\/\/evil\.example\\\) \\\[x\]\(http:\/\/127\.0\.0\.1:3770\/\?plan=p1\): /,
+      );
+      expect(body).not.toContain("](https://evil.example)");
+      expect(body).not.toMatch(/^- \[Injected/m);
+    } finally {
+      plans.splice(0, plans.length, ...kept);
+    }
+  });
 });
