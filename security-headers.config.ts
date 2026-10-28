@@ -34,6 +34,12 @@ export interface SecurityHeaderEnv {
   siteUrl?: string;
   /** NEXT_PUBLIC_MOD_AND_COMMUNITY at build: exactly "on" (any case, trimmed) adds the mod's loopback origins. */
   modAndCommunity?: string;
+  /**
+   * The quoted `'sha256-...'` sources of every inline script the page carries. A page whose inline scripts
+   * are fixed at build (no streamed payload) lists them, and in production `script-src` then names them
+   * instead of `'unsafe-inline'`. Absent or empty, the policy keeps `'unsafe-inline'`.
+   */
+  scriptHashes?: string[];
 }
 
 /**
@@ -47,7 +53,13 @@ export const MOD_LOOPBACK_ORIGINS = Array.from(
 );
 
 export function documentPolicy(env: SecurityHeaderEnv): string {
-  const scriptSources = ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"];
+  // Outside production the dev server injects inline scripts of its own (React Refresh), which no build-time
+  // hash list names, so only production trades 'unsafe-inline' for the hashes.
+  const hashes = env.production ? (env.scriptHashes ?? []) : [];
+  const scriptSources =
+    hashes.length > 0
+      ? ["'self'", ...hashes, "'wasm-unsafe-eval'"]
+      : ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"];
   if (!env.production) {
     scriptSources.push("'unsafe-eval'");
   }
@@ -123,6 +135,25 @@ export function securityHeaders(env: SecurityHeaderEnv): HeaderRule[] {
       headers: [{ key: "Content-Security-Policy", value: workerPolicy }],
     },
   ];
+}
+
+/** The paths whose answers carry `workerPolicy`: Next's static chunks and the Vite build's assets. */
+const WORKER_POLICY_PREFIXES = ["/_next/static", "/assets"];
+
+/**
+ * The security headers one answer carries, for a server without Next's header rules: the site-wide rule,
+ * with the worker policy in place of the document policy under the static chunk folders (the same override
+ * `securityHeaders` gives Next). Names are lower case, as Next sends them, in the site rule's order.
+ */
+export function headersForPath(pathname: string, env: SecurityHeaderEnv): [string, string][] {
+  const worker = WORKER_POLICY_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+  const [siteRule] = securityHeaders(env);
+  return siteRule!.headers.map(({ key, value }) => {
+    const name = key.toLowerCase();
+    return [name, worker && name === "content-security-policy" ? workerPolicy : value];
+  });
 }
 
 /** The origin of an absolute URL with one of `schemes`, else undefined (a path, blank or junk adds nothing). */

@@ -3,6 +3,7 @@ import nextConfig from "../../next.config";
 import { MOD_PORTS } from "./mod-link/mod-link";
 import {
   documentPolicy,
+  headersForPath,
   MOD_LOOPBACK_ORIGINS,
   securityHeaders,
   STRICT_TRANSPORT_SECURITY,
@@ -119,5 +120,53 @@ describe("the header rules", () => {
     // A cache rule by path would beat a route's own header: a missing texture would be kept a year.
     expect(rules).toEqual(expected);
     expect(nextConfig.poweredByHeader).toBe(false);
+  });
+});
+
+describe("the script hashes", () => {
+  it("drop 'unsafe-inline' from script-src in production when the page's hashes are given", () => {
+    const policy = documentPolicy({ production: true, scriptHashes: ["'sha256-abc='"] });
+    expect(policy).toMatch(/script-src 'self' 'sha256-abc=' 'wasm-unsafe-eval'(;|$)/);
+    expect(directive(policy, "script-src")).not.toContain("'unsafe-inline'");
+    expect(documentPolicy({ production: true, scriptHashes: ["'sha256-a='", "'sha256-b='"] })).toContain(
+      "script-src 'self' 'sha256-a=' 'sha256-b=' 'wasm-unsafe-eval';",
+    );
+    // Every other directive is the same policy.
+    expect(policy.replace("'sha256-abc='", "'unsafe-inline'")).toBe(documentPolicy(production));
+    // style-src keeps its own 'unsafe-inline': only scripts are hashed.
+    expect(directive(policy, "style-src")).toBe("style-src 'self' 'unsafe-inline'");
+  });
+
+  it("keep 'unsafe-inline' and 'unsafe-eval' outside production, and with no hashes", () => {
+    expect(directive(documentPolicy({ production: false, scriptHashes: ["'sha256-abc='"] }), "script-src")).toBe(
+      "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval'",
+    );
+    expect(documentPolicy({ production: true, scriptHashes: [] })).toBe(documentPolicy(production));
+    expect(documentPolicy({ production: true, scriptHashes: undefined })).toBe(documentPolicy(production));
+  });
+});
+
+describe("the headers for one path", () => {
+  const env = { production: true, scriptHashes: ["'sha256-abc='"] };
+  const site: [string, string][] = [
+    ["content-security-policy", documentPolicy(env)],
+    ["x-frame-options", "SAMEORIGIN"],
+    ["x-content-type-options", "nosniff"],
+    ["referrer-policy", "strict-origin-when-cross-origin"],
+    ["strict-transport-security", STRICT_TRANSPORT_SECURITY],
+  ];
+
+  it("give the worker policy to /assets/* and /_next/static/*, and the page policy elsewhere", () => {
+    for (const path of ["/assets/solver.worker-abc.js", "/assets", "/_next/static/chunks/x.js", "/_next/static"]) {
+      expect(headersForPath(path, env), path).toEqual([["content-security-policy", workerPolicy], ...site.slice(1)]);
+    }
+    for (const path of ["/", "/api/version", "/assetsx/y.js", "/x/assets/y.js", "/_next/staticx", "/ASSETS/y.js"]) {
+      expect(headersForPath(path, env), path).toEqual(site);
+    }
+  });
+
+  it("are the site rule Next applies, in its order", () => {
+    const [rule] = securityHeaders(env);
+    expect(headersForPath("/", env)).toEqual(rule!.headers.map(({ key, value }) => [key.toLowerCase(), value]));
   });
 });

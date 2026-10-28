@@ -120,11 +120,20 @@ describe("the build identity the config bakes in", () => {
       );
     const source = read("next.config.ts");
     const local = importsOf(source).filter((specifier) => /^(\.|@\/)/.test(specifier));
-    expect(local.sort()).toEqual(["./body-limits.config", "./security-headers.config"]);
+    expect(local.sort()).toEqual([
+      "./body-limits.config",
+      "./security-headers.config",
+      "./tools/build/build-identity.mjs",
+    ]);
     for (const specifier of local) {
-      const module = read(`${specifier.slice(2)}.ts`);
-      expect(module, specifier).not.toMatch(/^\s*import\s(?!type\b)/m);
-      expect(importsOf(module), specifier).toEqual([]);
+      const file = specifier.endsWith(".mjs") ? specifier.slice(2) : `${specifier.slice(2)}.ts`;
+      const text = read(file);
+      // The build identity runs git and reads the version file: Node built-ins only, nothing else.
+      const allowed = file.endsWith(".mjs") ? (name: string) => name.startsWith("node:") : () => false;
+      if (!file.endsWith(".mjs")) {
+        expect(text, specifier).not.toMatch(/^\s*import\s(?!type\b)/m);
+      }
+      expect(importsOf(text).filter((name) => !allowed(name)), specifier).toEqual([]);
     }
     expect(source).not.toMatch(/["']\.\/src\/|["']@\//);
     expect(source).not.toMatch(/require\(\s*["'](\.|@\/)/);

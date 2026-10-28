@@ -1,16 +1,18 @@
 import type { Metadata } from "next";
 import { FactoryPlannerApp } from "@/components/FactoryPlannerApp";
 import { isModAndCommunityOn } from "@/lib/deployment-features";
-import { describePlanRow, getPublicPlanRow } from "@/lib/server/services/plan-preview";
+import { getPublicPlanRow } from "@/lib/server/services/plan-preview";
+import { planHead } from "@/lib/server/site/head";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 /**
- * A shared link unfurls as the plan it carries: its name and the author's
- * words (or the plan's numbers), over the site's own image. Any other visit,
- * and any plan a crawler may not see, falls through to the layout's metadata
- * untouched, as does every visit while the community library is switched off.
+ * A shared link unfurls as the plan it carries (`planHead`): its name and the
+ * author's words (or the plan's numbers), over the site's own image. Any other
+ * visit, and any plan a crawler may not see, falls through to the layout's
+ * metadata untouched, as does every visit while the community library is
+ * switched off.
  */
 export async function generateMetadata({
   searchParams,
@@ -27,24 +29,13 @@ export async function generateMetadata({
     return {};
   }
 
-  const description = describePlanRow(row);
-  const planUrl = `/?plan=${encodeURIComponent(row.id)}`;
+  const head = planHead(row);
   return {
-    title: `${row.name} | GTNH Planner`,
-    description,
-    alternates: { canonical: planUrl },
-    openGraph: {
-      title: row.name,
-      description,
-      siteName: "GTNH Planner",
-      type: "website",
-      url: planUrl,
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: row.name,
-      description,
-    },
+    title: head.title,
+    description: head.description,
+    alternates: { canonical: head.canonical },
+    openGraph: { ...head.openGraph },
+    twitter: { ...head.twitter },
   };
 }
 

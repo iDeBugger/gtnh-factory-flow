@@ -1,9 +1,7 @@
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import type { NextConfig } from "next";
 import { PROXY_BODY_MAX_BYTES } from "./body-limits.config";
 import { securityHeaders } from "./security-headers.config";
+import { buildIdentity } from "./tools/build/build-identity.mjs";
 
 const datasetBackendUrl = process.env.GTNH_DATASET_BACKEND_URL?.replace(/\/+$/, "");
 /** A published dataset name's characters, never starting with a dot (route-pattern syntax). */
@@ -11,65 +9,14 @@ const PUBLISHED_SEGMENT = "[A-Za-z0-9_-][A-Za-z0-9._-]*";
 /** Any API path segment that does not start with a dot or a percent escape. */
 const API_SEGMENT = "[^/.%][^/]*";
 
-/**
- * The build's identity, baked into the server and browser bundles alike: the
- * dataset answers' cache key (`src/lib/datasets/answer-version.ts`), so two
- * builds that share an APP_VERSION never share a cached answer. The deploy
- * passes `GTNH_BUILD_ID` (`<version>-<sha8>`, the same value its image labels
- * and `/api/version` report; a build from `git archive` has no git to ask); a
- * checkout builds `<version>-<sha8>`, with `-dirty` for uncommitted changes.
- * A deploy must do one of the two: with neither, the id falls back to the
- * bare APP_VERSION, and two deploys under one version share year-immutable
- * answer URLs.
- *
- * The version is read as text, never imported: `next start` and the tests load
- * this file outside a build, so it imports only `security-headers.config.ts`
- * and `body-limits.config.ts` beside it, which import nothing
- * (`next-config.test.ts` pins both). The site image's standalone `server.js`
- * reads no config file: it carries this one, serialized at build. Where
- * neither the version nor git is there the value is unused: `env` is inlined
- * at build.
- */
-function buildIdentity(): string {
-  const configured = process.env.GTNH_BUILD_ID?.trim();
-  if (configured) {
-    return configured;
-  }
-  const version = readAppVersion();
-  const sha = git(["rev-parse", "--short=8", "HEAD"]);
-  if (!sha) {
-    return version;
-  }
-  const dirty = git(["status", "--porcelain", "--untracked-files=no"]) ? "-dirty" : "";
-  return `${version}-${sha}${dirty}`;
-}
-
-function readAppVersion(): string {
-  try {
-    const source = readFileSync(path.join(process.cwd(), "src", "lib", "version.ts"), "utf8");
-    return /APP_VERSION\s*=\s*"([^"]+)"/.exec(source)?.[1] ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function git(args: string[]): string {
-  try {
-    return execFileSync("git", args, {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-  } catch {
-    return "";
-  }
-}
-
 const nextConfig: NextConfig = {
   // Always defined at build, so `process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY` is inlined in the browser AND the
   // server bundles as the build's value (unset at build inlines ""). The server then compares it with the
   // running process's (deployment-features.ts), and a build and a unit that disagree leave the routes off.
   env: {
     NEXT_PUBLIC_MOD_AND_COMMUNITY: process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY ?? "",
+    // The dataset answers' cache key (tools/build/build-identity.mjs). The site image's standalone
+    // `server.js` reads no config file: it carries this one, serialized at build, so the value is fixed then.
     NEXT_PUBLIC_GTNH_BUILD_ID: buildIdentity(),
   },
   // The site image runs `.next/standalone/server.js`: the traced server files and only the packages they

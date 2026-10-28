@@ -1,0 +1,6 @@
+User-Agent: *
+Allow: /
+Disallow: /api/
+Disallow: /datasets/
+
+Sitemap: http://127.0.0.1:3770/sitemap.xml
