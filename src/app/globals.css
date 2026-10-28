@@ -1,7 +1,8 @@
 /*
  * Class names come from the app's own source only: src/ without tests, notes and the solver's test corpus.
  * The site image's build context leaves those out (.dockerignore), so a checkout and the image scan the same
- * files and build the same CSS.
+ * files and build the same CSS. The server's fixtures are captured answers (Next's pages, HTML heads) that
+ * tests compare against: their markup is not the app's, and scanning it adds classes no element uses.
  */
 @import "tailwindcss" source("..");
 @source not "../**/*.test.ts";
@@ -9,6 +10,8 @@
 @source not "../**/*.md";
 @source not "../test-support";
 @source not "../lib/solver/plan/__fixtures__/corpus";
+@source not "../server/__fixtures__";
+@source not "../lib/server/site/__fixtures__";
 @import "@xyflow/react/dist/style.css";
 
 /*
