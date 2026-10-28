@@ -76,6 +76,18 @@ describe("the route table", () => {
     expect(routePathForFile("src/app/api/version/route.jsx")).toBe("/api/version");
   });
 
+  it("serves each route with the handlers its own file exports", async () => {
+    const methods = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const;
+    for (const route of ROUTES) {
+      const imported = (await import(path.join(REPO, route.source))) as Record<string, unknown>;
+      const exported = methods.filter((method) => typeof imported[method] === "function");
+      expect(Object.keys(route.module).sort(), route.source).toEqual([...exported].sort());
+      for (const method of exported) {
+        expect(route.module[method] === imported[method], `${method} ${route.source}`).toBe(true);
+      }
+    }
+  });
+
   it("keeps only the method exports of a route module", () => {
     for (const route of ROUTES) {
       expect(Object.keys(route.module).length).toBeGreaterThan(0);
