@@ -82,12 +82,20 @@ describe("ttlMemo", () => {
 
   it("rejects a load that throws before it returns a promise", async () => {
     let fail = true;
-    const memo = ttlMemo(HOUR, async () => {
+    let at = 0;
+    // Not async: the throw happens in the call itself, before any promise exists.
+    const load = (): Promise<string> => {
       if (fail) throw new Error("sync");
-      return "ok";
-    });
+      return Promise.resolve("ok");
+    };
+    const memo = ttlMemo(HOUR, load, () => at);
     await expect(memo()).rejects.toThrow("sync");
     fail = false;
+    expect(await memo()).toBe("ok");
+    // A reload past the TTL that throws the same way keeps the old value.
+    fail = true;
+    at = HOUR;
+    expect(await memo()).toBe("ok");
     expect(await memo()).toBe("ok");
   });
 });
