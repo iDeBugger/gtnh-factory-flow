@@ -4,7 +4,13 @@
  */
 import type { ErrorRequestHandler, RequestHandler, Response } from "express";
 import { headersForPath, type SecurityHeaderEnv } from "../../../security-headers.config";
-import { RouteHandlerError } from "../http/adapter";
+import {
+  DEFAULT_DRAIN,
+  drainUnreadBody,
+  hasUnreadBody,
+  RouteHandlerError,
+  type DrainBounds,
+} from "../http/adapter";
 import { optionsAllow, type RouteModule } from "../http/route-table";
 
 /** A request held for a start that failed. The failure was logged once, where it happened (app.ts). */
@@ -116,9 +122,12 @@ export function sendNextFileError(res: Response): void {
  * Last in the chain. A param decode error answers as Next did; every other error answers Next's own 500: the
  * security headers and an empty body, never a stack. The client keeps its own fallback sentence for a 500. The
  * headers are written here again, so an error raised before the security-header middleware ran still carries
- * them.
+ * them. A request body left unread is drained within the adapter's bounds, then the connection closes.
  */
-export function errorHandler(env: SecurityHeaderEnv): ErrorRequestHandler {
+export function errorHandler(
+  env: SecurityHeaderEnv,
+  drain: DrainBounds = DEFAULT_DRAIN,
+): ErrorRequestHandler {
   // Express knows an error handler by its four parameters, so the unused `next` stays.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return (error: unknown, req, res, _next) => {
@@ -128,6 +137,7 @@ export function errorHandler(env: SecurityHeaderEnv): ErrorRequestHandler {
         return;
       }
       for (const name of res.getHeaderNames()) res.removeHeader(name);
+      if (hasUnreadBody(req)) drainUnreadBody(req, res, drain);
       sendNextPlainError(res);
       return;
     }
@@ -140,6 +150,8 @@ export function errorHandler(env: SecurityHeaderEnv): ErrorRequestHandler {
     }
     for (const name of res.getHeaderNames()) res.removeHeader(name);
     for (const [name, value] of headersForPath(req.path, env)) res.setHeader(name, value);
+    // A handler that failed with the body half read left it paused: drain the rest, then close.
+    if (hasUnreadBody(req)) drainUnreadBody(req, res, drain);
     res.statusCode = 500;
     res.end();
   };

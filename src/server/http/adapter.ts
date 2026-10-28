@@ -66,6 +66,8 @@ export class RouteHandlerError extends Error {
 interface BodyState {
   bytes: number;
   draining: boolean;
+  /** Detaches the handler's body stream, which errors, so the drain alone reads what is left. */
+  abandon?: () => void;
 }
 
 const bodyStates = new WeakMap<IncomingMessage, BodyState>();
@@ -117,6 +119,10 @@ function bodyStream(req: IncomingMessage, capBytes: number): ReadableStream<Uint
             if (!req.complete)
               onError(new Error("The client went away before the request body ended."));
           };
+          state.abandon = () =>
+            settle(() =>
+              controller.error(new Error("The answer was sent before the request body was read.")),
+            );
           detach = () => {
             req.off("data", onData);
             req.off("end", onEnd);
@@ -179,19 +185,38 @@ export function toWebRequest(req: ExpressRequest, options: WebRequestOptions): R
 }
 
 /**
- * Reads and discards the rest of a request body the handler left unread, within `bounds`, then closes the
- * connection. The answer says `Connection: close`.
+ * Reads and discards the rest of a request body nobody read, within `bounds`, then closes the connection: after
+ * a handler's answer, and after the error answer of a handler that failed mid-body (not-found.ts). The answer
+ * says `Connection: close`. Once begun, the drain owns the body: the handler's stream errors.
  *
  * Node closes a `Connection: close` socket as soon as the answer is flushed (`destroySoon`), which with request
  * bytes still arriving is the reset described at `DRAIN_MAX_BYTES`. Until the drain ends, that close is held back
  * on this one socket: on the body's end the socket closes as Node would have closed it, and on a bound it is
  * destroyed.
  */
-function drainUnreadBody(req: IncomingMessage, res: ExpressResponse, bounds: DrainBounds): void {
+/**
+ * Whether the request has body bytes nobody has read yet. A request without a body is not complete until Node's
+ * parser has finished its message, which comes after a middleware that answers at once has run.
+ */
+export function hasUnreadBody(req: IncomingMessage): boolean {
+  if (req.complete) return false;
+  return (
+    req.headers["transfer-encoding"] !== undefined || Number(req.headers["content-length"] ?? 0) > 0
+  );
+}
+
+export function drainUnreadBody(
+  req: IncomingMessage,
+  res: ExpressResponse,
+  bounds: DrainBounds,
+): void {
+  const state = bodyState(req);
+  if (state.draining) return;
   res.shouldKeepAlive = false;
   const socket = req.socket;
-  const state = bodyState(req);
   state.draining = true;
+  // The handler's stream would pause the request at its cap and stall the drain.
+  state.abandon?.();
   let answered = false;
   let done = false;
   const held = (): void => {

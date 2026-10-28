@@ -58,6 +58,16 @@ const routes: RouteEntry[] = [
     module: { POST: (request) => Response.json(Object.fromEntries(request.headers)) },
   },
   {
+    path: "/api/t/throw-mid-body",
+    source: "test",
+    module: {
+      POST: async (request) => {
+        await request.body!.getReader().read();
+        throw new Error("failed with the body half read");
+      },
+    },
+  },
+  {
     path: "/api/t/redirect",
     source: "test",
     module: { GET: () => Response.redirect(`${SITE}/elsewhere`, 302) },
@@ -178,6 +188,7 @@ function closedAfter(
   port: number,
   declared: number,
   send: (socket: net.Socket) => void,
+  target = IMAGES,
 ): Promise<{ ms: number; received: string }> {
   return new Promise((resolve, reject) => {
     const socket = net.connect(port, "127.0.0.1");
@@ -189,7 +200,7 @@ function closedAfter(
     socket.on("close", () => resolve({ ms: Date.now() - started, received }));
     socket.on("connect", () => {
       socket.write(
-        `POST ${IMAGES} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: multipart/form-data; boundary=x\r\n` +
+        `POST ${target} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: multipart/form-data; boundary=x\r\n` +
           `Content-Length: ${declared}\r\n\r\n`,
       );
       started = Date.now();
@@ -395,6 +406,44 @@ describe("the adapter", () => {
     expect(trickled.ms).toBeGreaterThanOrEqual(900);
     expect(trickled.ms).toBeLessThan(2_000);
   }, 30_000);
+
+  it("drains the rest of the body and closes when a handler fails mid-body, so the 500 arrives and nothing hangs", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      // A client that sends the whole body whatever it is told, past the hard cap, so the handler's own body
+      // stream would have paused the request and stalled the drain.
+      const fresh = await serve();
+      const { ms, received } = await closedAfter(
+        fresh.port,
+        6 * MiB,
+        (socket) => socket.write(sixMiB),
+        "/api/t/throw-mid-body",
+      );
+      expect(received).toMatch(/^HTTP\/1\.1 500 /);
+      expect(received.toLowerCase()).toContain("connection: close");
+      expect(ms).toBeLessThan(3_000);
+      expect(serverBytesRead(fresh)).toBeGreaterThan(6 * MiB);
+      expect(log).toHaveBeenCalledTimes(1);
+
+      const bounded = await serve({ maxBytes: MiB, idleMs: 300, totalMs: 1_000 });
+      const started = Date.now();
+      const cut = await call(
+        bounded.port,
+        "POST",
+        "/api/t/throw-mid-body",
+        { "content-length": String(64 * MiB) },
+        Buffer.alloc(64 * MiB, 1),
+        { timeoutMs: 5_000 },
+      ).catch((error: NodeJS.ErrnoException) => ({ error }));
+      if ("status" in cut) expect(cut.status).toBe(500);
+      else expect(cut.error.code).toMatch(/^(ECONNRESET|EPIPE)$/);
+      await waitFor(() => bounded.sockets.every((socket) => socket.destroyed));
+      expect(Date.now() - started).toBeLessThan(4_000);
+      expect(serverBytesRead(bounded)).toBeLessThanOrEqual(MiB + 512 * 1024);
+    } finally {
+      log.mockRestore();
+    }
+  });
 
   it("keeps the drain's default idle and total bounds above Caddy's 30 s body timeout", () => {
     expect(DRAIN_IDLE_MS).toBe(31_000);

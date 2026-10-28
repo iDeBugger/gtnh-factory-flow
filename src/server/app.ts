@@ -135,6 +135,6 @@ export function createApp(options: AppOptions): Express {
   if (options.page) app.use(options.page);
 
   app.use(notFound());
-  app.use(errorHandler(options.env));
+  app.use(errorHandler(options.env, drain));
   return app;
 }
