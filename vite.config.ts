@@ -7,6 +7,30 @@ import { clientDefines } from "./tools/build/define.mjs";
 
 const src = path.resolve(import.meta.dirname, "src");
 
+/** A path as a glob that matches only itself: the checkout may sit under a folder whose name has glob characters. */
+const literalGlob = (file: string) => file.replace(/[\\()[\]{}*?!+@|^$]/g, "\\$&");
+
+/**
+ * What the dev server's `/@fs/` may read: the browser code and its packages, nothing else in the checkout. The
+ * deny list keeps Vite's own and adds the folders that hold deploy targets, probes, plans and the database files,
+ * so a path that slips past the allow list still gets a 403.
+ */
+const devFs = {
+  allow: [src, path.join(import.meta.dirname, "node_modules")],
+  deny: [
+    ".env",
+    ".env.*",
+    ".env*",
+    "*.{crt,pem,key,p12,pfx,cer,der}",
+    ".npmrc",
+    ".yarnrc.yml",
+    "**/.git/**",
+    ...["tools/deploy/targets", "scratch", ".superpowers", "db"].map(
+      (dir) => `${literalGlob(path.join(import.meta.dirname, dir))}/**`,
+    ),
+  ],
+};
+
 /** The lightningcss Vite minifies the CSS with, for its feature flags. */
 const lightningcss = createRequire(
   path.join(import.meta.dirname, "node_modules/vite/package.json"),
@@ -80,6 +104,7 @@ export default defineConfig(({ isSsrBuild, mode }) => {
     },
     // Media range syntax is written out as min-/max- queries, as Next's CSS pipeline wrote it.
     css: { lightningcss: { include: lightningcss.Features.MediaRangeSyntax } },
+    server: { fs: devFs },
     // The workers are ES modules (`new Worker(url, { type: "module" })`), the same in dev and build.
     worker: { format: "es" },
     // The shell render bundles the app, so it loads no package the way Node would and needs no node_modules.

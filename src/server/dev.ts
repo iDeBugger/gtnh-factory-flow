@@ -5,6 +5,9 @@
  * renders instead of hydrating), and the policy is development's (`'unsafe-inline'` and `'unsafe-eval'`). It also
  * serves the clean card harness at `/dev/clean-card`, which production has no page for.
  *
+ * It listens on 127.0.0.1 unless `HOSTNAME` is set, and Vite's `/@fs/` reads only src/ and node_modules
+ * (vite.config.ts), so the checkout's other files stay unserved.
+ *
  * The start work is production's: the setup checks, and the prewarm when `GTNH_PREWARM_ON_STARTUP=1`.
  */
 import { readFile } from "node:fs/promises";
@@ -12,6 +15,7 @@ import http from "node:http";
 import path from "node:path";
 import type { RequestHandler } from "express";
 import type { ViteDevServer } from "vite";
+import { devListenHost } from "./dev-host";
 import type { PageTemplate } from "./page/template";
 
 const ROOT = path.resolve(__dirname, "../..");
@@ -105,9 +109,9 @@ async function main(): Promise<void> {
   server.on("request", app);
 
   const port = Number(process.env.PORT ?? 3000);
-  const host = process.env.HOSTNAME || undefined;
+  const host = devListenHost(process.env);
   await new Promise<void>((resolve) => server.listen(port, host, resolve));
-  console.info(`GTNH Planner (dev) on http://localhost:${port}`);
+  console.info(`GTNH Planner (dev) on http://${host === "127.0.0.1" ? "localhost" : host}:${port}`);
 
   const stop = async () => {
     await vite.close();

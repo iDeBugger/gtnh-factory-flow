@@ -66,7 +66,7 @@ you remove entries.
 ## Commands
 
 ```bash
-npm run dev          # http://localhost:3000: Express with Vite in middleware mode, hot reload
+npm run dev          # http://localhost:3000: Express with Vite in middleware mode, hot reload; loopback only
 npm run dev:local    # the same with a local database and the live service: no database credentials
 npm run build        # dist/client (Vite, the prerendered page) and dist/server (esbuild)
 npm run start        # node dist/server/server.mjs, the production server
@@ -74,6 +74,9 @@ npm run typecheck
 npm run test         # full vitest suite, must be green
 node tools/dataset-pipeline/scripts/build-datasets.mjs all --export   # build the datasets (Docker)
 ```
+
+The dev servers listen on 127.0.0.1, and Vite's `/@fs/` reads only `src/` and `node_modules/`, since a dev
+server serves source. `HOSTNAME=0.0.0.0` opens one to the LAN on purpose.
 
 Scratch harnesses are `*.local.test.ts` (excluded from the suite); run one with
 `npx vitest run <file> --config vitest.local.config.ts`.
