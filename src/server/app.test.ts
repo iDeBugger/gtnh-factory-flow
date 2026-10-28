@@ -353,6 +353,21 @@ describe("the app's routing rules", () => {
     }
   });
 
+  it("keeps an absolute-form target's redirect on this origin", async () => {
+    for (const target of [
+      "http://evil.example/x",
+      "http://evil.example//x",
+      "https://evil.example/x/",
+      "http://evil.example",
+    ]) {
+      const answer = await call(server.port, "GET", target);
+      expect(answer.status, target).toBe(308);
+      const location = header(answer, "location")!;
+      expect(location, target).toMatch(/^\/(?![/\\])/);
+      expect(new URL(location, SITE).origin, target).toBe(SITE);
+    }
+  });
+
   it("is case-sensitive: /API/version is a 404", async () => {
     expect((await call(server.port, "GET", "/API/version")).status).toBe(404);
     expect((await call(server.port, "GET", "/api/Version")).status).toBe(404);
