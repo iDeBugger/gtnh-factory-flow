@@ -427,8 +427,9 @@ it("ignores date and keep-alive, and checks the body length across content-lengt
   Expected: no difference. A difference here is a normalizer gap: fix the normalizer, not the cases.
 - [ ] **Step 7: Write `allowed-differences.json`.** Each entry is `{ case, field, reason }` and names a difference
   that is meant to happen:
-  - the HTML body of `/`, `/?plan=` and the 404 page, outside the metadata tags and the shell markup. Task 10 compares
-    those two separately. Framework tags (`<script>`, `<link rel="stylesheet|preload|modulepreload">` to an asset,
+  - the HTML body of `/`, `/?plan=` and every HTML 404, around the metadata tags, the page's inline scripts and the
+    shell (on a 404, Next's not-found markup). `head-compare.mjs` (Task 10 step 3) compares those parts and must
+    report no difference. Framework tags (`<script>`, `<link rel="stylesheet|preload|modulepreload">` to an asset,
     `<meta name="next-size-adjust">`) and the RSC flight are filtered out;
   - `vary` on HTML and route answers (`rsc, next-router-*` goes away);
   - the `content-security-policy` value: `script-src` hashes instead of `'unsafe-inline'`, and the worker policy
@@ -742,9 +743,11 @@ it("has a parity case for every route and every method", () => {
   - `optionsAnswer(routes)`: 204 with `Allow: optionsAllow(module)`, registered as `app.options(path, ...)` before the
     405;
   - `methodNotAllowed()`: 405, no `Allow`, empty body (Next's `auto-implement-methods`);
-  - `notFound()`: Next's 404 status, `cache-control` and `content-type` from the fixture. The body is a static HTML
-    page saying what Next's says ("404: This page could not be found."); the body difference and the `etag` are on
-    the allow list;
+  - `notFound(page)`: Next's 404 status, `cache-control` and `content-type` from the fixture. The body is Next's
+    not-found page (`src/server/page/not-found-page.ts`): the built page's head with its module scripts taken out,
+    then `noindex`, the site metadata and the 404 title, and Next's not-found markup in the root. It is rendered
+    once in `createApp`, so a page template it cannot be cut from stops the start, and then per answer. Only the
+    framework HTML around those parts and Next's `etag` are on the allow list;
   - `errorHandler()`. Only the router's parameter decode error (a `URIError`, or the router's error with
     `status === 400` and a `URIError` cause, raised from `decode_param`) answers as the fixture's malformed-escape
     answer. Any other error with a `.status` from a library still gets Next's 500. Any other error answers exactly Next's 500 from the fixture
