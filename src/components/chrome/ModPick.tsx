@@ -1,5 +1,3 @@
-"use client";
-
 import "./mod-panel.css";
 
 import { useCallback, useState } from "react";

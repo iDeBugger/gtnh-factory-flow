@@ -1,5 +1,3 @@
-"use client";
-
 import { useReactFlow, useStore, useStoreApi } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";

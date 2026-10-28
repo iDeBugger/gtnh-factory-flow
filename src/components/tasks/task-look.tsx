@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo } from "react";
 import { inkOn } from "@/components/live/LiveFaces";
 import { PixelRuns } from "@/components/chrome/pixel-icons";

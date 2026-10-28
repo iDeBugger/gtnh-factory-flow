@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * Stitching a board capture and its summary bar into one finished image.
  *

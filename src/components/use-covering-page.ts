@@ -1,5 +1,3 @@
-"use client";
-
 import { useDesignStore } from "@/store/design-store";
 import { useLibraryTab } from "@/lib/library/library-tab";
 import { useWelcomeTab } from "@/lib/welcome/welcome-tab";

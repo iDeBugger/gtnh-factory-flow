@@ -1,5 +1,3 @@
-"use client";
-
 import "./rail.css";
 import { fluidSwatchStyle } from "../fluid-swatch";
 import { wheelChangesValues } from "@/lib/device-settings";

@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { wheelChangesValues } from "@/lib/device-settings";
 import { MenuPortal, anchorOf, type MenuAnchor } from "../menus/MenuPortal";

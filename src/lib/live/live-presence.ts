@@ -1,5 +1,3 @@
-"use client";
-
 import { useSyncExternalStore } from "react";
 import type { LiveClientKind, LiveCursor } from "./protocol";
 

@@ -1,5 +1,3 @@
-"use client";
-
 import { useChecklistBoard, checklistCursorStyle } from "./ChecklistMode";
 
 import { emitBoardCameraMove } from "@/lib/board-camera-signal";

@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect } from "react";
 import type { FactoryProject, ThroughputResult } from "@/lib/model/types";
 import { boardFingerprint, snapshotBoard, soundForDiff, type BoardShot, type DiffSound } from "@/lib/sound/board-diff";

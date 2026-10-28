@@ -1,5 +1,3 @@
-"use client";
-
 import { useSyncExternalStore } from "react";
 import { isCompactViewport } from "@/lib/compact-view";
 import { Cursor, draws } from "./cursor";

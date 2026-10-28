@@ -1,5 +1,3 @@
-"use client";
-
 import { decodePlanCode, readPlanCodeFromHash } from "@/lib/import-export/plan-code";
 import { applyPlanView } from "@/lib/plan-view";
 import { looksLikePlanJson, openPlanJsonText } from "@/lib/import-export/open-plan-file";

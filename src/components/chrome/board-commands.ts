@@ -1,5 +1,3 @@
-"use client";
-
 import { useSyncExternalStore } from "react";
 import { playEditSfx, playSfxDegree } from "@/lib/sound/sfx";
 

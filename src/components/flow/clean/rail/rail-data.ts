@@ -1,5 +1,3 @@
-"use client";
-
 import { useDeferredValue, useMemo } from "react";
 import type { FactoryProject, ThroughputResult } from "@/lib/model/types";
 import { useFactoryStore } from "@/store/factory-store";

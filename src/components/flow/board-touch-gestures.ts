@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect } from "react";
 import type { ReactFlowInstance } from "@xyflow/react";
 import { isCompactViewport } from "@/lib/compact-view";

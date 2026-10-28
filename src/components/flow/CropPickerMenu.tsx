@@ -1,5 +1,3 @@
-"use client";
-
 import { listRecipeDatasetCrops } from "@/lib/datasets/browser-loader";
 import type { RecipeSummary } from "@/lib/datasets/types";
 import { ResourceIcon } from "@/components/nei/ResourceIcon";

@@ -1,5 +1,3 @@
-"use client";
-
 import "./menus.css";
 
 import { forwardRef, useMemo, type CSSProperties } from "react";

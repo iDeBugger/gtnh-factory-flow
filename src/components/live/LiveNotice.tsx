@@ -1,5 +1,3 @@
-"use client";
-
 import { Info, X } from "lucide-react";
 import { dismissLiveNotice, useLiveSession } from "@/store/live-session";
 

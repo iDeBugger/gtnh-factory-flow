@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect } from "react";
 import { FactoryPlannerApp } from "@/components/FactoryPlannerApp";
 import { mockPlans } from "@/lib/solver/plan/__fixtures__/mock-extras";

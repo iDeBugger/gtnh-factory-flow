@@ -1,5 +1,3 @@
-"use client";
-
 import { useFactoryStore } from "@/store/factory-store";
 import { Cursor, draws, sleep, type MouseGlyph } from "./cursor";
 import * as input from "./input";

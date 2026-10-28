@@ -1,5 +1,3 @@
-"use client";
-
 import { makeResourceKey } from "@/lib/model";
 import { fluidSwatchStyle } from "../fluid-swatch";
 import type { FactoryStorage, Recipe, ResourceAmount } from "@/lib/model/types";

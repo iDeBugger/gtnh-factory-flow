@@ -1,5 +1,3 @@
-"use client";
-
 import { BOARD_MIN_ZOOM, boardMaxZoom } from "@/components/flow/board-camera";
 
 /**

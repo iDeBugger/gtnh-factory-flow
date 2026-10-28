@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDropdownDismiss } from "@/lib/hooks/use-dropdown-dismiss";

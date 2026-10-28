@@ -1,5 +1,3 @@
-"use client";
-
 import { useFactoryStore } from "@/store/factory-store";
 import { useDesignStore } from "@/store/design-store";
 import type { Pt } from "./director";

@@ -1,5 +1,3 @@
-"use client";
-
 import { CopyCheck, X } from "lucide-react";
 import { useDesignStore } from "@/store/design-store";
 

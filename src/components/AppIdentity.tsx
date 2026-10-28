@@ -1,5 +1,3 @@
-"use client";
-
 import { listSelectableDatasetVersions } from "@/lib/datasets/remote";
 import { useFactoryStore } from "@/store/factory-store";
 

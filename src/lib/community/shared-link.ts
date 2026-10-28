@@ -1,5 +1,3 @@
-"use client";
-
 import { isModAndCommunityOn } from "@/lib/deployment-features";
 
 /**

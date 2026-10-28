@@ -1,5 +1,3 @@
-"use client";
-
 import { createPortal } from "react-dom";
 import { wheelChangesValues } from "@/lib/device-settings";
 import { useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";

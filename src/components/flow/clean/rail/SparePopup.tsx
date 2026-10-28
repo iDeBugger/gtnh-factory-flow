@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useFactoryStore } from "@/store/factory-store";

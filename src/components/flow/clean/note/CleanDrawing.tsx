@@ -1,5 +1,3 @@
-"use client";
-
 import { NodeResizer, useReactFlow, useStore, type NodeProps } from "@xyflow/react";
 import { memo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ANNOTATION_MIN_BOX, BOARD_GRID } from "@/lib/board-grid";

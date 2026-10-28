@@ -1,5 +1,3 @@
-"use client";
-
 import { isLiveConfigured } from "@/lib/live/live-config";
 import { useFactoryStore } from "@/store/factory-store";
 import { setMinimap } from "../minimap/minimap-settings";

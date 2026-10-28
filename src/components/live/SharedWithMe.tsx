@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useMemo, useState } from "react";
 import { formatRelativeDate } from "@/components/shelf-cards";
 import { LibraryTile } from "@/components/library/LibraryTile";

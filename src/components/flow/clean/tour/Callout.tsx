@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { getUiScale } from "@/lib/ui-scale";
 import { getTourCursor } from "./tour-controller";

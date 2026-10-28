@@ -1,5 +1,3 @@
-"use client";
-
 import "./app-chrome.css";
 
 import { useEffect, useState, useSyncExternalStore } from "react";

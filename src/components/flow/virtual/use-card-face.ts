@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo } from "react";
 import { useFactoryStore } from "@/store/factory-store";
 import type { FactoryNode } from "@/lib/model/types";

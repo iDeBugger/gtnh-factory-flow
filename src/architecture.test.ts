@@ -460,6 +460,26 @@ function syntaxTree(file: SourceFile): ts.SourceFile {
 }
 
 /**
+ * The files whose directive prologue holds `"use client"`. Nothing reads that directive since the site left Next,
+ * so it would only mislead. Every source file counts here, the exempt ones (tests, the dev pages) and workers too.
+ */
+function clientDirectiveFiles(graph: Map<string, SourceFile>): string[] {
+  return [...graph.values()]
+    .filter((file) => file.text.includes("use client"))
+    .filter((file) => {
+      for (const statement of syntaxTree(file).statements) {
+        if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) {
+          return false;
+        }
+        if (statement.expression.text === "use client") return true;
+      }
+      return false;
+    })
+    .map((file) => file.path)
+    .sort();
+}
+
+/**
  * The names `file` imports or re-exports from `target`: each binding's
  * exported name, `*` for a namespace or `export *`, `default` for a default,
  * and `import()` for a dynamic import or `require`, whose names this reading
@@ -999,8 +1019,8 @@ describe("the layers", () => {
       "src/lib/site-url.ts":
         'import { x } from "@/lib/server/http/viewer";\nimport fs from "node:fs";',
       "src/lib/arrange.worker.ts": 'import { y } from "@/lib/server/http/client-address";',
-      // A "use client" line makes no root, and a file nothing in the browser loads is not reached.
-      "src/lib/app-font.ts": '"use client";\nimport { z } from "@/lib/server/http/request-body";',
+      // A file nothing in the browser loads is not reached.
+      "src/lib/app-font.ts": 'import { z } from "@/lib/server/http/request-body";',
     };
     const bad = new Map(
       Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
@@ -1374,5 +1394,28 @@ describe("the layers", () => {
     expect(serviceDbNames(good)).toEqual([]);
     expect(handleReexports(good)).toEqual([]);
     expect(sqlOutOfPlace(good)).toEqual([]);
+  });
+
+  it("no source file carries a 'use client' directive", () => {
+    expect(clientDirectiveFiles(graph)).toEqual([]);
+  });
+
+  it("finds the directive in any file, after other directives, and not past the prologue", () => {
+    const fixtures: Record<string, string> = {
+      "src/client/dev/clean-card/main.tsx": '"use client";\nimport { x } from "./x";',
+      "src/lib/arrange.worker.ts": "'use client'\nexport {};",
+      "src/components/Strict.tsx": '"use strict";\n"use client";\nexport {};',
+      "src/components/Late.tsx": 'import { x } from "./x";\n"use client";',
+      "src/components/Comment.tsx": '// "use client";\nexport {};',
+      "src/components/Text.tsx": 'export const note = "use client";',
+    };
+    const files = new Map(
+      Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
+    );
+    expect(clientDirectiveFiles(files)).toEqual([
+      "src/client/dev/clean-card/main.tsx",
+      "src/components/Strict.tsx",
+      "src/lib/arrange.worker.ts",
+    ]);
   });
 });

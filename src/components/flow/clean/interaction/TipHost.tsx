@@ -1,5 +1,3 @@
-"use client";
-
 import { useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import { getUiScale } from "@/lib/ui-scale";

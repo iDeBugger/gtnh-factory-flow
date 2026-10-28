@@ -1,5 +1,3 @@
-"use client";
-
 import {
   CANVAS_PATTERNS,
   readBoardViewSnapshot,

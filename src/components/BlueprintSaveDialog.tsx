@@ -1,5 +1,3 @@
-"use client";
-
 import { LoaderCircle, Save, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { computeBlueprintIo } from "@/lib/blueprints/io-stats";

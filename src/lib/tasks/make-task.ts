@@ -1,5 +1,3 @@
-"use client";
-
 import { readNewPlanVersion } from "@/lib/datasets/new-plan-version";
 import { readDesign } from "@/lib/designs/design-storage";
 import { buildMachineList } from "@/lib/model/machine-list";

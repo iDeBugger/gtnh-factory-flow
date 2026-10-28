@@ -1,5 +1,3 @@
-"use client";
-
 import { LoaderCircle, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCommunityUser } from "@/components/community/auth";

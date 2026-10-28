@@ -1,5 +1,3 @@
-"use client";
-
 import { createNewProject } from "@/examples";
 import type { FactoryProject } from "@/lib/model/types";
 import { leaveLibrary } from "@/lib/library/library-tab";

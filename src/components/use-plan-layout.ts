@@ -1,5 +1,3 @@
-"use client";
-
 import { useDeviceSettings } from "@/lib/device-settings";
 import { useIsCompactViewport } from "@/lib/compact-view";
 

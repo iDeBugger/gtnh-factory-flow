@@ -1,5 +1,3 @@
-"use client";
-
 import type { MachineTier, Recipe, ResourceAmount } from "@/lib/model/types";
 import type { RecipeContentRef } from "@/lib/import-export/recipe-ref-match";
 import { DATASET_ANSWER_VERSION, DATASET_ANSWER_VERSION_PARAM } from "./answer-version";

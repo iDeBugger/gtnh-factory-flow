@@ -1,5 +1,3 @@
-"use client";
-
 import "./chrome.css";
 import "./power-picker.css";
 

@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { parseRateInput } from "./rail-math";
 import { LIVE_TYPE_MS } from "../clean-model";

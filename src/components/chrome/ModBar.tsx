@@ -1,5 +1,3 @@
-"use client";
-
 import "./chrome.css";
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";

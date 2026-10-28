@@ -1,5 +1,3 @@
-"use client";
-
 import { create } from "zustand";
 import { LiveClientState, makeCid, type PendingBatch } from "@/lib/live/client-state";
 import { THIS_TAB_ID } from "@/lib/designs/design-tab-sync";

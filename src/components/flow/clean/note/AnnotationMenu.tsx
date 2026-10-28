@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { BoardMenu, MenuLine, MenuRow } from "../menus/BoardMenu";
 import { GT_NODE_COLORS } from "../../node-colors";

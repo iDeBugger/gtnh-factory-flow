@@ -1,5 +1,3 @@
-"use client";
-
 import { PIN_RULE_LABEL, PIN_RULE_ORDER, type PinRule } from "@/lib/model/pin-rule";
 import { BoardMenu, MenuRow } from "./BoardMenu";
 import type { MenuAnchor } from "./MenuPortal";

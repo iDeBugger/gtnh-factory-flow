@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo } from "react";
 import { unservedPlanVersion } from "@/lib/datasets/dataset-cache";
 import { servedGameVersions } from "@/lib/datasets/new-plan-version";

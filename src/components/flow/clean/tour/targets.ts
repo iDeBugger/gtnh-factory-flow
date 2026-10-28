@@ -1,5 +1,3 @@
-"use client";
-
 import { useFactoryStore } from "@/store/factory-store";
 import { glanceLeaveZoom } from "../../node-detail";
 import { boardZoomScale } from "@/lib/ui-scale";

@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo } from "react";
 import type { MachineHandlerIconEntry, RecipeMapIconEntry } from "@/lib/datasets/types";
 import { useFactoryStore } from "@/store/factory-store";

@@ -1,5 +1,3 @@
-"use client";
-
 import { create } from "zustand";
 import { readDesign } from "@/lib/designs/design-storage";
 import type { PlanTask, PlanTaskItem, PlanTaskStatus } from "@/lib/model/types";

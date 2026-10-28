@@ -1,5 +1,3 @@
-"use client";
-
 import { useDropdownDismiss } from "@/lib/hooks/use-dropdown-dismiss";
 
 import { useRef, type ReactNode } from "react";

@@ -1,5 +1,3 @@
-"use client";
-
 import { useLayoutEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useStore, type ReactFlowState } from "@xyflow/react";

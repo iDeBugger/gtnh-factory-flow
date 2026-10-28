@@ -75,11 +75,6 @@ export default defineConfig(({ isSsrBuild, mode }) => {
       // Fonts are files, never data: URLs, so a preload names them and each face loads only when used.
       assetsInlineLimit: (file: string) => (/\.(woff2?|ttf|otf)$/.test(file) ? false : undefined),
       rollupOptions: {
-        onwarn(warning, warn) {
-          // The "use client" lines Next needed mean nothing to this bundle.
-          if (warning.code === "MODULE_LEVEL_DIRECTIVE") return;
-          warn(warning);
-        },
         ...(isSsrBuild ? { output: { entryFileNames: "[name].mjs" } } : {}),
       },
     },

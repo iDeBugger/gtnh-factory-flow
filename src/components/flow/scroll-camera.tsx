@@ -1,5 +1,3 @@
-"use client";
-
 import { NodeToolbar, useStore, useStoreApi, type NodeToolbarProps } from "@xyflow/react";
 import { useEffect, type RefObject } from "react";
 

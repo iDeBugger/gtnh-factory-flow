@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * "Open in the mod": the open plan sent to a running game with GTNH Planner installed. A page can reach a Java
  * process only over the loopback address, so the mod listens on 127.0.0.1, on the first free port of

@@ -1,5 +1,3 @@
-"use client";
-
 import { Handle, Position, useStoreApi, type Node, type NodeProps } from "@xyflow/react";
 import { memo, type CSSProperties } from "react";
 import { Copy } from "lucide-react";

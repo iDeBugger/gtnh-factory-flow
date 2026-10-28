@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, type RefObject, type SyntheticEvent } from "react";
 
 /** Native inert controls also stay out of keyboard focus. Board-window

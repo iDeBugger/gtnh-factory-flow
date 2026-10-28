@@ -1,5 +1,3 @@
-"use client";
-
 import { ScreenshotButton } from "@/components/export/ScreenshotButton";
 import { Copy, LockKeyhole } from "lucide-react";
 import { useState } from "react";

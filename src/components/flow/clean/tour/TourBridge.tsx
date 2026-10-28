@@ -1,5 +1,3 @@
-"use client";
-
 import { useReactFlow, useStoreApi } from "@xyflow/react";
 import { useEffect } from "react";
 

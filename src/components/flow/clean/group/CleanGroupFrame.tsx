@@ -1,5 +1,3 @@
-"use client";
-
 import "../clean.css";
 import "./group.css";
 import { memo, useEffect, useState, type CSSProperties } from "react";

@@ -1,6 +1,6 @@
 /**
- * The layout breakpoints. Kept in a module with no "use client" so the server layout can inline them into the boot
- * script; compact-view.ts re-exports them and owns the media queries.
+ * The layout breakpoints. Kept in a module that imports nothing, so the boot script (src/client/boot.ts) can inline
+ * them into the page; compact-view.ts re-exports them and owns the media queries.
  */
 
 /**

@@ -1,5 +1,3 @@
-"use client";
-
 import { emitBoardCameraMove } from "@/lib/board-camera-signal";
 import { wheelChangesValues } from "@/lib/device-settings";
 

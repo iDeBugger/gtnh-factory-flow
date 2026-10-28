@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { compareVersions } from "@/lib/whats-new";
 import { APP_VERSION } from "@/lib/version";

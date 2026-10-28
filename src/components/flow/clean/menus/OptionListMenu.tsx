@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { ArtBox } from "./ArtBox";
 import { MenuPortal, type MenuAnchor } from "./MenuPortal";

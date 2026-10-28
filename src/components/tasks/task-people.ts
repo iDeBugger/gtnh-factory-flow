@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo } from "react";
 import { colorFor } from "@/lib/live/protocol";
 import type { TaskAuthor } from "@/lib/tasks/task-board";

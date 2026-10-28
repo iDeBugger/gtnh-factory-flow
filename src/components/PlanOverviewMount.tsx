@@ -1,5 +1,3 @@
-"use client";
-
 /** The one seam between the plan-mode workspace and the overview rail (flow/clean/rail). */
 import { OverviewRail } from "./flow/clean/rail/OverviewRail";
 

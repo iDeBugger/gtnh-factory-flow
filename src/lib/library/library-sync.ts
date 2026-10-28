@@ -1,5 +1,3 @@
-"use client";
-
 import { create } from "zustand";
 import { forgetDesignCameras } from "@/lib/designs/design-camera";
 import type { DesignFolder, DesignSummary } from "@/lib/designs/design-library";

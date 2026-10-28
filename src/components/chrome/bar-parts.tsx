@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { activateOnKey } from "@/lib/hooks/button-keys";
 import { playBoardSound } from "@/lib/board-sounds";

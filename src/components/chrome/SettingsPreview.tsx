@@ -1,5 +1,3 @@
-"use client";
-
 import type { CSSProperties } from "react";
 import { MouseIcon } from "@/components/flow/clean/interaction/TipPanel";
 import { useDeviceSettings } from "@/lib/device-settings";

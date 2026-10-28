@@ -1,5 +1,3 @@
-"use client";
-
 import { create } from "zustand";
 import { fetchCurrentUser, logoutCommunityUser } from "@/lib/community/client";
 import type { CommunityUser } from "@/lib/community/types";

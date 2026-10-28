@@ -1,5 +1,3 @@
-"use client";
-
 import type { FactoryNodeColorTag } from "@/lib/model/types";
 import { BoardMenu, MenuLine, MenuRow } from "../menus/BoardMenu";
 import { NOTE, NOTE_COLOR_MENU, notePalette } from "./note-model";

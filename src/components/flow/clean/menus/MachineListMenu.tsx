@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo } from "react";
 import type { MachineHandler } from "@/lib/model/types";
 import { ArtBox } from "./ArtBox";

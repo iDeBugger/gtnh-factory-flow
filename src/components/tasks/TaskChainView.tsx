@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { tipAttrs } from "@/components/flow/clean/interaction";
 import type { PlanTask } from "@/lib/model/types";

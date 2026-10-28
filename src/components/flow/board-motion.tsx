@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useReducer, useRef, useSyncExternalStore } from "react";
 
 import {

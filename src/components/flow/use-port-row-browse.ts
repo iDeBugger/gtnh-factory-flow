@@ -1,5 +1,3 @@
-"use client";
-
 import { isFromBrowseMenu, useBrowseMenu, type BrowseMode as PortBrowseMode } from "@/components/browse-menu";
 import { isEchoOfTouch } from "@/lib/pointer-kind";
 import { wasRecentWireDrop } from "./connection-drag";

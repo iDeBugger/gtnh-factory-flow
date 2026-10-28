@@ -1,5 +1,3 @@
-"use client";
-
 import { forgetRecipeChecks, landingRefreshMemory, startLandingRefresh } from "@/lib/datasets/refresh-project-recipes";
 import { findRevokedSubstituteTwins } from "@/lib/datasets/revoked-substitute-twins";
 import { datasetServesPlan } from "@/lib/datasets/dataset-cache";

@@ -1,5 +1,3 @@
-"use client";
-
 import "./tasks.css";
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";

@@ -1,5 +1,3 @@
-"use client";
-
 import { RailKey } from "@/components/flow/clean/rail/rail-controls";
 import "@/components/flow/clean/rail/rail.css";
 import { useIsCompactViewport } from "@/lib/compact-view";

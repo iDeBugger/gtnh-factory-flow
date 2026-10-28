@@ -1,5 +1,3 @@
-"use client";
-
 import { BOARD_IMAGE_MAX_BYTES } from "./types";
 
 /**

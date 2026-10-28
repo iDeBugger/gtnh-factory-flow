@@ -1,5 +1,3 @@
-"use client";
-
 import { useFactoryStore } from "@/store/factory-store";
 import { BoardMenu, MenuLine, MenuRow } from "./BoardMenu";
 import { useCardRecipeRows } from "./card-recipe-rows";

@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import type { FactoryPocket } from "@/lib/model/types";
 import { playSfx } from "@/lib/sound/sfx";

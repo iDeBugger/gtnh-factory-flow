@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect } from "react";
 import { readSharedPlanId, syncSharedPlanAddress } from "@/lib/community/shared-link";
 import { useWelcomeTab } from "@/lib/welcome/welcome-tab";

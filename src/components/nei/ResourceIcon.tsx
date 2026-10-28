@@ -1,5 +1,3 @@
-"use client";
-
 import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import {
   getAlternativeCycleFaces,

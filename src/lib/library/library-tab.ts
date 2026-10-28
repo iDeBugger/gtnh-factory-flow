@@ -1,5 +1,3 @@
-"use client";
-
 import { useSyncExternalStore } from "react";
 import { leaveWelcomeTab } from "@/lib/welcome/welcome-tab";
 import { playSfx } from "@/lib/sound/sfx";

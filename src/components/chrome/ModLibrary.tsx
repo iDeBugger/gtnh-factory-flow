@@ -1,5 +1,3 @@
-"use client";
-
 import { readNewPlanVersion } from "@/lib/datasets/new-plan-version";
 import "./chrome.css";
 import "./library.css";

@@ -1,5 +1,3 @@
-"use client";
-
 import type { LivePerson } from "@/lib/live/protocol";
 import { useLiveSession, type LiveStatus } from "@/store/live-session";
 import { isModAndCommunityOn } from "@/lib/deployment-features";

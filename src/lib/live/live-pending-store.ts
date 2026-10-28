@@ -1,5 +1,3 @@
-"use client";
-
 import { makeCid, type PendingBatch } from "./client-state";
 import { applyOps, type LiveOp, type LivePlan } from "./ops";
 

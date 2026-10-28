@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * Write text to the system clipboard, with the old selection-based path behind
  * it: the async API needs a secure context, and a plan opened from a file or

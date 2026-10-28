@@ -1,5 +1,3 @@
-"use client";
-
 import type { SharedPlanRef } from "@/lib/designs/design-library";
 import { parseFactoryProjectJson } from "@/lib/import-export";
 import { useDesignStore } from "@/store/design-store";

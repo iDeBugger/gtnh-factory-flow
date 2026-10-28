@@ -1,5 +1,3 @@
-"use client";
-
 import "./nei.css";
 
 import { useLayoutEffect, useRef, useState } from "react";

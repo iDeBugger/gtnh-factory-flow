@@ -1,5 +1,3 @@
-"use client";
-
 import { memo } from "react";
 import type { NodeProps } from "@xyflow/react";
 import { useFactoryStore } from "@/store/factory-store";

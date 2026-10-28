@@ -1,5 +1,3 @@
-"use client";
-
 import "./checklist.css";
 
 import {

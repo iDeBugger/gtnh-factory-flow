@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, History, X } from "lucide-react";
 import { visibleChangelog, type ChangelogEntry } from "@/lib/changelog";

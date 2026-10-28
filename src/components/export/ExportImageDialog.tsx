@@ -1,5 +1,3 @@
-"use client";
-
 import { Check, Eye, EyeOff, ImageDown, LoaderCircle, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDialogA11y } from "@/lib/hooks/use-dialog-a11y";

@@ -1,5 +1,3 @@
-"use client";
-
 import { Check, X } from "lucide-react";
 import { wheelChangesValues } from "@/lib/device-settings";
 import { useEffect, useRef, useState } from "react";

@@ -1,5 +1,3 @@
-"use client";
-
 import { memo, useEffect, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import { useStoreApi } from "@xyflow/react";

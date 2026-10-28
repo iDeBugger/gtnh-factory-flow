@@ -1,5 +1,3 @@
-"use client";
-
 import "../clean.css";
 import { useDeviceSettings } from "@/lib/device-settings";
 import "./special.css";

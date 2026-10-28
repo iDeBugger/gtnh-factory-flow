@@ -1,5 +1,3 @@
-"use client";
-
 import { LoaderCircle } from "lucide-react";
 import { useEffect } from "react";
 import { useFactoryStore } from "@/store/factory-store";

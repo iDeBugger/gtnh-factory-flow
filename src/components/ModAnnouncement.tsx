@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
 import "./chrome/mod-panel.css";
 import { Download, Play, X } from "lucide-react";

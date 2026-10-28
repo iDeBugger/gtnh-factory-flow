@@ -1,5 +1,3 @@
-"use client";
-
 import type { CommunityPlanStats, EntryIcon, PlanResourceStat } from "@/lib/community/types";
 import { formatSlotRate } from "@/components/flow/flow-explainers";
 import { TierBadge } from "@/components/shelf-cards";

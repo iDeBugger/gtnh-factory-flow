@@ -1,5 +1,3 @@
-"use client";
-
 import { forgetDetachedBase } from "@/lib/live/live-pending-store";
 import type { FactoryProject } from "@/lib/model/types";
 import {

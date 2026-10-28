@@ -1,5 +1,3 @@
-"use client";
-
 import { create } from "zustand";
 import { ChromeMenu, type ChromeAnchor, type MenuEntry } from "@/components/chrome/ChromeMenu";
 import {

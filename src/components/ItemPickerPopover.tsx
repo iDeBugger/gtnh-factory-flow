@@ -1,5 +1,3 @@
-"use client";
-
 import { getUiScale } from "@/lib/ui-scale";
 import { useDropdownDismiss } from "@/lib/hooks/use-dropdown-dismiss";
 

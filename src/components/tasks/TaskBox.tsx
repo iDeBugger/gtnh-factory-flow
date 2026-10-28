@@ -1,5 +1,3 @@
-"use client";
-
 import "./tasks.css";
 import "./task-box.css";
 

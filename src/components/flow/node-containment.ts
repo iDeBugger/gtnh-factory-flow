@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, type RefObject } from "react";
 import { virtualizationEnabled } from "./virtual/card-virtualizer";
 

@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { flashNotice } from "@/components/flow/clean/rail/NoticeBar";
 import { copyToClipboard } from "@/lib/clipboard";

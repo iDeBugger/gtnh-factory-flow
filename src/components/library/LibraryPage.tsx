@@ -1,5 +1,3 @@
-"use client";
-
 import { Bookmark, Factory, Folder, FolderPlus, LayoutGrid, Star, Users } from "lucide-react";
 import {
   useCallback,

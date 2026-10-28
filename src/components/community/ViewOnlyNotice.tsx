@@ -1,5 +1,3 @@
-"use client";
-
 import { Copy, LockKeyhole } from "lucide-react";
 import { useState } from "react";
 import { copyViewedPost } from "@/lib/community/open-post";

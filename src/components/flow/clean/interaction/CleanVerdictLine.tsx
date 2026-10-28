@@ -1,5 +1,3 @@
-"use client";
-
 import { Position } from "@xyflow/react";
 import { carriedHome } from "./accept";
 

@@ -1,5 +1,3 @@
-"use client";
-
 import { useReactFlow } from "@xyflow/react";
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
 import type { FactoryPocket } from "@/lib/model/types";

@@ -1,5 +1,3 @@
-"use client";
-
 import { useDropdownDismiss } from "@/lib/hooks/use-dropdown-dismiss";
 
 import { ChevronDown, Factory, LogOut, ShieldCheck, User } from "lucide-react";

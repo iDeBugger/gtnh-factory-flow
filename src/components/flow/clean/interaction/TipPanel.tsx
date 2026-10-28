@@ -1,5 +1,3 @@
-"use client";
-
 import { forwardRef, type CSSProperties } from "react";
 import { wheelChangesValues } from "@/lib/device-settings";
 import { PowerInputPanel } from "../menus/PowerInputPanel";

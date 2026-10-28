@@ -1,5 +1,3 @@
-"use client";
-
 import "../flow/clean/clean.css";
 import "./nei-recipe.css";
 

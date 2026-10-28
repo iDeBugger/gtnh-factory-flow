@@ -1,5 +1,3 @@
-"use client";
-
 import { ResourceIcon } from "@/components/nei/ResourceIcon";
 
 /**

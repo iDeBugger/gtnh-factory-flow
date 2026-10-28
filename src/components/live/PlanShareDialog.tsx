@@ -1,5 +1,3 @@
-"use client";
-
 import "../chrome/mod-panel.css";
 import { LoaderCircle, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";

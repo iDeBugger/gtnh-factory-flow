@@ -1,5 +1,3 @@
-"use client";
-
 import { useReactFlow, useStore, type Node, type NodeProps } from "@xyflow/react";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { snapToGrid } from "@/lib/board-grid";

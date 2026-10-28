@@ -1,5 +1,3 @@
-"use client";
-
 import "./menus.css";
 
 import type { ReactNode } from "react";

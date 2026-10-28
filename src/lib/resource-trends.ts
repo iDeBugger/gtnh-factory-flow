@@ -1,5 +1,3 @@
-"use client";
-
 import { useSyncExternalStore } from "react";
 import type { ResourceBalance, ThroughputResult } from "./model/types";
 

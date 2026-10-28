@@ -1,5 +1,3 @@
-"use client";
-
 import { Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { DragEvent, PointerEvent, ReactNode, RefObject, WheelEvent } from "react";

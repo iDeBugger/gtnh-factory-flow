@@ -1,5 +1,3 @@
-"use client";
-
 import { getCanvasTheme } from "@/components/flow/canvas-themes";
 import { readBoardViewSnapshot } from "@/components/flow/board-view";
 import {

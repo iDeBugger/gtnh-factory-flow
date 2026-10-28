@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo, useRef, useState } from "react";
 import { wheelChangesValues } from "@/lib/device-settings";
 import type { FormulaLine, FormulaTerm } from "@/lib/machines/formula-lines";

@@ -1,5 +1,3 @@
-"use client";
-
 import { useStore, useReactFlow, ViewportPortal, type ReactFlowState } from "@xyflow/react";
 import { memo, useEffect, useMemo, useState } from "react";
 import { registerZoomConsumer } from "./virtual/zoom-var";

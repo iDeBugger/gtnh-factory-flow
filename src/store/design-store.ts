@@ -1,5 +1,3 @@
-"use client";
-
 import { create } from "zustand";
 import { createNewProject } from "@/examples";
 import { forgetDetachedBase } from "@/lib/live/live-pending-store";

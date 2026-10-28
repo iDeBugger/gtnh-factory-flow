@@ -1,5 +1,3 @@
-"use client";
-
 import "./clean.css";
 import { fluidSwatchStyle } from "./fluid-swatch";
 

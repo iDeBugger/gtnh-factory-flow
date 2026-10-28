@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { RefreshCw, X } from "lucide-react";
 import { useDeployedVersion } from "@/lib/use-deployed-version";

@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef } from "react";
 import {
   MINIMAP_CORNER_LABELS,

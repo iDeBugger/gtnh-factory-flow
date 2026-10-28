@@ -1,5 +1,3 @@
-"use client";
-
 import { visibleChangelog, type ChangelogEntry } from "@/lib/changelog";
 import { APP_VERSION } from "@/lib/version";
 

@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { readDesign } from "@/lib/designs/design-storage";
 import { leaveLibrary } from "@/lib/library/library-tab";

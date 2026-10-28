@@ -1,5 +1,3 @@
-"use client";
-
 import { randomUUID } from "@/lib/random-id";
 import type {
   CommunityComment,

@@ -1,5 +1,3 @@
-"use client";
-
 import { useSyncExternalStore } from "react";
 
 import type { FactoryEdge } from "@/lib/model/types";

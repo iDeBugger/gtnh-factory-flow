@@ -1,5 +1,3 @@
-"use client";
-
 import { Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useIsCompactViewport } from "@/lib/compact-view";

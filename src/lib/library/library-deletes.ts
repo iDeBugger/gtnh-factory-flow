@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * Deletions waiting to reach the account.
  *

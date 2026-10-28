@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect } from "react";
 import { DEFAULT_APP_FONT, getStoredAppFont } from "@/lib/app-font";
 

@@ -1,5 +1,3 @@
-"use client";
-
 import { useSyncExternalStore } from "react";
 import {
   DEFAULT_CANVAS_THEME_ID,

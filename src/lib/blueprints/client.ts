@@ -1,5 +1,3 @@
-"use client";
-
 import type { BoardClipboardPayload } from "@/store/factory-store";
 import type { EntryIcon } from "@/lib/community/types";
 import type {

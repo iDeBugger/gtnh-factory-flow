@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * What last touched the screen, for the handlers that have to tell a finger from
  * a mouse.

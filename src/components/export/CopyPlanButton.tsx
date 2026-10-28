@@ -1,5 +1,3 @@
-"use client";
-
 import { Check, ClipboardCopy, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 import { copyToClipboard } from "@/lib/clipboard";

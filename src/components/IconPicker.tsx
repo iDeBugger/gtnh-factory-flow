@@ -1,5 +1,3 @@
-"use client";
-
 import { Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DEFAULT_DATASET_MANIFEST_URL } from "@/lib/datasets";

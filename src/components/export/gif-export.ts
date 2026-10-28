@@ -1,5 +1,3 @@
-"use client";
-
 import { GIFEncoder, applyPalette, quantize } from "gifenc";
 import type {
   EdgePulseFrameSpec,

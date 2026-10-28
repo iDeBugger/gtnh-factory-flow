@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo } from "react";
 import type { FactoryNode, FactoryProject, MachineConfigTierOption, Recipe } from "@/lib/model/types";
 import {

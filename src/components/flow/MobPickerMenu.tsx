@@ -1,5 +1,3 @@
-"use client";
-
 import { listRecipeDatasetMobs } from "@/lib/datasets/browser-loader";
 import type { RecipeSummary } from "@/lib/datasets/types";
 import type { EecMetadata } from "@/lib/machines/extreme-entity-crusher";

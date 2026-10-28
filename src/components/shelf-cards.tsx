@@ -1,5 +1,3 @@
-"use client";
-
 import type { ReactNode } from "react";
 import type { PlanResourceStat } from "@/lib/community/types";
 import type { MachineTier } from "@/lib/model/types";

@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, type RefObject } from "react";
 import { subscribeBoardCameraMove } from "@/lib/board-camera-signal";
 import { playSfx } from "@/lib/sound/sfx";

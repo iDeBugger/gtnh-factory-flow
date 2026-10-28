@@ -1,5 +1,3 @@
-"use client";
-
 import { useStore, useStoreApi } from "@xyflow/react";
 import { FlowViewportPortal as ViewportPortal } from "./virtual/flow-portals";
 import { memo, useEffect, useMemo, useState } from "react";

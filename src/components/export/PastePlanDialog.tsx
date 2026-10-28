@@ -1,5 +1,3 @@
-"use client";
-
 import "../chrome/mod-panel.css";
 
 import { useRef, useState } from "react";

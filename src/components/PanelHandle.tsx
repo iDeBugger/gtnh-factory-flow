@@ -1,5 +1,3 @@
-"use client";
-
 import "./panel-handle.css";
 
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";

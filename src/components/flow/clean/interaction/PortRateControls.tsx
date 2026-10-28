@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useState, type MouseEvent, type WheelEvent } from "react";
 import { startPromptClock } from "../../virtual/prompt-phase";
 import { formatSlotRateBare } from "../../flow-explainers";

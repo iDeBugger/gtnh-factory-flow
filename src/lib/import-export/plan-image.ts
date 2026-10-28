@@ -1,5 +1,3 @@
-"use client";
-
 const PLAN_METADATA_KEY = "gtnh-factory-flow-project";
 export const FLOW_IMAGE_EXPORT_EVENT = "gtnh-flow-export-image";
 export const FLOW_IMAGE_EXPORT_COMPLETE_EVENT = "gtnh-flow-export-image-complete";

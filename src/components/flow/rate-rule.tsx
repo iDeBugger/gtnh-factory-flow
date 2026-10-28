@@ -1,4 +1,3 @@
-"use client";
 import { useState } from "react";
 import type { FactoryStorage, StorageThroughputResult } from "@/lib/model/types";
 import type { StorageRole } from "@/lib/model/storage-role";
