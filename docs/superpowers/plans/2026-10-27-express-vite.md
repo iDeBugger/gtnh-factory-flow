@@ -1153,12 +1153,14 @@ it("sends the Link preload header Next sent, by asset bytes", async () => { /* p
   - With `GTNH_PREWARM_ON_STARTUP=1`, `ready` resolves after `prewarm()` settles (a failure is logged and `ready`
     still resolves), and then `writeClientFiles()` runs in the background.
   - `headersTimeout` and `keepAliveTimeout` keep Node's defaults, as Next does.
-  - `NODE_ENV` is `production` before any import is evaluated, as Next's `server.js` sets it before it requires
-    anything. ESM evaluates every static import before the module body, and externals such as `react/jsx-runtime`
+  - `NODE_ENV` is `production` before any import is evaluated, as Next's `server.js` sets it (with `=`, whatever
+    the caller set) before it requires anything. ESM evaluates every static import before the module body, and externals such as `react/jsx-runtime`
     pick their dev or prod build when they load, so a first line in the bundle runs too late. The fix is a two-file
     entry:
     - `dist/server/server.mjs`, written by `build-server.mjs` (`writeEntry(outDir)`), holds only
-      `process.env.NODE_ENV ??= "production"; const { startServer } = await import("./app.mjs"); await startServer();`;
+      `process.env.NODE_ENV = "production"; const { startServer } = await import("./app.mjs"); await startServer();`.
+      The assignment is `=`, not `??=`: a caller's `NODE_ENV=development` must not give the bundle the development
+      policy;
     - `dist/server/app.mjs` is the esbuild bundle of `main.ts`.
 
     `main.ts` only exports `startServer`; it never listens on import, so `main.test.ts` imports it without starting a
@@ -1213,7 +1215,8 @@ it("sets NODE_ENV to production before any module the bundle imports is evaluate
   // which prints process.env.NODE_ENV at load, and exports a startServer that does nothing. Spawned with NODE_ENV
   // removed from the env, dep.mjs prints "production"
 });
-it("leaves a NODE_ENV the caller set alone", async () => { /* NODE_ENV=test: dep.mjs prints "test" */ });
+it("overrides a NODE_ENV the caller set, as Next's server.js does", async () => { /* NODE_ENV=test and development: dep.mjs prints "production" */ });
+it("serves the production policy with the page's hashes under a caller-set NODE_ENV=development", async () => { /* the real main.ts bundled, run against a fixture page.json */ });
 it("starts the server from server.mjs", async () => {
   // in tools/build/build-server.test.mjs: writeEntry(tmp) beside a stand-in app.mjs whose startServer listens on
   // port 0 and prints the port. Spawned: the printed port accepts a connection and answers; then SIGTERM
