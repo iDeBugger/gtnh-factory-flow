@@ -198,10 +198,18 @@ const link = (attributes: [string, string][]) =>
   `<link ${attributes.map(([name, value]) => `${name}="${escapeAttribute(value)}"`).join(" ")}/>`;
 
 /**
- * The metadata tags of the page, in the order Next writes them: charset,
- * viewport and theme color first, then title, description, the site-wide
- * tags, canonical, Open Graph with its image, Twitter with its image, and the
- * icons. Page URLs are absolute against `origin` (`siteUrl()`, Next's
+ * The two tags that open Next's head, before its stylesheets and scripts: the
+ * charset, which a browser must meet within the first 1024 bytes, and the
+ * viewport.
+ */
+export const HEAD_LEAD =
+  '<meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>';
+
+/**
+ * The metadata tags of the page, in the order Next writes them: `HEAD_LEAD`
+ * first, then the theme color, title, description, the site-wide tags,
+ * canonical, Open Graph with its image, Twitter with its image, and the icons.
+ * Page URLs are absolute against `origin` (`siteUrl()`, Next's
  * `metadataBase`); the icons and the manifest stay paths, as Next leaves them.
  * Every value goes through the escaping React applies.
  */
@@ -210,9 +218,19 @@ export function renderHead(
   origin: string,
   versions: HeadAssetVersions = {},
 ): string {
+  return HEAD_LEAD + renderMetadataTags(head, origin, versions);
+}
+
+/**
+ * `renderHead` without `HEAD_LEAD`: what Next writes after its stylesheets and
+ * scripts, from the theme color on.
+ */
+export function renderMetadataTags(
+  head: PageHead,
+  origin: string,
+  versions: HeadAssetVersions = {},
+): string {
   const tags = [
-    '<meta charSet="utf-8"/>',
-    '<meta name="viewport" content="width=device-width, initial-scale=1"/>',
     meta("name", "theme-color", THEME_COLOR),
     `<title>${escapeHtml(head.title)}</title>`,
     meta("name", "description", head.description),

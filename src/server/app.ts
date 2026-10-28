@@ -2,8 +2,8 @@
  * The site as an Express 5 app. Its first middlewares do, in Next's order, what Next did without being asked:
  * the 308s for repeated slashes, backslashes and a trailing slash, then the canonical path, then the security
  * headers, then what Next's proxy did (the dataset path gate and the cross-site write check), then the dataset
- * backend of a development server, then the static files. Then the route table, each route with its OPTIONS and
- * 405 answers, then the page, the 404 and the error answer.
+ * backend of a development server, then the static files. Then the site files, the route table (each route with
+ * its OPTIONS and 405 answers), the page and `/community`, the 404 and the error answer.
  */
 import express, { type Express, type RequestHandler } from "express";
 import type { SecurityHeaderEnv } from "../../security-headers.config";
@@ -27,6 +27,10 @@ import {
 } from "./middleware/not-found";
 import { securityHeaders } from "./middleware/security-headers";
 import { clientAssets, datasetPublicFiles, publicFiles } from "./middleware/static";
+import { communityRedirect } from "./page/community";
+import { homePage } from "./page/home";
+import { siteRoutes } from "./page/site-routes";
+import type { PageTemplate } from "./page/template";
 
 export interface AppOptions {
   env: SecurityHeaderEnv;
@@ -36,8 +40,13 @@ export interface AppOptions {
   datasetsDir: string;
   /** The client build: its `assets` folder is served at `/assets`. */
   clientDir?: string;
-  /** The page handler, after the routes. */
-  page?: RequestHandler;
+  /**
+   * The built page (`loadPageTemplate`), served at `/` with its head per request. Its inline script hashes
+   * become the document policy's script sources, so production needs no `'unsafe-inline'` for scripts.
+   */
+  template?: PageTemplate;
+  /** The folder holding `favicon.ico` and `opengraph-image.png`: with it, the site files are served. */
+  siteFilesDir?: string;
   /** Requests wait for this before anything answers them (the server's start checks and prewarm). */
   ready?: Promise<void>;
   /** A development server's dataset backend (`GTNH_DATASET_BACKEND_URL`). */
@@ -108,6 +117,9 @@ function readyGate(ready: Promise<void>): RequestHandler {
 }
 
 export function createApp(options: AppOptions): Express {
+  const env: SecurityHeaderEnv = options.template
+    ? { ...options.env, scriptHashes: options.template.scriptHashes }
+    : options.env;
   const app = express();
   // Settings before any middleware: Next's router is case-sensitive and strict about a trailing slash (the
   // redirect handles that), sends no X-Powered-By and no ETag on a route answer, and its query is plain.
@@ -122,7 +134,7 @@ export function createApp(options: AppOptions): Express {
   app.use(repeatedSlashRedirect());
   app.use(trailingSlashRedirect());
   app.use(canonicalPath());
-  app.use(securityHeaders(options.env));
+  app.use(securityHeaders(env));
   app.use(datasetGate());
   app.use(crossSiteWriteGuard());
   if (options.datasetBackendUrl) app.use(datasetBackendProxy(options.datasetBackendUrl));
@@ -130,11 +142,16 @@ export function createApp(options: AppOptions): Express {
   app.use(publicFiles(options.publicDir));
   app.use(datasetPublicFiles(options.datasetsDir));
 
+  // Ahead of the table: llms.txt is answered here from memory, and its table entry is never reached.
+  if (options.siteFilesDir) app.use(siteRoutes({ filesDir: options.siteFilesDir }));
   const drain = options.drain ?? DEFAULT_DRAIN;
   for (const route of [...(options.extraRoutes ?? []), ...ROUTES]) mountRoute(app, route, drain);
-  if (options.page) app.use(options.page);
+  if (options.template) {
+    app.all("/", homePage(options.template));
+    app.all("/community", communityRedirect(options.template));
+  }
 
   app.use(notFound());
-  app.use(errorHandler(options.env, drain));
+  app.use(errorHandler(env, drain));
   return app;
 }

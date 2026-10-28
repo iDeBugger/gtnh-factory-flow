@@ -2,7 +2,14 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { fillTemplate, fontPreloads, inlineScriptHashes, PRELOAD_ALL_FONTS } from "./prerender.mjs";
+import {
+  assetVersion,
+  fillTemplate,
+  fontPreloads,
+  inlineScriptHashes,
+  PRELOAD_ALL_FONTS,
+  siteAssetVersions,
+} from "./prerender.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const FONTS_CSS = path.join(ROOT, "src/client/fonts.css");
@@ -61,6 +68,21 @@ describe("page.json", () => {
         structuredData: "",
       }),
     ).toThrow();
+  });
+
+  it("versions the og image and the favicon by their own bytes", () => {
+    const one = assetVersion("opengraph-image.png", Buffer.from("one"));
+    expect(one).toMatch(/^opengraph-image\.[0-9a-f]{16}\.png$/);
+    expect(assetVersion("opengraph-image.png", Buffer.from("one"))).toBe(one);
+    expect(assetVersion("opengraph-image.png", Buffer.from("two"))).not.toBe(one);
+    const versions = siteAssetVersions(ROOT);
+    expect(versions.ogImage).toBe(
+      assetVersion(
+        "opengraph-image.png",
+        readFileSync(path.join(ROOT, "src/app/opengraph-image.png")),
+      ),
+    );
+    expect(versions.favicon).toMatch(/^favicon\.[0-9a-f]{16}\.ico$/);
   });
 });
 

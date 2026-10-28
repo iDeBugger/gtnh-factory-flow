@@ -1,0 +1,1579 @@
+{
+  "source": "Next 16 at e6fd3ae3 (scratch/parity/r1-off and r1-on), NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3770, as the parity harness captured and normalized it (tools/http-parity). Page bodies are left out (the allow list leaves them to the metadata compare); each keeps only its doctype.",
+  "off": {
+    "page /": {
+      "name": "page /",
+      "request": {
+        "method": "GET",
+        "target": "/"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding"
+        ],
+        [
+          "link",
+          "<<asset:1e06740a>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:c9407645>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1cc7c0c5>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:262e3182>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:77057b73>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d5b840fa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:e6f3f9aa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d0ed42db>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:0845271b>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:5d690ea4>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:32f5840f>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:18e9d8e6>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1ec8f6ee>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:a60206dd>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:9baadbba>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:6b73917d>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:50841fc9>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\""
+        ],
+        [
+          "cache-control",
+          "private, no-cache, no-store, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "text/html; charset=utf-8"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:43:33 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "<!DOCTYPE html><!-- the page body, left out of the fixture -->"
+      }
+    },
+    "page /?plan=missing": {
+      "name": "page /?plan=missing",
+      "request": {
+        "method": "GET",
+        "target": "/?plan=missing"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding"
+        ],
+        [
+          "link",
+          "<<asset:1e06740a>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:c9407645>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1cc7c0c5>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:262e3182>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:77057b73>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d5b840fa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:e6f3f9aa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d0ed42db>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:0845271b>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:5d690ea4>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:32f5840f>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:18e9d8e6>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1ec8f6ee>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:a60206dd>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:9baadbba>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:6b73917d>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:50841fc9>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\""
+        ],
+        [
+          "cache-control",
+          "private, no-cache, no-store, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "text/html; charset=utf-8"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:43:33 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "<!DOCTYPE html><!-- the page body, left out of the fixture -->"
+      }
+    },
+    "HEAD /": {
+      "name": "HEAD /",
+      "request": {
+        "method": "HEAD",
+        "target": "/"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding"
+        ],
+        [
+          "link",
+          "<<asset:1e06740a>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:c9407645>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1cc7c0c5>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:262e3182>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:77057b73>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d5b840fa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:e6f3f9aa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d0ed42db>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:0845271b>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:5d690ea4>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:32f5840f>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:18e9d8e6>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1ec8f6ee>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:a60206dd>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:9baadbba>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:6b73917d>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:50841fc9>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\""
+        ],
+        [
+          "cache-control",
+          "private, no-cache, no-store, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "text/html; charset=utf-8"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:43:33 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ]
+      ],
+      "body": {
+        "text": ""
+      }
+    },
+    "OPTIONS /": {
+      "name": "OPTIONS /",
+      "request": {
+        "method": "OPTIONS",
+        "target": "/"
+      },
+      "status": 400,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:43:33 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": ""
+      }
+    },
+    "page /community": {
+      "name": "page /community",
+      "request": {
+        "method": "GET",
+        "target": "/community"
+      },
+      "status": 404,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "x-nextjs-prerender",
+          "1"
+        ],
+        [
+          "x-nextjs-prerender",
+          "1"
+        ],
+        [
+          "x-nextjs-stale-time",
+          "300"
+        ],
+        [
+          "cache-control",
+          "s-maxage=31536000"
+        ],
+        [
+          "etag",
+          "<etag>"
+        ],
+        [
+          "content-type",
+          "text/html; charset=utf-8"
+        ],
+        [
+          "content-length",
+          "18258"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:43:33 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ]
+      ],
+      "body": {
+        "text": "<!DOCTYPE html><!-- the page body, left out of the fixture -->"
+      }
+    },
+    "page /community?plan=x": {
+      "name": "page /community?plan=x",
+      "request": {
+        "method": "GET",
+        "target": "/community?plan=x"
+      },
+      "status": 404,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "x-nextjs-prerender",
+          "1"
+        ],
+        [
+          "x-nextjs-prerender",
+          "1"
+        ],
+        [
+          "x-nextjs-stale-time",
+          "300"
+        ],
+        [
+          "cache-control",
+          "s-maxage=31536000"
+        ],
+        [
+          "etag",
+          "<etag>"
+        ],
+        [
+          "content-type",
+          "text/html; charset=utf-8"
+        ],
+        [
+          "content-length",
+          "18258"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:43:33 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ]
+      ],
+      "body": {
+        "text": "<!DOCTYPE html><!-- the page body, left out of the fixture -->"
+      }
+    },
+    "site /sitemap.xml": {
+      "name": "site /sitemap.xml",
+      "request": {
+        "method": "GET",
+        "target": "/sitemap.xml"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "cache-control",
+          "public, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "application/xml"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:43:33 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n<url>\n<loc>http://127.0.0.1:3770/</loc>\n<lastmod><time></lastmod>\n<changefreq>weekly</changefreq>\n<priority>1</priority>\n</url>\n</urlset>\n"
+      }
+    },
+    "site /robots.txt": {
+      "name": "site /robots.txt",
+      "request": {
+        "method": "GET",
+        "target": "/robots.txt"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "cache-control",
+          "public, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "text/plain"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:43:33 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "User-Agent: *\nAllow: /\nDisallow: /api/\nDisallow: /datasets/\n\nSitemap: http://127.0.0.1:3770/sitemap.xml\n"
+      }
+    },
+    "site /manifest.webmanifest": {
+      "name": "site /manifest.webmanifest",
+      "request": {
+        "method": "GET",
+        "target": "/manifest.webmanifest"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "cache-control",
+          "public, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "application/manifest+json"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:43:33 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "{\"name\":\"GTNH Planner\",\"short_name\":\"GTNH Planner\",\"description\":\"Factory planner and recipe calculator for GregTech: New Horizons.\",\"start_url\":\"/\",\"display\":\"standalone\",\"background_color\":\"#1b1d21\",\"theme_color\":\"#1b1d21\",\"icons\":[{\"src\":\"/icon-192.png\",\"sizes\":\"192x192\",\"type\":\"image/png\"},{\"src\":\"/icon-512.png\",\"sizes\":\"512x512\",\"type\":\"image/png\"},{\"src\":\"/icon-maskable-512.png\",\"sizes\":\"512x512\",\"type\":\"image/png\",\"purpose\":\"maskable\"}]}"
+      }
+    },
+    "site /favicon.ico": {
+      "name": "site /favicon.ico",
+      "request": {
+        "method": "GET",
+        "target": "/favicon.ico"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "cache-control",
+          "public, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "image/x-icon"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:43:33 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "sha256": "7f427e7379027d4cfa279f11d6e3d36e0cda275b8da37206ada8d1770e5263c4",
+        "length": 5803
+      }
+    },
+    "site /opengraph-image.png": {
+      "name": "site /opengraph-image.png",
+      "request": {
+        "method": "GET",
+        "target": "/opengraph-image.png"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "cache-control",
+          "public, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "image/png"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:43:33 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "sha256": "c899dd58b798d9281689c935e88398c205a97bd7b4edd95e6503cf084136ff90",
+        "length": 373246
+      }
+    },
+    "site /llms.txt": {
+      "name": "site /llms.txt",
+      "request": {
+        "method": "GET",
+        "target": "/llms.txt"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "cache-control",
+          "public, max-age=3600"
+        ],
+        [
+          "content-type",
+          "text/plain; charset=utf-8"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:43:33 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "# GTNH Planner\n\n> Free browser-based factory planner and recipe calculator for GregTech: New Horizons (GTNH), the Minecraft expert modpack. Draw production chains on an interactive flowchart, balance machine ratios, and compute EU/t power draw and throughput. No account and no install needed.\n\nKey facts:\n\n- Carries full recipe data for GTNH 2.9 and 2.8.1, exported from the game itself (NEI/RecEx), including multiblock machines, ore dictionary alternatives, and programmed circuit settings.\n- Models GregTech mechanics faithfully: voltage tiers and overclocking, parallel processing on multiblocks, heat bonuses on the Electric Blast Furnace family, machine-specific speed and power coefficients.\n- A solver computes steady-state flow for the whole factory at once: what every machine produces and consumes per second, where the bottleneck is, and how full each machine runs.\n- Plans export as shareable links, JSON, PNG, or GIF. Opening a shared link loads the full plan, editable, with nothing to sign up for.\n- The planner is a client-side application. Pages carry little static HTML; a plan link's name and summary are server-rendered into its page metadata, so fetching a plan URL is the way to read a plan.\n- Version 4.4.1 as of this file; http://127.0.0.1:3770/api/version reports what is live.\n\n## Start here\n\n- [The planner](http://127.0.0.1:3770/): the app itself. Everything happens on one page.\n- [Sitemap](http://127.0.0.1:3770/sitemap.xml): the home page.\n"
+      }
+    }
+  },
+  "on": {
+    "page /": {
+      "name": "page /",
+      "request": {
+        "method": "GET",
+        "target": "/"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770 http://127.0.0.1:25640 http://127.0.0.1:25641 http://127.0.0.1:25642 http://127.0.0.1:25643 http://127.0.0.1:25644 http://127.0.0.1:25645 http://127.0.0.1:25646 http://127.0.0.1:25647 http://127.0.0.1:25648 http://127.0.0.1:25649; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding"
+        ],
+        [
+          "link",
+          "<<asset:1e06740a>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:c9407645>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1cc7c0c5>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:262e3182>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:77057b73>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d5b840fa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:e6f3f9aa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d0ed42db>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:0845271b>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:5d690ea4>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:32f5840f>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:18e9d8e6>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1ec8f6ee>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:a60206dd>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:9baadbba>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:6b73917d>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:50841fc9>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\""
+        ],
+        [
+          "cache-control",
+          "private, no-cache, no-store, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "text/html; charset=utf-8"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:38 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "<!DOCTYPE html><!-- the page body, left out of the fixture -->"
+      }
+    },
+    "page /?plan=missing": {
+      "name": "page /?plan=missing",
+      "request": {
+        "method": "GET",
+        "target": "/?plan=missing"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770 http://127.0.0.1:25640 http://127.0.0.1:25641 http://127.0.0.1:25642 http://127.0.0.1:25643 http://127.0.0.1:25644 http://127.0.0.1:25645 http://127.0.0.1:25646 http://127.0.0.1:25647 http://127.0.0.1:25648 http://127.0.0.1:25649; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding"
+        ],
+        [
+          "link",
+          "<<asset:1e06740a>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:c9407645>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1cc7c0c5>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:262e3182>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:77057b73>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d5b840fa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:e6f3f9aa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d0ed42db>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:0845271b>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:5d690ea4>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:32f5840f>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:18e9d8e6>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1ec8f6ee>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:a60206dd>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:9baadbba>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:6b73917d>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:50841fc9>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\""
+        ],
+        [
+          "cache-control",
+          "private, no-cache, no-store, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "text/html; charset=utf-8"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:38 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "<!DOCTYPE html><!-- the page body, left out of the fixture -->"
+      }
+    },
+    "HEAD /": {
+      "name": "HEAD /",
+      "request": {
+        "method": "HEAD",
+        "target": "/"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770 http://127.0.0.1:25640 http://127.0.0.1:25641 http://127.0.0.1:25642 http://127.0.0.1:25643 http://127.0.0.1:25644 http://127.0.0.1:25645 http://127.0.0.1:25646 http://127.0.0.1:25647 http://127.0.0.1:25648 http://127.0.0.1:25649; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding"
+        ],
+        [
+          "link",
+          "<<asset:1e06740a>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:c9407645>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1cc7c0c5>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:262e3182>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:77057b73>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d5b840fa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:e6f3f9aa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d0ed42db>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:0845271b>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:5d690ea4>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:32f5840f>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:18e9d8e6>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1ec8f6ee>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:a60206dd>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:9baadbba>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:6b73917d>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:50841fc9>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\""
+        ],
+        [
+          "cache-control",
+          "private, no-cache, no-store, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "text/html; charset=utf-8"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:39 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ]
+      ],
+      "body": {
+        "text": ""
+      }
+    },
+    "OPTIONS /": {
+      "name": "OPTIONS /",
+      "request": {
+        "method": "OPTIONS",
+        "target": "/"
+      },
+      "status": 400,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770 http://127.0.0.1:25640 http://127.0.0.1:25641 http://127.0.0.1:25642 http://127.0.0.1:25643 http://127.0.0.1:25644 http://127.0.0.1:25645 http://127.0.0.1:25646 http://127.0.0.1:25647 http://127.0.0.1:25648 http://127.0.0.1:25649; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:39 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": ""
+      }
+    },
+    "page /community": {
+      "name": "page /community",
+      "request": {
+        "method": "GET",
+        "target": "/community"
+      },
+      "status": 307,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770 http://127.0.0.1:25640 http://127.0.0.1:25641 http://127.0.0.1:25642 http://127.0.0.1:25643 http://127.0.0.1:25644 http://127.0.0.1:25645 http://127.0.0.1:25646 http://127.0.0.1:25647 http://127.0.0.1:25648 http://127.0.0.1:25649; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding"
+        ],
+        [
+          "location",
+          "/"
+        ],
+        [
+          "link",
+          "<<asset:1e06740a>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:c9407645>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1cc7c0c5>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:262e3182>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:77057b73>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d5b840fa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:e6f3f9aa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d0ed42db>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:0845271b>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:5d690ea4>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:32f5840f>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:18e9d8e6>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1ec8f6ee>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:a60206dd>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:9baadbba>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:6b73917d>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:50841fc9>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:401f8660>>; rel=preload; as=\"style\", <<asset:d70d050a>>; rel=preload; as=\"style\""
+        ],
+        [
+          "cache-control",
+          "private, no-cache, no-store, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "text/html; charset=utf-8"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:38 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "<!DOCTYPE html><!-- the page body, left out of the fixture -->"
+      }
+    },
+    "page /community?plan=x": {
+      "name": "page /community?plan=x",
+      "request": {
+        "method": "GET",
+        "target": "/community?plan=x"
+      },
+      "status": 307,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770 http://127.0.0.1:25640 http://127.0.0.1:25641 http://127.0.0.1:25642 http://127.0.0.1:25643 http://127.0.0.1:25644 http://127.0.0.1:25645 http://127.0.0.1:25646 http://127.0.0.1:25647 http://127.0.0.1:25648 http://127.0.0.1:25649; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding"
+        ],
+        [
+          "location",
+          "/?plan=x"
+        ],
+        [
+          "link",
+          "<<asset:1e06740a>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:c9407645>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1cc7c0c5>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:262e3182>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:77057b73>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d5b840fa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:e6f3f9aa>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:d0ed42db>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:0845271b>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/ttf\", <<asset:5d690ea4>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:32f5840f>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/otf\", <<asset:18e9d8e6>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:1ec8f6ee>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:a60206dd>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:9baadbba>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:6b73917d>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:50841fc9>>; rel=preload; as=\"font\"; crossorigin=\"\"; type=\"font/woff2\", <<asset:401f8660>>; rel=preload; as=\"style\", <<asset:d70d050a>>; rel=preload; as=\"style\""
+        ],
+        [
+          "cache-control",
+          "private, no-cache, no-store, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "text/html; charset=utf-8"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:38 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "<!DOCTYPE html><!-- the page body, left out of the fixture -->"
+      }
+    },
+    "site /sitemap.xml": {
+      "name": "site /sitemap.xml",
+      "request": {
+        "method": "GET",
+        "target": "/sitemap.xml"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770 http://127.0.0.1:25640 http://127.0.0.1:25641 http://127.0.0.1:25642 http://127.0.0.1:25643 http://127.0.0.1:25644 http://127.0.0.1:25645 http://127.0.0.1:25646 http://127.0.0.1:25647 http://127.0.0.1:25648 http://127.0.0.1:25649; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "cache-control",
+          "public, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "application/xml"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:38 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n<url>\n<loc>http://127.0.0.1:3770/</loc>\n<lastmod><time></lastmod>\n<changefreq>weekly</changefreq>\n<priority>1</priority>\n</url>\n</urlset>\n"
+      }
+    },
+    "site /robots.txt": {
+      "name": "site /robots.txt",
+      "request": {
+        "method": "GET",
+        "target": "/robots.txt"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770 http://127.0.0.1:25640 http://127.0.0.1:25641 http://127.0.0.1:25642 http://127.0.0.1:25643 http://127.0.0.1:25644 http://127.0.0.1:25645 http://127.0.0.1:25646 http://127.0.0.1:25647 http://127.0.0.1:25648 http://127.0.0.1:25649; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "cache-control",
+          "public, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "text/plain"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:38 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "User-Agent: *\nAllow: /\nDisallow: /api/\nDisallow: /datasets/\n\nSitemap: http://127.0.0.1:3770/sitemap.xml\n"
+      }
+    },
+    "site /manifest.webmanifest": {
+      "name": "site /manifest.webmanifest",
+      "request": {
+        "method": "GET",
+        "target": "/manifest.webmanifest"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770 http://127.0.0.1:25640 http://127.0.0.1:25641 http://127.0.0.1:25642 http://127.0.0.1:25643 http://127.0.0.1:25644 http://127.0.0.1:25645 http://127.0.0.1:25646 http://127.0.0.1:25647 http://127.0.0.1:25648 http://127.0.0.1:25649; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "cache-control",
+          "public, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "application/manifest+json"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:38 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "{\"name\":\"GTNH Planner\",\"short_name\":\"GTNH Planner\",\"description\":\"Factory planner and recipe calculator for GregTech: New Horizons.\",\"start_url\":\"/\",\"display\":\"standalone\",\"background_color\":\"#1b1d21\",\"theme_color\":\"#1b1d21\",\"icons\":[{\"src\":\"/icon-192.png\",\"sizes\":\"192x192\",\"type\":\"image/png\"},{\"src\":\"/icon-512.png\",\"sizes\":\"512x512\",\"type\":\"image/png\"},{\"src\":\"/icon-maskable-512.png\",\"sizes\":\"512x512\",\"type\":\"image/png\",\"purpose\":\"maskable\"}]}"
+      }
+    },
+    "site /favicon.ico": {
+      "name": "site /favicon.ico",
+      "request": {
+        "method": "GET",
+        "target": "/favicon.ico"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770 http://127.0.0.1:25640 http://127.0.0.1:25641 http://127.0.0.1:25642 http://127.0.0.1:25643 http://127.0.0.1:25644 http://127.0.0.1:25645 http://127.0.0.1:25646 http://127.0.0.1:25647 http://127.0.0.1:25648 http://127.0.0.1:25649; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "cache-control",
+          "public, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "image/x-icon"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:38 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "sha256": "7f427e7379027d4cfa279f11d6e3d36e0cda275b8da37206ada8d1770e5263c4",
+        "length": 5803
+      }
+    },
+    "site /opengraph-image.png": {
+      "name": "site /opengraph-image.png",
+      "request": {
+        "method": "GET",
+        "target": "/opengraph-image.png"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770 http://127.0.0.1:25640 http://127.0.0.1:25641 http://127.0.0.1:25642 http://127.0.0.1:25643 http://127.0.0.1:25644 http://127.0.0.1:25645 http://127.0.0.1:25646 http://127.0.0.1:25647 http://127.0.0.1:25648 http://127.0.0.1:25649; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "cache-control",
+          "public, max-age=0, must-revalidate"
+        ],
+        [
+          "content-type",
+          "image/png"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:38 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "sha256": "c899dd58b798d9281689c935e88398c205a97bd7b4edd95e6503cf084136ff90",
+        "length": 373246
+      }
+    },
+    "site /llms.txt": {
+      "name": "site /llms.txt",
+      "request": {
+        "method": "GET",
+        "target": "/llms.txt"
+      },
+      "status": 200,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770 http://127.0.0.1:25640 http://127.0.0.1:25641 http://127.0.0.1:25642 http://127.0.0.1:25643 http://127.0.0.1:25644 http://127.0.0.1:25645 http://127.0.0.1:25646 http://127.0.0.1:25647 http://127.0.0.1:25648 http://127.0.0.1:25649; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "vary",
+          "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+        ],
+        [
+          "x-nextjs-cache",
+          "HIT"
+        ],
+        [
+          "cache-control",
+          "public, max-age=3600"
+        ],
+        [
+          "content-type",
+          "text/plain; charset=utf-8"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 08:44:38 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ],
+        [
+          "transfer-encoding",
+          "chunked"
+        ]
+      ],
+      "body": {
+        "text": "# GTNH Planner\n\n> Free browser-based factory planner and recipe calculator for GregTech: New Horizons (GTNH), the Minecraft expert modpack. Draw production chains on an interactive flowchart, balance machine ratios, compute EU/t power draw and throughput, and share plans with the community. No account and no install needed.\n\nKey facts:\n\n- Carries full recipe data for GTNH 2.9 and 2.8.1, exported from the game itself (NEI/RecEx), including multiblock machines, ore dictionary alternatives, and programmed circuit settings.\n- Models GregTech mechanics faithfully: voltage tiers and overclocking, parallel processing on multiblocks, heat bonuses on the Electric Blast Furnace family, machine-specific speed and power coefficients.\n- A solver computes steady-state flow for the whole factory at once: what every machine produces and consumes per second, where the bottleneck is, and how full each machine runs.\n- Plans export as shareable links, JSON, PNG, or GIF. Opening a shared link loads the full plan, editable, with nothing to sign up for.\n- The planner is a client-side application. Pages carry little static HTML; a plan link's name and summary are server-rendered into its page metadata, so fetching a plan URL is the way to read a plan.\n- Version 4.4.1 as of this file; http://127.0.0.1:3770/api/version reports what is live.\n\n## Start here\n\n- [The planner](http://127.0.0.1:3770/): the app itself. Everything happens on one page.\n- [Sitemap](http://127.0.0.1:3770/sitemap.xml): the home page plus every public community plan.\n"
+      }
+    }
+  }
+}

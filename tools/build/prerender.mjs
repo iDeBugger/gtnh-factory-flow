@@ -12,7 +12,9 @@ import { pathToFileURL } from "node:url";
  * - `scriptHashes`: the CSP hash of every inline script that runs, so the
  *   policy needs no 'unsafe-inline' for scripts. JSON-LD is a data block, not
  *   a script, and needs none.
- * - `fontPreloads`: the font files the server names in its `Link` header.
+ * - `fontPreloads`: the font files the server names in its `Link` header;
+ * - `assetVersions`: the cache-busting query of the og:image and favicon URLs
+ *   in the head (`assetVersion`).
  */
 
 /**
@@ -90,6 +92,45 @@ export function fontPreloads(manifest, all = PRELOAD_ALL_FONTS) {
   });
 }
 
+/** The site files whose head URLs carry a version query, as `HeadAssetVersions` in head.ts names them. */
+export const VERSIONED_SITE_FILES = {
+  ogImage: "src/app/opengraph-image.png",
+  favicon: "src/app/favicon.ico",
+};
+
+/**
+ * The query a site file's head URL carries: `<name>.<content hash>.<ext>`, the
+ * shape of the name Next's bundler gave the file. The hash is the file's own
+ * sha256, so the query changes exactly when the file does, and a crawler or
+ * browser holding the old image asks again.
+ *
+ * @param {string} fileName
+ * @param {Buffer} bytes
+ * @returns {string}
+ */
+export function assetVersion(fileName, bytes) {
+  const extension = path.extname(fileName);
+  const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
+  return `${path.basename(fileName, extension)}.${hash}${extension}`;
+}
+
+/**
+ * `assetVersion` of each versioned site file under `root`.
+ *
+ * @param {string} root
+ * @returns {{ ogImage: string, favicon: string }}
+ */
+export function siteAssetVersions(root) {
+  return /** @type {{ ogImage: string, favicon: string }} */ (
+    Object.fromEntries(
+      Object.entries(VERSIONED_SITE_FILES).map(([key, file]) => [
+        key,
+        assetVersion(path.basename(file), readFileSync(path.join(root, file))),
+      ]),
+    )
+  );
+}
+
 /**
  * The page with the boot scripts and the shell filled in.
  *
@@ -117,7 +158,11 @@ async function main() {
   const template = readFileSync(path.join(clientDir, "index.html"), "utf8");
   const html = fillTemplate(template, renderShell());
   const manifest = JSON.parse(readFileSync(path.join(clientDir, ".vite", "manifest.json"), "utf8"));
-  const page = { scriptHashes: inlineScriptHashes(html), fontPreloads: fontPreloads(manifest) };
+  const page = {
+    scriptHashes: inlineScriptHashes(html),
+    fontPreloads: fontPreloads(manifest),
+    assetVersions: siteAssetVersions(root),
+  };
   writeFileSync(path.join(clientDir, "index.html"), html);
   writeFileSync(path.join(clientDir, "page.json"), `${JSON.stringify(page, null, 2)}\n`);
   console.log(

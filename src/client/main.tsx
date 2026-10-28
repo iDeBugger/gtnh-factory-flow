@@ -1,3 +1,7 @@
+// First, so it runs before any other module of the app.
+import "./entry-started";
+// Before any module builds a schema (zod-jitless.ts).
+import "./zod-jitless";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import "../app/globals.css";
 import "./fonts.css";
