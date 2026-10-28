@@ -44,3 +44,5 @@ tools/*
 !tools/deploy/live-deps.mjs
 !tools/deploy/check-env.mjs
 !tools/db/migrate.ts
+# The re-included folder brings its tests back; they stay out, as everywhere else.
+tools/build/**/*.test.mjs
