@@ -44,10 +44,37 @@ describe("head-compare", () => {
     }
   });
 
-  it("reports the cases ruled to a plain 404 without failing them", () => {
+  it("reports the cases ruled to a plain 404 without failing them, when they are the site's own 404", () => {
     const next = new Map([page("site /dev/clean-card", 404, NEXT_HEAD + "<body></body>")]);
-    const result = compareHeads(next, new Map([page("site /dev/clean-card", 404, EXPRESS)]));
-    expect(result.differences).toEqual([]);
+    const express = new Map([
+      page("site /dev/clean-card", 404, EXPRESS),
+      page("page /no-such-page", 404, EXPRESS),
+    ]);
+    const result = compareHeads(next, express);
+    expect(result.differences.filter((d) => d.name === "site /dev/clean-card")).toEqual([]);
     expect(result.ruled.length).toBeGreaterThan(0);
+  });
+
+  it("fails a ruled case that is not the site's own 404, or has none to hold it to", () => {
+    const next = new Map([page("site /dev/clean-card", 404, NEXT_HEAD + "<body></body>")]);
+    for (const other of [
+      EXPRESS.replace("<title>Site</title>", "<title>Other</title>"),
+      EXPRESS.replace("<p>shell</p>", "<p>other</p>"),
+      EXPRESS.replace("boot()", "boot(1)"),
+    ]) {
+      const express = new Map([
+        page("site /dev/clean-card", 404, other),
+        page("page /no-such-page", 404, EXPRESS),
+      ]);
+      const own = compareHeads(next, express).differences.filter(
+        (d) => d.name === "site /dev/clean-card",
+      );
+      expect(own.length, other).toBeGreaterThan(0);
+      expect(own.every((d) => d.field.startsWith("own 404 "))).toBe(true);
+    }
+    const alone = compareHeads(next, new Map([page("site /dev/clean-card", 404, EXPRESS)]));
+    expect(alone.differences).toMatchObject([
+      { name: "site /dev/clean-card", field: "own 404 case" },
+    ]);
   });
 });

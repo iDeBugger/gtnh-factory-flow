@@ -28,7 +28,9 @@ const TAG =
 /**
  * Cases ruled to answer the site's plain 404 where Next answered another page: Next's prerendered not-found of
  * a page route (`/community` with the switch off, the dev page in production), whose head lacks the 404 title
- * and whose body is empty until its script runs. They are reported, never failed.
+ * and whose body is empty until its script runs. Their difference from the first directory is reported, never
+ * failed; the second directory's answer must be that directory's own plain 404 (`PLAIN_404_CASE`), and any
+ * difference from it fails.
  */
 export const RULED_PLAIN_404 = new Set([
   "page /community",
@@ -99,12 +101,50 @@ export function shellMarkup(html) {
 
 export const PAGE_CASES = ["page /", "page /?plan=missing", "scenario page /?plan="];
 
+/** The site's plain 404: an unknown path. */
+export const PLAIN_404_CASE = "page /no-such-page";
+
 function isHtml404(stored) {
   const type = stored?.headers?.find(([key]) => key === "content-type")?.[1] ?? "";
   return stored?.status === 404 && /text\/html/.test(type) && typeof stored.body?.text === "string";
 }
 
-/** Each case's differences: `{ name, field: "tags" | "shell" | "case", index?, a, b }`. */
+/** The differences between two HTML answers of one case: `{ name, field, index?, a, b }`. */
+function diffHtml(name, textA, textB, prefix = "") {
+  const differences = [];
+  for (const [field, list] of [
+    ["tags", metadataTags],
+    ["scripts", pageScripts],
+  ]) {
+    const listA = list(textA);
+    const listB = list(textB);
+    for (let index = 0; index < Math.max(listA.length, listB.length); index++) {
+      if (listA[index] !== listB[index]) {
+        differences.push({ name, field: prefix + field, index, a: listA[index], b: listB[index] });
+        break;
+      }
+    }
+  }
+  const shellA = shellMarkup(textA);
+  const shellB = shellMarkup(textB);
+  if (shellA !== shellB) {
+    let at = 0;
+    while (shellA[at] === shellB[at]) at++;
+    differences.push({
+      name,
+      field: prefix + "shell",
+      index: at,
+      a: shellA.slice(Math.max(0, at - 60), at + 200),
+      b: shellB.slice(Math.max(0, at - 60), at + 200),
+    });
+  }
+  return differences;
+}
+
+/**
+ * Each case's differences: `{ name, field: "tags" | "scripts" | "shell" | "case", index?, a, b }`. A ruled case
+ * is also held to the second directory's own plain 404, as fields named `own 404 <field>`.
+ */
 export function compareHeads(a, b) {
   const names = new Set(PAGE_CASES.filter((name) => a.has(name) || b.has(name)));
   // The throw and escape fixtures exist only in Next's baseline build.
@@ -112,6 +152,7 @@ export function compareHeads(a, b) {
     if (isHtml404(stored) && !name.startsWith("nextOnly ")) names.add(name);
   }
   const differences = [];
+  const ruled = [];
   for (const name of names) {
     const textA = a.get(name)?.body?.text;
     const textB = b.get(name)?.body?.text;
@@ -119,38 +160,21 @@ export function compareHeads(a, b) {
       differences.push({ name, field: "case", a: typeof textA, b: typeof textB });
       continue;
     }
-    for (const [field, list] of [
-      ["tags", metadataTags],
-      ["scripts", pageScripts],
-    ]) {
-      const listA = list(textA);
-      const listB = list(textB);
-      for (let index = 0; index < Math.max(listA.length, listB.length); index++) {
-        if (listA[index] !== listB[index]) {
-          differences.push({ name, field, index, a: listA[index], b: listB[index] });
-          break;
-        }
-      }
+    const found = diffHtml(name, textA, textB);
+    if (!RULED_PLAIN_404.has(name)) {
+      differences.push(...found);
+      continue;
     }
-    const shellA = shellMarkup(textA);
-    const shellB = shellMarkup(textB);
-    if (shellA !== shellB) {
-      let at = 0;
-      while (shellA[at] === shellB[at]) at++;
-      differences.push({
-        name,
-        field: "shell",
-        index: at,
-        a: shellA.slice(Math.max(0, at - 60), at + 200),
-        b: shellB.slice(Math.max(0, at - 60), at + 200),
-      });
+    ruled.push(...found);
+    if (!isHtml404(b.get(name))) continue;
+    const plain = b.get(PLAIN_404_CASE)?.body?.text;
+    if (typeof plain !== "string") {
+      differences.push({ name, field: "own 404 case", a: "missing", b: "string" });
+      continue;
     }
+    differences.push(...diffHtml(name, plain, textB, "own 404 "));
   }
-  return {
-    cases: names.size,
-    differences: differences.filter((d) => !RULED_PLAIN_404.has(d.name)),
-    ruled: differences.filter((d) => RULED_PLAIN_404.has(d.name)),
-  };
+  return { cases: names.size, differences, ruled };
 }
 
 function main([dirA, dirB]) {
@@ -160,7 +184,9 @@ function main([dirA, dirB]) {
   }
   const { cases, differences, ruled } = compareHeads(readCaptureDir(dirA), readCaptureDir(dirB));
   for (const d of ruled)
-    console.log(`ruled ${d.name} ${d.field}: the site's plain 404 (RULED_PLAIN_404)`);
+    console.log(
+      `ruled ${d.name} ${d.field}: the site's plain 404 (RULED_PLAIN_404), checked against ${PLAIN_404_CASE}`,
+    );
   for (const d of differences) {
     console.log(`DIFF ${d.name} ${d.field}${d.index === undefined ? "" : ` at ${d.index}`}`);
     console.log(`  a: ${JSON.stringify(d.a)}\n  b: ${JSON.stringify(d.b)}`);
