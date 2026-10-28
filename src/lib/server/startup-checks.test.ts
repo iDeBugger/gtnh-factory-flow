@@ -116,10 +116,14 @@ describe("the server's startup checks", () => {
     expect(modAndCommunityMismatch(" ON ", "on")).toBeUndefined();
     expect(modAndCommunityMismatch("", undefined)).toBeUndefined();
     expect(modAndCommunityMismatch("off", "")).toBeUndefined();
-    expect(modAndCommunityMismatch("on", "")).toMatch(
-      /^\[mod-and-community\] NEXT_PUBLIC_MOD_AND_COMMUNITY is off here but on in the build/,
+    expect(modAndCommunityMismatch("on", "")).toBe(
+      "[mod-and-community] NEXT_PUBLIC_MOD_AND_COMMUNITY is off here but on in the build: the page shows the " +
+        "mod link and the community library, and their routes answer 404. Start the server with it on, or rebuild with it off.",
     );
-    expect(modAndCommunityMismatch("", "on")).toMatch(/is on here but off in the build/);
+    expect(modAndCommunityMismatch("", "on")).toBe(
+      "[mod-and-community] NEXT_PUBLIC_MOD_AND_COMMUNITY is on here but off in the build: the mod link and the " +
+        "community library stay off, in the page and on the server. Rebuild with it on, or unset it here.",
+    );
     // Unbundled, both reads are the process's, so the checks never see a mismatch.
     vi.stubEnv("NEXT_PUBLIC_MOD_AND_COMMUNITY", "on");
     const errors: string[] = [];

@@ -23,9 +23,10 @@
  *   name before anything starts (tools/deploy/check-env.mjs).
  * - NEXT_PUBLIC_MOD_AND_COMMUNITY in the process says otherwise than the
  *   build's (modAndCommunityMismatch): it says so as an error line. The
- *   switch then stays off on the server (deployment-features.ts), while the
- *   page, built the other way, still shows or hides the mod and the library.
- *   Not refused, as the deployment's fail-safe is to keep serving the planner.
+ *   switch then stays off on the server (deployment-features.ts). Built on,
+ *   the page still shows the mod and the library, whose routes answer 404;
+ *   built off, both stay off and only the env disagrees. Not refused, as the
+ *   deployment's fail-safe is to keep serving the planner.
  */
 export const SHORT_SECRET_LENGTH = 16;
 
@@ -41,10 +42,15 @@ export function modAndCommunityMismatch(
   running: string | undefined,
 ): string | undefined {
   if (isOn(built) === isOn(running)) return undefined;
+  if (isOn(built)) {
+    return (
+      "[mod-and-community] NEXT_PUBLIC_MOD_AND_COMMUNITY is off here but on in the build: the page shows the " +
+      "mod link and the community library, and their routes answer 404. Start the server with it on, or rebuild with it off."
+    );
+  }
   return (
-    `[mod-and-community] NEXT_PUBLIC_MOD_AND_COMMUNITY is ${isOn(running) ? "on" : "off"} here but ` +
-    `${isOn(built) ? "on" : "off"} in the build: the mod and community routes are off, and the page does not ` +
-    "match this server. Start it with the value it was built with, or rebuild."
+    "[mod-and-community] NEXT_PUBLIC_MOD_AND_COMMUNITY is on here but off in the build: the mod link and the " +
+    "community library stay off, in the page and on the server. Rebuild with it on, or unset it here."
   );
 }
 
