@@ -100,7 +100,7 @@ function scheduleSolve(request: SolveRequest) {
 
 function getWorker(): Worker {
   if (!worker) {
-    worker = new Worker(new URL("./solve-books.worker.ts", import.meta.url));
+    worker = new Worker(new URL("./solve-books.worker.ts", import.meta.url), { type: "module" });
     worker.onmessage = (
       event: MessageEvent<{
         key: string;

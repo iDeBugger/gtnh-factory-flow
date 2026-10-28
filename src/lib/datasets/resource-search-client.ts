@@ -74,7 +74,9 @@ export function startBrowserResourceSearch(version: DatasetVersion, itemsUrl: st
   stopBrowserResourceSearch();
   let worker: Worker;
   try {
-    worker = new Worker(new URL("../search/resource-search.worker.ts", import.meta.url));
+    worker = new Worker(new URL("../search/resource-search.worker.ts", import.meta.url), {
+      type: "module",
+    });
   } catch {
     broken = true;
     return;

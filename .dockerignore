@@ -3,6 +3,7 @@
 # and `next build` cached. Generated and local files (a build from a working tree):
 node_modules
 .next
+dist
 dist-live
 dist-db
 public/datasets

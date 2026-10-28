@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { pickDatasetVersionFor, pickDefaultDatasetVersion } from "./remote";
 import type { DatasetManifest } from "./types";
 
@@ -15,6 +15,30 @@ describe("remote dataset selection", () => {
     };
 
     expect(pickDefaultDatasetVersion(manifest)?.id).toBe("stable-2.8.4");
+  });
+});
+
+describe("DEFAULT_DATASET_MANIFEST_URL", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  // The build leaves an unset NEXT_PUBLIC name undefined (tools/build/define.mjs), never "", so the
+  // fallback fires.
+  it("falls back to the served manifest path when the build names none", async () => {
+    vi.stubEnv("NEXT_PUBLIC_GTNH_DATASET_MANIFEST_URL", undefined);
+    vi.resetModules();
+    const { DEFAULT_DATASET_MANIFEST_URL } = await import("./remote");
+    expect(DEFAULT_DATASET_MANIFEST_URL).toBe("/datasets/gtnh/datasets.manifest.json");
+  });
+
+  it("takes the manifest URL the build names", async () => {
+    const named = "https://data.example.test/datasets.manifest.json";
+    vi.stubEnv("NEXT_PUBLIC_GTNH_DATASET_MANIFEST_URL", named);
+    vi.resetModules();
+    const { DEFAULT_DATASET_MANIFEST_URL } = await import("./remote");
+    expect(DEFAULT_DATASET_MANIFEST_URL).toBe(named);
   });
 });
 

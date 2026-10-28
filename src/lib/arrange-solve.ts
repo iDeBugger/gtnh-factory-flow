@@ -54,7 +54,7 @@ export function arrangeWorkerAvailable(): boolean {
 function getWorker(slot: number): Worker {
   let worker = workers[slot];
   if (!worker) {
-    worker = new Worker(new URL("./arrange.worker.ts", import.meta.url));
+    worker = new Worker(new URL("./arrange.worker.ts", import.meta.url), { type: "module" });
     workers[slot] = worker;
   }
   return worker;

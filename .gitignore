@@ -74,3 +74,6 @@ tools/parity/out/
 
 # Deploy targets: hosts and logins stay on the deploying machine.
 /tools/deploy/targets/*.env
+
+# the Vite client build and its prerendered page
+/dist/

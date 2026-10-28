@@ -74,7 +74,7 @@ export function scheduleRouteSolve(job: RouteSolveJob) {
 
 function getWorker(): Worker {
   if (!worker) {
-    worker = new Worker(new URL("./grid-route.worker.ts", import.meta.url));
+    worker = new Worker(new URL("./grid-route.worker.ts", import.meta.url), { type: "module" });
     worker.onmessage = (event: MessageEvent<RouteSolveResult | { error: string }>) => {
       inFlight = undefined;
       if ("routes" in event.data) {
