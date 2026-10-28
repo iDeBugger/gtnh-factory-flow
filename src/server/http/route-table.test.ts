@@ -1,7 +1,7 @@
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { CASES } from "../../../tools/http-parity/requests.mjs";
+import { CASES, ROUTE_TABLE } from "../../../tools/http-parity/requests.mjs";
 import { optionsAllow, routePathForFile, ROUTES, type WebHandler } from "./route-table";
 
 const REPO = path.resolve(__dirname, "../../..");
@@ -119,6 +119,24 @@ describe("the route table", () => {
         expect(first?.source, c.target).toBe(route.source);
       }
     }
+  });
+
+  it("has parity cases for exactly the methods each route exports", () => {
+    for (const route of ROUTES) {
+      const route_ = nextPath(route.source);
+      // HEAD and OPTIONS are asked of every route, and PATCH of every route as the unexported probe.
+      const probed = (c: { name: string; method: string }) =>
+        c.method === "HEAD" || c.method === "OPTIONS" || c.name.endsWith(" unexported");
+      const caseMethods = new Set(
+        CASES.filter((c) => c.route === route_ && !probed(c)).map((c) => c.method),
+      );
+      expect([...caseMethods].sort(), route_).toEqual(Object.keys(route.module).sort());
+      const listed = ROUTE_TABLE.find((r) => r.route === route_);
+      expect(listed?.methods.slice().sort(), route_).toEqual(Object.keys(route.module).sort());
+    }
+    expect(ROUTE_TABLE.map((r) => r.route).sort()).toEqual(
+      ROUTES.map((r) => nextPath(r.source)).sort(),
+    );
   });
 
   it("has a parity case for every route and every method", () => {
