@@ -2,8 +2,8 @@
  * The site's production server. It runs the start checks, listens at once and holds every request until the start
  * work is done, prewarms the datasets when asked to, and stops cleanly on SIGTERM.
  *
- * This module only exports `startServer`; it never listens on import. The bundle's `server.mjs`
- * (tools/build/build-server.mjs) sets NODE_ENV and calls it.
+ * This module exports `startServer` and `startWork` (which the dev server shares); it never listens on import.
+ * The bundle's `server.mjs` (tools/build/build-server.mjs) sets NODE_ENV and calls `startServer`.
  */
 import http from "node:http";
 import type { AddressInfo } from "node:net";
