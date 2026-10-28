@@ -28,17 +28,21 @@ const PNG = Buffer.from(
   "base64",
 );
 
-function upload(address: string, body: Uint8Array = PNG, deviceId?: string): Promise<Response> {
+async function upload(address: string, body: Uint8Array = PNG, deviceId?: string): Promise<Response> {
   const form = new FormData();
   form.set("image", new Blob([body as BlobPart], { type: "image/png" }), "board.png");
   if (deviceId) {
     form.set("deviceId", deviceId);
   }
+  // Sent as encoded bytes, as a browser's upload reaches the server. A body
+  // streamed from a FormData object rejects unhandled when the route stops
+  // reading it at the cap (Node 24.21's fetch), which is not what a socket does.
+  const encoded = new Response(form);
   return POST(
     new Request("http://localhost/api/community/images", {
       method: "POST",
-      headers: { "x-client-ip": address },
-      body: form,
+      headers: { "x-client-ip": address, "content-type": encoded.headers.get("content-type")! },
+      body: await encoded.arrayBuffer(),
     }),
   );
 }
