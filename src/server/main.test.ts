@@ -188,6 +188,30 @@ describe("startServer", () => {
     expect(order).toEqual(["close", "exit 143"]);
   });
 
+  it("says Connection: close on every answer sent after the stop began", async () => {
+    const warm = deferred();
+    const server = await start({ prewarm: () => warm.promise });
+    // Open when the stop begins, its head not yet written.
+    const held = call(server.port, "GET", "/api/version");
+    // Its head still arriving when the stop begins.
+    const late = sendRaw(server.port, "GET /api/version HTTP/1.1\r\nHost: 127.0.0.1\r\n");
+    await tick();
+    const stopped = server.shutdown();
+    await tick();
+    late.socket.write("Connection: keep-alive\r\n\r\n");
+    warm.resolve();
+    const answer = await held;
+    expect(answer.status).toBe(200);
+    expect(answer.headers.filter(([name]) => name === "connection")).toEqual([
+      ["connection", "close"],
+    ]);
+    const received = await late.closed;
+    expect(received).toMatch(/^HTTP\/1\.1 200 /);
+    expect(received).toMatch(/\r\nConnection: close\r\n/i);
+    expect(received).not.toMatch(/keep-alive/i);
+    await stopped;
+  });
+
   it("reads and answers a request body that is still arriving after the stop began", async () => {
     vi.stubEnv("DATABASE_URL", "postgres://127.0.0.1:1/unused");
     const exit = vi.fn();

@@ -25,11 +25,19 @@ export function installShutdown(
   options: ShutdownOptions,
 ): (signal?: "SIGTERM" | "SIGINT") => Promise<void> {
   let stopping: Promise<void> | undefined;
-  // A connection that was busy when the stop began closes as soon as its answer has gone out.
-  server.on("request", (_req, res) => {
+  // Answers whose head has not gone out yet. Once the stop begins each says `Connection: close`, so the proxy
+  // in front never reuses a socket this server is about to close.
+  const open = new Set<http.ServerResponse>();
+  // Ahead of the app's own listener, which may answer at once.
+  server.prependListener("request", (_req, res) => {
+    if (stopping) res.setHeader("connection", "close");
+    else open.add(res);
+    // A connection that was busy when the stop began closes as soon as its answer has gone out.
     res.on("finish", () => {
+      open.delete(res);
       if (stopping) server.closeIdleConnections();
     });
+    res.on("close", () => open.delete(res));
   });
   return (signal = "SIGTERM") => {
     const code = SIGNAL_EXIT[signal];
@@ -37,6 +45,10 @@ export function installShutdown(
       options.exit(code);
       return stopping;
     }
+    for (const res of open) {
+      if (!res.headersSent) res.setHeader("connection", "close");
+    }
+    open.clear();
     stopping = new Promise<void>((resolve) => {
       let finished = false;
       const finish = async () => {
