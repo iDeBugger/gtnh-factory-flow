@@ -181,6 +181,31 @@ describe("startServer", () => {
     expect(order).toEqual(["close", "exit 143"]);
   });
 
+  it("reads and answers a request body that is still arriving after the stop began", async () => {
+    vi.stubEnv("DATABASE_URL", "postgres://127.0.0.1:1/unused");
+    const exit = vi.fn();
+    const server = await start({ exit });
+    const body = JSON.stringify({ username: "", password: "" });
+    const half = Math.floor(body.length / 2);
+    const { socket, closed } = sendRaw(
+      server.port,
+      `POST ${LOGIN} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\n` +
+        `Content-Length: ${body.length}\r\n\r\n${body.slice(0, half)}`,
+    );
+    await tick();
+    const stopped = server.shutdown();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(exit).not.toHaveBeenCalled();
+    socket.write(body.slice(half));
+    const received = await closed;
+    await stopped;
+    // The route parsed the whole body and the sign-in answered on its fields; a cut body would give
+    // "Invalid request body." instead.
+    expect(received).toMatch(/^HTTP\/1\.1 400 /);
+    expect(received).toContain('{"error":"Username and password required."}');
+    expect(exit).toHaveBeenCalledWith(143);
+  });
+
   it("exits 143 within the grace when a client holds a connection open", async () => {
     const exit = vi.fn();
     const server = await start({ exit, graceMs: 200 });
