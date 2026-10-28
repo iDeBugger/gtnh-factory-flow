@@ -90,7 +90,14 @@ describe("reading a request body under a cap", () => {
       new Blob([new Uint8Array(5 * MIB) as BlobPart], { type: "image/png" }),
       "big.png",
     );
-    expect(await readFormDataCapped(post(big), 4 * MIB + 64 * 1024)).toBeUndefined();
+    // Sent as encoded bytes, as a socket delivers it: a body streamed from a
+    // FormData object rejects unhandled once the reader stops at the cap
+    // (Node 24.21's fetch).
+    const encoded = new Response(big);
+    const bigRequest = post(await encoded.arrayBuffer(), {
+      "content-type": encoded.headers.get("content-type")!,
+    });
+    expect(await readFormDataCapped(bigRequest, 4 * MIB + 64 * 1024)).toBeUndefined();
   });
 
   it("throws on a multipart body with no content type, as the uncapped parse does", async () => {
