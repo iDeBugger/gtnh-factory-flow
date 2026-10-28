@@ -55,6 +55,7 @@
   },
   {
     "case": "cap board image 6 MiB",
+    "status": 413,
     "field": "headers.connection",
     "a": "keep-alive",
     "b": "close",
@@ -62,6 +63,7 @@
   },
   {
     "case": "cap login 17 KiB chunked",
+    "status": 413,
     "field": "headers.connection",
     "a": "keep-alive",
     "b": "close",

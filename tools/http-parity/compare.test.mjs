@@ -237,13 +237,23 @@ describe("diffCases", () => {
       ).toHaveLength(1);
     });
 
-    it("allows Connection: close only on the two over-cap uploads", () => {
-      const connection = (name, value) =>
-        stored({ name, status: 413, headers: [["connection", value]] });
+    it("allows Connection: close only on the two over-cap uploads' 413", () => {
+      const connection = (name, value, status = 413) =>
+        stored({ name, status, headers: [["connection", value]] });
       for (const name of ["cap login 17 KiB chunked", "cap board image 6 MiB"]) {
         expect(diffCases(connection(name, "keep-alive"), connection(name, "close"), ALLOW)).toEqual(
           [],
         );
+        // A cap that stopped answering 413 is no unread body: its close is a difference.
+        for (const status of [200, 400]) {
+          expect(
+            diffCases(
+              connection(name, "keep-alive", status),
+              connection(name, "close", status),
+              ALLOW,
+            ),
+          ).toHaveLength(1);
+        }
       }
       const length = "cap login 17 KiB Content-Length";
       expect(
