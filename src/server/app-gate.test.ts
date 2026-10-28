@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -8,6 +8,7 @@ import type { RawAnswer } from "../../tools/http-parity/requests.mjs";
 import {
   extraGateCases,
   harnessGateCases,
+  LINKED_DATASETS,
   type GateCase,
 } from "../test-support/dataset-gate-cases";
 import gateAnswers from "./__fixtures__/next-gate-answers.json";
@@ -77,6 +78,7 @@ beforeAll(async () => {
   writeFileSync(path.join(version, "recipe-lookup-index.json.gz"), INDEX_GZIP);
   writeFileSync(path.join(version, "oracle", "oracle-report.json"), ORACLE_REPORT);
   writeFileSync(path.join(version, "textures", "atlas", "a.png"), ATLAS_TEXTURE);
+  symlinkSync(path.join(publicDir, "datasets"), path.join(publicDir, LINKED_DATASETS), "dir");
   server = await listen(
     createApp({
       env: { production: true, siteUrl: SITE },
@@ -207,7 +209,12 @@ describe("the dataset path gate", () => {
       `/datasets/gtnh/${V}/./recipes.json`,
       `/datasets/gtnh/${V}/RECIPE-LOOKUP-INDEX.JSON.GZ`,
       `/%64atasets/gtnh/${V}/recipes.json`,
+      ...kind("notFound").map((c) => c.target),
+      ...kind("refuse").map((c) => c.target),
     ];
+    // The fold and the link reach the real files: on APFS `data%C5%BFets` opens the dataset folder.
+    expect(targets).toContain(`/data%C5%BFets/gtnh/${V}/recipes.json`);
+    expect(targets).toContain(`/${LINKED_DATASETS}/gtnh/${V}/recipes.json`);
     for (const target of targets) {
       for (const method of ["GET", "HEAD"]) {
         const answer = await call(server.port, method, target);

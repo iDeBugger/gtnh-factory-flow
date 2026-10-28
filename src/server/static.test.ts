@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -17,7 +18,17 @@ import { call, listen, type Listening } from "./test-support/serve";
  */
 
 const ALLOW = allowJson as AllowEntry[];
-const NEXT = gateAnswers as unknown as { publicFileOptions: StoredCase };
+const NEXT = gateAnswers as unknown as {
+  publicFileOptions: StoredCase;
+  fileErrors: Record<
+    | "rangeNotSatisfiable"
+    | "preconditionFailed"
+    | "postPublicFile"
+    | "deleteDatasetFile"
+    | "optionsManifest",
+    StoredCase
+  >;
+};
 const SITE = "http://127.0.0.1:3770";
 const V = "v";
 const MTIME = new Date("2026-10-26T19:50:31Z");
@@ -68,6 +79,23 @@ function header(answer: RawAnswer, name: string): string | undefined {
 
 function headers(answer: RawAnswer, name: string): string[] {
   return answer.headers.filter(([key]) => key === name).map(([, value]) => value);
+}
+
+/** The differences from Next's answer that the allow list does not name; a binary body compares by its sha256. */
+function againstNext(next: StoredCase, answer: RawAnswer, binary = false) {
+  const stored: StoredCase = {
+    name: "pinned",
+    request: next.request,
+    status: answer.status,
+    headers: answer.headers,
+    body: binary
+      ? {
+          sha256: createHash("sha256").update(answer.body).digest("hex"),
+          length: answer.body.length,
+        }
+      : { text: answer.body.toString("utf8") },
+  };
+  return diffCases({ ...next, name: "pinned" }, stored, ALLOW);
 }
 
 const WEAK_ETAG = /^W\/"[0-9a-f]+-[0-9a-f]+"$/;
@@ -135,15 +163,19 @@ describe("the static mounts", () => {
   });
 
   it("answers any other method on a served file as Next did, and passes the rest on", async () => {
-    const answer = await call(server.port, "OPTIONS", "/icon-192.png");
-    const stored: StoredCase = {
-      name: "pinned",
-      request: { method: "OPTIONS", target: "/icon-192.png" },
-      status: answer.status,
-      headers: answer.headers,
-      body: { text: answer.body.toString("utf8") },
-    };
-    expect(diffCases({ ...NEXT.publicFileOptions, name: "pinned" }, stored, ALLOW)).toEqual([]);
+    for (const [next, method, target] of [
+      [NEXT.publicFileOptions, "OPTIONS", "/icon-192.png"],
+      [NEXT.fileErrors.postPublicFile, "POST", "/icon-192.png"],
+      [
+        NEXT.fileErrors.deleteDatasetFile,
+        "DELETE",
+        `/datasets/gtnh/${V}/textures/icon-report.json`,
+      ],
+      [NEXT.fileErrors.optionsManifest, "OPTIONS", "/datasets/gtnh/datasets.manifest.json"],
+    ] as const) {
+      const answer = await call(server.port, method, target);
+      expect(againstNext(next, answer), `${method} ${target}`).toEqual([]);
+    }
     for (const [method, target] of [
       ["POST", "/highs.js"],
       ["DELETE", "/datasets/gtnh/datasets.manifest.json"],
@@ -164,11 +196,28 @@ describe("the static mounts", () => {
   });
 
   it("answers a failed precondition or an unsatisfiable range as Next did: its 500, the file's other headers kept", async () => {
-    for (const [extra, range] of [
-      [{ range: "bytes=99999999-" }, `bytes */${"png bytes".length}`],
-      [{ "if-match": '"nope"' }, undefined],
+    for (const [next, extra, range] of [
+      [
+        NEXT.fileErrors.rangeNotSatisfiable,
+        { range: "bytes=99999999-" },
+        `bytes */${"png bytes".length}`,
+      ],
+      [NEXT.fileErrors.preconditionFailed, { "if-match": '"nope"' }, undefined],
     ] as const) {
       const answer = await call(server.port, "GET", "/icon-192.png", { ...extra });
+      // Next answered for its own icon: only that file's date and length are this fixture's.
+      const own: StoredCase = {
+        ...next,
+        headers: next.headers.map(([key, value]): [string, string] => [
+          key,
+          key === "last-modified"
+            ? MTIME.toUTCString()
+            : key === "content-range"
+              ? value.replace(/\/\d+$/, `/${"png bytes".length}`)
+              : value,
+        ]),
+      };
+      expect(againstNext(own, answer, true)).toEqual([]);
       expect(answer.status).toBe(500);
       expect(answer.body.toString()).toBe("Internal Server Error");
       expect(header(answer, "cache-control")).toBe(
@@ -214,6 +263,50 @@ describe("the static mounts", () => {
     expect(resolveLikeSend(publicDir, "/x/..%2f..%2fetc/passwd")).toBeUndefined();
     expect(resolveLikeSend(publicDir, "/%E0%A4%A")).toBeUndefined();
     expect(resolveLikeSend(publicDir, "/a%00b")).toBeUndefined();
+  });
+
+  it("decides on the file the system opens, so no symlink reaches the data or leaves the root", async () => {
+    const publicDir = path.join(root, "public");
+    const outside = mkdtempSync(path.join(tmpdir(), "static-outside-"));
+    try {
+      writeFileSync(path.join(outside, "secret.txt"), "outside the root");
+      symlinkSync(path.join(outside, "secret.txt"), path.join(publicDir, "outside.txt"));
+      symlinkSync(path.join(publicDir, "datasets"), path.join(publicDir, "linked"), "dir");
+      mkdirSync(path.join(publicDir, "datasets", "gtnh", V, "oracle"), { recursive: true });
+      writeFileSync(path.join(publicDir, "datasets", "gtnh", V, "oracle", "report.json"), "{}");
+      symlinkSync(
+        path.join(publicDir, "datasets", "gtnh", V, "recipes.json"),
+        path.join(publicDir, "datasets", "gtnh", V, "oracle", "linked.json"),
+      );
+      for (const target of [
+        "/outside.txt",
+        `/linked/gtnh/${V}/recipes.json`,
+        "/linked/gtnh/datasets.manifest.json",
+        `/datasets/gtnh/${V}/oracle/linked.json`,
+      ]) {
+        // The lexical check alone passes each of these; only the real path refuses them.
+        for (const method of ["GET", "HEAD", "OPTIONS"]) {
+          const answer = await call(server.port, method, target);
+          expect(answer.status, `${method} ${target}`).toBe(404);
+          expect(answer.body.toString(), `${method} ${target}`).not.toMatch(
+            /outside the root|^raw$/,
+          );
+        }
+      }
+      expect(
+        (await call(server.port, "GET", `/datasets/gtnh/${V}/oracle/report.json`)).status,
+      ).toBe(200);
+      // A link inside the root to a file the mount may serve still serves it.
+      symlinkSync(path.join(publicDir, "icon-192.png"), path.join(publicDir, "icon-link.png"));
+      const linked = await call(server.port, "GET", "/icon-link.png");
+      expect([linked.status, linked.body.toString()]).toEqual([200, "png bytes"]);
+    } finally {
+      for (const link of ["outside.txt", "linked", "icon-link.png"]) {
+        rmSync(path.join(publicDir, link), { force: true });
+      }
+      rmSync(path.join(publicDir, "datasets", "gtnh", V, "oracle", "linked.json"), { force: true });
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 
   it("falls through to the textures route when an atlas texture is missing", async () => {

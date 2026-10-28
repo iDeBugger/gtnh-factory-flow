@@ -579,5 +579,379 @@
     "body": {
       "text": "Internal Server Error"
     }
+  },
+  "fileErrors": {
+    "rangeNotSatisfiable": {
+      "name": "GET /icon-192.png",
+      "request": {
+        "method": "GET",
+        "target": "/icon-192.png",
+        "headers": {
+          "range": "bytes=99999999-"
+        }
+      },
+      "status": 500,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "accept-ranges",
+          "bytes"
+        ],
+        [
+          "cache-control",
+          "private, no-cache, no-store, max-age=0, must-revalidate"
+        ],
+        [
+          "last-modified",
+          "Tue, 27 Oct 2026 17:03:37 GMT"
+        ],
+        [
+          "etag",
+          "\"66fci67lppl\""
+        ],
+        [
+          "content-type",
+          "image/png"
+        ],
+        [
+          "content-range",
+          "bytes */31268"
+        ],
+        [
+          "content-length",
+          "21"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 11:12:49 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ]
+      ],
+      "body": {
+        "sha256": "e41656eb2ba6c6293bf6dd928e5a88cdbc50535cab661c1969e0f598e497ed62",
+        "length": 21
+      }
+    },
+    "preconditionFailed": {
+      "name": "GET /icon-192.png",
+      "request": {
+        "method": "GET",
+        "target": "/icon-192.png",
+        "headers": {
+          "if-match": "\"nope\""
+        }
+      },
+      "status": 500,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "accept-ranges",
+          "bytes"
+        ],
+        [
+          "cache-control",
+          "private, no-cache, no-store, max-age=0, must-revalidate"
+        ],
+        [
+          "last-modified",
+          "Tue, 27 Oct 2026 17:03:37 GMT"
+        ],
+        [
+          "etag",
+          "\"66fci67lppl\""
+        ],
+        [
+          "content-type",
+          "image/png"
+        ],
+        [
+          "content-length",
+          "21"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 11:12:49 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ]
+      ],
+      "body": {
+        "sha256": "e41656eb2ba6c6293bf6dd928e5a88cdbc50535cab661c1969e0f598e497ed62",
+        "length": 21
+      }
+    },
+    "postPublicFile": {
+      "name": "POST /icon-192.png",
+      "request": {
+        "method": "POST",
+        "target": "/icon-192.png",
+        "headers": {}
+      },
+      "status": 500,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "allow",
+          "GET"
+        ],
+        [
+          "allow",
+          "HEAD"
+        ],
+        [
+          "cache-control",
+          "private, no-cache, no-store, max-age=0, must-revalidate"
+        ],
+        [
+          "etag",
+          "\"66fci67lppl\""
+        ],
+        [
+          "content-type",
+          "text/plain"
+        ],
+        [
+          "content-length",
+          "21"
+        ],
+        [
+          "vary",
+          "Accept-Encoding"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 11:12:49 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ]
+      ],
+      "body": {
+        "text": "Internal Server Error"
+      }
+    },
+    "deleteDatasetFile": {
+      "name": "DELETE /datasets/gtnh/local-2.9.0-rc-2/oracle/oracle-report.json",
+      "request": {
+        "method": "DELETE",
+        "target": "/datasets/gtnh/local-2.9.0-rc-2/oracle/oracle-report.json",
+        "headers": {}
+      },
+      "status": 500,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "allow",
+          "GET"
+        ],
+        [
+          "allow",
+          "HEAD"
+        ],
+        [
+          "cache-control",
+          "private, no-cache, no-store, max-age=0, must-revalidate"
+        ],
+        [
+          "etag",
+          "\"66fci67lppl\""
+        ],
+        [
+          "content-type",
+          "text/plain"
+        ],
+        [
+          "content-length",
+          "21"
+        ],
+        [
+          "vary",
+          "Accept-Encoding"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 11:12:49 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ]
+      ],
+      "body": {
+        "text": "Internal Server Error"
+      }
+    },
+    "optionsManifest": {
+      "name": "OPTIONS /datasets/gtnh/datasets.manifest.json",
+      "request": {
+        "method": "OPTIONS",
+        "target": "/datasets/gtnh/datasets.manifest.json",
+        "headers": {}
+      },
+      "status": 500,
+      "headers": [
+        [
+          "content-security-policy",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws://127.0.0.1:3770; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        ],
+        [
+          "x-frame-options",
+          "SAMEORIGIN"
+        ],
+        [
+          "x-content-type-options",
+          "nosniff"
+        ],
+        [
+          "referrer-policy",
+          "strict-origin-when-cross-origin"
+        ],
+        [
+          "strict-transport-security",
+          "max-age=15552000"
+        ],
+        [
+          "allow",
+          "GET"
+        ],
+        [
+          "allow",
+          "HEAD"
+        ],
+        [
+          "cache-control",
+          "private, no-cache, no-store, max-age=0, must-revalidate"
+        ],
+        [
+          "etag",
+          "\"66fci67lppl\""
+        ],
+        [
+          "content-type",
+          "text/plain"
+        ],
+        [
+          "content-length",
+          "21"
+        ],
+        [
+          "vary",
+          "Accept-Encoding"
+        ],
+        [
+          "date",
+          "Wed, 28 Oct 2026 11:12:49 GMT"
+        ],
+        [
+          "connection",
+          "keep-alive"
+        ],
+        [
+          "keep-alive",
+          "timeout=5"
+        ]
+      ],
+      "body": {
+        "text": "Internal Server Error"
+      }
+    }
   }
 }

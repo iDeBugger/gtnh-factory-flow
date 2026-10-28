@@ -36,13 +36,20 @@ export interface GateCase {
   localOnly: boolean;
 }
 
+/**
+ * A folder of the public root that the HTTP test links to the public `datasets` folder: a request through it
+ * reaches the data by a symlink, which no lexical check sees. Elsewhere nothing has that name, and it is a 404.
+ */
+export const LINKED_DATASETS = "linked-datasets";
+
 const refuse: GateAnswer = { kind: "refuse" };
 const notFound: GateAnswer = { kind: "notFound" };
 
 /**
  * The harness's gate cases for one dataset version, in the harness's order: the encoded spellings of the gate's
  * unit test, then the spellings around it (case, trailing slash), then the review's (repeated slash, backslash,
- * encoded slash before `datasets`, dot segments).
+ * encoded slash before `datasets`, dot segments), then the names a case-insensitive volume folds onto the data
+ * (U+017F `ſ`, which APFS reads as `s`) and the symlink (`LINKED_DATASETS`).
  */
 export function harnessGateCases(v: string): GateCase[] {
   const files = `/dataset-files/${v}`;
@@ -103,6 +110,12 @@ export function harnessGateCases(v: string): GateCase[] {
       "refuse",
       rewrite("recipe-lookup-index.json.gz"),
     ),
+    both(`/data%C5%BFets/gtnh/${v}/recipes.json`, "pass", notFound),
+    both(`/DATA%C5%BFETS/GTNH/${v.toUpperCase()}/RECIPES.JSON`, "pass", notFound),
+    both(`/data%C5%BFets/gtnh/${v}/recipe-lookup-index.json.gz`, "pass", notFound),
+    both(`${root}/recipe%C5%BF.json`, "refuse", refuse),
+    local(`/${LINKED_DATASETS}/gtnh/${v}/recipes.json`, "pass", notFound),
+    local(`/${LINKED_DATASETS}/gtnh/${v}/recipe-lookup-index.json.gz`, "pass", notFound),
   ];
 }
 

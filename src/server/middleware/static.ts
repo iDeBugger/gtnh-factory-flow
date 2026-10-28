@@ -4,10 +4,14 @@
  * `Last-Modified`), as Next's were, and a year with `immutable` on the build's hashed assets.
  *
  * Each mount decides on the file the request would resolve to, the way `send` resolves it (decoded once, dot
- * segments normalized, joined under the root), never on a URL segment, so no spelling of a path reaches a file
- * the mount must not serve. A request a mount refuses or misses falls through to the routes, then the 404.
+ * segments normalized, joined under the root), never on a URL segment, and then again on the file the system
+ * opens for it (its real path), so neither a spelling of a path, a case-insensitive volume's folding (`ſ` is `s`
+ * on APFS) nor a symlink reaches a file the mount must not serve. A request a mount refuses or misses falls
+ * through to the routes, then the 404.
  */
+import { realpath } from "node:fs";
 import { stat } from "node:fs/promises";
+import { promisify } from "node:util";
 import path from "node:path";
 import express, { type Request, type RequestHandler, type Response } from "express";
 import { decideDatasetPath } from "@/lib/server/dataset-path-gate";
@@ -94,43 +98,97 @@ function varyOnCompressibleType(res: Response): () => void {
   };
 }
 
+/** A file as the system opens it: its real path, and that path relative to the real root. */
+export interface RealFile {
+  file: string;
+  relative: string;
+}
+
+/** The system's own `realpath`, which names each folder and file as the volume spells it on disk. */
+const realpathNative = promisify(realpath.native);
+
+/** The real path of `path`, or undefined when nothing is there. */
+async function realPathOf(file: string): Promise<string | undefined> {
+  try {
+    return await realpathNative(file);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The file `file` opens, by its real path (every symlink followed, every name as the volume spells it on disk),
+ * when that is inside the real `root`; undefined when nothing is there or it lies outside the root.
+ */
+export async function realFileUnder(root: string, file: string): Promise<RealFile | undefined> {
+  const realFile = await realPathOf(file);
+  if (!realFile) return undefined;
+  const realRoot = await realPathOf(root);
+  if (!realRoot) return undefined;
+  const relative = path.relative(realRoot, realFile);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return undefined;
+  return { file: realFile, relative };
+}
+
 interface MountOptions {
   root: string;
   serve: RequestHandler;
-  /** Whether the mount may serve this file at all; false falls through. */
+  /** Whether the mount may serve this file, by its spelling; false falls through. */
   allows(req: Request, relative: string): boolean;
+  /** Whether the mount may serve the file the system opens; false falls through. */
+  allowsReal(req: Request, real: RealFile): boolean | Promise<boolean>;
 }
 
-function guardedMount({ root, serve, allows }: MountOptions): RequestHandler {
+/** Whether `file` is `folder` or inside it. */
+function isWithin(file: string, folder: string): boolean {
+  return file === folder || file.startsWith(`${folder}${path.sep}`);
+}
+
+function guardedMount({ root, serve, allows, allowsReal }: MountOptions): RequestHandler {
   return (req, res, next) => {
     const resolved = resolveLikeSend(root, req.path);
     if (!resolved || !allows(req, resolved.relative)) {
       next();
       return;
     }
-    if (req.method !== "GET" && req.method !== "HEAD") {
-      // A dot file is never served (ignored or denied), so a write to one falls through like a miss.
-      if (hasDotSegment(resolved.relative)) {
-        next();
-        return;
-      }
-      stat(resolved.file).then(
-        (stats) => (stats.isFile() ? fileMethodNotAllowed(res) : next()),
-        () => next(),
-      );
+    // A dot file is never served (ignored or denied), so a write to one falls through like a miss, unopened.
+    if (req.method !== "GET" && req.method !== "HEAD" && hasDotSegment(resolved.relative)) {
+      next();
       return;
     }
-    const restore = varyOnCompressibleType(res);
-    serve(req, res, (error?: unknown) => {
-      const status = (error as { statusCode?: unknown } | undefined)?.statusCode;
-      if ((status === 412 || status === 416) && !res.headersSent) {
-        sendNextFileError(res);
-        return;
-      }
-      restore();
-      next(error);
-    });
+    realFileUnder(root, resolved.file)
+      .then(async (real) => (real && (await allowsReal(req, real)) ? real : undefined))
+      .then(
+        (real) => (real ? serveAllowed(req, res, next, resolved.file, serve) : next()),
+        (error: unknown) => next(error),
+      );
   };
+}
+
+function serveAllowed(
+  req: Request,
+  res: Response,
+  next: (error?: unknown) => void,
+  file: string,
+  serve: RequestHandler,
+): void {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    stat(file).then(
+      (stats) => (stats.isFile() ? fileMethodNotAllowed(res) : next()),
+      () => next(),
+    );
+    return;
+  }
+  const restore = varyOnCompressibleType(res);
+  serve(req, res, (error?: unknown) => {
+    const status = (error as { statusCode?: unknown } | undefined)?.statusCode;
+    if ((status === 412 || status === 416) && !res.headersSent) {
+      sendNextFileError(res);
+      return;
+    }
+    restore();
+    next(error);
+  });
 }
 
 function serveStatic(root: string, options: { immutable?: boolean; dotfiles: "ignore" | "deny" }) {
@@ -154,23 +212,34 @@ export function clientAssets(clientDir: string): RequestHandler {
     root,
     serve: serveStatic(root, { immutable: true, dotfiles: "ignore" }),
     allows: () => true,
+    allowsReal: () => true,
   });
   const router = express.Router({ caseSensitive: true, strict: true });
   router.use("/assets", mount);
   return router;
 }
 
+/** Whether a path relative to the public root names `datasets` or anything under it, in any case. */
+function namesDatasets(relative: string): boolean {
+  const lower = relative.toLowerCase();
+  return lower === "datasets" || lower.startsWith(`datasets${path.sep}`);
+}
+
 /**
- * The public folder, except anything under `datasets`, decided on the resolved file and in lower case, so no
- * escaped slash, dot segment or case spelling reaches the data. The dataset tree has its own mount.
+ * The public folder, except anything under `datasets`. The refusal is decided on the resolved file in lower
+ * case, so no escaped slash, dot segment or case spelling reaches the data, and then on the file the system
+ * opens, which must not lie under the real `datasets` folder (a link to it, or a name the volume folds onto it).
+ * The dataset tree has its own mount.
  */
 export function publicFiles(publicDir: string): RequestHandler {
   return guardedMount({
     root: publicDir,
     serve: serveStatic(publicDir, { dotfiles: "ignore" }),
-    allows: (_req, relative) => {
-      const lower = relative.toLowerCase();
-      return lower !== "datasets" && !lower.startsWith(`datasets${path.sep}`);
+    allows: (_req, relative) => !namesDatasets(relative),
+    allowsReal: async (_req, real) => {
+      if (namesDatasets(real.relative)) return false;
+      const datasets = await realPathOf(path.join(publicDir, "datasets"));
+      return !datasets || !isWithin(real.file, datasets);
     },
   });
 }
@@ -178,14 +247,18 @@ export function publicFiles(publicDir: string): RequestHandler {
 /**
  * The public dataset tree, served at `/datasets/gtnh`: the files beside the data (the manifest, reports, the
  * textures that are not named by their bytes). It serves a file only when the dataset gate passes the request's
- * whole canonical path in lower case, so a case-folded `RECIPES.JSON` on a case-insensitive file system is never
- * a file. A miss falls through to the textures route, as Next's file handler did.
+ * whole canonical path in lower case, and again on the real path of the file it opens, so a case-folded
+ * `RECIPES.JSON` or `recipeſ.json` on a case-insensitive file system, or a link to a refused file, is never a
+ * file. A miss falls through to the textures route, as Next's file handler did.
  */
 export function datasetPublicFiles(datasetsDir: string): RequestHandler {
   const mount = guardedMount({
     root: datasetsDir,
     serve: serveStatic(datasetsDir, { dotfiles: "deny" }),
     allows: (req) => decideDatasetPath(canonicalParts(req).pathname.toLowerCase()).kind === "pass",
+    allowsReal: (_req, real) =>
+      decideDatasetPath(`/datasets/gtnh/${real.relative.split(path.sep).join("/")}`.toLowerCase())
+        .kind === "pass",
   });
   const router = express.Router({ caseSensitive: true, strict: true });
   router.use("/datasets/gtnh", mount);
