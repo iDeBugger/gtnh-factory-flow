@@ -284,17 +284,6 @@ const ROUTES = [
     },
   },
   {
-    route: "/api/community/plans/[planId]/card",
-    path: `/api/community/plans/${MISSING_UUID}/card`,
-    invalidPath: "/api/community/plans/not-an-id/card",
-    methods: {
-      GET: [
-        ["valid", {}],
-        ["invalid", { invalidPath: true }],
-      ],
-    },
-  },
-  {
     route: "/api/community/plans/[planId]/comments/[commentId]",
     path: `/api/community/plans/${MISSING_UUID}/comments/${MISSING_UUID}`,
     invalidPath: "/api/community/plans/not-an-id/comments/not-an-id",
@@ -1453,16 +1442,6 @@ community({
   name: "scenario community download",
   method: "POST",
   target: "/api/community/plans/{planId}/download",
-});
-community({
-  name: "scenario community card",
-  method: "GET",
-  target: "/api/community/plans/{planId}/card",
-});
-community({
-  name: "scenario community card missing",
-  method: "GET",
-  target: `/api/community/plans/${MISSING_UUID}/card`,
 });
 community({
   name: "scenario community account search",
