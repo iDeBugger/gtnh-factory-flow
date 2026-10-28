@@ -16,6 +16,7 @@ import { installShutdown } from "./shutdown";
 
 let publicDir: string;
 let release: () => void = () => {};
+let entered = false;
 let stopping: { server: http.Server; shutdown: () => Promise<void> } | undefined;
 
 /** A route that waits for `release`, then throws: a 500 that is decided after the stop began. */
@@ -24,6 +25,7 @@ const heldThrow: RouteEntry = {
   source: "test",
   module: {
     GET: async () => {
+      entered = true;
       await new Promise<void>((resolve) => (release = resolve));
       throw new Error("thrown on purpose");
     },
@@ -114,7 +116,8 @@ describe("after the stop began", () => {
     client.socket.write(
       "GET /api/held-throw HTTP/1.1\r\nHost: x\r\nConnection: keep-alive\r\n\r\n",
     );
-    await wait(30);
+    entered = false;
+    await until(() => entered);
     const stopped = shutdown();
     release();
     const received = await client.closed;
@@ -129,7 +132,8 @@ describe("after the stop began", () => {
     const client = await connect(port);
     // Half a head before the stop, so the connection is busy and not closed as idle.
     client.socket.write("GET /api/datasets/%E0%A4%A/catalog HTTP/1.1\r\nHost: x\r\n");
-    await wait(20);
+    // Long enough for the bytes to arrive under load: a connection the server has read nothing from is idle.
+    await wait(50);
     const stopped = shutdown();
     await wait(20);
     client.socket.write("Connection: keep-alive\r\n\r\n");
@@ -149,7 +153,7 @@ describe("after the stop began", () => {
       const { port, shutdown } = await start();
       const client = await connect(port);
       client.socket.write(`${method} ${target} HTTP/1.1\r\nHost: x\r\n`);
-      await wait(20);
+      await wait(50);
       const stopped = shutdown();
       await wait(20);
       client.socket.write(
