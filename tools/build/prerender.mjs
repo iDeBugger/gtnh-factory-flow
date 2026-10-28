@@ -66,7 +66,9 @@ export function inlineScriptHashes(html) {
   for (const match of html.matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi)) {
     const attributes = match[1] ?? "";
     if (/\ssrc\s*=/i.test(attributes)) continue;
-    const type = /\stype\s*=\s*"([^"]*)"/i.exec(attributes)?.[1]?.trim().toLowerCase() ?? "";
+    // The type in double quotes, single quotes or none, as HTML allows.
+    const typeMatch = /\stype\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i.exec(attributes);
+    const type = (typeMatch?.[1] ?? typeMatch?.[2] ?? typeMatch?.[3] ?? "").trim().toLowerCase();
     if (!EXECUTABLE_TYPES.has(type)) continue;
     hashes.push(`'sha256-${createHash("sha256").update(match[2], "utf8").digest("base64")}'`);
   }

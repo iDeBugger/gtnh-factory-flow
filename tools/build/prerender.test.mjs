@@ -53,6 +53,14 @@ describe("page.json", () => {
     expect(inlineScriptHashes(html)).toEqual([hash("a()"), hash("b()")]);
   });
 
+  it("reads the type in double quotes, single quotes or none", () => {
+    const html =
+      "<script type='application/ld+json'>{}</script><script type=application/ld+json>{}</script>" +
+      "<script type='module'>c()</script><script type=text/javascript>d()</script>";
+    const hash = (text) => `'sha256-${createHash("sha256").update(text).digest("base64")}'`;
+    expect(inlineScriptHashes(html)).toEqual([hash("c()"), hash("d()")]);
+  });
+
   it("fills the boot scripts and the shell, and leaves the head for the server", () => {
     const template =
       "<head><!--app-head--></head><body><!--app-boot--><div id=root><!--app-shell--></div></body>";
