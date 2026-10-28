@@ -18,6 +18,8 @@ let publicDir: string;
 let release: () => void = () => {};
 let entered = false;
 let stopping: { server: http.Server; shutdown: () => Promise<void> } | undefined;
+/** The server's side of every connection, so a test can see what the server has read. */
+let serverSockets: net.Socket[] = [];
 
 /** A route that waits for `release`, then throws: a 500 that is decided after the stop began. */
 const heldThrow: RouteEntry = {
@@ -32,14 +34,19 @@ const heldThrow: RouteEntry = {
   },
 };
 
-async function start(): Promise<{ port: number; shutdown: () => Promise<void> }> {
+async function start(
+  ready?: Promise<void>,
+): Promise<{ port: number; shutdown: () => Promise<void> }> {
   const app = createApp({
     env: { production: true, siteUrl: "http://127.0.0.1:3770" },
     publicDir,
     datasetsDir: path.join(publicDir, "datasets", "gtnh"),
     extraRoutes: [heldThrow],
+    ready,
   });
   const server = http.createServer(app);
+  serverSockets = [];
+  server.on("connection", (socket) => serverSockets.push(socket));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const shutdown = installShutdown(server, {
     graceMs: 5_000,
@@ -78,12 +85,25 @@ function connect(port: number): Promise<{
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function until(check: () => boolean, ms = 2_000): Promise<void> {
+async function until(check: () => boolean, ms = 10_000): Promise<void> {
   const began = Date.now();
   while (!check()) {
     if (Date.now() - began > ms) throw new Error("timed out");
     await wait(5);
   }
+}
+
+/**
+ * Writes `text` and waits until the server has read all of it. A connection the server has read nothing from
+ * is idle, and the stop closes idle connections at once, so a half-sent head must have been read before it.
+ */
+async function sendAndRead(socket: net.Socket, text: string): Promise<void> {
+  const before = serverSockets.reduce((sum, server) => sum + server.bytesRead, 0);
+  socket.write(text);
+  const length = Buffer.byteLength(text);
+  await until(
+    () => serverSockets.reduce((sum, server) => sum + server.bytesRead, 0) >= before + length,
+  );
 }
 
 beforeAll(() => {
@@ -130,12 +150,9 @@ describe("after the stop began", () => {
   it("says Connection: close on the 500 for a malformed escape, sent after the stop", async () => {
     const { port, shutdown } = await start();
     const client = await connect(port);
-    // Half a head before the stop, so the connection is busy and not closed as idle.
-    client.socket.write("GET /api/datasets/%E0%A4%A/catalog HTTP/1.1\r\nHost: x\r\n");
-    // Long enough for the bytes to arrive under load: a connection the server has read nothing from is idle.
-    await wait(50);
+    // Half a head, read before the stop, so the connection is busy and not closed as idle.
+    await sendAndRead(client.socket, "GET /api/datasets/%E0%A4%A/catalog HTTP/1.1\r\nHost: x\r\n");
     const stopped = shutdown();
-    await wait(20);
     client.socket.write("Connection: keep-alive\r\n\r\n");
     const received = await client.closed;
     expect(received).toMatch(/^HTTP\/1\.1 500 /);
@@ -152,10 +169,8 @@ describe("after the stop began", () => {
     it(`reads the rest of a body still arriving before it closes, after ${label}`, async () => {
       const { port, shutdown } = await start();
       const client = await connect(port);
-      client.socket.write(`${method} ${target} HTTP/1.1\r\nHost: x\r\n`);
-      await wait(50);
+      await sendAndRead(client.socket, `${method} ${target} HTTP/1.1\r\nHost: x\r\n`);
       const stopped = shutdown();
-      await wait(20);
       client.socket.write(
         "Connection: keep-alive\r\nContent-Type: text/plain\r\nContent-Length: 10\r\n\r\n12345",
       );

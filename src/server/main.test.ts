@@ -193,13 +193,19 @@ describe("startServer", () => {
   it("says Connection: close on every answer sent after the stop began", async () => {
     const warm = deferred();
     const server = await start({ prewarm: () => warm.promise });
+    const accepted: net.Socket[] = [];
+    server.server.on("connection", (socket) => accepted.push(socket));
     // Open when the stop begins, its head not yet written.
     const held = call(server.port, "GET", "/api/version");
     // Its head still arriving when the stop begins.
     const late = sendRaw(server.port, "GET /api/version HTTP/1.1\r\nHost: 127.0.0.1\r\n");
-    await tick();
+    // Both read before the stop: a connection the server has read nothing from is idle, and the stop closes it.
+    const began = Date.now();
+    while (accepted.length < 2 || accepted.some((socket) => socket.bytesRead === 0)) {
+      if (Date.now() - began > 10_000) throw new Error("the server never read both requests");
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
     const stopped = server.shutdown();
-    await tick();
     late.socket.write("Connection: keep-alive\r\n\r\n");
     warm.resolve();
     const answer = await held;
