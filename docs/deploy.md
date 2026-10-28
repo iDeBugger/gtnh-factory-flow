@@ -380,9 +380,11 @@ published on `127.0.0.1:3482` for the tests against the real roles:
    200 ms, and `docker restart gtnh-postgres` (or `docker stop`, a few seconds, `docker start`). Requests during the
    outage answer 500 with the down sentence ("The community database is not responding. Try again in a few
    minutes."), the site answers again within 30 s of Postgres being back (at most the breaker's 15 s), site and
-   live keep their `StartedAt` and restart count, and a live room opens again (`tools/live/test-client.mjs`). The
-   smoke signs up twice a run against the register limit (5 an hour per address): between runs, `delete from
-   community_events where action = 'register'` as `postgres`, in the rehearsal database only.
+   live keep their `StartedAt` and restart count, and a live room opens again (`tools/live/test-client.mjs --base
+   http://127.0.0.1:3480 --live ws://127.0.0.1:3481/live`: with no Caddy in front, the socket is live's own port,
+   not the site's `/live`). The smoke signs up twice a run against the register limit (5 an hour per address):
+   between runs, `delete from community_events where action = 'register'` as `postgres`, in the rehearsal
+   database only.
 8. `docker compose ... --profile tools down`, remove the images, then remove `scratch/rehearsal`.
 
 ## Smoke test
