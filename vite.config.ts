@@ -5,12 +5,12 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { clientDefines } from "./tools/build/define.mjs";
 
-const src = path.resolve(__dirname, "src");
+const src = path.resolve(import.meta.dirname, "src");
 
 /** The lightningcss Vite minifies the CSS with, for its feature flags. */
-const lightningcss = createRequire(path.join(__dirname, "node_modules/vite/package.json"))(
-  "lightningcss",
-) as typeof import("lightningcss");
+const lightningcss = createRequire(
+  path.join(import.meta.dirname, "node_modules/vite/package.json"),
+)("lightningcss") as typeof import("lightningcss");
 
 /**
  * The browser bundle (root src/client, out to dist/client) and, with
@@ -27,7 +27,7 @@ export default defineConfig(({ isSsrBuild, mode }) => ({
   define: clientDefines(process.env, { mode }),
   plugins: [react(), tailwindcss()],
   build: {
-    outDir: path.resolve(__dirname, isSsrBuild ? "dist/prerender" : "dist/client"),
+    outDir: path.resolve(import.meta.dirname, isSsrBuild ? "dist/prerender" : "dist/client"),
     emptyOutDir: true,
     manifest: !isSsrBuild,
     // Next's browser list, with Firefox at 114: the first with module workers.
