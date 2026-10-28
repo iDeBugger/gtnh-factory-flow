@@ -140,6 +140,19 @@ describe("diffCases", () => {
     ]);
   });
 
+  it("keeps a single-value header sent twice apart from one line holding a comma", () => {
+    for (const [name, one, two] of [
+      ["location", "/?plan=a, b", ["/?plan=a", "b"]],
+      ["content-type", "text/html, text/plain", ["text/html", "text/plain"]],
+      ["content-disposition", 'attachment; filename="a, b"', ['attachment; filename="a', ' b"']],
+    ]) {
+      const twice = stored({ headers: two.map((value) => [name, value]) });
+      expect(diffCases(stored({ headers: [[name, one]] }), twice, []), name).toEqual([
+        { field: `headers.${name}`, a: one, b: two.join("\n") },
+      ]);
+    }
+  });
+
   describe("the committed allow list", () => {
     const NEXT_CSP =
       "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:3770 http://127.0.0.1:25640; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'";

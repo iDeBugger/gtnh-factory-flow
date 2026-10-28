@@ -2,7 +2,7 @@
 /**
  * Compares two capture directories case by case: status, body, and every
  * header name and value, order within one name included (repeated lines of
- * one name are joined as RFC 9110 joins them, `set-cookie` excepted).
+ * a list-valued name are joined as RFC 9110 joins them; see `LIST_HEADERS`).
  *
  *   node tools/http-parity/compare.mjs <dirA> <dirB> [--allow allowed-differences.json]
  *
@@ -63,14 +63,30 @@ function headerMap(headers, bodyless) {
 }
 
 /**
- * One header's value: repeated field lines joined with ", ", which RFC 9110 makes the same field as one
- * comma-joined line, so two `vary` lines and one joined line compare equal. `set-cookie` is the exception the
- * RFC names: its lines cannot be joined, so they stay one per line.
+ * The list-valued fields whose repeated lines RFC 9110 makes the same field as one comma-joined line, so two
+ * `vary` lines and one joined line compare equal. Every other name keeps one value per line: a single-value
+ * field sent twice (two `location`, `content-type` or `content-disposition` lines) is a broken answer, not a
+ * spelling, and `set-cookie` lines can never be joined.
  */
+export const LIST_HEADERS = new Set([
+  "vary",
+  "cache-control",
+  "link",
+  "allow",
+  "connection",
+  "content-encoding",
+  "content-language",
+  "pragma",
+  "via",
+  "access-control-allow-headers",
+  "access-control-allow-methods",
+  "access-control-expose-headers",
+]);
+
 function headerValue(key, values) {
   if (values === undefined) return undefined;
   if (values.length === 1) return values[0];
-  return values.join(key === "set-cookie" ? "\n" : ", ");
+  return values.join(LIST_HEADERS.has(key) ? ", " : "\n");
 }
 
 /**
