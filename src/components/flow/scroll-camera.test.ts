@@ -40,7 +40,7 @@ describe("the viewport's zoom hint", () => {
 
   // Worn at rest, Chrome draws a board zoomed out from its old, larger raster: soft text and icons.
   it("is the only will-change: transform on the viewport", () => {
-    const css = readFileSync(path.resolve(__dirname, "../../app/globals.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const css = readFileSync(path.resolve(__dirname, "../../client/globals.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
     const rules = [...css.matchAll(/([^{}]*\.react-flow__viewport[^{}]*)\{([^}]*)\}/g)].filter(([, , body]) =>
       /will-change:\s*transform/.test(body!),
     );

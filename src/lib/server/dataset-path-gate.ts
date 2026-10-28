@@ -1,12 +1,12 @@
 /**
- * What a request path under the datasets may do, decided on the decoded path
- * before Next's public-file handler or any rewrite sees it.
+ * What a request path under the datasets may do, decided on the path as sent
+ * before the public file mount or any route sees it.
  *
- * Next matches a rewrite on the path as sent but serves a public file by the
- * decoded path, so a percent-encoded name ("recipes%2Ejson", "%72ecipes.json",
- * an encoded slash, an encoded letter in "datasets") passes every rewrite and
- * reaches the public handler, which serves everything under
- * public/datasets/gtnh. src/proxy.ts runs this on every request path: a
+ * A file mount serves by the decoded path, so a percent-encoded name
+ * ("recipes%2Ejson", "%72ecipes.json", an encoded slash, an encoded letter in
+ * "datasets") would pass a check on the path as sent and reach the public
+ * handler, which serves everything under public/datasets/gtnh. The dataset
+ * gate (src/server/middleware/dataset-gate.ts) runs this on every request path: a
  * dataset path is refused when it is encoded at all or holds a "." or ".."
  * segment; the index gzips, the shards, the server's content-addressed
  * answers (client/, client-files.ts), the content-named textures (textures/
@@ -32,7 +32,7 @@ const INDEX_FILES = new Set([
 ]);
 const SHARDS_DIRECTORY = "recipes-shards";
 // Named by their bytes, so a hit is kept a year. A header rule by path would give a miss that
-// year too: Next's public handler and a route's own header both lose to a next.config rule.
+// year too, so the dataset-files route sets each answer's policy, no-store on a miss.
 const CONTENT_NAMED_TEXTURE_ROOTS = new Set(["rendered", "icons"]);
 
 export type DatasetPathDecision =

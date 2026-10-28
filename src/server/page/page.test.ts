@@ -16,7 +16,7 @@ import {
   shellMarkup,
 } from "../../../tools/http-parity/head-compare.mjs";
 import type { RawAnswer } from "../../../tools/http-parity/requests.mjs";
-import { documentPolicy } from "../../../security-headers.config";
+import { documentPolicy } from "@/lib/server/http/security-headers";
 import nextAnswers from "../__fixtures__/next-answers.json";
 import pageAnswers from "../__fixtures__/next-page-answers.json";
 import { createApp } from "../app";
@@ -63,8 +63,8 @@ const HASHES = [
   "'sha256-PvTNY8RRgyZEoaf02ie6QMuKgOIk6BcO1wRWREniD94='",
   "'sha256-bAECyPKIDm9rdxW1yLMYCHUdNmNMMTDUJeKbUuAXKyU='",
 ];
-const INTER = path.resolve(import.meta.dirname, "../../app/fonts/inter-latin.woff2");
-const SITE_FILES = path.resolve(import.meta.dirname, "../../app");
+const INTER = path.resolve(import.meta.dirname, "../../client/fonts/inter-latin.woff2");
+const SITE_FILES = path.resolve(import.meta.dirname, "assets");
 const SHELL = '<div class="ui-scale-shell">shell</div>';
 
 const row = {

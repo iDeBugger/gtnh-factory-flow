@@ -9,10 +9,10 @@
  * Two places must stay in step with `APP_FONTS`:
  * - the `html[data-app-font="..."]` rules in globals.css (each option's
  *   `stack` here is the same string, used inline for the picker's previews),
- * - the next/font loaders in layout.tsx that define the `--font-*` variables
- *   the stacks read.
+ * - the `@font-face` rules in src/client/fonts.css that define the `--font-*`
+ *   variables the stacks read.
  *
- * The no-flash boot script in layout.tsx reads the same storage key before
+ * The no-flash boot script (src/client/boot.ts) reads the same storage key before
  * first paint; it deliberately does not validate the id, because an unknown
  * value matches no CSS rule and falls through to the default.
  */
@@ -100,7 +100,7 @@ export const APP_FONTS: readonly AppFontOption[] = [
  */
 export const DEFAULT_APP_FONT: AppFontId = "inter";
 
-/** Shared with the inline boot script in layout.tsx. */
+/** Shared with the inline boot script in src/client/boot.ts. */
 export const APP_FONT_STORAGE_KEY = "gtnh-app-font";
 
 export function isAppFontId(value: unknown): value is AppFontId {

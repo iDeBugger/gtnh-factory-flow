@@ -4,43 +4,43 @@
  * test derives each path from its file, so the table cannot drift from the
  * folders.
  */
-import * as apiAccountsSearch from "@/app/api/accounts/search/route";
-import * as apiBlueprints from "@/app/api/blueprints/route";
-import * as apiBlueprintsBlueprintId from "@/app/api/blueprints/[blueprintId]/route";
-import * as apiCommunityAuthLogin from "@/app/api/community/auth/login/route";
-import * as apiCommunityAuthLogout from "@/app/api/community/auth/logout/route";
-import * as apiCommunityAuthMe from "@/app/api/community/auth/me/route";
-import * as apiCommunityAuthRegister from "@/app/api/community/auth/register/route";
-import * as apiCommunityImages from "@/app/api/community/images/route";
-import * as apiCommunityImagesMonthName from "@/app/api/community/images/[month]/[name]/route";
-import * as apiCommunityPlans from "@/app/api/community/plans/route";
-import * as apiCommunityPlansPlanId from "@/app/api/community/plans/[planId]/route";
-import * as apiCommunityPlansPlanIdComments from "@/app/api/community/plans/[planId]/comments/route";
-import * as apiCommunityPlansPlanIdCommentsCommentId from "@/app/api/community/plans/[planId]/comments/[commentId]/route";
-import * as apiCommunityPlansPlanIdDownload from "@/app/api/community/plans/[planId]/download/route";
-import * as apiCommunityPlansPlanIdPreview from "@/app/api/community/plans/[planId]/preview/route";
-import * as apiCommunityPlansPlanIdView from "@/app/api/community/plans/[planId]/view/route";
-import * as apiCommunityPlansPlanIdVote from "@/app/api/community/plans/[planId]/vote/route";
-import * as apiDatasetsVersionIdCatalog from "@/app/api/datasets/[versionId]/catalog/route";
-import * as apiDatasetsVersionIdClientFiles from "@/app/api/datasets/[versionId]/client-files/route";
-import * as apiDatasetsVersionIdCrops from "@/app/api/datasets/[versionId]/crops/route";
-import * as apiDatasetsVersionIdMobs from "@/app/api/datasets/[versionId]/mobs/route";
-import * as apiDatasetsVersionIdPrewarm from "@/app/api/datasets/[versionId]/prewarm/route";
-import * as apiDatasetsVersionIdRecipeIds from "@/app/api/datasets/[versionId]/recipe-ids/route";
-import * as apiDatasetsVersionIdRecipes from "@/app/api/datasets/[versionId]/recipes/route";
-import * as apiDatasetsVersionIdRecipesRecipeId from "@/app/api/datasets/[versionId]/recipes/[recipeId]/route";
-import * as apiDatasetsVersionIdResolveRecipes from "@/app/api/datasets/[versionId]/resolve-recipes/route";
-import * as apiDatasetsVersionIdResources from "@/app/api/datasets/[versionId]/resources/route";
-import * as apiHighsFile from "@/app/api/highs/[file]/route";
-import * as apiLibrary from "@/app/api/library/route";
-import * as apiLibraryDesignsDesignId from "@/app/api/library/designs/[designId]/route";
-import * as apiLibraryDesignsDesignIdMembers from "@/app/api/library/designs/[designId]/members/route";
-import * as apiLibraryDesignsDesignIdMembersUserId from "@/app/api/library/designs/[designId]/members/[userId]/route";
-import * as apiLibraryFoldersFolderId from "@/app/api/library/folders/[folderId]/route";
-import * as apiResourcePopularity from "@/app/api/resource-popularity/route";
-import * as apiVersion from "@/app/api/version/route";
-import * as datasetFilesVersionIdAssetPath from "@/app/dataset-files/[versionId]/[...assetPath]/route";
-import * as datasetsGtnhVersionIdTexturesAssetPath from "@/app/datasets/gtnh/[versionId]/textures/[...assetPath]/route";
+import * as apiAccountsSearch from "@/server/routes/api/accounts/search/route";
+import * as apiBlueprints from "@/server/routes/api/blueprints/route";
+import * as apiBlueprintsBlueprintId from "@/server/routes/api/blueprints/[blueprintId]/route";
+import * as apiCommunityAuthLogin from "@/server/routes/api/community/auth/login/route";
+import * as apiCommunityAuthLogout from "@/server/routes/api/community/auth/logout/route";
+import * as apiCommunityAuthMe from "@/server/routes/api/community/auth/me/route";
+import * as apiCommunityAuthRegister from "@/server/routes/api/community/auth/register/route";
+import * as apiCommunityImages from "@/server/routes/api/community/images/route";
+import * as apiCommunityImagesMonthName from "@/server/routes/api/community/images/[month]/[name]/route";
+import * as apiCommunityPlans from "@/server/routes/api/community/plans/route";
+import * as apiCommunityPlansPlanId from "@/server/routes/api/community/plans/[planId]/route";
+import * as apiCommunityPlansPlanIdComments from "@/server/routes/api/community/plans/[planId]/comments/route";
+import * as apiCommunityPlansPlanIdCommentsCommentId from "@/server/routes/api/community/plans/[planId]/comments/[commentId]/route";
+import * as apiCommunityPlansPlanIdDownload from "@/server/routes/api/community/plans/[planId]/download/route";
+import * as apiCommunityPlansPlanIdPreview from "@/server/routes/api/community/plans/[planId]/preview/route";
+import * as apiCommunityPlansPlanIdView from "@/server/routes/api/community/plans/[planId]/view/route";
+import * as apiCommunityPlansPlanIdVote from "@/server/routes/api/community/plans/[planId]/vote/route";
+import * as apiDatasetsVersionIdCatalog from "@/server/routes/api/datasets/[versionId]/catalog/route";
+import * as apiDatasetsVersionIdClientFiles from "@/server/routes/api/datasets/[versionId]/client-files/route";
+import * as apiDatasetsVersionIdCrops from "@/server/routes/api/datasets/[versionId]/crops/route";
+import * as apiDatasetsVersionIdMobs from "@/server/routes/api/datasets/[versionId]/mobs/route";
+import * as apiDatasetsVersionIdPrewarm from "@/server/routes/api/datasets/[versionId]/prewarm/route";
+import * as apiDatasetsVersionIdRecipeIds from "@/server/routes/api/datasets/[versionId]/recipe-ids/route";
+import * as apiDatasetsVersionIdRecipes from "@/server/routes/api/datasets/[versionId]/recipes/route";
+import * as apiDatasetsVersionIdRecipesRecipeId from "@/server/routes/api/datasets/[versionId]/recipes/[recipeId]/route";
+import * as apiDatasetsVersionIdResolveRecipes from "@/server/routes/api/datasets/[versionId]/resolve-recipes/route";
+import * as apiDatasetsVersionIdResources from "@/server/routes/api/datasets/[versionId]/resources/route";
+import * as apiHighsFile from "@/server/routes/api/highs/[file]/route";
+import * as apiLibrary from "@/server/routes/api/library/route";
+import * as apiLibraryDesignsDesignId from "@/server/routes/api/library/designs/[designId]/route";
+import * as apiLibraryDesignsDesignIdMembers from "@/server/routes/api/library/designs/[designId]/members/route";
+import * as apiLibraryDesignsDesignIdMembersUserId from "@/server/routes/api/library/designs/[designId]/members/[userId]/route";
+import * as apiLibraryFoldersFolderId from "@/server/routes/api/library/folders/[folderId]/route";
+import * as apiResourcePopularity from "@/server/routes/api/resource-popularity/route";
+import * as apiVersion from "@/server/routes/api/version/route";
+import * as datasetFilesVersionIdAssetPath from "@/server/routes/dataset-files/[versionId]/[...assetPath]/route";
+import * as datasetsGtnhVersionIdTexturesAssetPath from "@/server/routes/datasets/gtnh/[versionId]/textures/[...assetPath]/route";
 
 export type HttpMethod = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
 
@@ -51,11 +51,11 @@ export type WebHandler = (request: Request, context: RouteContext) => Response |
 export type RouteModule = Partial<Record<HttpMethod, WebHandler>>;
 
 /**
- * How Next served a route its segment config made static, which shows on the wire. Named in the table by hand:
- * `"static"` (`dynamic = "force-static"`) gives every method the GET answer, and an answer with no Cache-Control
- * of its own gets `s-maxage=31536000`.
+ * A route answered as a static file: every method gets the GET answer, and an answer with no Cache-Control of
+ * its own gets `s-maxage=31536000`. The wire keeps the answers Next gave the route it served from its prerender
+ * cache. Named in the table by hand.
  */
-export type NextServing = "static";
+export type RouteServing = "static";
 
 export interface RouteEntry {
   /** The Express 5 path: `:name` for `[name]`, `*name` for `[...name]`. */
@@ -63,7 +63,7 @@ export interface RouteEntry {
   /** The route file's repo path. */
   source: string;
   module: RouteModule;
-  serving?: NextServing;
+  serving?: RouteServing;
 }
 
 const METHODS: readonly HttpMethod[] = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
@@ -74,7 +74,7 @@ const METHODS: readonly HttpMethod[] = ["GET", "HEAD", "POST", "PUT", "PATCH", "
  * literal segments.
  */
 export function routePathForFile(file: string): string {
-  const folders = file.replace(/^src\/app/, "").replace(/\/route\.[jt]sx?$/, "");
+  const folders = file.replace(/^src\/server\/routes/, "").replace(/\/route\.[jt]sx?$/, "");
   return folders
     .split("/")
     .map((segment) => segment.replace(/^\[\.\.\.(.+)\]$/, "*$1").replace(/^\[(.+)\]$/, ":$1"))
@@ -129,10 +129,7 @@ type TypedRouteModule<S extends string> = {
   ) => Response | Promise<Response>;
 };
 
-/**
- * The method exports of a route module. Next's segment config (`runtime`,
- * `dynamic`, `revalidate`, `generateStaticParams`) is not a handler.
- */
+/** The method exports of a route module: anything else it exports is not a handler. */
 function pick(module: Record<string, unknown>): RouteModule {
   const picked: RouteModule = {};
   for (const method of METHODS) {
@@ -150,7 +147,7 @@ function pick(module: Record<string, unknown>): RouteModule {
 function entry<S extends string>(
   source: S,
   module: TypedRouteModule<S>,
-  serving?: NextServing,
+  serving?: RouteServing,
 ): RouteEntry {
   return {
     path: routePathForFile(source),
@@ -166,62 +163,89 @@ function entry<S extends string>(
  * with the first path that matches.
  */
 export const ROUTES: readonly RouteEntry[] = [
-  entry("src/app/api/accounts/search/route.ts", apiAccountsSearch),
-  entry("src/app/api/blueprints/route.ts", apiBlueprints),
-  entry("src/app/api/blueprints/[blueprintId]/route.ts", apiBlueprintsBlueprintId),
-  entry("src/app/api/community/auth/login/route.ts", apiCommunityAuthLogin),
-  entry("src/app/api/community/auth/logout/route.ts", apiCommunityAuthLogout),
-  entry("src/app/api/community/auth/me/route.ts", apiCommunityAuthMe),
-  entry("src/app/api/community/auth/register/route.ts", apiCommunityAuthRegister),
-  entry("src/app/api/community/images/route.ts", apiCommunityImages),
-  entry("src/app/api/community/images/[month]/[name]/route.ts", apiCommunityImagesMonthName),
-  entry("src/app/api/community/plans/route.ts", apiCommunityPlans),
-  entry("src/app/api/community/plans/[planId]/route.ts", apiCommunityPlansPlanId),
-  entry("src/app/api/community/plans/[planId]/comments/route.ts", apiCommunityPlansPlanIdComments),
+  entry("src/server/routes/api/accounts/search/route.ts", apiAccountsSearch),
+  entry("src/server/routes/api/blueprints/route.ts", apiBlueprints),
+  entry("src/server/routes/api/blueprints/[blueprintId]/route.ts", apiBlueprintsBlueprintId),
+  entry("src/server/routes/api/community/auth/login/route.ts", apiCommunityAuthLogin),
+  entry("src/server/routes/api/community/auth/logout/route.ts", apiCommunityAuthLogout),
+  entry("src/server/routes/api/community/auth/me/route.ts", apiCommunityAuthMe),
+  entry("src/server/routes/api/community/auth/register/route.ts", apiCommunityAuthRegister),
+  entry("src/server/routes/api/community/images/route.ts", apiCommunityImages),
   entry(
-    "src/app/api/community/plans/[planId]/comments/[commentId]/route.ts",
+    "src/server/routes/api/community/images/[month]/[name]/route.ts",
+    apiCommunityImagesMonthName,
+  ),
+  entry("src/server/routes/api/community/plans/route.ts", apiCommunityPlans),
+  entry("src/server/routes/api/community/plans/[planId]/route.ts", apiCommunityPlansPlanId),
+  entry(
+    "src/server/routes/api/community/plans/[planId]/comments/route.ts",
+    apiCommunityPlansPlanIdComments,
+  ),
+  entry(
+    "src/server/routes/api/community/plans/[planId]/comments/[commentId]/route.ts",
     apiCommunityPlansPlanIdCommentsCommentId,
   ),
-  entry("src/app/api/community/plans/[planId]/download/route.ts", apiCommunityPlansPlanIdDownload),
-  entry("src/app/api/community/plans/[planId]/preview/route.ts", apiCommunityPlansPlanIdPreview),
-  entry("src/app/api/community/plans/[planId]/view/route.ts", apiCommunityPlansPlanIdView),
-  entry("src/app/api/community/plans/[planId]/vote/route.ts", apiCommunityPlansPlanIdVote),
-  entry("src/app/api/datasets/[versionId]/catalog/route.ts", apiDatasetsVersionIdCatalog),
-  entry("src/app/api/datasets/[versionId]/client-files/route.ts", apiDatasetsVersionIdClientFiles),
-  entry("src/app/api/datasets/[versionId]/crops/route.ts", apiDatasetsVersionIdCrops),
-  entry("src/app/api/datasets/[versionId]/mobs/route.ts", apiDatasetsVersionIdMobs),
-  entry("src/app/api/datasets/[versionId]/prewarm/route.ts", apiDatasetsVersionIdPrewarm),
-  entry("src/app/api/datasets/[versionId]/recipe-ids/route.ts", apiDatasetsVersionIdRecipeIds),
-  entry("src/app/api/datasets/[versionId]/recipes/route.ts", apiDatasetsVersionIdRecipes),
   entry(
-    "src/app/api/datasets/[versionId]/recipes/[recipeId]/route.ts",
+    "src/server/routes/api/community/plans/[planId]/download/route.ts",
+    apiCommunityPlansPlanIdDownload,
+  ),
+  entry(
+    "src/server/routes/api/community/plans/[planId]/preview/route.ts",
+    apiCommunityPlansPlanIdPreview,
+  ),
+  entry(
+    "src/server/routes/api/community/plans/[planId]/view/route.ts",
+    apiCommunityPlansPlanIdView,
+  ),
+  entry(
+    "src/server/routes/api/community/plans/[planId]/vote/route.ts",
+    apiCommunityPlansPlanIdVote,
+  ),
+  entry("src/server/routes/api/datasets/[versionId]/catalog/route.ts", apiDatasetsVersionIdCatalog),
+  entry(
+    "src/server/routes/api/datasets/[versionId]/client-files/route.ts",
+    apiDatasetsVersionIdClientFiles,
+  ),
+  entry("src/server/routes/api/datasets/[versionId]/crops/route.ts", apiDatasetsVersionIdCrops),
+  entry("src/server/routes/api/datasets/[versionId]/mobs/route.ts", apiDatasetsVersionIdMobs),
+  entry("src/server/routes/api/datasets/[versionId]/prewarm/route.ts", apiDatasetsVersionIdPrewarm),
+  entry(
+    "src/server/routes/api/datasets/[versionId]/recipe-ids/route.ts",
+    apiDatasetsVersionIdRecipeIds,
+  ),
+  entry("src/server/routes/api/datasets/[versionId]/recipes/route.ts", apiDatasetsVersionIdRecipes),
+  entry(
+    "src/server/routes/api/datasets/[versionId]/recipes/[recipeId]/route.ts",
     apiDatasetsVersionIdRecipesRecipeId,
   ),
   entry(
-    "src/app/api/datasets/[versionId]/resolve-recipes/route.ts",
+    "src/server/routes/api/datasets/[versionId]/resolve-recipes/route.ts",
     apiDatasetsVersionIdResolveRecipes,
   ),
-  entry("src/app/api/datasets/[versionId]/resources/route.ts", apiDatasetsVersionIdResources),
-  entry("src/app/api/highs/[file]/route.ts", apiHighsFile, "static"),
-  entry("src/app/api/library/route.ts", apiLibrary),
-  entry("src/app/api/library/designs/[designId]/route.ts", apiLibraryDesignsDesignId),
   entry(
-    "src/app/api/library/designs/[designId]/members/route.ts",
+    "src/server/routes/api/datasets/[versionId]/resources/route.ts",
+    apiDatasetsVersionIdResources,
+  ),
+  entry("src/server/routes/api/highs/[file]/route.ts", apiHighsFile, "static"),
+  entry("src/server/routes/api/library/route.ts", apiLibrary),
+  entry("src/server/routes/api/library/designs/[designId]/route.ts", apiLibraryDesignsDesignId),
+  entry(
+    "src/server/routes/api/library/designs/[designId]/members/route.ts",
     apiLibraryDesignsDesignIdMembers,
   ),
   entry(
-    "src/app/api/library/designs/[designId]/members/[userId]/route.ts",
+    "src/server/routes/api/library/designs/[designId]/members/[userId]/route.ts",
     apiLibraryDesignsDesignIdMembersUserId,
   ),
-  entry("src/app/api/library/folders/[folderId]/route.ts", apiLibraryFoldersFolderId),
-  entry("src/app/api/resource-popularity/route.ts", apiResourcePopularity),
-  entry("src/app/api/version/route.ts", apiVersion),
+  entry("src/server/routes/api/library/folders/[folderId]/route.ts", apiLibraryFoldersFolderId),
+  entry("src/server/routes/api/resource-popularity/route.ts", apiResourcePopularity),
+  entry("src/server/routes/api/version/route.ts", apiVersion),
   entry(
-    "src/app/dataset-files/[versionId]/[...assetPath]/route.ts",
+    "src/server/routes/dataset-files/[versionId]/[...assetPath]/route.ts",
     datasetFilesVersionIdAssetPath,
   ),
   entry(
-    "src/app/datasets/gtnh/[versionId]/textures/[...assetPath]/route.ts",
+    "src/server/routes/datasets/gtnh/[versionId]/textures/[...assetPath]/route.ts",
     datasetsGtnhVersionIdTexturesAssetPath,
   ),
 ];

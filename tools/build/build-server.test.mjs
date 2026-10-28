@@ -195,9 +195,10 @@ describe("the built server", () => {
         datasetManifestUrl: null,
       }),
     );
-    mkdirSync(path.join(cwd, "src", "app"), { recursive: true });
+    const assets = path.join("src", "server", "page", "assets");
+    mkdirSync(path.join(cwd, assets), { recursive: true });
     for (const file of ["favicon.ico", "opengraph-image.png"]) {
-      copyFileSync(path.join(REPO, "src", "app", file), path.join(cwd, "src", "app", file));
+      copyFileSync(path.join(REPO, assets, file), path.join(cwd, assets, file));
     }
     mkdirSync(path.join(cwd, "public"));
     // The bundle sits inside the repository, so its external packages resolve from its node_modules.

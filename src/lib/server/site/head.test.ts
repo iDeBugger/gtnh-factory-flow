@@ -135,11 +135,13 @@ describe("with the community switch on", () => {
 describe("the site image", () => {
   it("is the file beside the pages, with its alt text and size", () => {
     const alt = readFileSync(
-      new URL("../../../app/opengraph-image.alt.txt", import.meta.url),
+      new URL("../../../server/page/assets/opengraph-image.alt.txt", import.meta.url),
       "utf8",
     );
     expect(SITE_IMAGE.alt).toBe(alt);
-    const png = readFileSync(new URL("../../../app/opengraph-image.png", import.meta.url));
+    const png = readFileSync(
+      new URL("../../../server/page/assets/opengraph-image.png", import.meta.url),
+    );
     expect(readPngHeader(png)).toEqual({ width: SITE_IMAGE.width, height: SITE_IMAGE.height });
   });
 

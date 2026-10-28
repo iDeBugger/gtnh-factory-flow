@@ -33,7 +33,7 @@ const NEXT = nextAnswers as unknown as {
   probedLocations: Record<string, string>;
 };
 
-/** The environment the fixture's Next build ran with. */
+/** The environment the captured Next answers were made with. */
 const SITE = "http://127.0.0.1:3770";
 const BUILD_ID = "baseline-3a41db6d";
 
@@ -99,7 +99,7 @@ beforeAll(async () => {
       ...options,
       before: [libraryErrors],
       extraRoutes: [throwing, param, handlerUriError],
-      siteFilesDir: path.resolve(import.meta.dirname, "../app"),
+      siteFilesDir: path.resolve(import.meta.dirname, "page/assets"),
     }),
   );
   const deferred = new Promise<void>((resolve) => {

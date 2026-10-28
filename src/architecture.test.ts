@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
  * src/ and tools/ is read with `ts.preProcessFile`; a layer rule below may be
  * broken only by an edge `architecture-allowlist.json` names, and that list
  * may only shrink: a new break fails, and a fixed edge still listed fails too.
- * Tests, `__fixtures__/`, `test-support/` and `src/app/dev/**` are exempt.
+ * Tests, `__fixtures__/`, `test-support/` and `src/client/dev/**` are exempt.
  *
  * `ARCH_DUMP=1 npx vitest run src/architecture.test.ts` drops the fixed
  * entries from the allowlist. It never adds one, and `MAX_ALLOWED` below holds
@@ -38,13 +38,22 @@ const MAX_ALLOWED: Record<string, number> = {
   "11": 0,
   "12": 0,
   "13": 0,
+  "14": 0,
   queriesInApp: 0,
 };
 
 const ROOT = path.resolve(__dirname, "..");
 const ALLOWLIST_FILE = path.join(ROOT, "src/architecture-allowlist.json");
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".mjs"];
-const SKIPPED_DIRECTORIES = new Set(["node_modules", ".next", "scratch", "dist-live", "dist-db"]);
+// `.next` stays while old checkouts still hold a Next build.
+const SKIPPED_DIRECTORIES = new Set([
+  "node_modules",
+  "dist",
+  ".next",
+  "scratch",
+  "dist-live",
+  "dist-db",
+]);
 const NODE_BUILTINS = new Set(builtinModules);
 
 interface Edge {
@@ -140,12 +149,16 @@ function isTypeOnlyAt(text: string, position: number): boolean {
   return names.length > 0 && names.every((name) => name.startsWith("type "));
 }
 
-function isClientEntry(file: string, text: string): boolean {
-  if (/\.worker\.tsx?$/.test(file)) {
-    return true;
-  }
-  const preProcessed = text.replace(/^(\s*(\/\/[^\n]*\n|\/\*[\s\S]*?\*\/))*/, "");
-  return /^\s*["']use client["']/.test(preProcessed);
+/**
+ * Where browser code starts: the page's entry, the shell render (the same tree, prerendered at build) and every
+ * worker.
+ */
+function isClientEntryFile(file: string): boolean {
+  return (
+    file === "src/client/main.tsx" ||
+    file === "src/client/prerender.tsx" ||
+    /^src\/.*\.worker\.tsx?$/.test(file)
+  );
 }
 
 /** One file's imports; `relative` is its repository path, which need not exist on disk. */
@@ -166,7 +179,7 @@ function toSourceFile(relative: string, text: string): SourceFile {
   return {
     path: relative,
     text,
-    isClientEntry: isClientEntry(relative, text),
+    isClientEntry: isClientEntryFile(relative),
     edges: [...seen.values()],
   };
 }
@@ -188,7 +201,7 @@ function isExempt(file: string): boolean {
     /\.(test|local\.test)\.(m?[tj]sx?)$/.test(file) ||
     file.includes("/__fixtures__/") ||
     file.includes("/test-support/") ||
-    file.startsWith("src/app/dev/")
+    file.startsWith("src/client/dev/")
   );
 }
 
@@ -211,8 +224,12 @@ const isContract = (file: string): boolean =>
 
 const isServer = (file: string): boolean => file.startsWith("src/lib/server/");
 
-const isRouteHandler = (file: string): boolean =>
-  /^src\/app\/.*\/route\.tsx?$/.test(file) || file === "src/app/sitemap.ts";
+/**
+ * The web server: its routes, middleware, adapter, page and production entry. The dev entry is the one file
+ * under src/server that loads the client (its boot scripts, through Vite).
+ */
+const isWebServer = (file: string): boolean =>
+  file.startsWith("src/server/") && file !== "src/server/dev.ts";
 
 const isUiOrStore = (file: string): boolean => /^src\/(components|store)\//.test(file);
 
@@ -261,7 +278,7 @@ function isImpurePackage(name: string): boolean {
   return (
     name.startsWith("node:") ||
     NODE_BUILTINS.has(name) ||
-    /^(react|react-dom|zustand|ws|pg|kysely|next)(\/|$)/.test(name) ||
+    /^(react|react-dom|zustand|ws|pg|kysely|next|express|vite)(\/|$)/.test(name) ||
     /^@xyflow\//.test(name)
   );
 }
@@ -299,19 +316,20 @@ const RULES: Record<string, (edge: Edge) => boolean> = {
     if (name) return isImpurePackage(name);
     return !isDomain(to) && !isContract(to);
   },
-  // 3. Server code never imports the UI, the stores, the app, the live service or React.
+  // 3. Server code never imports the UI, the stores, the client, the web server, the live service or React.
   "3": ({ from, to }) => {
     if (!isServer(from)) return false;
     const name = packageName(to);
     if (name) return /^(react|react-dom)(\/|$)/.test(name);
-    return /^src\/(components|store|app|live)\//.test(to);
+    return /^src\/(components|store|client|server|live)\//.test(to);
   },
-  // 4. Route handlers never reach the database layer, the UI or the stores.
-  "4": ({ from, to }) => isRouteHandler(from) && (isDatabaseLayer(to) || isUiOrStore(to)),
+  // 4. The web server never reaches the database layer, the UI, the stores or the client.
+  "4": ({ from, to }) =>
+    isWebServer(from) && (isDatabaseLayer(to) || isUiOrStore(to) || to.startsWith("src/client/")),
   // 5. The live service uses the repositories and the files `isLiveServerTarget` names only.
   "5": ({ from, to }) => {
     if (!from.startsWith("src/live/")) return false;
-    if (/^src\/(app|components|store)\//.test(to)) return true;
+    if (/^src\/(server|client|components|store)\//.test(to)) return true;
     return isServer(to) && !isLiveServerTarget(to);
   },
   // 7. The stores never import the UI.
@@ -343,37 +361,28 @@ const RULES: Record<string, (edge: Edge) => boolean> = {
     from !== "src/live/store.ts",
   // 13. src/ never imports tools/: the scripts there are outside the layers above.
   "13": ({ from, to }) => from.startsWith("src/") && to.startsWith("tools/"),
+  // 14. Only the web server (and tools/) loads express; only the dev entry (and tools/) loads vite; nothing
+  //     loads next. The browser bundle and the rest of the server never depend on the framework.
+  "14": ({ from, to }) => {
+    const name = packageName(to);
+    if (!name) return false;
+    if (/^next(\/|$)/.test(name)) return true;
+    if (from.startsWith("tools/")) return false;
+    if (/^express(\/|$)/.test(name)) return !from.startsWith("src/server/");
+    if (/^vite(\/|$)/.test(name)) return from !== "src/server/dev.ts";
+    return false;
+  },
 };
 
-/**
- * Files that import `next` or `next/*`, type-only imports included: every
- * route handler, and every file outside src/app (Next's pages, layouts and
- * metadata files under src/app are its own until the cut). The handlers
- * must answer the same outside Next.
- */
-function nextImporters(graph: Map<string, SourceFile>): string[] {
-  return [...graph.values()]
-    .filter((file) => !isExempt(file.path))
-    .filter((file) => isRouteHandler(file.path) || !file.path.startsWith("src/app/"))
-    .filter((file) => file.edges.some((edge) => /^pkg:next(\/|$)/.test(edge.to)))
-    .map((file) => file.path)
-    .sort();
-}
-
-/** Today's next imports outside the pages, each until the task that removes it. The list only shrinks. */
-const NEXT_IMPORT_EXCEPTIONS = new Map<string, string>([
-  ["src/app/sitemap.ts", "MetadataRoute's type, until Task 12 moves the sitemap off Next"],
-  ["src/proxy.ts", "Next's middleware, until Task 12 removes it"],
-]);
-
 /** Services return results, never HTTP responses; no allowlist entry excuses one. */
-const importsNext = ({ from, to }: Edge): boolean =>
-  from.startsWith("src/lib/server/services/") && /^pkg:next(\/|$)/.test(to);
+const importsFramework = ({ from, to }: Edge): boolean =>
+  from.startsWith("src/lib/server/services/") && /^pkg:(next|express)(\/|$)/.test(to);
 
 /**
- * Rule 6: the code that runs in a browser (the UI, the stores, every
- * "use client" file and worker, and everything they load at run time) never
- * reaches lib/server or a Node built-in. Reported as the edges that cross.
+ * Rule 6: the code that runs in a browser (what the page's entry, the shell
+ * render and every worker load at run time, plus the UI and the stores)
+ * never reaches lib/server or a Node built-in. Reported as the edges that
+ * cross.
  */
 function clientCrossings(graph: Map<string, SourceFile>): Edge[] {
   const reached = new Set<string>();
@@ -428,10 +437,7 @@ function sendsQuery(text: string): boolean {
 function queriesOutsideDataLayer(graph: Map<string, SourceFile>): string[] {
   return [...graph.values()]
     .filter(
-      (file) =>
-        file.path.startsWith("src/") &&
-        !isExempt(file.path) &&
-        !isDatabaseLayer(file.path),
+      (file) => file.path.startsWith("src/") && !isExempt(file.path) && !isDatabaseLayer(file.path),
     )
     .filter((file) => sendsQuery(file.text))
     .map((file) => file.path)
@@ -790,7 +796,7 @@ function sqlOutOfPlace(graph: Map<string, SourceFile>): string[] {
 }
 
 /**
- * Files under src/app that send a query themselves, or hold the client. A
+ * Files of the web server that send a query themselves, or hold the client. A
  * route that hands a query to a helper outside db/ and repos/
  * (`community-rows`, `library`, `cloud-plans`, `blueprints`) is not seen
  * here; those helpers join the database layer as their queries move into
@@ -798,7 +804,7 @@ function sqlOutOfPlace(graph: Map<string, SourceFile>): string[] {
  */
 function queryingAppFiles(graph: Map<string, SourceFile>): string[] {
   return [...graph.values()]
-    .filter((file) => file.path.startsWith("src/app/") && !isExempt(file.path))
+    .filter((file) => file.path.startsWith("src/server/") && !isExempt(file.path))
     .filter(
       (file) =>
         sendsQuery(file.text) ||
@@ -893,7 +899,7 @@ describe("the layers", () => {
     expect(crossings).toEqual([]);
   });
 
-  it("route handlers send no query", () => {
+  it("the web server sends no query", () => {
     expect(querying).toEqual([...allowlist.queriesInApp].sort());
   });
 
@@ -918,22 +924,70 @@ describe("the layers", () => {
     }
   });
 
-  it("services never import next/server", () => {
+  it("services never import express or next", () => {
     const services = [...graph.values()].filter(
       (file) => file.path.startsWith("src/lib/server/services/") && !isExempt(file.path),
     );
-    const next = services.flatMap((file) => file.edges.filter(importsNext));
-    expect(next.map((edge) => `${edge.from} -> ${edge.to}`)).toEqual([]);
+    const framework = services.flatMap((file) => file.edges.filter(importsFramework));
+    expect(framework.map((edge) => `${edge.from} -> ${edge.to}`)).toEqual([]);
   });
 
-  it("only the pages and Next's own files import next, so the handlers and the rest run without it", () => {
-    const offenders = nextImporters(graph).filter((file) => !NEXT_IMPORT_EXCEPTIONS.has(file));
-    expect(offenders).toEqual([]);
+  it("each layer rule's classifier matches real files", () => {
+    const files = [...graph.keys()].filter((file) => !isExempt(file));
+    expect(files.filter(isWebServer).length).toBeGreaterThan(39);
+    // main.tsx, prerender.tsx and the four workers.
+    expect(files.filter(isClientEntryFile).length).toBe(6);
+    expect(files.filter((file) => file.startsWith("src/server/routes/")).length).toBe(37);
   });
 
-  it("every next import exception still imports next", () => {
-    const importers = new Set(nextImporters(graph));
-    expect([...NEXT_IMPORT_EXCEPTIONS.keys()].filter((file) => !importers.has(file))).toEqual([]);
+  it("refuses next anywhere, express outside the web server and vite outside the dev entry", () => {
+    const fixtures: Record<string, string> = {
+      "src/lib/server/express-fixture.ts": 'import type { Request } from "express";',
+      "src/components/vite-fixture.ts": 'import { createServer } from "vite";',
+      "src/server/vite-fixture.ts": 'import { createServer } from "vite";',
+      "src/server/next-fixture.ts": 'import { NextResponse } from "next/server";',
+      "tools/next-fixture.mjs": 'import next from "next";',
+      "src/server/express-fine.ts": 'import express from "express";',
+      "src/server/dev.ts": 'import type { ViteDevServer } from "vite";',
+      "tools/vite-fine.mjs": 'import { build } from "vite";',
+    };
+    const bad = new Map(
+      Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
+    );
+    expect(
+      breaks(bad)
+        .filter((edge) => edge.rule === "14")
+        .map(key),
+    ).toEqual([
+      "14|src/components/vite-fixture.ts|pkg:vite",
+      "14|src/lib/server/express-fixture.ts|pkg:express",
+      "14|src/server/next-fixture.ts|pkg:next/server",
+      "14|src/server/vite-fixture.ts|pkg:vite",
+      "14|tools/next-fixture.mjs|pkg:next",
+    ]);
+  });
+
+  it("starts the browser's reach at the page entry, the shell render and the workers", () => {
+    const fixtures: Record<string, string> = {
+      "src/client/main.tsx": 'import { siteUrl } from "@/lib/site-url";',
+      "src/lib/site-url.ts":
+        'import { x } from "@/lib/server/http/viewer";\nimport fs from "node:fs";',
+      "src/lib/arrange.worker.ts": 'import { y } from "@/lib/server/http/client-address";',
+      // A "use client" line no longer makes a root, and a file nothing in the browser loads is not reached.
+      "src/lib/app-font.ts": '"use client";\nimport { z } from "@/lib/server/http/request-body";',
+    };
+    const bad = new Map(
+      Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
+    );
+    expect(
+      clientCrossings(bad)
+        .map((edge) => `${edge.from} -> ${edge.to}`)
+        .sort(),
+    ).toEqual([
+      "src/lib/arrange.worker.ts -> src/lib/server/http/client-address.ts",
+      "src/lib/site-url.ts -> pkg:node:fs",
+      "src/lib/site-url.ts -> src/lib/server/http/viewer.ts",
+    ]);
   });
 
   it("only the data layer sends a query", () => {
@@ -1233,7 +1287,7 @@ describe("the layers", () => {
 
   it("refuses a repository call from outside the services, and an import of tools/", () => {
     const helper = "src/lib/server/preview-arch-fixture.ts";
-    const route = "src/app/api/arch-fixture/route.ts";
+    const route = "src/server/routes/api/arch-fixture/route.ts";
     const fixtures: Record<string, string> = {
       [helper]: [
         'import * as plans from "./repos/plans";',
@@ -1246,8 +1300,8 @@ describe("the layers", () => {
       Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
     );
     expect(breaks(bad).map(key)).toEqual([
-      `12|${route}|src/lib/server/repos/popularity.ts`,
       `12|${helper}|src/lib/server/repos/plans.ts`,
+      `12|${route}|src/lib/server/repos/popularity.ts`,
       `13|${helper}|tools/local-db/serve.ts`,
       `4|${route}|src/lib/server/repos/popularity.ts`,
     ]);

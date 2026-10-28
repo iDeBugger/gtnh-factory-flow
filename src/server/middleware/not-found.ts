@@ -3,7 +3,7 @@
  * Each matches Next's status and headers (src/server/__fixtures__/next-answers.json, pinned by app.test.ts).
  */
 import type { ErrorRequestHandler, RequestHandler, Response } from "express";
-import { headersForPath, type SecurityHeaderEnv } from "../../../security-headers.config";
+import { headersForPath, type SecurityHeaderEnv } from "@/lib/server/http/security-headers";
 import {
   DEFAULT_DRAIN,
   drainUnreadBody,

@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import nextConfig from "../../next.config";
 import { isModAndCommunityOn } from "./deployment-features";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 
@@ -41,10 +40,4 @@ describe("the on helper", () => {
   test("turns them on for each test", () => {
     expect(isModAndCommunityOn()).toBe(true);
   });
-});
-
-test("next.config always defines the setting, so a build inlines its value in both bundles", () => {
-  // An undefined variable is left as a run-time read by the bundler, and the server's build-and-process check
-  // would then read the process twice.
-  expect(typeof nextConfig.env?.NEXT_PUBLIC_MOD_AND_COMMUNITY).toBe("string");
 });

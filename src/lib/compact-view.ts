@@ -20,7 +20,7 @@ import {
  * `globals.css` defines a Tailwind `compact:` variant for the style-only half
  * of the switch (heights, min-heights, font sizes). It keys on the
  * `data-compact` attribute this module stamps on <html>, so the two can never
- * disagree; the boot script in layout.tsx stamps it before first paint.
+ * disagree; the boot script in src/client/boot.ts stamps it before first paint.
  *
  * Two tests, either one is enough. A phone-sized window (REAL px, `PHONE_MAX_*`)
  * is compact whatever the interface size: a bigger size must not turn a

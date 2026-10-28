@@ -50,7 +50,7 @@ export function currentFontEpoch(): number {
 }
 
 /**
- * The app's faces arrive after the page is drawn (next/font swaps each in once it loads), and a width measured before
+ * The app's faces arrive after the page is drawn (each face swaps in once it loads), and a width measured before
  * then is the fallback's. When a face of the app's font lands, every width so far is dropped and measured again, so
  * chips and names are laid out in the face that is drawn. Once per face, never per frame.
  */

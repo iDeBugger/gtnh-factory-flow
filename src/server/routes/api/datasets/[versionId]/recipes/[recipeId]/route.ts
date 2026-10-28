@@ -1,0 +1,27 @@
+import { datasetErrorResponse } from "@/lib/server/http/error-response";
+import { datasetCacheHeaders } from "@/lib/server/http/dataset-cache-headers";
+import { getDatasetRecipe } from "@/lib/server/dataset-query";
+import { datasetBudgetRefusal, meteredDatasetWork } from "@/lib/server/limits/dataset-rate";
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ versionId: string; recipeId: string }> },
+) {
+  try {
+    const { versionId, recipeId } = await params;
+    const refusal = datasetBudgetRefusal(request, 1);
+    if (refusal) {
+      return refusal;
+    }
+    const recipe = await meteredDatasetWork(request, () => getDatasetRecipe(versionId, recipeId));
+    if (!recipe) {
+      return Response.json({ error: "Recipe not found." }, { status: 404 });
+    }
+
+    return Response.json(recipe, {
+      headers: datasetCacheHeaders(request),
+    });
+  } catch (error) {
+    return datasetErrorResponse(error, "Recipe load failed.");
+  }
+}

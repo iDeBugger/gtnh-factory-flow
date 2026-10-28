@@ -3,7 +3,7 @@ import path from "node:path";
 
 /**
  * The characters a published dataset file or directory name may use. The
- * site's request gate (src/proxy.ts) refuses any dataset path a browser would
+ * site's request gate (src/server/middleware/dataset-gate.ts) refuses any dataset path a browser would
  * percent-encode, so a name holding a space, "#", "%", "?" or a character
  * outside ASCII would be unreachable once published. Every name the pipeline
  * writes today (data, shards, 170k textures) fits this set; a version that

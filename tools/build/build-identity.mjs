@@ -14,8 +14,8 @@ import path from "node:path";
  * answer URLs.
  *
  * The version is read as text from `<cwd>/src/lib/version.ts`, never imported,
- * and this module imports only Node built-ins: next.config.ts and the build
- * scripts load it outside a bundle, where an import of app code would pull the
+ * and this module imports only Node built-ins: the build scripts load it
+ * outside a bundle, where an import of app code would pull the
  * app in with it.
  *
  * @param {Record<string, string | undefined>} [env]

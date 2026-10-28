@@ -1,0 +1,153 @@
+import { describe, expect, it } from "vitest";
+import { MOD_PORTS } from "@/lib/mod-link/mod-link";
+import {
+  documentPolicy,
+  headersForPath,
+  MOD_LOOPBACK_ORIGINS,
+  STRICT_TRANSPORT_SECURITY,
+  workerPolicy,
+} from "./security-headers";
+
+const production = { production: true };
+
+const directive = (policy: string, name: string) =>
+  policy
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name} `));
+
+describe("the document policy", () => {
+  it("is the one string in production", () => {
+    expect(documentPolicy(production)).toBe(
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'",
+    );
+  });
+
+  it("allows eval outside production, in script-src only", () => {
+    const dev = documentPolicy({ production: false });
+    expect(directive(dev, "script-src")).toBe(
+      "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval'",
+    );
+    expect(dev.replace("'unsafe-eval'", "").replace("  ", " ").replace(" ;", ";")).toBe(
+      documentPolicy(production),
+    );
+    expect(documentPolicy(production)).not.toContain("'unsafe-eval'");
+  });
+
+  it("adds an absolute live socket origin to connect-src and nothing for a path", () => {
+    expect(directive(documentPolicy({ ...production, liveUrl: "ws://localhost:3001/live" }), "connect-src")).toBe(
+      "connect-src 'self' ws://localhost:3001",
+    );
+    expect(directive(documentPolicy({ ...production, liveUrl: "wss://live.example/live" }), "connect-src")).toBe(
+      "connect-src 'self' wss://live.example",
+    );
+    // The site's own socket origin, named for WebKit before CSP3; once only.
+    expect(directive(documentPolicy({ ...production, siteUrl: "https://gtnhplanner.com" }), "connect-src")).toBe(
+      "connect-src 'self' wss://gtnhplanner.com",
+    );
+    expect(
+      directive(
+        documentPolicy({ ...production, siteUrl: "http://localhost:3000/", liveUrl: "ws://localhost:3000/live" }),
+        "connect-src",
+      ),
+    ).toBe("connect-src 'self' ws://localhost:3000");
+    for (const siteUrl of ["", "/", "not a url", "ftp://gtnhplanner.com"]) {
+      expect(documentPolicy({ ...production, siteUrl })).toBe(documentPolicy(production));
+    }
+    for (const liveUrl of ["/live", "", "not a url", "https://live.example/live"]) {
+      expect(documentPolicy({ ...production, liveUrl })).toBe(documentPolicy(production));
+    }
+  });
+});
+
+describe("the mod's loopback origins", () => {
+  it("are in connect-src only when the mod and community switch is on at build", () => {
+    const on = directive(documentPolicy({ ...production, modAndCommunity: "on" }), "connect-src");
+    expect(on).toBe(
+      "connect-src 'self' http://127.0.0.1:25640 http://127.0.0.1:25641 http://127.0.0.1:25642 http://127.0.0.1:25643 http://127.0.0.1:25644 http://127.0.0.1:25645 http://127.0.0.1:25646 http://127.0.0.1:25647 http://127.0.0.1:25648 http://127.0.0.1:25649",
+    );
+    expect(documentPolicy({ ...production, modAndCommunity: " ON " })).toBe(
+      documentPolicy({ ...production, modAndCommunity: "on" }),
+    );
+    for (const modAndCommunity of [undefined, "", "off", "true", "1"]) {
+      expect(documentPolicy({ ...production, modAndCommunity })).toBe(documentPolicy(production));
+    }
+    expect(documentPolicy(production)).not.toContain("127.0.0.1");
+  });
+
+  it("follow the live origins and match the ports the mod link tries", () => {
+    expect(
+      directive(
+        documentPolicy({ ...production, siteUrl: "https://gtnhplanner.com", modAndCommunity: "on" }),
+        "connect-src",
+      ),
+    ).toBe(`connect-src 'self' wss://gtnhplanner.com ${MOD_LOOPBACK_ORIGINS.join(" ")}`);
+    expect(MOD_LOOPBACK_ORIGINS).toEqual(MOD_PORTS.map((port) => `http://127.0.0.1:${port}`));
+    expect(workerPolicy).not.toContain("127.0.0.1");
+  });
+});
+
+describe("the worker policy", () => {
+  it("allows eval, which the document policy never does in production", () => {
+    expect(workerPolicy).toContain("'unsafe-eval'");
+    expect(documentPolicy(production)).not.toContain("'unsafe-eval'");
+  });
+});
+
+describe("the script hashes", () => {
+  it("drop 'unsafe-inline' from script-src in production when the page's hashes are given", () => {
+    const policy = documentPolicy({ production: true, scriptHashes: ["'sha256-abc='"] });
+    expect(policy).toMatch(/script-src 'self' 'sha256-abc=' 'wasm-unsafe-eval'(;|$)/);
+    expect(directive(policy, "script-src")).not.toContain("'unsafe-inline'");
+    expect(documentPolicy({ production: true, scriptHashes: ["'sha256-a='", "'sha256-b='"] })).toContain(
+      "script-src 'self' 'sha256-a=' 'sha256-b=' 'wasm-unsafe-eval';",
+    );
+    // Every other directive is the same policy.
+    expect(policy.replace("'sha256-abc='", "'unsafe-inline'")).toBe(documentPolicy(production));
+    // style-src keeps its own 'unsafe-inline': only scripts are hashed.
+    expect(directive(policy, "style-src")).toBe("style-src 'self' 'unsafe-inline'");
+  });
+
+  it("keep 'unsafe-inline' and 'unsafe-eval' outside production, and with no hashes", () => {
+    expect(directive(documentPolicy({ production: false, scriptHashes: ["'sha256-abc='"] }), "script-src")).toBe(
+      "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval'",
+    );
+    expect(documentPolicy({ production: true, scriptHashes: [] })).toBe(documentPolicy(production));
+    expect(documentPolicy({ production: true, scriptHashes: undefined })).toBe(documentPolicy(production));
+  });
+
+  it("refuse to fall back to 'unsafe-inline' in production when the page must carry hashes", () => {
+    for (const scriptHashes of [[], undefined]) {
+      expect(() => documentPolicy({ production: true, requireScriptHashes: true, scriptHashes })).toThrow(
+        /script hashes are missing/,
+      );
+    }
+    expect(
+      directive(documentPolicy({ production: true, requireScriptHashes: true, scriptHashes: ["'sha256-abc='"] }), "script-src"),
+    ).toBe("script-src 'self' 'sha256-abc=' 'wasm-unsafe-eval'");
+    // Outside production the dev server's own inline scripts need 'unsafe-inline' whatever the build says.
+    expect(directive(documentPolicy({ production: false, requireScriptHashes: true }), "script-src")).toContain(
+      "'unsafe-inline'",
+    );
+  });
+});
+
+describe("the headers for one path", () => {
+  const env = { production: true, scriptHashes: ["'sha256-abc='"] };
+  const site: [string, string][] = [
+    ["content-security-policy", documentPolicy(env)],
+    ["x-frame-options", "SAMEORIGIN"],
+    ["x-content-type-options", "nosniff"],
+    ["referrer-policy", "strict-origin-when-cross-origin"],
+    ["strict-transport-security", STRICT_TRANSPORT_SECURITY],
+  ];
+
+  it("give the worker policy to /assets/*, and the page policy elsewhere, in one order", () => {
+    for (const path of ["/assets/solver.worker-abc.js", "/assets"]) {
+      expect(headersForPath(path, env), path).toEqual([["content-security-policy", workerPolicy], ...site.slice(1)]);
+    }
+    for (const path of ["/", "/api/version", "/assetsx/y.js", "/x/assets/y.js", "/ASSETS/y.js"]) {
+      expect(headersForPath(path, env), path).toEqual(site);
+    }
+  });
+});

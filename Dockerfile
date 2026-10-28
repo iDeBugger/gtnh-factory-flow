@@ -55,7 +55,7 @@ RUN NEXT_PUBLIC_SITE_URL="$NEXT_PUBLIC_SITE_URL" \
     GTNH_BUILD_ID="$GTNH_BUILD_ID" \
     npm run build \
  && npm run build:live -- --metafile=dist-live/meta.json \
- && chmod -R a+rX,go-w public tools/deploy dist src/app/favicon.ico src/app/opengraph-image.png
+ && chmod -R a+rX,go-w public tools/deploy dist src/server/page/assets/favicon.ico src/server/page/assets/opengraph-image.png
 
 # The live service's run-time packages: the ones its bundle leaves external
 # (esbuild --packages=external; the build's metafile names them) and their
@@ -77,7 +77,7 @@ RUN node /tools/live-deps.mjs package-lock.json /tools/meta.json /app /site
 
 FROM ${NODE_IMAGE} AS site
 # The app root: the server reads dist/client, public/, the site files in
-# src/app and node_modules/highs/build from its working folder.
+# src/server/page/assets and node_modules/highs/build from its working folder.
 WORKDIR /app
 # .next/cache stays only because compose still mounts a tmpfs there; nothing
 # writes it.
@@ -95,7 +95,7 @@ COPY --from=build /app/public ./public
 # The deploy runs the env check in this image, against the server's .env and
 # the image's dist/client/build.json.
 COPY --from=build /app/tools/deploy/check-env.mjs ./deploy/
-COPY --from=build /app/src/app/favicon.ico /app/src/app/opengraph-image.png ./src/app/
+COPY --from=build /app/src/server/page/assets/favicon.ico /app/src/server/page/assets/opengraph-image.png ./src/server/page/assets/
 COPY --from=build /app/dist/client/assets ./dist/client/assets
 COPY --from=build /app/dist/client/index.html /app/dist/client/page.json /app/dist/client/build.json ./dist/client/
 COPY --from=build /app/dist/server/server.mjs /app/dist/server/app.mjs ./dist/server/

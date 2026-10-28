@@ -1,0 +1,1479 @@
+/*
+ * Class names come from the app's own source only: src/ without tests, notes and the solver's test corpus.
+ * The site image's build context leaves those out (.dockerignore), so a checkout and the image scan the same
+ * files and build the same CSS. The server's fixtures are captured answers (Next's pages, HTML heads) that
+ * tests compare against: their markup is not the app's, and scanning it adds classes no element uses.
+ */
+@import "tailwindcss" source("..");
+@source not "../**/*.test.ts";
+@source not "../**/*.test.tsx";
+@source not "../**/*.md";
+@source not "../test-support";
+@source not "../lib/solver/plan/__fixtures__/corpus";
+@source not "../server/__fixtures__";
+@source not "../lib/server/site/__fixtures__";
+@import "@xyflow/react/dist/style.css";
+
+/*
+ * `compact:` — a phone, or any window too narrow or too short (a phone held
+ * sideways) for the board to share the screen with both side columns.
+ *
+ * Keyed on the `data-compact` attribute that `src/lib/compact-view.ts` (and
+ * the boot script in src/client/boot.ts) stamps on <html>, not on a media query: the
+ * breakpoints are shell pixels under `--ui-scale` zoom, which CSS cannot
+ * compute. compact-view.ts owns the numbers and the behavioural half; this
+ * variant is for style-only changes.
+ */
+@custom-variant compact (&:where(html[data-compact], html[data-compact] *));
+
+/*
+ * `snug:` — wide enough for the full top bar, not for every button to keep
+ * its word: between the compact cutoff and SNUG_MAX_WIDTH labelled buttons
+ * drop to icons. An overflowing bar makes a phone browser widen its layout
+ * viewport and shrink the page (see AppMenu). Same attribute scheme as
+ * `compact:`.
+ */
+@custom-variant snug (&:where(html[data-snug], html[data-snug] *));
+
+/*
+ * The interface size (src/lib/ui-scale.ts). The shell is drawn at
+ * `--ui-scale` with CSS zoom; the board unzooms itself back to real pixels
+ * because React Flow cannot measure under zoom, and scales through its own
+ * camera instead. Viewport units are not divided by zoom, so inside the shell
+ * `100vh` is taller than the window: the `--ui-vh` family is the unit to use
+ * there. The boot script stamps the live values on <html>; these are the
+ * server-render defaults.
+ */
+:root {
+  --ui-scale: 1.17;
+  /* The EXACT reciprocal, never a rounded decimal: an effective board zoom
+     of 0.99996 puts every card on sub-pixel geometry and slows panning.
+     ui-scale.ts and the boot script write the same calc() form. */
+  --ui-scale-inverse: calc(1 / var(--ui-scale));
+  --ui-vh: calc(1vh * var(--ui-scale-inverse));
+  --ui-vw: calc(1vw * var(--ui-scale-inverse));
+  --ui-dvh: calc(1dvh * var(--ui-scale-inverse));
+}
+
+.ui-scale-shell {
+  zoom: var(--ui-scale);
+}
+
+/* A portal to the body sits outside the shell: its positioning box stays in
+   real pixels and its visual box wears this. */
+.ui-zoom {
+  zoom: var(--ui-scale);
+}
+
+/* THE BOARD IS ITS OWN COMPOSITOR LAYER. A pan moves a composited transform,
+   and Chrome re-tests everything painted after it for overlap, out to the
+   nearest COMPOSITED clip; without one that is the whole page, and the side
+   columns' rows each become layers (a slow pan on big plans). will-change:
+   opacity gives the board its own layer so its clip bounds the test, and
+   unlike transform it is not a containing block for fixed descendants.
+   isolation and contain: paint do not composite, so they do not help. */
+.factory-flow-board {
+  will-change: opacity;
+}
+
+/* The board, back at 1:1. Nested zooms multiply, so this cancels the shell's;
+   the element is still sized by its zoomed parent, so it fills the same space
+   and simply has more pixels in it. */
+.ui-scale-shell .react-flow {
+  zoom: var(--ui-scale-inverse);
+}
+
+/*
+ * Theme tokens. The app renders dark, and only dark.
+ *
+ * The `--mc-*` scale is the Minecraft GUI bevel ramp: --mc-100 is the
+ * lightest token (a mid grey here) and --mc-12 the darkest. Panels build
+ * their raised/inset look by pairing a face colour with a lighter token
+ * (top-left highlight) and a darker one (bottom-right shadow), so the names
+ * must keep matching the lightness ORDER or every bevel inverts.
+ */
+:root {
+  color-scheme: dark;
+
+  /*
+   * The one font the whole app renders in: Inter unless the settings dialog
+   * stamped a choice on <html>. The option list, storage key and these same
+   * stacks live in src/lib/app-font.ts; the boot script in src/client/boot.ts
+   * restores the attribute before first paint.
+   */
+  --app-font: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /*
+   * The pixel font's own dress, worn only under it (html[data-app-font="minecraft"]
+   * below): the game's hard text shadow and unsmoothed edges. Under a vector
+   * face the shadow reads as a blur and macOS draws unsmoothed text jagged.
+   */
+  --pixel-text-shadow: none;
+  --pixel-font-smoothing: auto;
+
+  --background: #1b1d21;
+  --foreground: #f5f5f5;
+
+  /* Shared input/output accents for rates, drawer frames and editable targets. */
+  --flow-output: var(--color-emerald-300);
+  --flow-input: var(--color-red-300);
+
+  --surface: #25272c;
+  --surface-raised: #303238;
+  --surface-sunken: #1b1d21;
+  /* Fallbacks only: the board div stamps the live theme's values over these.
+     Kept in step with the default theme (Charcoal, canvas-themes.ts). */
+  --canvas: #141414;
+  --canvas-dot: #43464d;
+  --fg: #f5f5f5;
+  --fg-subtle: #e5e5e5;
+  --fg-muted: #a3a3a3;
+  --line: #3a3b40;
+  --line-strong: #4a4b52;
+
+  /*
+   * Chart tokens. Voltage tier is ordinal, so it takes one hue stepped by
+   * lightness. Steps are checked against the panel surface (#303238) for
+   * monotone lightness and a visible gap between neighbours.
+   */
+  --viz-ordinal-1: #256abf;
+  --viz-ordinal-2: #3987e5;
+  --viz-ordinal-3: #6da7ec;
+  --viz-ordinal-4: #9ec5f4;
+  --viz-ordinal-5: #cde2fb;
+  /* Nominal series: machine names carry no order, so every bar shares one hue. */
+  --viz-series-1: #3987e5;
+
+  --mc-100: #5a5c65;
+  --mc-98: #565861;
+  --mc-96: #52545c;
+  --mc-93: #4e5058;
+  --mc-85: #4a4c54;
+  --mc-82: #46484f;
+  --mc-81: #45474e;
+  --mc-78: #3c3e45;
+  --mc-71: #36383f;
+  --mc-66: #323439;
+  --mc-65: #313338;
+  --mc-62: #2f3136;
+  --mc-61: #2d2f35;
+  --mc-56: #2a2c31;
+  --mc-55: #292b30;
+  --mc-54: #282a2f;
+  --mc-49: #26282d;
+  --mc-47: #25272c;
+  --mc-44: #232529;
+  --mc-36: #1f2125;
+  --mc-33: #1d1f23;
+  --mc-29: #1a1c20;
+  --mc-26: #18191d;
+  --mc-25: #17191d;
+  --mc-24: #16181c;
+  --mc-20: #151619;
+  --mc-15: #111317;
+  --mc-12: #0e1013;
+
+  --mc-ink: #e8e9ee;
+  --mc-ink-muted: #9a9ca4;
+
+  /* Semantic status colors for text sitting on mc-* panel surfaces. Raw
+     Tailwind 700-shades go dark-on-dark there; use these instead of hardcoded
+     emerald/red/cyan. */
+  --mc-good: #4ade80;
+  --mc-bad: #f87171;
+  --mc-info: #22d3ee;
+
+  /* SELECTION, in one place. Every mark that answers "what did I click"
+     (card ring, drawer rim, board frame ring, marquee, the panel's selection
+     band) uses these tokens, in the site's accent cyan. Nothing else should
+     hardcode a selection colour. */
+  --selection: #22d3ee;
+  --selection-soft: rgba(34, 211, 238, 0.6);
+  --selection-line: rgba(34, 211, 238, 0.5);
+  --selection-wash: rgba(34, 211, 238, 0.2);
+  --selection-ink: #a5f3fc;
+  --selection-ink-dim: rgba(207, 250, 254, 0.7);
+
+  /* The glow: one warm colour for "this carries the hovered resource" —
+     cards outline in it, wires halo in it. A glow answers "where is this
+     item", a ring answers "what did I click"; they are kept different
+     weights so both can be on at once. */
+  --glow-line: #ffd257;
+  --glow-halo: rgba(255, 202, 84, 0.8);
+}
+
+/*
+ * The item search box, lit for a moment when something outside the column
+ * (the Welcome page's "Find a recipe") lands the cursor in it. Two beats of
+ * the app's cyan ring, then back to plain.
+ */
+.search-box-flash {
+  animation: search-box-flash 1.4s ease-out;
+}
+
+@keyframes search-box-flash {
+  0%,
+  45% {
+    border-color: #22d3ee;
+    box-shadow:
+      inset 1px 1px 0 rgba(255, 255, 255, 0.08),
+      0 0 0 3px rgba(34, 211, 238, 0.45);
+  }
+  22%,
+  70% {
+    border-color: #404040;
+    box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  100% {
+    border-color: #404040;
+    box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* Zoomed out a storage card is already reduced to its item; a glowing frame
+   around a glowing icon is noise. LED mode glows nothing — the wires and
+   machine cards still light, the drawer itself stays quiet. The selection
+   rim is not a glow and stays. */
+.factory-flow-board[data-detail-level="glance"] [data-storage-node-id] {
+  outline: none !important;
+  filter: none !important;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-canvas: var(--canvas);
+  --color-fg: var(--fg);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-fg-muted: var(--fg-muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --font-sans: var(--app-font);
+  --font-mono: var(--app-font);
+}
+
+/* Kept in step with APP_FONTS in src/lib/app-font.ts. */
+html[data-app-font="minecraft"] {
+  --app-font: var(--font-minecraft), monospace;
+  --pixel-text-shadow: 1px 1px 0 color-mix(in srgb, currentColor 25%, #000);
+  --pixel-font-smoothing: none;
+}
+
+html[data-app-font="jetbrains-mono"] {
+  --app-font: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+html[data-app-font="lexend"] {
+  --app-font: var(--font-lexend), ui-sans-serif, system-ui, sans-serif;
+}
+
+html[data-app-font="atkinson-hyperlegible"] {
+  --app-font: var(--font-atkinson), ui-sans-serif, system-ui, sans-serif;
+}
+
+html[data-app-font="open-dyslexic"] {
+  --app-font: var(--font-open-dyslexic), ui-sans-serif, system-ui, sans-serif;
+}
+
+html[data-app-font="andika"] {
+  --app-font: var(--font-andika), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* (rules above are switched by the settings dialog; see src/lib/app-font.ts) */
+
+html[data-app-font="comic-neue"] {
+  --app-font: var(--font-comic-neue), ui-sans-serif, system-ui, sans-serif;
+}
+
+html[data-app-font="system"] {
+  --app-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--app-font);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+/*
+ * The page is an app, not a document. `pan-x pan-y` keeps panel scrolling but
+ * stops pinch zooming the PAGE and double tap (the board's own zoom gesture)
+ * zooming text. `overscroll-behavior: none` stops a drag from the board's top
+ * arming pull-to-refresh. CSS rather than `user-scalable=no`, which iOS
+ * ignores.
+ */
+html,
+body {
+  touch-action: pan-x pan-y;
+  overscroll-behavior: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/*
+ * The board owns every touch that lands on it. `touch-action: none` extends
+ * React Flow's pane rule to the toolbars and cards, so the browser never
+ * takes a board drag as a scroll, pull-to-refresh or page zoom.
+ *
+ * No text selection either: a long press opens a slot's menu and must not
+ * raise the selection band and copy callout. Fields keep their selection.
+ */
+.factory-flow-board {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.factory-flow-board input,
+.factory-flow-board textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/*
+ * On a touchscreen, nothing outside a field is selectable either: a slot's
+ * menu, its tooltips and both drawers render OUTSIDE the board, and the menu
+ * opens under the still-pressing finger, which would select its words.
+ * `hover: none` scopes this to devices where a long press is a gesture; a
+ * mouse keeps normal selection.
+ */
+@media (hover: none) {
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
+/* The chip the recipe book leaves behind while a pressed plus button's recipe
+   is still on the wire. The animation delay is the point: an add answered
+   from cache resolves inside it, so the chip only ever appears for a wait
+   worth naming. */
+@keyframes recipe-add-chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.react-flow__edge-textbg {
+  fill: var(--canvas);
+}
+
+.factory-flow-board .react-flow__edges {
+  z-index: 80 !important;
+  /* The wires cast too, as one filter over the whole layer so the cost never
+     scales with edge count: every wire shadows at its own thickness, and a
+     fat pipe grounds harder than a hairline exactly as it should. Smaller
+     offset and softer than the cards: wires lie closer to the paper. */
+  filter: drop-shadow(4px 5px 5px rgba(0, 0, 0, 0.35));
+}
+
+.factory-flow-board .react-flow__nodes {
+  z-index: 20 !important;
+}
+
+/* The whole edge LAYER drops beneath the node layer. It has to be the layer:
+   both rules above make each layer a stacking context, so an edge's own
+   z-index is sealed inside .react-flow__edges and never compared against a
+   node. Per-edge values are silently ignored. */
+.factory-flow-board--edges-under .react-flow__edges {
+  z-index: 10 !important;
+}
+
+/* The NODES layer stops being a stacking context, so each node's depth is
+   compared against the edge layer directly: cards (20) sit over the wires
+   (10), backdrop annotations (-5) under them, so a box's fill never covers
+   the wires crossing it. The drag and popup lifts below re-seal the layer
+   while they apply. */
+.factory-flow-board--edges-under .react-flow__nodes {
+  z-index: auto !important;
+}
+
+/* Only while the zoom moves (data-zooming, scroll-camera.tsx zoomingMark:
+   zoom steps alone, never pans): the retained layer keeps a zoom step from
+   rastering the whole board again. Chrome keeps such a layer's raster scale
+   as the zoom falls, so worn at rest it would leave a board zoomed out drawn
+   from its old, larger raster, scaled down: soft text and icons. Without the
+   hint the layer stays composited (its translate3d) and rasters at its true
+   scale. */
+.factory-flow-board .react-flow__viewport[data-zooming] {
+  will-change: transform;
+}
+
+/* NO gesture hides the drop-shadows. A pan never re-rasterises a composited
+   filter and a zoom only re-rasterises at rest, so hiding them mid-gesture
+   saves almost nothing and makes the board flatten whenever the camera
+   moves. Profile before adding such a gate. */
+
+.factory-flow-board .react-flow__node {
+  contain: layout style;
+  /* Everything on the paper casts a shadow. drop-shadow follows each node's
+     PAINTED silhouette rather than its box, so a translucent box casts from
+     its frame and an arrow from its line. */
+  filter: drop-shadow(6px 8px 7px rgba(0, 0, 0, 0.45));
+}
+
+/* The grid magnet (board-motion.tsx). Card positions are whole cells, so a
+   drag is a series of 20px hops; easing the transform turns each into a
+   short glide. Also covers undo and paste moves. Mounts do not animate (no
+   previous value). Duration mirrors MOVE_SNAP_MS. */
+.factory-flow-board--move-motion .react-flow__node {
+  transition: transform 120ms cubic-bezier(0.25, 0.9, 0.35, 1);
+}
+
+/* Except an annotation that is not being MOVED: a resize changes position
+   and size in one frame (no .dragging class), and easing only the translate
+   makes the far edge wobble. Real moves carry .dragging and keep the glide. */
+.factory-flow-board--move-motion .react-flow__node-annotationNode:not(.dragging) {
+  transition: none;
+}
+
+/* Just added: the card materialises instead of blinking into existence.
+   Opacity rides the wrapper (its transform is React Flow's positioning and
+   must not be animated); the scale-up rides the card root inside it. */
+.factory-flow-board--move-motion .board-card-arrive {
+  animation: board-card-arrive 200ms cubic-bezier(0.25, 1, 0.5, 1) backwards;
+}
+
+.factory-flow-board--move-motion .board-card-arrive > * {
+  animation: board-card-arrive-pop 220ms cubic-bezier(0.3, 1.4, 0.5, 1) backwards;
+}
+
+@keyframes board-card-arrive {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes board-card-arrive-pop {
+  from {
+    transform: scale(0.92);
+  }
+}
+
+/* The build timelapse (board-timelapse.ts): every card and wire MOUNTS on
+   the beat it is revealed, so the arrival rides the board class. Same split
+   as the arrive pop above: opacity on the wrapper, scale on the card root. */
+.factory-flow-board--timelapse .react-flow__node {
+  animation: board-card-arrive var(--timelapse-pop, 260ms) cubic-bezier(0.25, 1, 0.5, 1)
+    backwards;
+}
+
+.factory-flow-board--timelapse .react-flow__node > * {
+  animation: board-card-arrive-pop calc(var(--timelapse-pop, 260ms) * 1.15)
+    cubic-bezier(0.3, 1.4, 0.5, 1) backwards;
+}
+
+/* PENDING: mounted so its wire can render and draw toward it, but held at
+   nothing until its pop beat. The release is a TRANSITION, not the mount
+   keyframe - the node mounted invisible beats ago - so dropping the class
+   fades and grows it over the same pop duration. */
+.factory-flow-board--timelapse .react-flow__node {
+  transition: opacity var(--timelapse-pop, 260ms) ease-out;
+}
+
+.factory-flow-board--timelapse .react-flow__node > * {
+  transition: scale var(--timelapse-pop, 260ms) cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+.factory-flow-board--timelapse .react-flow__node.timelapse-pending {
+  animation: none;
+  opacity: 0;
+}
+
+.factory-flow-board--timelapse .react-flow__node.timelapse-pending > * {
+  animation: none;
+  scale: 0.6;
+}
+
+/* A wire DRAWS itself from source to target when it mounts mid-show, a
+   dash slid in by its offset. The beat scheduler waits the same duration
+   variable, so the next beat starts after the ink is dry. Dashed channel
+   wires render solid for the run. */
+.factory-flow-board--timelapse .react-flow__edge path.react-flow__edge-path {
+  /* Against pathLength=1 (set on exactly these BaseEdge paths during a
+     run), so every route takes the full duration to draw. Scoped to the
+     BaseEdge class: a unit dash on a path WITHOUT the normalized length
+     renders as one-pixel dots. */
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: timelapse-wire-draw var(--timelapse-wire-draw, 450ms)
+    cubic-bezier(0.3, 0.55, 0.4, 1) forwards;
+}
+
+@keyframes timelapse-wire-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* The demo-card tilt (board-tilt.ts): the whole canvas leans, with a slow
+   drift on the inner renderer. Angles ride CSS variables so the dev menu's
+   sliders apply live; the cover scale keeps the rotated plane's shrinking
+   corners behind the 2D chrome. Only the visual layer tilts: React Flow's
+   viewport transform stays 2D, so camera math is unaffected. The transition
+   lives on the base class so the tilt eases both on and off. */
+.factory-flow-board .react-flow {
+  transition: transform 1200ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.factory-flow-board--tilted {
+  perspective: 1600px;
+}
+
+.factory-flow-board--tilted .react-flow {
+  /* The breathe variables are the timelapse follower's: written straight
+     onto the board element per frame from the camera's velocity, additive
+     over the dev menu's base angles, never touched by React. The
+     transition above is what turns per-frame writes into a lean. */
+  transform: rotateX(
+      calc(var(--board-tilt-pitch, 7deg) + var(--board-tilt-breathe-pitch, 0deg))
+    )
+    rotateY(calc(var(--board-tilt-yaw, -3deg) + var(--board-tilt-breathe-yaw, 0deg)))
+    scale(var(--board-tilt-cover, 1.12));
+  transform-style: preserve-3d;
+}
+
+.factory-flow-board--tilted-drift .react-flow__renderer {
+  animation: timelapse-tilt-drift 9s ease-in-out infinite alternate;
+}
+
+@keyframes timelapse-tilt-drift {
+  from {
+    transform: rotateY(-2deg);
+  }
+  to {
+    transform: rotateY(2.5deg);
+  }
+}
+
+/* Zoom detail steps; node-detail.ts decides what each step keeps and when.
+   Zoomed out, a node is reduced to its one legible fact.
+
+   `visibility` + opacity, NEVER `display`: hidden elements keep their layout
+   boxes, so card size and the router's measured slot anchors do not change
+   with zoom (viewport-independent routing), and the two details can
+   cross-fade. Hidden subtrees also drop out of hit-testing, on purpose.
+
+   The glance root is the CARD (frame, colour, texture); only its contents
+   stop painting. The rule targets "every child that isn't the glance", not a
+   list, so anything added later is covered automatically. */
+.factory-flow-board [data-node-detail="glance"] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.factory-flow-board[data-detail-level="glance"] [data-node-glance-root] > *:not([data-node-detail="glance"]) {
+  visibility: hidden;
+  opacity: 0;
+}
+
+/* A tooltip wrapper is `display: contents`, and opacity cannot dim a box the
+   element does not have. So where a glance root's direct child is a tooltip
+   root, the fade lands one level down, on its children. */
+.factory-flow-board[data-detail-level="glance"] [data-node-glance-root] > [data-tooltip-root] > * {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.factory-flow-board[data-detail-level="glance"] [data-node-detail="glance"] {
+  opacity: 1;
+  visibility: visible;
+  /* The LED tile (see NodeGlance.tsx): cards that publish --glance-bg get a
+     deep-dimmed wash of their icon's colour behind the big icon. The hop
+     map's rule below carries more specificity, so its hover flood still
+     wins in status mode. */
+  background-color: var(--glance-bg, transparent);
+}
+
+/* The fade across the LOD threshold, the same speed both ways. `visibility`
+   is delayed only on the way OUT, so the appearing side shows its whole fade.
+   Both sides move together on one clock (sequenced, it reads as two events).
+
+   Scoped to the value-motion class: the image export turns motion off before
+   capturing, so a photograph must not come out half-faded. */
+.factory-flow-board--value-motion [data-node-detail="glance"] {
+  transition: opacity 560ms ease, visibility 0s 560ms;
+}
+
+.factory-flow-board--value-motion [data-node-glance-root] > *:not([data-node-detail="glance"]),
+.factory-flow-board--value-motion [data-node-glance-root] > [data-tooltip-root] > * {
+  transition: opacity 560ms ease, visibility 0s;
+}
+
+.factory-flow-board--value-motion[data-detail-level="glance"] [data-node-detail="glance"] {
+  transition: opacity 560ms ease, visibility 0s;
+  /* Mount fade. A transition only plays on a value CHANGE, and switching
+     smart views mounts a NEW layer already at opacity 1; an animation also
+     runs on mount. In practice it also draws the fade INTO the glance (the
+     transition above finds no change to start from). Keep the two timed
+     alike, and give this NO fill: an animation holding its end value leaves
+     the fade OUT nothing to start from, and the icon would vanish at once. */
+  animation: glance-layer-in 560ms ease;
+}
+
+@keyframes glance-layer-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.factory-flow-board--value-motion[data-detail-level="glance"]
+  [data-node-glance-root]
+  > *:not([data-node-detail="glance"]),
+.factory-flow-board--value-motion[data-detail-level="glance"]
+  [data-node-glance-root]
+  > [data-tooltip-root]
+  > * {
+  transition: opacity 560ms ease, visibility 0s 560ms;
+}
+
+/* The paper's ruling (dots, lines, ruled/graph) fades out with the rest of
+   the near view. Same clock as the cards; only the motion rules below
+   animate it, so an export capture stays clean. */
+.factory-flow-board[data-detail-level="glance"] .react-flow__background,
+.factory-flow-board[data-detail-level="glance"] .board-ruling {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.factory-flow-board--value-motion .react-flow__background,
+.factory-flow-board--value-motion .board-ruling {
+  transition: opacity 560ms ease, visibility 0s;
+}
+
+.factory-flow-board--value-motion[data-detail-level="glance"] .react-flow__background,
+.factory-flow-board--value-motion[data-detail-level="glance"] .board-ruling {
+  transition: opacity 560ms ease, visibility 0s 560ms;
+}
+
+/* Lines take the speed-view colour with the same fade the cards get. */
+.factory-flow-board--value-motion .react-flow__edge path {
+  transition: stroke 560ms ease;
+}
+
+/* The LED rim: a constant SCREEN thickness (divided by the live zoom) so it
+   never goes sub-pixel far out; min() caps it. !important because the
+   identity tile's border is an inline shorthand. Drawers are excluded: a
+   width on their bare card div paints a currentColor (white) box; their
+   silhouette is kept instead (below). */
+.factory-flow-board[data-detail-level="glance"] .trash-node-card{
+  border-width: min(calc(2px / var(--board-zoom, 1)), 12px) !important;
+}
+
+/* Zoomed out a drawer KEEPS its silhouette, with the big item icon on top.
+   The fill is inset by the frame's thickness, so growing the inset against
+   the zoom grows the frame like the LED rim. The selection rim is a shape
+   span too, so it stays visible at any distance. */
+.factory-flow-board[data-detail-level="glance"] [data-node-glance-root] > .storage-shape {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* While a reveal is up it beats EVERYTHING: the nodes layer lifts over the
+   other layers, and the hovered node outranks every inline zIndex a sibling
+   can carry (annotations 1000, hovered-usage cards 1500). Identity mode only;
+   the status view's hover paints the hop map instead. */
+.factory-flow-board[data-detail-level="glance"][data-glance-mode="identity"]:has(.react-flow__node:hover)
+  .react-flow__nodes {
+  z-index: 2200 !important;
+}
+
+.factory-flow-board[data-detail-level="glance"][data-glance-mode="identity"]
+  .react-flow__node:hover {
+  z-index: 3000 !important;
+}
+
+/* The hop map: hovering a card zoomed out colours every other card by how many
+   wires away it is. See hop-map.ts: the colours are custom properties written
+   onto node elements, not React props, because the board must not re-render
+   on hover. Only the glance layer is painted. */
+.factory-flow-board[data-hop-map] .react-flow__node [data-node-detail="glance"] {
+  background-color: var(--hop-fill);
+  /* Makes the layer a query container so the figure below can be sized from the
+     card it is sitting in. The layer is `absolute inset-0`, so its size comes
+     from the card and containment cannot feed back into the card's own size —
+     which the router measures. */
+  container-type: size;
+}
+
+/* Under a map the card answers a different question, so it stops giving the old
+   answer: the utilisation figure and the drawer's item both go, and the card
+   shows its distance from the hub instead. One number, nothing else. */
+.factory-flow-board[data-hop-map] .react-flow__node [data-node-detail="glance"] > * {
+  display: none;
+}
+
+/* The figure itself. `content: var(--hop-label)` lets the card change what it
+   SAYS from outside React (hop-map.ts writes the quoted string; out of reach
+   is empty).
+
+   Sized to match the utilisation figure it replaces: that SVG fits a 100×30
+   viewBox into the layer's content box and draws 30 units of text, so its
+   font size is min(0.3 × content width, content height). Container query
+   units resolve against the same box, so the two are exactly equal. */
+.factory-flow-board[data-hop-map] .react-flow__node [data-node-detail="glance"]::after {
+  content: var(--hop-label, "");
+  color: var(--hop-ink);
+  font-size: min(30cqw, 100cqh);
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The hub gets a hard dark edge rather than a brighter fill — at this zoom the
+   difference between it and its nearest neighbours is a few pixels of hue, but
+   an outline is unmistakable. Inside AND outside the card, so it survives
+   whatever colour lands next to it. */
+.factory-flow-board[data-hop-map] .react-flow__node[data-hop-hub] [data-node-detail="glance"] {
+  box-shadow:
+    inset 0 0 0 3px #101014,
+    0 0 0 4px #101014;
+}
+
+/* While a map is up, the wires step back: the map IS the wiring, counted and
+   coloured. They stay drawn, just quiet enough that the colours win. */
+.factory-flow-board[data-hop-map] .react-flow__edges {
+  opacity: 0.28;
+}
+
+.minecraft-pixel-art,
+.minecraft-pixel-art * {
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+
+/* Icons must never become the browser's native drag ghost - dragging on the
+   board moves nodes and pulls wires, nothing else. */
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+/* While paint mode is active the whole board keeps the brush cursor, so the
+   grab/grabbing pan cursors don't take over between nodes. */
+.factory-flow-board--painting .react-flow__pane,
+.factory-flow-board--painting .react-flow__pane.draggable,
+.factory-flow-board--painting .react-flow__pane.dragging {
+  cursor: var(--paint-cursor, crosshair) !important;
+}
+
+/* While the delete tool is armed, everything on the board shows the red X. */
+.factory-flow-board--deleting .react-flow__pane,
+.factory-flow-board--deleting .react-flow__node,
+.factory-flow-board--deleting .react-flow__edge,
+.factory-flow-board--deleting .react-flow__edgelabel-renderer * {
+  cursor: var(--delete-cursor, not-allowed) !important;
+}
+
+/* Resource edges normally opt out of pointer events (labels do selection);
+   the delete tool needs the lines themselves to take the click. */
+.factory-flow-board--deleting .react-flow__edge path {
+  pointer-events: stroke !important;
+}
+
+/* The delete tool must reach the node under the pointer. Wire handles - which
+   blanket a storage card's whole body - give up their pointer events while it
+   is armed, so clicking a tank deletes it instead of starting a connection. */
+.factory-flow-board--deleting .react-flow__handle {
+  pointer-events: none !important;
+}
+
+/* While an annotation tool is armed, everything on the board draws. */
+.factory-flow-board--annotating,
+.factory-flow-board--annotating .react-flow__pane,
+.factory-flow-board--annotating .react-flow__node {
+  cursor: crosshair !important;
+}
+
+.factory-flow-board .react-flow__node.selected {
+  /* Above the resting cards, which publish 20 of their own. */
+  z-index: 25 !important;
+}
+
+.factory-flow-board .react-flow__node.dragging {
+  z-index: 30 !important;
+}
+
+/* Backdrops (boxes, zones, images) never take the lift above: selecting or
+   dragging one must not raise its wash over the machines it frames. */
+.factory-flow-board .react-flow__node.board-backdrop.selected,
+.factory-flow-board .react-flow__node.board-backdrop.dragging {
+  z-index: -5 !important;
+}
+
+/* A board window is chrome BETWEEN the wires and its members: over the
+   lines that cross it (so the bar and the rim occlude them, the way a
+   window occludes what is behind it), under the cards riding along inside
+   it. Dragging the title bar must not lift it past either. */
+.factory-flow-board .react-flow__node.board-window.selected,
+.factory-flow-board .react-flow__node.board-window.dragging {
+  z-index: 15 !important;
+}
+
+/* Its paper is painted by the floor layer instead (a viewport portal at
+   z -4, under the wires and over the backdrop ink) — see BoardFloors. */
+
+/* While a drag is live the NODES layer rides above the wires: the card in
+   hand must visibly pass over them (wires hold still and reroute on drop).
+   Within the lifted layer the .dragging rule above keeps the held card over
+   its siblings. */
+.factory-flow-board--dragging .react-flow__nodes {
+  z-index: 2100 !important;
+}
+
+.factory-flow-board .react-flow__edgelabel-renderer {
+  z-index: 90;
+}
+
+.factory-flow-board .react-flow__panel {
+  z-index: 60;
+}
+
+/* The marquee takes the selection colour instead of React Flow's own blue:
+   the box you drag and the rings it leaves are one gesture, one hue. */
+.factory-flow-board .react-flow__selection {
+  background: var(--selection-wash);
+  border: 1px solid var(--selection);
+}
+
+/* Selected cards already wear blue outlines. Omit the enclosing group frame
+   and its empty-space drag target; drag a selected card to move the group. */
+.factory-flow-board .react-flow__nodesselection {
+  display: none;
+}
+
+.factory-flow-board .react-flow__edge-path {
+  cursor: pointer;
+  pointer-events: stroke;
+}
+
+.factory-flow-board .react-flow__edge-text {
+  pointer-events: none;
+}
+
+.factory-flow-board .react-flow__edgeupdater {
+  pointer-events: auto;
+}
+
+.factory-flow-board .react-flow__edge-interaction {
+  pointer-events: none;
+}
+
+.factory-flow-board .resource-slot-handle.react-flow__handle {
+  left: 0 !important;
+  top: 0 !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  transform: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  opacity: 0 !important;
+}
+
+/* While a wire is being dragged, every card shows whether the drop would
+   work: green yes, red no. The connect handlers write the verdict straight
+   onto the node wrapper, because a board-wide drag effect must never go
+   through React (see src/components/flow/CLAUDE.md). The drag's own cards and annotation
+   backdrops get data-drop-fit="none". */
+.factory-flow-board .react-flow__node[data-drop-fit="yes"]::after,
+.factory-flow-board .react-flow__node[data-drop-fit="no"]::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.factory-flow-board .react-flow__node[data-drop-fit="yes"]::after {
+  background: rgb(74 222 128 / 0.14);
+  box-shadow: inset 0 0 0 1px rgb(74 222 128 / 0.5);
+}
+
+.factory-flow-board .react-flow__node[data-drop-fit="no"]::after {
+  background: rgb(248 113 113 / 0.1);
+  box-shadow: inset 0 0 0 1px rgb(248 113 113 / 0.35);
+}
+
+/* Wiring is a MODE. With a wire out, lines, labels and their tooltips stop
+   taking the pointer entirely, so no hover handler fires (cheaper and surer
+   than gating each in JS); CSS-only hover effects are switched off below.
+   Item tooltips already refuse to open while a button is held. */
+.factory-flow-board--wiring .react-flow__edge,
+.factory-flow-board--wiring .react-flow__edgelabel-renderer,
+.factory-flow-board--wiring .react-flow__edgelabel-renderer * {
+  pointer-events: none !important;
+}
+
+/* Visible at rest: a solid thumb and recessed track across app scrollers. */
+* {
+  scrollbar-color: var(--mc-ink-muted) var(--mc-25);
+  scrollbar-width: thin;
+}
+@supports selector(::-webkit-scrollbar) {
+  * { scrollbar-color: auto; scrollbar-width: auto; }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-track { background: var(--mc-25); }
+  *::-webkit-scrollbar-thumb {
+    background: var(--mc-ink-muted);
+    border: 2px solid var(--mc-25);
+    border-radius: 4px;
+  }
+  *::-webkit-scrollbar-thumb:hover { background: var(--mc-ink); }
+  *::-webkit-scrollbar-corner { background: var(--mc-25); }
+}
+
+/*
+   The recipe search's scrollers: a wide, always-present bar (paired with
+   overflow-y: scroll on the containers). Firefox takes scrollbar-color;
+   Chromium resets it to auto so the webkit sizing below applies.
+*/
+.recipe-search-scroll {
+  scrollbar-color: var(--mc-ink-muted) var(--mc-25);
+}
+
+@supports selector(::-webkit-scrollbar) {
+  .recipe-search-scroll {
+    scrollbar-color: auto;
+  }
+
+  .recipe-search-scroll::-webkit-scrollbar {
+    width: 14px;
+  }
+
+  .recipe-search-scroll::-webkit-scrollbar-track {
+    background: var(--mc-33);
+    border: 2px solid var(--mc-15);
+  }
+
+  .recipe-search-scroll::-webkit-scrollbar-thumb {
+    background: var(--mc-ink-muted);
+    border: 2px solid var(--mc-33);
+  }
+
+  .recipe-search-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--mc-ink);
+  }
+}
+
+/*
+   The recipe search's loading state: ghost result cards in the real card
+   anatomy, breathing in a staggered wave, arrows filling like a furnace's
+   progress bar.
+*/
+@keyframes recipe-search-skeleton-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.recipe-search-skeleton {
+  animation: recipe-search-skeleton-breathe 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recipe-search-skeleton{
+    animation: none;
+  }
+
+  .recipe-search-skeleton {
+    opacity: 0.6;
+  }
+}
+
+.minecraft-title {
+  font-family: var(--app-font);
+  font-weight: 400;
+  letter-spacing: 0;
+  color: #ffffff;
+}
+
+/* The hard pixel drop shadow belongs to the pixel font alone: under a
+   vector face it read as a blur. This covers the title class and every
+   inline Tailwind text-shadow utility on the NEI chrome. */
+html[data-app-font="minecraft"] .minecraft-title {
+  text-shadow:
+    1px 1px 0 var(--mc-24),
+    2px 2px 0 var(--mc-24);
+}
+
+html:not([data-app-font="minecraft"]) [class*="[text-shadow:"] {
+  text-shadow: none;
+}
+
+/* ===== Painted cards =====================================================
+   A card takes a colour by REDEFINING its own --mc-* tokens on the shell
+   (node-colors.ts, GT_NODE_RAMPS). Every surface inside reads those tokens,
+   so no rule here names elements; a list of elements to tint always misses
+   some. Semantic colours (binding input, hungry plug, tier badge, delete
+   red) are fixed values, not tokens, so they never depend on paint. */
+
+/* A drawer's SILHOUETTE and COLOUR both name its role, because they fail
+ * differently: colour (red source, green product and byproduct, steel buffer
+ * and trash) reads at any distance, and
+ * shape survives the glance step and calm mode. The item's colour lives in
+ * its icon, not the frame.
+ *
+ * Product and byproduct keep a SQUARE top row so the swap button between them
+ * never jumps under the click. The card's BOX never changes by role (6x4
+ * cells); wires dock on the box perimeter.
+ */
+/* The frame and its fill take the silhouette. The CONTENT is not clipped -
+   the rule list has to open past the drawer's edge - so the title bar clips
+   itself to the silhouette's top (--band-radius / --band-clip), and the port
+   chip is inset clear of the cuts (--storage-cm). */
+.storage-shape{
+  /* Square by default: that is PRODUCT (the crate the plan ships), and idle
+     inherits it. */
+  clip-path: none;
+  border-radius: 0;
+}
+
+/* SOURCE: rounded. Soft, open, the thing everything flows OUT of.
+   `clip-path: inset(round)` rather than `border-radius`, because a radius
+   alone does NOT clip children - it only rounds the element's own
+   background, and the fill is a child of the frame. */
+.storage-shape[data-storage-shape="source"]{
+  clip-path: inset(0 round 12px);
+}
+
+/* BYPRODUCT: the shield - square shoulders, tapered base. */
+.storage-shape[data-storage-shape="byproduct"]{
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - 14px),
+    calc(100% - 14px) 100%,
+    14px 100%,
+    0 calc(100% - 14px)
+  );
+}
+
+/* TRASH: the bin - square shoulders, sides tapering straight down to a
+   narrower base. */
+.storage-shape[data-storage-shape="trash"]{
+  clip-path: polygon(0 0, 100% 0, calc(100% - 9px) 100%, 9px 100%);
+}
+
+/* BUFFER: the hexagon, points left and right - a pipe joint the flow passes
+   through, in one side and out the other. Strict buffers share the shape;
+   the inlay rings and the mode key say which one it is running. */
+.storage-shape[data-storage-shape="buffer"]{
+  clip-path: polygon(
+    10px 0,
+    calc(100% - 10px) 0,
+    100% 50%,
+    calc(100% - 10px) 100%,
+    10px 100%,
+    0 50%
+  );
+}
+
+.storage-shape[data-storage-shape="product"]{
+  border-radius: 4px;
+}
+
+.storage-rule-button {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 1px;
+  padding: 0 2px 0 3px;
+  border: 1px solid #111317;
+  background: #34373e;
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,0.18), inset -1px -1px 0 rgba(0,0,0,0.45);
+  color: #ffd257;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.storage-rule-button svg {
+  width: 7px;
+  height: 7px;
+  stroke-width: 3.5;
+  opacity: 0.85;
+}
+
+.storage-rule-button--any {
+  color: #9a9ca4;
+}
+
+.storage-rule-button:hover,
+.storage-rule-button--open {
+  background: #454952;
+}
+
+.storage-rule-button--open {
+  box-shadow: 0 0 0 1px rgba(255,210,87,0.45), inset 1px 1px 0 rgba(255,255,255,0.18);
+}
+
+/* The button and the list it opens: the list hangs from here. */
+.storage-rule-anchor {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+
+.storage-rule-mark {
+  font-weight: 800;
+}
+
+.storage-rule-button:disabled,
+.storage-rate-field:disabled {
+  cursor: default;
+}
+
+/* A viewer cannot choose, so there is nothing to open. */
+.storage-rule-button:disabled svg {
+  display: none;
+}
+
+.storage-rule-button:focus-visible,
+.storage-rate-field:focus-visible {
+  outline: 1px solid #ffd257;
+  outline-offset: 1px;
+}
+
+/* The number comes first: when it and the unit do not both fit, the unit
+   wraps to a second line the box hides, instead of the number being cut.
+   The rate under it keeps the unit. */
+.storage-rate-field {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: center;
+  gap: 0 1px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 2px 0 3px;
+  border: 1px solid #5a5e68;
+  background: #0f1114;
+  box-shadow: inset 1px 1px 0 rgba(0,0,0,0.7);
+  color: #ffd257;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  cursor: text;
+}
+
+.storage-rate-field:hover {
+  border-color: #7c808a;
+}
+
+.storage-rate-field-number {
+  min-width: 0;
+  height: 12px;
+  line-height: 12px;
+  /* Room for an italic's overhang, so "rate?" keeps its question mark. */
+  padding-right: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.storage-rate-field-unit {
+  flex: none;
+  height: 12px;
+  line-height: 12px;
+  margin-left: auto;
+  padding-left: 1px;
+  color: #8a8e97;
+  font-size: 8px;
+  font-weight: 600;
+}
+
+.storage-rate-field--empty .storage-rate-field-number {
+  color: #6f737c;
+  font-style: italic;
+  font-weight: 600;
+}
+
+.storage-rate-field--ask .storage-rate-field-number {
+  color: #ffd257;
+}
+
+.storage-rate-field--bad {
+  border-color: rgba(248,113,113,0.75);
+  color: #f87171;
+}
+
+.storage-rate-field--editing {
+  border-color: #ffd257;
+  outline: none;
+  background: #15171c;
+  box-shadow: 0 0 0 1px rgba(255,210,87,0.35), inset 1px 1px 0 rgba(0,0,0,0.7);
+  cursor: text;
+}
+
+.storage-rate-field--editing::placeholder {
+  color: #6b7280;
+  font-weight: 600;
+}
+
+/* The rule list: the app's dropdown, dark and bevelled, opening past the
+   drawer's edge (the content is not clipped for this). */
+.storage-rule-list {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 140;
+  display: flex;
+  flex-direction: column;
+  min-width: 80px;
+  padding: 2px;
+  border: 1.5px solid #111317;
+  background: #2b2d33;
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,0.12), 3px 3px 0 rgba(0,0,0,0.5);
+}
+
+.storage-rule-option {
+  display: grid;
+  grid-template-columns: 11px minmax(0, 1fr);
+  gap: 4px;
+  align-items: center;
+  padding: 3px 6px 3px 3px;
+  border: 0;
+  background: transparent;
+  color: #e8e9ee;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.storage-rule-option b {
+  color: #ffd257;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.storage-rule-option--any b {
+  color: #9a9ca4;
+}
+
+.storage-rule-option:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.storage-rule-option--on {
+  background: rgba(255,210,87,0.16);
+  box-shadow: inset 0 0 0 1px rgba(255,210,87,0.4);
+}
+
+/* Pool's Desired rates borrow the rule button: plain text on a dotted
+   underline, as Pool's rule always was, the drawer's mark before the word. */
+.storage-rule-anchor--table {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.storage-rule-button--table {
+  width: 64px;
+  height: 16px;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px dotted #ffffff40;
+  background: transparent;
+  box-shadow: none;
+  color: #ffd257;
+  font-family: var(--app-font);
+  font-size: 10.5px;
+}
+
+.storage-rule-button--table:hover,
+.storage-rule-button--table.storage-rule-button--open {
+  background: transparent;
+  border-bottom-color: #ffffff80;
+  box-shadow: none;
+}
+
+.storage-rule-button--any.storage-rule-button--table {
+  color: #9a9ca4;
+}
+
+.storage-rule-word {
+  color: var(--mc-ink, #e8e9ee);
+  font-size: 10px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.storage-rule-button--any .storage-rule-word {
+  color: var(--mc-ink-muted, #9a9ca4);
+}
+
+.storage-rule-button--table svg {
+  width: 9px;
+  height: 9px;
+  margin-left: auto;
+  color: var(--mc-ink, #e8e9ee);
+  stroke-width: 2.5;
+}
+
+/* As wide as its words: the button it hangs from can be narrower. */
+.storage-rule-list--table {
+  width: max-content;
+  min-width: 100%;
+}
+
+/* Near the floor of a scrolling table the list opens upward instead. */
+.storage-rule-list--up {
+  top: auto;
+  bottom: calc(100% + 2px);
+}
+
+.storage-rule-list--table .storage-rule-option {
+  grid-template-columns: 12px minmax(0, 1fr);
+  padding: 4px 8px 4px 4px;
+  font-size: 10px;
+}
+
+.storage-rule-list--table .storage-rule-option b {
+  font-size: 11px;
+}
+
+/* Blueprint overwrite picker: every folded board is a target, ringed in amber
+   dashes; the one under the pointer goes solid and brighter. */
+.factory-flow-board--blueprint-picking .react-flow__node-pocketNode {
+  cursor: pointer;
+}
+
+.factory-flow-board--blueprint-picking .react-flow__node-pocketNode > div {
+  outline: 3px dashed #f59e0b;
+  outline-offset: 3px;
+}
+
+.factory-flow-board--blueprint-picking .react-flow__node-pocketNode:hover > div {
+  outline-style: solid;
+  filter: brightness(1.18);
+}
+
+/* ---------- output couplings: the slim plug chip at the node's edge ---------- */
+
+/* The coupling chip: one percent over one bar, in the asker's frame, colored
+   by the coupling's state. Sits INSIDE the card at the row's right edge;
+   everything wordy lives in its hover.
+   Width 30px: the output rail is exactly chip + 2px gap + this
+   (OUTPUT_RAIL_WIDTH in src/lib/board-grid.ts). Keep them in step or the
+   coupling hangs off the card's right edge. */
+.flow-plug {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex: none;
+  width: 30px;
+  align-self: stretch;
+  margin-left: 2px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  padding: 1px 2px;
+  border: 2px solid var(--mc-47);
+  background: var(--mc-71);
+  color: var(--mc-ink);
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.25),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* ===== Calm colours (the presentation toggle) ============================
+   One class on the board root steps every STATUS colour down to steel; the
+   words and marks stay. Interaction colours (selection, flow-scope, drop
+   wash) are left alone. */
+
+/* Editing chrome (delete/clone on drawer, tank and trash headers) hides in a
+   presentation. The recipe card's head buttons, footer and dials are gated
+   in JSX instead, because their grid columns and heights leave with them. */
+.factory-flow-board--calm .board-edit-chrome {
+  display: none;
+}
+
+/* A wire whose pair is snapped by the CURRENT drag - releasing would toggle
+   it away. Dashed, red, breathing: "this is what gets deleted". Applied
+   imperatively to the one edge element by the snap loop. */
+@keyframes edge-doomed-flash {
+  from {
+    opacity: 1;
+    filter: drop-shadow(0 0 4px #ef4444) drop-shadow(0 0 10px rgba(239, 68, 68, 0.8));
+  }
+  to {
+    opacity: 0.3;
+    filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.5));
+  }
+}
+.edge-doomed path {
+  stroke: #ff5555 !important;
+  stroke-width: 7px !important;
+  stroke-dasharray: 10 8 !important;
+  stroke-linecap: round;
+}
+.edge-doomed {
+  animation: edge-doomed-flash 0.35s linear infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .edge-doomed {
+    animation: none;
+    opacity: 0.8;
+    filter: drop-shadow(0 0 5px #ef4444);
+  }
+}
+
+/* Public viewing keeps configuration readable, but the controls are inert. */
+[data-view-only] [data-viewer-disabled] {
+  cursor: default;
+}
+[data-view-only] button[data-viewer-disabled] {
+  opacity: 0.5;
+}
+
+/* Loaded category sprites overlap briefly; neither frame fades through empty. */
+@keyframes category-icon-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes category-icon-leave { from { opacity: 1; } to { opacity: 0; } }
+.category-icon-enter { animation: category-icon-enter 110ms ease-in-out both; }
+.category-icon-leave { animation: category-icon-leave 110ms ease-in-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .category-icon-enter, .category-icon-leave { animation-duration: 1ms; }
+}

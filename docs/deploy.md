@@ -139,7 +139,7 @@ here uses sudo or edits a file the role manages.
     `request_body max_size 8MB` for every request (the largest legitimate body is a 4 MB image or plan upload), a
     30 s body read timeout for POST, PUT and PATCH only, and `lb_try_duration 30s` to hold requests while the site
     restarts. On a body over a route's cap the site answers the 413 at once, then reads and discards the rest up to
-    its drain bound (the 4.5 MiB hard cap, `PROXY_BODY_MAX_BYTES`, plus 4 MiB; 31 s without a byte, 35 s in all; both timers above Caddy's 30 s, so
+    its drain bound (the 4.5 MiB hard cap, `BODY_HARD_CAP_BYTES`, plus 4 MiB; 31 s without a byte, 35 s in all; both timers above Caddy's 30 s, so
     Caddy fires first and a stalled upload still gets the 413 rather than a 502) and closes. It stops reading at
     that bound, not at the route's cap, and an answer past the byte bound may be lost; Caddy's 8 MB limit and its
     30 s body timeout stay the outer bounds.

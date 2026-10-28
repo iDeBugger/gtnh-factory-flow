@@ -2,7 +2,7 @@ import http from "node:http";
 import net from "node:net";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
-import { PROXY_BODY_MAX_BYTES } from "@/lib/server/http/request-body";
+import { BODY_HARD_CAP_BYTES } from "@/lib/server/http/request-body";
 import { createApp, type AppOptions } from "../app";
 import { call, listen, type Listening } from "../test-support/serve";
 import { DRAIN_IDLE_MS, DRAIN_MAX_BYTES, DRAIN_TOTAL_MS, type DrainBounds } from "./adapter";
@@ -304,7 +304,7 @@ describe("the adapter", () => {
   });
 
   it("errors the request body past the hard cap", async () => {
-    const body = Buffer.alloc(PROXY_BODY_MAX_BYTES + 64 * 1024, 2);
+    const body = Buffer.alloc(BODY_HARD_CAP_BYTES + 64 * 1024, 2);
     const answer = await call(server.port, "POST", "/api/t/read-all", {}, body);
     expect(JSON.parse(answer.body.toString())).toEqual({ error: "BodyTooLargeError" });
   });
@@ -449,7 +449,7 @@ describe("the adapter", () => {
     expect(DRAIN_IDLE_MS).toBe(31_000);
     expect(DRAIN_TOTAL_MS).toBeGreaterThanOrEqual(35_000);
     expect(DRAIN_TOTAL_MS).toBeGreaterThanOrEqual(DRAIN_IDLE_MS);
-    expect(DRAIN_MAX_BYTES).toBe(PROXY_BODY_MAX_BYTES + 4 * MiB);
+    expect(DRAIN_MAX_BYTES).toBe(BODY_HARD_CAP_BYTES + 4 * MiB);
   });
 
   it("aborts the request signal when the client goes away", async () => {

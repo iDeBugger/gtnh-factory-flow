@@ -334,7 +334,6 @@ function PowerSourceCard({
           Singleblocks show their machine item instead. */}
       <span className="relative flex h-36 w-full items-center justify-center overflow-hidden border-b border-[var(--mc-33)] bg-[#0b0d10] p-2">
         {structureArt ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={structureArt}
             alt=""

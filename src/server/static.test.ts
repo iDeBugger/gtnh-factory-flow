@@ -13,7 +13,7 @@ import { call, listen, type Listening } from "./test-support/serve";
 
 /**
  * The static mounts against what Next's file handler sent (the parity captures of `public/`, the dataset tree and
- * `/_next/static`): cache headers, validators, content types, `Vary`, the answer to other methods, and the
+ * Next's static chunks): cache headers, validators, content types, `Vary`, the answer to other methods, and the
  * refusals decided on the resolved file.
  */
 

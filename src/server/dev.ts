@@ -2,13 +2,15 @@
  * `npm run dev`: the site on Express with Vite in middleware mode, on `PORT` (3000). The browser code
  * comes from Vite with hot reload; the server code runs under `tsx watch`, which restarts this process when a
  * route or server module changes. The page is the template with the boot scripts and no shell (main.tsx then
- * renders instead of hydrating), and the policy is development's (`'unsafe-inline'` and `'unsafe-eval'`).
+ * renders instead of hydrating), and the policy is development's (`'unsafe-inline'` and `'unsafe-eval'`). It also
+ * serves the clean card harness at `/dev/clean-card`, which production has no page for.
  *
  * The start work is production's: the setup checks, and the prewarm when `GTNH_PREWARM_ON_STARTUP=1`.
  */
 import { readFile } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
+import type { RequestHandler } from "express";
 import type { ViteDevServer } from "vite";
 import type { PageTemplate } from "./page/template";
 
@@ -17,19 +19,24 @@ const CLIENT = path.join(ROOT, "src", "client");
 const HEAD_MARK = "<!--app-head-->";
 
 /**
- * The dev page: index.html with the boot scripts and the shell mark left empty, run through Vite's HTML
- * transform (its client and React Refresh's preamble). The head mark is put back after the transform, at the
- * head's start behind the charset and viewport, so the metadata leads. Read once at start: an edit to
- * index.html or the boot scripts needs a restart.
+ * A dev page: its index.html (relative to src/client) with the boot scripts and the shell mark left empty, run
+ * through Vite's HTML transform (its client and React Refresh's preamble) as the page at `url`. The head mark is
+ * put back after the transform, at the head's start behind the charset and viewport, so the metadata leads. Read
+ * once at start: an edit to an index.html or the boot scripts needs a restart.
  */
-async function devTemplate(vite: ViteDevServer, headLead: string): Promise<PageTemplate> {
-  const raw = await readFile(path.join(CLIENT, "index.html"), "utf8");
+async function devTemplate(
+  vite: ViteDevServer,
+  headLead: string,
+  file: string,
+  url: string,
+): Promise<PageTemplate> {
+  const raw = await readFile(path.join(CLIENT, file), "utf8");
   const { appFontBootScript, structuredData, uiScaleBoot } = await import("../client/boot");
   const boot =
     [appFontBootScript, uiScaleBoot].map((script) => `<script>${script}</script>`).join("") +
     `<script type="application/ld+json">${JSON.stringify(structuredData())}</script>`;
   const filled = raw.replace(HEAD_MARK, "").replace("<!--app-boot-->", () => boot);
-  const html = (await vite.transformIndexHtml("/", filled)).replace(
+  const html = (await vite.transformIndexHtml(url, filled)).replace(
     /<head>/,
     () => `<head>${headLead}${HEAD_MARK}`,
   );
@@ -47,6 +54,7 @@ async function main(): Promise<void> {
     { HEAD_LEAD },
     { createApp },
     { startWork },
+    { homePage },
   ] = await Promise.all([
     import("vite"),
     import("@/lib/server/startup-checks"),
@@ -55,6 +63,7 @@ async function main(): Promise<void> {
     import("@/lib/server/site/head"),
     import("./app"),
     import("./main"),
+    import("./page/home"),
   ]);
   checkServerSetupOrExit();
 
@@ -66,6 +75,17 @@ async function main(): Promise<void> {
     appType: "custom",
   });
   const ready = startWork(prewarmDatasetVersions, writeServedDatasetClientFiles);
+  // The clean card harness (src/client/dev/clean-card), a dev-only page with the site's head: GET and HEAD.
+  const cleanCard = homePage(
+    await devTemplate(vite, HEAD_LEAD, "dev/clean-card/index.html", "/dev/clean-card/"),
+  );
+  const cleanCardPage: RequestHandler = (req, res, next) => {
+    if (req.path === "/dev/clean-card" && (req.method === "GET" || req.method === "HEAD")) {
+      void cleanCard(req, res, next);
+      return;
+    }
+    next();
+  };
   const publicDir = path.join(ROOT, "public");
   const app = createApp({
     env: {
@@ -76,11 +96,11 @@ async function main(): Promise<void> {
     },
     publicDir,
     datasetsDir: path.join(publicDir, "datasets", "gtnh"),
-    template: await devTemplate(vite, HEAD_LEAD),
-    siteFilesDir: path.join(ROOT, "src", "app"),
+    template: await devTemplate(vite, HEAD_LEAD, "index.html", "/"),
+    siteFilesDir: path.join(ROOT, "src", "server", "page", "assets"),
     ready,
     datasetBackendUrl: process.env.GTNH_DATASET_BACKEND_URL?.replace(/\/+$/, "") || undefined,
-    devMiddlewares: [vite.middlewares],
+    devMiddlewares: [cleanCardPage, vite.middlewares],
   });
   server.on("request", app);
 

@@ -7,11 +7,9 @@ import { APP_VERSION } from "@/lib/version";
 
 /**
  * The site files crawlers read (sitemap.xml, robots.txt, the web manifest,
- * llms.txt), framework-free. Next's metadata files return the data here and
- * Next writes it; `sitemapXml` and `robotsTxt` write it the way Next does
- * (`resolveSitemap` and `resolveRobots` in
- * next/dist/build/webpack/loaders/metadata/resolve-route-data.js), so a server
- * without Next sends the same bytes.
+ * llms.txt). `sitemapXml` and `robotsTxt` write them byte for byte as Next's
+ * metadata writers did (`resolveSitemap`, `resolveRobots`), so crawlers see
+ * the same files (site-files.test.ts holds them to Next's captured output).
  */
 
 export interface SitemapEntry {

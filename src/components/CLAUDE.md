@@ -6,7 +6,7 @@ The board has its own notes in `flow/CLAUDE.md`.
 
 - `src/lib/ui-scale.ts` owns the size setting (60-200% of a default that is itself
   `UI_SCALE_BASE`, or `UI_SCALE_PHONE_BASE` on compact screens). A boot script in
-  `layout.tsx` stamps `--ui-scale`, `data-compact` and `data-snug` before first paint.
+  `src/client/boot.ts` stamps `--ui-scale`, `data-compact` and `data-snug` before first paint.
 - The app shell is CSS-`zoom`ed (`.ui-scale-shell`); the board UNZOOMS itself and carries
   the factor through its camera (`boardMaxZoom`, `boardZoomScale`). Never CSS-zoom the
   board: React Flow then measures cards and the pointer in two different spaces.
@@ -24,7 +24,7 @@ The board has its own notes in `flow/CLAUDE.md`.
 - `src/lib/compact-view.ts`: compact when the window is phone-sized in REAL px (under 900 wide or 560 tall;
   the Size setting can lower that, never raise it, so a bigger Size cannot turn a desktop window into a phone), or when
   the shell leaves under 800 x 440 shell px for the columns. A desktop window of 1280 x 720 or more is never compact at
-  any Size (Large leaves 842 x 473). The boot script in `layout.tsx` repeats the rule (`ui-scale-boot.ts`); a test pins
+  any Size (Large leaves 842 x 473). The boot script in `src/client/boot.ts` repeats the rule (`ui-scale-boot.ts`); a test pins
   that the two agree. Ask the media query, never `window.innerWidth`, which mobile browsers widen when content overflows.
 - Compact swaps the three columns for the board plus two drawers (`PanelDrawer`, their two keys join the top bar, which
   wraps its tabs above its keys), each toolbar for one folded button. Drawers track the finger by
@@ -222,8 +222,9 @@ in `src/store/CLAUDE.md` (Live plans, Task boards).
 
 ## Switched off: the in-game mod and the community library
 
-- One deployment setting, `NEXT_PUBLIC_MOD_AND_COMMUNITY`, read by `isModAndCommunityOn()`
-  (`src/lib/deployment-features.ts`) at render or call time, never in a module constant. Only `on` turns it on;
+- One deployment setting, `NEXT_PUBLIC_MOD_AND_COMMUNITY` (the name is kept; Vite and esbuild inline it at build,
+  `tools/build/define.mjs`), read by `isModAndCommunityOn()` (`src/lib/deployment-features.ts`) at render or call
+  time, never in a module constant. Only `on` turns it on;
   unset or any other value is off, the default. Tests run off; a test of a mod or community feature opts in with
   `withModAndCommunityOn()`, and a test that pins the off side uses `withModAndCommunityUnset()`
   (`src/test-support/mod-and-community.ts`).

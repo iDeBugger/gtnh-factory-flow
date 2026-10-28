@@ -11,7 +11,7 @@ import {
 import { renderShell } from "./prerender";
 
 describe("renderShell", () => {
-  it("renders the shell with the boot scripts layout.tsx had", () => {
+  it("renders the shell with the page's boot scripts", () => {
     const { shell, bootScripts, structuredData } = renderShell();
 
     expect(bootScripts).toHaveLength(2);
@@ -30,7 +30,7 @@ describe("renderShell", () => {
       }),
     );
 
-    // The app's own markup, the JS-less paragraph and the what's-new layer, in layout.tsx's order.
+    // The app's own markup, the JS-less paragraph and the what's-new layer, in AppRoot.tsx's order.
     expect(shell).toContain('class="ui-scale-shell');
     expect(shell).toContain("<noscript>");
     expect(shell).toContain("The planner needs JavaScript to run.");

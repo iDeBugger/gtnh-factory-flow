@@ -580,7 +580,6 @@ function SpriteImage({
           ...spriteFitStyle(fitScale, iconPixelSize),
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           ref={imageRef}
           src={iconPath}

@@ -28,7 +28,7 @@
  * Phones (a viewport that is compact at 1:1) use a 0.9 base, since the side
  * drawers leave no room to scale up. The base is read once per page load.
  *
- * The no-flash boot script in layout.tsx stamps the same variables before
+ * The no-flash boot script in src/client/boot.ts stamps the same variables before
  * first paint from the same storage key (`uiScaleBootScript` in
  * ui-scale-boot.ts, which has no hook import so the server layout may use
  * it), and `UiScaleRestore` re-stamps them once the app runs and after a

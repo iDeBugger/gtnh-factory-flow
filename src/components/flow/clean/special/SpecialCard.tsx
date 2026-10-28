@@ -865,7 +865,6 @@ function Picture({ view, context }: { view: SpecialView; context: SpecialContext
   if (view.glyph === "gauge")
     return <span className="sp-gauge" style={{ backgroundImage: GAUGE_URL }} />;
   if (view.art) {
-    // eslint-disable-next-line @next/next/no-img-element
     return <img className="cc-art" src={view.art} alt="" draggable={false} />;
   }
   if (view.icon?.iconPath || view.icon?.iconAtlas) {

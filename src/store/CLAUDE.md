@@ -130,7 +130,8 @@ Every save goes through `persistCanvas` in design-store.ts:
 
 ## Switched off: the in-game mod and the community library
 
-- `NEXT_PUBLIC_MOD_AND_COMMUNITY`, read by `isModAndCommunityOn()` at call time: only `on` is on; unset, the default,
+- `NEXT_PUBLIC_MOD_AND_COMMUNITY` (inlined at build by Vite and esbuild, `tools/build/define.mjs`), read by
+  `isModAndCommunityOn()` at call time: only `on` is on; unset, the default,
   is off. Tests turn it on with `withModAndCommunityOn()` (`src/test-support/mod-and-community.ts`).
 - Off, the store opens no community post: `viewPublicProject` returns at once (no public view, nothing read-only), a
   `?plan=` arrival reads no id, the library's public and saved views open My plans (`served()`), and deleting a design
@@ -159,8 +160,8 @@ loose cell wires for the landing (`keepCellWires`), which turns them into tank c
 never writes: storage keeps the old shape until the player's first edit saves the migrated plan.
 ## Live plans (live-session.ts)
 
-All of it is off unless `NEXT_PUBLIC_LIVE_URL` is set (`isLiveConfigured`, read by its literal name so Next.js
-inlines it) and someone is signed in: no socket, no Share, no Shared with me, no task board, no presence. Merging it
+All of it is off unless `NEXT_PUBLIC_LIVE_URL` is set (`isLiveConfigured`, read by its literal name so the build
+inlines it, `tools/build/define.mjs`) and someone is signed in: no socket, no Share, no Shared with me, no task board, no presence. Merging it
 changes nothing until then. Architecture and protocol: `docs/live.md`.
 
 - Which designs are live: the one on the canvas, when it is ours and the account has it (`remoteUpdatedAt`; its doc

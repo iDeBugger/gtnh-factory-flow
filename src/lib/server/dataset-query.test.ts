@@ -412,8 +412,8 @@ describe("what the startup prewarm waits for", () => {
 
 describe("the loaded datasets", () => {
   it("are one set for the whole process, however many copies of the module load", async () => {
-    // instrumentation.ts and the route handlers are separate bundles: the
-    // startup prewarm must fill the caches the routes read.
+    // A bundle may load the prewarm and the route handlers from separate
+    // copies: the startup prewarm must fill the caches the routes read.
     const key = Symbol.for("gtnh-factory-flow.dataset-query.caches");
     const host = globalThis as Record<symbol, unknown>;
     const first = host[key];

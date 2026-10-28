@@ -1,7 +1,7 @@
 /**
- * What the website's server checks as it starts (src/instrumentation.ts,
- * which exits the process when a check throws, so nothing serves
- * half-configured and the restart policy sees the failure):
+ * What the website's server checks as it starts (src/server/main.ts, which
+ * exits the process when a check throws, so nothing serves half-configured
+ * and the restart policy sees the failure):
  *
  * - COMMUNITY_HASH_SALT missing or blank: it warns. The secret accessor in
  *   session.ts refuses to sign or check anything in production without it, so
@@ -55,11 +55,9 @@ export function modAndCommunityMismatch(
 }
 
 /**
- * The checks as the server runs them: a failure ends the process. A throw left
- * inside the instrumentation hook keeps the port bound and answers 500 to
- * every request, and a restart policy never notices a live process. Here
- * rather than in instrumentation.ts, which Next.js also compiles for the Edge
- * runtime, where process.exit does not exist.
+ * The checks as the server runs them: a failure ends the process. A throw
+ * caught and left behind would keep the port bound and answer 500 to every
+ * request, and a restart policy never notices a live process.
  */
 export function checkServerSetupOrExit(): void {
   try {

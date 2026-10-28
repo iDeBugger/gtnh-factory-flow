@@ -1,6 +1,7 @@
 # Live service (src/live)
 
-The WebSocket server for live plans: a separate Node process beside Next.js (`next start` cannot hold sockets).
+The WebSocket server for live plans: a separate Node process beside the site's Express server, with its own image
+and compose service.
 Architecture, protocol notes and REST: `docs/live.md`. Production: `docs/deploy.md`. The contract with
 the game is `docs/design/cloud-live.md` in the game's repository: frames and ops must stay as it says, and a change to
 `src/lib/live/ops.ts` or `live-vectors.json` changes the game's engine too.
@@ -48,7 +49,7 @@ the game is `docs/design/cloud-live.md` in the game's repository: frames and ops
   (`LIVE_MAX_PLAN_BYTES`; memory is about four times it) before a room opens and again once it holds its plan
   (the stored size is a read before the lease), and the rooms an account left to
   linger (its oldest closes past its share). A new path that reads, decodes or opens anything joins this list.
-- `/internal/*` (Bearer `LIVE_INTERNAL_TOKEN`) is for the Next.js routes; Caddy routes only `/live` and `/live/*` here.
+- `/internal/*` (Bearer `LIVE_INTERNAL_TOKEN`) is for the site's routes; Caddy routes only `/live` and `/live/*` here.
 - Production runs the bundle `npm run build:live` makes (`dist-live/live.mjs`, gitignored); development runs the
   sources with tsx (`npm run live`, `npm run dev:local`).
 - The store (`store.ts`, `PlanStore`) holds no SQL: it is an adapter over the site's repositories

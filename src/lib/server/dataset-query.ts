@@ -241,10 +241,10 @@ export function shardHeapBytes(jsonBytes: number): number {
 const SHARD_LOAD_CONCURRENCY = 4;
 /**
  * The loaded datasets, shared by every copy of this module in the process.
- * Next.js bundles `instrumentation.ts` apart from the route handlers, so each
- * gets its own instance of this module: with module-level maps the startup
- * prewarm filled a copy no request reads, the first request loaded the
- * dataset again, and the heap held every dataset twice.
+ * A bundle that splits the prewarm from the route handlers gives each its own
+ * instance of this module: with module-level maps the startup prewarm would
+ * fill a copy no request reads, the first request load the dataset again, and
+ * the heap hold every dataset twice.
  */
 interface DatasetQueryCaches {
   loadedCatalogs: Map<string, LoadedRecipeIndex>;

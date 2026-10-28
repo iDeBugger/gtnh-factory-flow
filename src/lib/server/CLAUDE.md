@@ -1,4 +1,4 @@
-# Server and API (src/lib/server, src/app/api)
+# Server and API (src/lib/server, src/server)
 
 ## Recipe queries (dataset-query.ts)
 
@@ -25,16 +25,16 @@
 - Every dataset answer is the dataset's bytes run through server code, so every dataset request carries two
   cache keys (`addDatasetCacheKey` in `browser-loader.ts`): `datasetHash` and the answer version
   (`appVersion=<build>`, `src/lib/datasets/answer-version.ts`). The answer version is the build, not the release
-  number: `next.config.ts` bakes `NEXT_PUBLIC_GTNH_BUILD_ID` into the server and browser bundles, from
+  number: the build's defines (`tools/build/define.mjs`) bake `NEXT_PUBLIC_GTNH_BUILD_ID` into the server and
+  browser bundles, from
   `GTNH_BUILD_ID` (the deploy's `<version>-<sha8>`, the value `/api/version` reports; an image built from `git
   archive` has no git, so its Dockerfile must pass `ARG GTNH_BUILD_ID` to the build) or else
   `<APP_VERSION>-<git sha8>` (`-dirty` with uncommitted changes), or `APP_VERSION` with neither. A deploy must
   set `GTNH_BUILD_ID` or build inside a git checkout: with neither, two deploys under one `APP_VERSION` share
-  year-immutable answer URLs, and browsers keep the older build's answers. `next.config.ts`
-  imports nothing from `src/` (it reads `version.ts` as text): `next start` and the test suite load it outside a
-  build. Its own modules sit beside it and import nothing (`security-headers.config.ts`, `body-limits.config.ts`,
-  which `http/request-body.ts` re-exports; `next-config.test.ts` pins it). The site image runs the standalone
-  `server.js`, which carries the config serialized at build and reads no config file. `datasetCacheHeaders` marks an answer immutable for a
+  year-immutable answer URLs, and browsers keep the older build's answers. `tools/build/build-identity.mjs`
+  imports only Node built-ins (it reads `version.ts` as text), so the build scripts load it outside a bundle. The
+  site image runs `dist/server/server.mjs`, whose build values were inlined at build and must match the client's
+  `dist/client/build.json` (`tools/build/build-server.mjs` refuses a drift). `datasetCacheHeaders` marks an answer immutable for a
   year only when both keys are there and the version is this build's; anything else is `no-store`, so no build that
   changes a ranking is served from another build's URL, even under one APP_VERSION. Exam:
   `http/dataset-cache-headers.test.ts`, `browser-loader.test.ts`.
@@ -43,30 +43,30 @@
 - Dataset files other than textures may be replaced in place; textures are
   cache-immutable, so a changed icon needs a new name. The index gzips and the shards are therefore served for a
   day (`DATASET_FILE_CACHE_CONTROL`), never `immutable`; the manifest stays `max-age=0`.
-- Next's public handler serves everything under `public/datasets/gtnh` before any route, by the DECODED path, with
-  a cache policy it can only set by path (a 404 would be cached like the file). A rewrite matches the path as
-  sent, so a rewrite alone is bypassed by percent-encoding (`recipes%2Ejson`). The gate is `src/proxy.ts`
-  (`decideDatasetPath`, `dataset-path-gate.ts`), which runs on every request path but `/_next/`: under
+- The public file mount serves everything under `public/datasets/gtnh` before any route, by the DECODED path, with
+  a cache policy it can only set by path (a 404 would be cached like the file). A check on the path as sent alone
+  is bypassed by percent-encoding (`recipes%2Ejson`). The gate is `src/server/middleware/dataset-gate.ts`
+  (`decideDatasetPath`, `dataset-path-gate.ts`), which runs on every request path ahead of the files and routes: under
   `/datasets/gtnh/` (decoded) it refuses a path that is percent-encoded at all or holds a `.` or `..` segment
   (400 `no-store`), sends the four index gzips, the shards, `client/`, the content-named textures
   (`textures/rendered/<name>.png`, `textures/icons/<name>.png`) and `recipes.json` to
-  `src/app/dataset-files/[versionId]/[...assetPath]/route.ts` (a day's cache, ETag, Last-Modified and one byte
+  `src/server/routes/dataset-files/[versionId]/[...assetPath]/route.ts` (a day's cache, ETag, Last-Modified and one byte
   range on a file, a texture `immutable` for a year; `no-store` on 400 and 404; `recipes.json`, about 2 GB,
   refused), and lets everything else through to the public handler: the other textures, `oracle/`, stray copies,
   at `max-age=0` (a texture the handler misses reaches `datasets/gtnh/[versionId]/textures/[...assetPath]/route.ts`,
   whose miss is `no-store` too). A texture through the route costs about 1-2 ms more per icon than the public
   handler (a `stat`, two `realpath`s, a stream); that is acceptable only because textures are immutable and kept by
-  the browser and Cloudflare, so profile before routing a hotter path this way. No cache policy is set by a `next.config.ts` header rule: Next applies the rule
-  first and keeps it over the answer's own `Cache-Control` (`send-response.js` adds a header only when absent), so a
-  texture asked for before its publish lands would be a 404 kept a year. With `GTNH_DATASET_BACKEND_URL` a
-  beforeFiles rewrite sends the proxy's texture rewrite on to the backend. The gate is one process's view of a path: the raw `recipes.json` must still not exist on the
+  the browser and Cloudflare, so profile before routing a hotter path this way. No cache policy is set by a rule by
+  path: it would also cover a miss, so a texture asked for before its publish lands would be a 404 kept a year. With
+  `GTNH_DATASET_BACKEND_URL` (development) `src/server/middleware/dataset-backend.ts` sends the gate's rewrites on to
+  the backend. The gate is one process's view of a path: the raw `recipes.json` must still not exist on the
   server, and the publish must not copy it (`tools/deploy/publish-datasets.sh` excludes it and checks). It also makes a pipeline invariant: published names stay within
   `[A-Za-z0-9._-]` (`tools/dataset-pipeline/CLAUDE.md`; `rebuild-manifest.mjs` refuses a version that breaks it),
   or the file is unreachable. The dataset-files and textures routes resolve a file with `resolveDatasetChildPath`
   (dataset-static-file.ts): lexically, then by real path against the real version directory, so a symlink in the
-  tree never reads outside it (a miss is a 404). Exam: `dataset-path-gate.test.ts`, `proxy.test.ts`,
+  tree never reads outside it (a miss is a 404). Exam: `dataset-path-gate.test.ts`, `src/server/app-gate.test.ts`,
   `dataset-files/[versionId]/[...assetPath]/route.test.ts`, `datasets/gtnh/[versionId]/textures/[...assetPath]/route.test.ts`,
-  `next-config.test.ts`, `dataset-static-file.test.ts`.
+  `src/server/static.test.ts`, `dataset-static-file.test.ts`.
 - The answers every player gets the same (catalog, mobs, crops, recipe-ids, items) are also static files the server
   writes itself (`client-files.ts`, `dataset-client-files.ts`), served at `/datasets/gtnh/<id>/client/<kind>.<20 hex
   of the sha256 of the JSON>.json` but stored outside the dataset tree, which stays the pipeline's bytes and may be
@@ -98,20 +98,22 @@
   `api/datasets/[versionId]/client-files/route.test.ts`, `browser-loader.test.ts`.
 - Every server cache is bounded or index-sized (the Node heap is capped at 3 GB). A slow
   site: check the heap first.
-- The image optimizer is off (`images.unoptimized` in next.config.ts): nothing uses next/image, and
-  `/_next/image` would hand any same-origin PNG (uploads, dataset textures) to sharp. Pictures are served
-  by the app's own routes or plain `<img>`; keep it that way.
-- Every answer carries the security headers of `security-headers.config.ts` (beside next.config.ts, which builds
-  them into the routes manifest at build): one Content-Security-Policy, `X-Frame-Options: SAMEORIGIN`, nosniff,
-  `Referrer-Policy`, the one HSTS value; `X-Powered-By` is off. The policy allows only the site's own origin for
+- Nothing resizes or optimizes images on the server: pictures are served by the app's own routes or plain `<img>`,
+  and no image optimizer path exists (it answers the site 404). Keep it that way: an optimizer route would hand
+  any same-origin PNG (uploads, dataset textures) to an image library.
+- Every answer but the path redirects (308) carries the security headers of `http/security-headers.ts`, set by
+  `src/server/middleware/security-headers.ts`: one Content-Security-Policy, `X-Frame-Options: SAMEORIGIN`, nosniff,
+  `Referrer-Policy`, the one HSTS value; no `X-Powered-By`. In production `script-src` names the page's inline
+  scripts by their build-time hashes (`dist/client/page.json`) instead of `'unsafe-inline'`, and the server will not
+  start without them. The policy allows only the site's own origin for
   scripts, styles, fonts, fetch/WebSocket and workers (`blob:` workers too), `data:`/`blob:`/`https:` images,
   and no framing by other origins; `NEXT_PUBLIC_SITE_URL` at build adds the site's own `wss://` origin to
   `connect-src` (WebKit before CSP3 did not match a socket with `'self'`). `NEXT_PUBLIC_MOD_AND_COMMUNITY=on`
   at build adds the mod's ten loopback origins, `http://127.0.0.1:25640` to `:25649` ("Open in the mod"); off,
-  the policy names no loopback origin. `/_next/static/*` gets a second policy with `'unsafe-eval'`: the solver
-  worker evaluates the HiGHS glue, and a worker's policy is its own script's response (a later rule overrides
-  the same key). A third-party script, font, socket or frame needs a change there first, or the browser
-  refuses it. Exam: `security-headers.test.ts`, `next-config.test.ts`, probe `scratch/probes/csp-headers.mjs`.
+  the policy names no loopback origin. `/assets/*` gets a second policy with `'unsafe-eval'`: the solver
+  worker evaluates the HiGHS glue, and a worker's policy is its own script's response. A third-party script,
+  font, socket or frame needs a change there first, or the browser refuses it. Exam: `http/security-headers.test.ts`,
+  `src/server/app.test.ts`, `src/server/page/page.test.ts`, probe `scratch/probes/csp-headers.mjs`.
 - A route's `catch` answers through `http/error-response.ts`: `serverErrorResponse` gives the route's own fallback
   sentence and logs the error (a database or file system message names tables or the release path); the one
   sentence passed on is `COMMUNITY_DB_DOWN_MESSAGE`. Dataset routes use `datasetErrorResponse`: an unserved id
@@ -187,26 +189,25 @@
   shapes are in `scratch/probes/sec-data-p5.mjs`. Exam: `text-search.test.ts`, `dataset-query.test.ts` "the
   recipe partial search phase".
 
-## Prewarm (instrumentation.ts, `prewarmDatasetVersions`)
+## Prewarm (src/server/main.ts `startWork`, `prewarmDatasetVersions`)
 
-- With `GTNH_PREWARM_ON_STARTUP=1`, `register()` awaits only `latestStableVersion`'s prewarm (Next.js holds
-  requests until it resolves), then every other manifest version not in `HIDDEN_DATASET_VERSION_IDS`
+- With `GTNH_PREWARM_ON_STARTUP=1`, `startWork` awaits only `latestStableVersion`'s prewarm (the server listens at
+  once and holds every request until it resolves), then every other manifest version not in `HIDDEN_DATASET_VERSION_IDS`
   (`src/lib/datasets/hidden-versions.ts`) loads in the background, one at a time. A version that fails is
   logged and skipped; the server still starts. `GTNH_PREWARM_FULL_DATASETS=1` loads the recipe shards too.
-  Measured on `next start`: the first answer comes at 8.8-11.6 s, against 15.5-17.3 s when both were
-  awaited (`scratch/probes/first-response.mjs`). Exam: `dataset-query.test.ts`.
+  Measured on the production server: the first answer comes at 8.8-11.6 s, against 15.5-17.3 s when both were
+  awaited (`scratch/probes/first-response.mjs`). Exam: `dataset-query.test.ts`, `src/server/main.test.ts`.
 - The loaded datasets live on `globalThis` (`Symbol.for("gtnh-factory-flow.dataset-query.caches")`), never in
-  module-level maps: Next.js bundles `instrumentation.ts` apart from the routes, so a module-level cache is
-  filled by the prewarm, unread by every request, loaded again by the first search, and held twice. That
-  doubling put two datasets over the 3 GB heap on the first 2.8.1 search. The object survives a dev reload:
-  restart the dev server after changing how a dataset is loaded or indexed.
+  module-level maps: a second copy of the module (a bundle that splits the prewarm from the routes) would fill
+  its own cache at the prewarm, leave it unread by every request, load the dataset again on the first search and
+  hold it twice. That doubling put two datasets over the 3 GB heap on the first 2.8.1 search.
 - An HTTP prewarm after start (`/api/datasets/<id>/prewarm`, e.g. a unit's `ExecStartPost`) now joins the
   startup load or finds it done: with `GTNH_PREWARM_ON_STARTUP=1` it is only a readiness wait. The HTTP route
   never reads shards (the route is public, and a shard sweep reads about 2 GB and flushes the shard cache);
   `GTNH_PREWARM_FULL_DATASETS=1` at start is the only shard warm.
 - A hidden version (`HIDDEN_DATASET_VERSION_IDS`) is refused by `loadCatalog`, so no request can load a third
   dataset into the heap; the budget below counts only the served versions.
-- Memory, measured on `next start` with the 3 GB heap cap (`scratch/probes/t74-memory.mjs`, median of 5 starts,
+- Memory, measured on the production server with the 3 GB heap cap (`scratch/probes/t74-memory.mjs`, median of 5 starts,
   heapUsed after a full GC, process RSS in brackets): 2.9 prewarmed 533 MB; 2.9 and 2.8.1 prewarmed 985 MB
   (2.0 GB); after a fixed browse set on each (searches, the Blast Furnace and wide clause browses, blank item
   lists) 1,210 MB (2.1 GB) with the 128 MB shard cap. Before a GC heapUsed reaches about 1.5 GB. Each version takes about 7 s to prewarm.
@@ -269,16 +270,18 @@ holds both forms to one truth table with `services/access.ts`. The live service'
 is an adapter over the same repositories; it loads the repositories, `services/design-role.ts`,
 `auth/{session,secret,sessions}` and `db`, never password code.
 
-Import rules, held by `src/architecture.test.ts` (AGENTS.md "Layers" has rules 1 to 9) with no allowlist entries:
+Import rules, held by `src/architecture.test.ts` (AGENTS.md "Layers" has rules 1 to 9 and 14) with no allowlist entries:
 - 10. Services import from `lib/server` only services, repositories, `auth/`, `limits/`, `db/index.ts`,
   `http/{viewer,client-address}.ts`, `live-notify.ts` and the query-free helpers `isServiceTarget` names
   (`community-rows`, `library`, `cloud-plans`, `blueprints`, `plan-list-cache`, `plan-engine`, `file-store`).
 - 11. The data layer (`db/`, `repos/`) never imports services, `auth/`, `limits/`, `http/` or `live-notify.ts`,
   and `db/` never imports `repos/`.
 - 12. Only services, `auth/`, `limits/`, the data layer and `live/store.ts` import a repository at run time
-  (a type-only import of a row shape is fine outside `src/app`), so a route reaches queries through a
-  service. Under `src/app` even a type-only import of a repository is refused (rule 4 and the app query
-  check): routes take row types from services or contracts.
+  (a type-only import of a row shape is fine outside `src/server`), so a route reaches queries through a
+  service. Under `src/server` even a type-only import of a repository is refused (rule 4 and the web server's
+  query check): routes take row types from services or contracts.
+- 14. Only `src/server/**` and `tools/` import `express`; only `src/server/dev.ts` and `tools/` import `vite`;
+  nothing imports `next`.
 - 13. `src/` never imports `tools/`.
 
 Checks with no exceptions at all:
@@ -300,8 +303,8 @@ Checks with no exceptions at all:
 ### The client, pools and timeouts
 
 `getDb()` opens the pool on first use and throws when no database is configured; `services/config.ts` answers
-"configured" exactly when `DATABASE_URL` is set. The pool is a `globalThis` singleton (`Symbol.for("gtnh.db")`):
-Next bundles `instrumentation.ts` apart from the routes, and a dev reload would otherwise open a pool per reload.
+"configured" exactly when `DATABASE_URL` is set. The pool is a `globalThis` singleton (`Symbol.for("gtnh.db")`),
+so a second copy of the module never opens a second pool.
 The live service calls `configureDb({ service: "live" })` before its first query and `closeDb()` after its
 SIGTERM flush; it refuses to start without `DATABASE_URL` ("No database: set DATABASE_URL."). Every pooled
 connection has an `error` listener (`hearConnectionErrors`): a connection the server drops fails its work as down
@@ -367,7 +370,7 @@ statement each: a CTE locks the row, applies the conditional write and reads the
 ### Values and types
 
 - One parser table (`DB_TYPE_PARSERS`, `db/parsers.ts`) for `pg` and PGlite: timestamptz as Postgres's JSON text
-  (`2026-10-25T17:33:50.431+00:00`), bigint as a number. `src/app/api/wire-format.test.ts` pins the answers' JSON.
+  (`2026-10-25T17:33:50.431+00:00`), bigint as a number. `src/server/routes/api/wire-format.test.ts` pins the answers' JSON.
 - A jsonb column takes only `json(value)` (its JSON text as one bound parameter, cast to jsonb): `pg` sends a JS
   array as a Postgres array, so a raw `needs: [...]` would fail or store the wrong value, and the column type
   (`JsonParam`) makes it a compile error.
@@ -489,17 +492,17 @@ Rules:
   the dataset's shard reads share the pool's four threads, so a sign-in flood may never hold them all. Past the
   queue the check throws `PasswordCheckBusyError` and sign-in and sign-up answer 429 "Sign-in is busy. Try again in
   a moment." Accepted trade-off: a flood past the queue refuses sign-ins for as long as it lasts, and never stalls
-  the site. Exam: the "password checks" block of `app/api/community/auth/auth.test.ts`.
+  the site. Exam: the "password checks" block of `src/server/routes/api/community/auth/auth.test.ts`.
 
 ## Request bodies (http/request-body.ts)
 
-- Because `src/proxy.ts` runs on every path, Next copies every write body (up to `PROXY_BODY_MAX_BYTES`, 4.5 MiB,
-  `experimental.proxyClientMaxBodySize`; the bytes past it are dropped) and waits for its end before any route runs.
-  That limit sits just above the largest route cap and must never drop below one: a body cut at it is still over every
-  cap and answers 413, not a 400 for a truncated JSON or form. Next awaits the body's end even when the proxy answers
-  itself, so a declared length that never arrives, or a slow sender, is held until it finishes or Node's
-  `requestTimeout` (300 s); only the edge (Caddy's body read timeout) bounds that. Route handlers have no body limit,
-  so every route that reads a body reads it through `http/request-body.ts` (`readJsonCapped`, `readTextCapped`,
+- The adapter (`src/server/http/adapter.ts`) hands a route at most `BODY_HARD_CAP_BYTES` (4.5 MiB) of a body; past
+  it the route's body stream errors and the answer is 413. That limit sits just above the largest route cap and must
+  never drop below one: a body cut at it is still over every cap and answers 413, not a 400 for a truncated JSON or
+  form. A route answers as soon as it has read what it needs; a body left unread is drained within the adapter's
+  bounds (the hard cap plus 4 MiB, 31 s without a byte, 35 s in all), then the connection closes, so the answer is
+  not lost to a reset. A slow sender is cut at Node's `requestTimeout` (300 s); Caddy's body read timeout bounds it
+  first. Below the hard cap route handlers have no body limit, so every route that reads a body reads it through `http/request-body.ts` (`readJsonCapped`, `readTextCapped`,
   `readFormDataCapped`) with a cap sized to what the client sends: a declared `content-length` over the cap is refused
   without parsing, a chunked body stops at the cap, and the answer is 413 with the route's own sentence. The read
   happens where it happened before, so every gate, 503 and auth check that ran ahead of it still does. Caps: plan uploads and synced designs `COMMUNITY_UPLOAD_BODY_MAX_BYTES` (4 MiB of bytes,
@@ -533,9 +536,10 @@ Rules:
   Off, every `/api/community/plans/**` route and `/community` answer 404 (`modAndCommunityOffResponse`);
   sitemap, llms.txt, robots and the `?plan=` metadata say nothing of community plans. Accounts, board images, the
   library, account sync and an account's own blueprints stay. Read it at each call, never in a module constant.
-- The value must be the same at `next build` and in the site's and the live service's run-time environment; a change
-  needs a rebuild. `next.config.ts` always defines it (`env`, "" when unset), so the literal read is the build's value
-  in the browser and server bundles alike. The browser has only that. On the Next.js server `isModAndCommunityOn()`
+- The value must be the same at `npm run build` and in the site's and the live service's run-time environment; a
+  change needs a rebuild. The build's defines (`tools/build/define.mjs`) always define it ("" when unset), so the
+  literal read is the build's value in the browser and server bundles alike. The browser has only that. On the
+  server `isModAndCommunityOn()`
   also reads the process (`Reflect.get`, never inlined) and is on only when both say `on`: a build without it and a
   unit that sets `on` (or the reverse) answers 404 on every mod and community route. The browser of a build made `on`
   still shows the keys against those 404s, and the live service reads only its process, so it lets the game in
@@ -579,7 +583,7 @@ Rules:
   digest, and under `CI` a missing URL fails them, `test-support/real-postgres.ts`), and `db/pg-real.local.test.ts` runs the repository cases against the
   rehearsal stack's database under the real roles (`REAL_DATABASE_URL`, `REAL_LIVE_DATABASE_URL`;
   `docs/deploy.md`, Rehearsal).
-- `npm run dev:local` gives Next and the live service `DATABASE_URL=postgres://postgres@127.0.0.1:54330/postgres`,
+- `npm run dev:local` gives the site and the live service `DATABASE_URL=postgres://postgres@127.0.0.1:54330/postgres`,
   served by `tools/local-db/serve.ts`: the compose file's pinned `postgres` image in the container `gtnh-local-db`
   (data in the volume of that name) when Docker answers, and serve.ts applies the migrations to it; else, or with
   `LOCAL_DB_PGLITE=1`, PGlite on disk (`scratch/local-db/pgdata`) behind its socket, whose multiplexer is not

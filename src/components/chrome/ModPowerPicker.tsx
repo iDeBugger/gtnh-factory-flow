@@ -412,7 +412,6 @@ function MachineArt({ entry, size }: { entry: Entry; size: number }) {
   }
   const art = getPowerStructureArt(entry.hit.source.id);
   if (art) {
-    // eslint-disable-next-line @next/next/no-img-element
     return <img src={art} alt="" draggable={false} className="mp-img" />;
   }
   const icon = getPowerMachineIcon(entry.hit.source.id, gameVersion);

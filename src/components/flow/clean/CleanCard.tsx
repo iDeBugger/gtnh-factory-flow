@@ -1124,7 +1124,6 @@ export function CleanCard({ view, actions, context, recipe, node }: CleanCardPro
 
       <div className="cc-pic">
         {view.art ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img className="cc-art" src={view.art} alt="" draggable={false} />
         ) : context.machineIcon?.iconPath || context.machineIcon?.iconAtlas ? (
           <ResourceIcon

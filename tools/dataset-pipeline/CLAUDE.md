@@ -127,7 +127,7 @@ a dataset there), else the previous manifest's while that dataset remains, else 
 through the previous manifest. A new `stable-*` build therefore never takes the default from a
 previous one still present: set `GTNH_LATEST_STABLE_VERSION` to switch. Exam: `scripts/rebuild-manifest.test.mjs`.
 Every published file and directory name under a version stays within `[A-Za-z0-9._-]`: the site's request gate
-(`src/proxy.ts`) refuses any dataset path a browser would percent-encode, so a name with a space, `#`, `%`, `?` or a
+(`src/server/middleware/dataset-gate.ts`) refuses any dataset path a browser would percent-encode, so a name with a space, `#`, `%`, `?` or a
 character outside ASCII would be unreachable. `rebuild-manifest.mjs` refuses a version directory holding one
 (`scripts/publishable-names.mjs`). Exam: `scripts/publishable-names.test.mjs`.
 

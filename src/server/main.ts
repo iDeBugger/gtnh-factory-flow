@@ -1,7 +1,6 @@
 /**
- * The site's production server: what Next's standalone `server.js` and `instrumentation.ts` did together. It
- * runs the start checks, listens at once and holds every request until the start work is done (as Next held
- * them behind `register()`), prewarms the datasets when asked to, and stops cleanly on SIGTERM.
+ * The site's production server. It runs the start checks, listens at once and holds every request until the start
+ * work is done, prewarms the datasets when asked to, and stops cleanly on SIGTERM.
  *
  * This module only exports `startServer`; it never listens on import. The bundle's `server.mjs`
  * (tools/build/build-server.mjs) sets NODE_ENV and calls it.
@@ -13,7 +12,7 @@ import { writeServedDatasetClientFiles } from "@/lib/server/dataset-client-files
 import { prewarmDatasetVersions } from "@/lib/server/dataset-query";
 import { closeServerResources } from "@/lib/server/lifecycle";
 import { checkServerSetupOrExit } from "@/lib/server/startup-checks";
-import type { SecurityHeaderEnv } from "../../security-headers.config";
+import type { SecurityHeaderEnv } from "@/lib/server/http/security-headers";
 import { createApp } from "./app";
 import { loadPageTemplate } from "./page/template";
 import { installShutdown } from "./shutdown";
@@ -97,7 +96,7 @@ export async function startServer(options: StartOptions = {}): Promise<StartedSe
     datasetsDir: path.join(publicDir, "datasets", "gtnh"),
     clientDir,
     template: loadPageTemplate(clientDir),
-    siteFilesDir: path.join(cwd, "src", "app"),
+    siteFilesDir: path.join(cwd, "src", "server", "page", "assets"),
     ready,
     datasetBackendUrl: process.env.GTNH_DATASET_BACKEND_URL?.replace(/\/+$/, "") || undefined,
   });

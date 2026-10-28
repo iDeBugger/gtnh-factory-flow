@@ -1,8 +1,8 @@
 # AGENTS.md
 
 GTNH Factory Flow: a production-chain planner for GregTech: New Horizons, live at
-https://gtnhplanner.com. Next.js App Router, TypeScript strict, Tailwind, React Flow,
-Zustand, Zod, Vitest. The repo is public.
+https://gtnhplanner.com. Express 5 server, Vite client build, React, TypeScript strict,
+Tailwind, React Flow, Zustand, Zod, Vitest. The repo is public.
 
 This file is the always-loaded core. Each area keeps its own rules in a `CLAUDE.md`
 beside its code, which Claude Code loads when you open files there. Read the area file
@@ -17,7 +17,7 @@ before changing that area; it names the tests that pin its behaviour.
 | Domain model: resources, cells vs fluids, oredict context, sections, boards | `src/lib/model/CLAUDE.md` |
 | Power generation | `src/lib/power/CLAUDE.md` |
 | Designs, tabs, saving, account sync, plan import/export, public view | `src/store/CLAUDE.md` |
-| Server, recipe API, database (`src/lib/server/{db,repos,services}`: Postgres direct, the layers, migrations and roles in `db/`), file store, cloud plans, local database | `src/lib/server/CLAUDE.md` |
+| Server, recipe API, database (`src/lib/server/{db,repos,services}`: Postgres direct, the layers, migrations and roles in `db/`), the web server (`src/server`: routes, middleware, page), file store, cloud plans, local database | `src/lib/server/CLAUDE.md` |
 | Live service: live plan editing over WebSockets | `src/live/CLAUDE.md`, `docs/live.md` |
 | Dataset pipeline: export, normalize, rebuild, publish | `tools/dataset-pipeline/CLAUDE.md` |
 | Deploy: Docker images, compose stack, deploy and dataset publish scripts | `docs/deploy.md` |
@@ -28,29 +28,33 @@ Longer references, read on demand: `docs/power-planner-math.md` (the decoded pow
 ## Layers
 
 `src/architecture.test.ts` holds these over the import graph of `src/` and `tools/`
-(tests, `__fixtures__/`, `test-support/` and `src/app/dev/` exempt):
+(tests, `__fixtures__/`, `test-support/` and `src/client/dev/` exempt):
 
 1. The domain (`src/lib/{model,machines,power,solver,search,board}`) imports the domain and
-   `src/lib/<feature>/types.ts` only, and no React, Zustand, React Flow, Node, Next, `ws` or
-   database package.
+   `src/lib/<feature>/types.ts` only, and no React, Zustand, React Flow, Node, Express, Vite,
+   Next, `ws` or database package.
 2. Contracts (feature `types.ts`, `library/sync-types.ts`, `datasets/resolve-recipes-limits.ts`,
    `live/{ops,protocol,validate}.ts`) import the domain and contracts only.
-3. `src/lib/server/**` never imports `src/{components,store,app,live}` or React.
-4. Route handlers never import the database layer (`lib/server/db`, `lib/server/repos`), the UI
-   or the stores, and send no query themselves (no `.from("`, no database package).
+3. `src/lib/server/**` never imports `src/{components,store,client,server,live}` or React.
+4. The web server (`src/server/**` but the dev entry `dev.ts`: routes, middleware, adapter, page,
+   production entry) never imports the database layer (`lib/server/db`, `lib/server/repos`), the
+   UI, the stores or `src/client`, and sends no query itself (no `.from("`, no database package).
 5. `src/live` uses `lib/server/repos`, `services/design-role.ts`,
    `auth/{session,secret,sessions}.ts`, `db/index.ts` and `http/client-address.ts` only, never
-   the app, the UI or the stores.
-6. Browser code (the UI, the stores, every `"use client"` file and worker, and what they load
-   at run time) never reaches `src/lib/server` or a Node built-in.
+   the web server, the client, the UI or the stores.
+6. Browser code (what `src/client/main.tsx`, `src/client/prerender.tsx` and every `*.worker.ts`
+   load at run time, plus the UI and the stores) never reaches `src/lib/server` or a Node
+   built-in.
 7. The stores never import the UI.
 8. Non-UI `src/lib` never imports the UI or the stores.
 9. Only the data layer (`lib/server/{db,repos}`) in `src/` loads `kysely`, `pg` or
    `db/client.ts`.
+14. Only `src/server/**` (and `tools/`) imports `express`; only `src/server/dev.ts` (and
+    `tools/`, `vite.config.ts`) imports `vite`; nothing imports `next`. No exceptions.
 
-Services (`lib/server/services`) never import `next/*`, with no exceptions, and the live service
-never loads `auth/passwords.ts`. The data layer alone holds queries and SQL; the rules that keep it
-so (rules 10 to 13 and the SQL-text checks) are in `src/lib/server/CLAUDE.md`, Database.
+Services (`lib/server/services`) never import `express` or `next`, with no exceptions, and the
+live service never loads `auth/passwords.ts`. The data layer alone holds queries and SQL; the rules
+that keep it so (rules 10 to 13 and the SQL-text checks) are in `src/lib/server/CLAUDE.md`, Database.
 
 Today's exceptions to the rules are listed in `src/architecture-allowlist.json`, and the list only
 shrinks: a fixed edge still listed fails, the dump (`ARCH_DUMP=1 npx vitest run
@@ -61,8 +65,10 @@ you remove entries.
 ## Commands
 
 ```bash
-npm run dev          # http://localhost:3000
+npm run dev          # http://localhost:3000: Express with Vite in middleware mode, hot reload
 npm run dev:local    # the same with a local database and the live service: no database credentials
+npm run build        # dist/client (Vite, the prerendered page) and dist/server (esbuild)
+npm run start        # node dist/server/server.mjs, the production server
 npm run typecheck
 npm run test         # full vitest suite, must be green
 node tools/dataset-pipeline/scripts/build-datasets.mjs all --export   # build the datasets (Docker)
@@ -121,7 +127,7 @@ Scratch harnesses are `*.local.test.ts` (excluded from the suite); run one with
   Site and live listen on loopback 3300 and 3301. Diagnose with `docker compose logs site`
   (or `live`) and the vhost's Caddy log; `docs/deploy.md` has the rest.
 - The server prewarms datasets on start when `GTNH_PREWARM_ON_STARTUP=1`
-  (`src/instrumentation.ts`). A slow first API call means prewarm or deploy regressed;
+  (`startWork` in `src/server/main.ts`). A slow first API call means prewarm or deploy regressed;
   don't make the client wait longer.
 - GTNH 2.9 and 2.8.1 datasets are supported; a plan belongs to one of them (src/store/CLAUDE.md, Plan version).
 
@@ -146,9 +152,8 @@ Scratch harnesses are `*.local.test.ts` (excluded from the suite); run one with
 - The board pane is a million px square under the scroll camera: aim at the `.react-flow`
   wrapper's box. Tooltips move `title` to `data-tip-title`.
 - Compare against old behaviour with `git worktree add` at that commit. A worktree needs
-  its own `npm install`: never junction `node_modules` into one (Turbopack crashes, and
-  `git worktree remove --force` follows the junction and empties the main repo's
-  `node_modules`). Diff exported plans rather than trusting "same board" by eye.
+  its own `npm install`: never junction `node_modules` into one (`git worktree remove --force`
+  follows the junction and empties the main repo's `node_modules`). Diff exported plans rather than trusting "same board" by eye.
 - Measure performance on a production server with `GTNH_PREWARM_ON_STARTUP=1`, after prewarm,
-  not on the dev server: `next start` (it warns that the build is standalone, and serves it) or, as
-  the site image runs it, `node .next/standalone/server.js` with `.next/static` and `public/` copied beside it.
+  not on the dev server: `npm run build`, then `npm run start` (`node dist/server/server.mjs`, as the
+  site image runs it, with `dist/client` and `public/` in its working folder).

@@ -77,10 +77,10 @@ export const SITE_ICONS = [
 export const APPLE_TOUCH_ICON = "/apple-touch-icon.png";
 
 /**
- * `src/app/opengraph-image.png` and its `.alt.txt`, which Next turns into the
+ * `src/server/page/assets/opengraph-image.png` and its `.alt.txt`: the
  * og:image and twitter:image tags of every page. The alt text is the file's
- * whole content, its last newline included, as Next reads it
- * (head.test.ts holds both to the files).
+ * whole content, its last newline included, as the tags have always carried
+ * it (head.test.ts holds both to the files).
  */
 export const SITE_IMAGE: OgImage = {
   url: "/opengraph-image.png",
@@ -90,7 +90,7 @@ export const SITE_IMAGE: OgImage = {
   alt: "The GTNH Planner board: a Benzene setup drawn as a flowchart, with the item list on the left and the plan totals on the right\n",
 };
 
-/** `src/app/favicon.ico`, which Next links before the other icons. */
+/** `src/server/page/assets/favicon.ico`, linked before the other icons. */
 const FAVICON = { url: "/favicon.ico", sizes: "48x48", type: "image/x-icon" };
 
 /**
@@ -168,8 +168,8 @@ export async function headForRequest(search: URLSearchParams): Promise<PageHead>
 }
 
 /**
- * Next's `metadataBase` join: the path is joined onto the base's own path.
- * `resolveUrl` in next/dist/lib/metadata/resolvers/resolve-url.js.
+ * The `metadataBase` join the head has always used (Next's `resolveUrl`): the
+ * path is joined onto the base's own path.
  */
 function resolveUrl(path: string, origin: string): URL {
   const base = new URL(origin);

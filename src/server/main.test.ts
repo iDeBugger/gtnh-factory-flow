@@ -30,9 +30,10 @@ function writeRoot(dir: string): void {
     path.join(client, "page.json"),
     JSON.stringify({ scriptHashes: [HASH], fontPreloads: [], assetVersions: {} }),
   );
-  mkdirSync(path.join(dir, "src", "app"), { recursive: true });
+  const assets = path.join("src", "server", "page", "assets");
+  mkdirSync(path.join(dir, assets), { recursive: true });
   for (const file of ["favicon.ico", "opengraph-image.png"]) {
-    copyFileSync(path.join(REPO, "src", "app", file), path.join(dir, "src", "app", file));
+    copyFileSync(path.join(REPO, assets, file), path.join(dir, assets, file));
   }
   mkdirSync(path.join(dir, "public"));
 }

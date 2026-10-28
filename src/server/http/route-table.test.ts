@@ -8,7 +8,7 @@ import { optionsAllow, routePathForFile, ROUTES, type WebHandler } from "./route
 const REPO = path.resolve(__dirname, "../../..");
 
 /**
- * Every route file under a folder, as a repo path: `route.ts`, `.tsx`, `.js` or `.jsx`, the names Next routes.
+ * Every route file under a folder, as a repo path: `route.ts`, `.tsx`, `.js` or `.jsx`.
  * Only the baseline's parity fixtures (`__parity-*`) are left out.
  */
 function globRouteFiles(dir: string): string[] {
@@ -25,9 +25,9 @@ function globRouteFiles(dir: string): string[] {
   return found;
 }
 
-/** The Next path of a route file, brackets kept: the key the parity cases use. */
+/** The bracketed path of a route file: the key the parity cases use. */
 const nextPath = (source: string): string =>
-  source.replace(/^src\/app/, "").replace(/\/route\.[jt]sx?$/, "");
+  source.replace(/^src\/server\/routes/, "").replace(/\/route\.[jt]sx?$/, "");
 
 /**
  * The path-to-regexp Express's router loads (resolved from `router`, so it is the copy Express runs), with the
@@ -55,37 +55,37 @@ function matches(pattern: string, concrete: string): boolean {
 const h: WebHandler = () => new Response(null);
 
 describe("the route table", () => {
-  it("registers every route file under src/app at the path its folders name", () => {
-    const files = globRouteFiles("src/app");
+  it("registers every route file under src/server/routes at the path its folders name", () => {
+    const files = globRouteFiles("src/server/routes");
     expect(files.length).toBe(37);
     expect(ROUTES.map((r) => r.source).sort()).toEqual(files.sort());
     for (const route of ROUTES) expect(route.path).toBe(routePathForFile(route.source));
   });
 
   /*
-   * routePathForFile maps plain, `[x]` and `[...x]` folders only. Next gives other names their own meaning
-   * (a `(group)` leaves the URL, a `_private` folder is never routed, `%5F` decodes, `[[...x]]` also matches its
-   * parent, `[file-name]` is one param), and the plain mapping would get each of them wrong, some silently.
-   * Such a folder must fail here until the mapping learns it.
+   * routePathForFile maps plain, `[x]` and `[...x]` folders only. Other spellings a reader might expect to mean
+   * something (a `(group)` left out of the URL, a `_private` folder, `%5F`, `[[...x]]` also matching its parent,
+   * `[file-name]` as one param) would each map wrong, some silently. Such a folder must fail here until the
+   * mapping learns it.
    */
   it("finds no route folder whose name the path mapping does not cover", () => {
     const segment = /^([a-z0-9.-]+|\[[A-Za-z_$][\w$]*\]|\[\.\.\.[A-Za-z_$][\w$]*\])$/;
-    for (const file of globRouteFiles("src/app")) {
+    for (const file of globRouteFiles("src/server/routes")) {
       for (const folder of nextPath(file).split("/").slice(1)) {
         expect(folder, file).toMatch(segment);
       }
     }
   });
 
-  it("derives Express 5 paths from Next folder names", () => {
-    expect(routePathForFile("src/app/api/a/[id]/route.ts")).toBe("/api/a/:id");
-    expect(routePathForFile("src/app/dataset-files/[versionId]/[...assetPath]/route.ts")).toBe(
-      "/dataset-files/:versionId/*assetPath",
-    );
-    expect(routePathForFile("src/app/robots.txt/route.ts")).toBe("/robots.txt");
-    expect(routePathForFile("src/app/api/version/route.tsx")).toBe("/api/version");
-    expect(routePathForFile("src/app/api/version/route.js")).toBe("/api/version");
-    expect(routePathForFile("src/app/api/version/route.jsx")).toBe("/api/version");
+  it("derives Express 5 paths from bracketed folder names", () => {
+    expect(routePathForFile("src/server/routes/api/a/[id]/route.ts")).toBe("/api/a/:id");
+    expect(
+      routePathForFile("src/server/routes/dataset-files/[versionId]/[...assetPath]/route.ts"),
+    ).toBe("/dataset-files/:versionId/*assetPath");
+    expect(routePathForFile("src/server/routes/robots.txt/route.ts")).toBe("/robots.txt");
+    expect(routePathForFile("src/server/routes/api/version/route.tsx")).toBe("/api/version");
+    expect(routePathForFile("src/server/routes/api/version/route.js")).toBe("/api/version");
+    expect(routePathForFile("src/server/routes/api/version/route.jsx")).toBe("/api/version");
   });
 
   it("serves each route with the handlers its own file exports", async () => {
@@ -110,21 +110,22 @@ describe("the route table", () => {
     }
   });
 
-  it("marks the routes Next served from its prerender cache as their segment config says, and only those", async () => {
-    // force-static is "static"; a revalidate above 0 is "revalidate"; anything else Next ran per request.
-    const servingOf = (config: Record<string, unknown>) =>
-      config.dynamic === "force-static"
-        ? "static"
-        : typeof config.revalidate === "number" && config.revalidate > 0
-          ? "revalidate"
-          : undefined;
-    for (const route of ROUTES) {
-      const config = (await import(path.join(REPO, route.source))) as Record<string, unknown>;
-      expect(route.serving, route.source).toBe(servingOf(config));
-    }
+  it("serves only the HiGHS files as static", () => {
     expect(ROUTES.filter((route) => route.serving).map((route) => route.source)).toEqual([
-      "src/app/api/highs/[file]/route.ts",
+      "src/server/routes/api/highs/[file]/route.ts",
     ]);
+    expect(ROUTES.find((route) => route.serving)?.serving).toBe("static");
+  });
+
+  it("finds no export in a route file other than its handlers", async () => {
+    const methods = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
+    for (const route of ROUTES) {
+      const imported = (await import(path.join(REPO, route.source))) as Record<string, unknown>;
+      expect(
+        Object.keys(imported).filter((name) => !methods.includes(name)),
+        route.source,
+      ).toEqual([]);
+    }
   });
 
   it("lists OPTIONS' Allow sorted, as Next does", () => {

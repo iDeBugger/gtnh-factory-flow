@@ -10,8 +10,9 @@ import { APP_VERSION } from "@/lib/version";
  * ranks would otherwise be served stale, for a year, to every browser and edge
  * cache holding the old URL. The token is the build, not the release number:
  * several builds can ship under one APP_VERSION (work folded into an unshipped
- * bump, a redeploy). `next.config.ts` bakes `NEXT_PUBLIC_GTNH_BUILD_ID`
- * (`<version>-<sha8>`) into the server and browser bundles alike, so both read
+ * bump, a redeploy). The build's defines (tools/build/define.mjs) bake
+ * `NEXT_PUBLIC_GTNH_BUILD_ID` (`<version>-<sha8>`) into the server and browser
+ * bundles alike, so both read
  * the same value. The server marks an answer immutable only when the request
  * carries this exact token (`datasetCacheHeaders`), so a URL from a tab opened
  * before a deploy is never cached under the new code's answer.

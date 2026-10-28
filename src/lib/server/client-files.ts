@@ -286,9 +286,9 @@ export async function removeUnservedClientFileDirectories(
 }
 
 /**
- * One version's files as this process knows them, kept on `globalThis`: Next.js
- * bundles `instrumentation.ts` apart from the routes, and the start-up write
- * must fill the listing the route reads.
+ * One version's files as this process knows them, kept on `globalThis`: the
+ * start-up write must fill the listing the route reads, even from another copy
+ * of this module.
  */
 interface VersionClientFiles {
   files: Partial<Record<ClientFileKind, string>>;

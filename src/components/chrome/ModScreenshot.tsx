@@ -280,7 +280,6 @@ export function ModScreenshot({ onClose }: { onClose: () => void }) {
           <div ref={wellRef} className="mshot-well">
             {previewUrl && capture && scale > 0 ? (
               <div className="mshot-picture" style={{ width: capture.width * scale }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={previewUrl} alt="Plan picture preview" draggable={false} />
                 {footerVisible && layout ? (
                   <div style={{ height: layout.footerHeight * layout.footerScale * scale, overflow: "hidden" }}>

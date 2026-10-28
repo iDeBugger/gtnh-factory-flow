@@ -1,9 +1,9 @@
 /**
- * Reading a request body under a byte cap. Next.js route handlers have no
- * body limit of their own, so `request.json()`, `request.text()` and
- * `request.formData()` parse whatever Next hands them. Every route that reads
- * a body reads it through here, with a cap sized to what the client
- * legitimately sends, and refuses the rest as 413.
+ * Reading a request body under a byte cap. A route handler's web `Request`
+ * has no body limit of its own past the adapter's hard cap, so
+ * `request.json()`, `request.text()` and `request.formData()` parse whatever
+ * arrives. Every route that reads a body reads it through here, with a cap
+ * sized to what the client legitimately sends, and refuses the rest as 413.
  */
 
 /** Sign-in, votes, folder names, a publish flag: a few hundred bytes, never kilobytes. */
@@ -12,18 +12,21 @@ export const SMALL_JSON_MAX_BYTES = 16 * 1024;
 /** A 2,000-character comment is at most 24 KiB of escaped JSON. */
 export const COMMENT_BODY_MAX_BYTES = 64 * 1024;
 
-/** What Next holds of a write body while the proxy runs (body-limits.config.ts, beside next.config.ts). */
-export { PROXY_BODY_MAX_BYTES } from "../../../../body-limits.config";
+/**
+ * The most of any request body the adapter (src/server/http/adapter.ts) hands a route: past it the route's body
+ * stream errors and the answer is a 413. It sits just above the largest route cap (an image or preview upload,
+ * 4 MiB plus the form's 64 KiB), never below one, so a body cut here is still over every cap and still answers
+ * 413, not a 400 for a truncated JSON or form.
+ */
+export const BODY_HARD_CAP_BYTES = 4.5 * 1024 * 1024;
 
 /** The 413 sentence for a body no player-facing limit describes better. */
 export const REQUEST_TOO_BIG_MESSAGE = "The request is too big.";
 
 /**
  * The body's bytes, or undefined once it passes `max`: a declared length over
- * the cap is refused without reading what Next holds, and a body with no
- * length (chunked) stops being read at the cap. No body reads as empty. The
- * proxy has already waited for the whole body, up to `PROXY_BODY_MAX_BYTES`,
- * before a route gets here.
+ * the cap is refused without reading the body, and a body with no length
+ * (chunked) stops being read at the cap. No body reads as empty.
  */
 export async function readBodyCapped(
   request: Request,

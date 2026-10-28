@@ -27,7 +27,7 @@ export const UI_SCALE_INVERSE_VAR = "--ui-scale-inverse";
 export const PHONE_MEDIA_QUERY = `(max-width: ${PHONE_MAX_WIDTH - 0.02}px), (max-height: ${PHONE_MAX_HEIGHT - 0.02}px)`;
 
 /**
- * The inline script layout.tsx runs before first paint. It repeats
+ * The inline script src/client/boot.ts puts in the page, run before first paint. It repeats
  * `uiScaleFactor` and the viewport attributes from compact-view.ts in plain
  * ES5 because it runs before any module does; the numbers are passed in so
  * there is one place they are written.

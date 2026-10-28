@@ -10,7 +10,7 @@ import type {
   RequestHandler,
   Response as ExpressResponse,
 } from "express";
-import { PROXY_BODY_MAX_BYTES } from "@/lib/server/http/request-body";
+import { BODY_HARD_CAP_BYTES } from "@/lib/server/http/request-body";
 import { siteUrl } from "@/lib/site-url";
 import { canonicalUrlOf } from "../middleware/normalize-path";
 import type { WebHandler } from "./route-table";
@@ -28,7 +28,7 @@ import type { WebHandler } from "./route-table";
  * reset by the app. The total stays at or above the idle timer. The byte bound sits 4 MiB past the hard cap;
  * Caddy's 8 MB request body limit refuses anything larger at the edge.
  */
-export const DRAIN_MAX_BYTES = PROXY_BODY_MAX_BYTES + 4 * 1024 * 1024;
+export const DRAIN_MAX_BYTES = BODY_HARD_CAP_BYTES + 4 * 1024 * 1024;
 /** Reset by every chunk that arrives: a sender that stops for this long is cut. */
 export const DRAIN_IDLE_MS = 31_000;
 /** The longest a drain runs, however steadily the bytes trickle in. */
@@ -320,7 +320,7 @@ export interface HandleOptions {
 
 /** An Express handler for one route handler: params by folder name, `:id` as a string and `*rest` as an array. */
 export function handle(handler: WebHandler, options: HandleOptions = {}): RequestHandler {
-  const hardCapBytes = options.hardCapBytes ?? PROXY_BODY_MAX_BYTES;
+  const hardCapBytes = options.hardCapBytes ?? BODY_HARD_CAP_BYTES;
   return async (req, res, next) => {
     let response: Response;
     try {

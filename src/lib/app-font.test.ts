@@ -23,7 +23,7 @@ describe("app fonts", () => {
   // This is the tripwire for editing one and not the other.
   it("matches the globals.css rules stack for stack", () => {
     const css = readFileSync(
-      path.resolve(__dirname, "../app/globals.css"),
+      path.resolve(__dirname, "../client/globals.css"),
       "utf8",
     );
 
@@ -48,7 +48,7 @@ describe("app fonts", () => {
   // The game's hard text shadow and unsmoothed edges suit the pixel font alone: under a vector face the shadow reads
   // as a blur and macOS draws unsmoothed text jagged.
   it("dresses the pixel font alone in its shadow and unsmoothed edges", () => {
-    const globals = readFileSync(path.resolve(__dirname, "../app/globals.css"), "utf8");
+    const globals = readFileSync(path.resolve(__dirname, "../client/globals.css"), "utf8");
     const pixelRule = /html\[data-app-font="minecraft"\]\s*\{([^}]*)\}/.exec(globals)?.[1] ?? "";
     expect(pixelRule).toMatch(/--pixel-text-shadow:\s*1px 1px 0 /);
     expect(pixelRule).toMatch(/--pixel-font-smoothing:\s*none;/);

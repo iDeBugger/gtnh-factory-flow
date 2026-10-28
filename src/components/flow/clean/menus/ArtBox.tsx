@@ -20,7 +20,6 @@ export function ArtBox({
   return (
     <span className="cm-icon" style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", width: size, height: size }}>
       {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt={alt} draggable={false} className="minecraft-pixel-art" style={{ width: "220%", height: "220%", maxWidth: "none", flex: "none", objectFit: "contain" }} />
       ) : atlas ? (
         <ResourceIcon

@@ -75,7 +75,7 @@ export function inlineScriptHashes(html) {
 
 /**
  * The font preloads, mapped to their built `/assets` names through the Vite
- * manifest.
+ * manifest, whose keys are paths under the Vite root (src/client).
  *
  * @param {Record<string, { file: string }>} manifest
  * @param {boolean} all
@@ -83,7 +83,7 @@ export function inlineScriptHashes(html) {
  */
 export function fontPreloads(manifest, all = PRELOAD_ALL_FONTS) {
   return (all ? ALL_PRELOADS : DEFAULT_PRELOADS).map((name) => {
-    const key = Object.keys(manifest).find((source) => source.endsWith(`app/fonts/${name}`));
+    const key = Object.keys(manifest).find((source) => source === `fonts/${name}`);
     if (!key) throw new Error(`The Vite manifest names no built file for ${name}.`);
     return {
       href: `/${manifest[key].file}`,
@@ -94,8 +94,8 @@ export function fontPreloads(manifest, all = PRELOAD_ALL_FONTS) {
 
 /** The site files whose head URLs carry a version query, as `HeadAssetVersions` in head.ts names them. */
 export const VERSIONED_SITE_FILES = {
-  ogImage: "src/app/opengraph-image.png",
-  favicon: "src/app/favicon.ico",
+  ogImage: "src/server/page/assets/opengraph-image.png",
+  favicon: "src/server/page/assets/favicon.ico",
 };
 
 /**

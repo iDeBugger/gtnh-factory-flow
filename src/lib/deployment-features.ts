@@ -8,8 +8,9 @@ const isOn = (value: string | undefined) => value?.trim().toLowerCase() === "on"
  * spaces trimmed): unset or any other value switches both off, so a fresh
  * deployment never answers the game or shows the library by accident.
  *
- * The literal read is the build's value in a Next.js build: next.config.ts
- * always defines the variable, so it is inlined in both bundles. The
+ * The literal read is the build's value: the build's defines
+ * (tools/build/define.mjs) always define the variable, so it is inlined in
+ * both bundles. The
  * `Reflect.get` read is never inlined or folded into it: it is the running
  * process's value. On the server both must say on, so a site built one way
  * and started the other answers no mod or community route. The browser has

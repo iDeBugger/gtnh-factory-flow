@@ -6,7 +6,7 @@
  * its OPTIONS and 405 answers), the page and `/community`, the 404 and the error answer.
  */
 import express, { type Express, type RequestHandler } from "express";
-import { documentPolicy, type SecurityHeaderEnv } from "../../security-headers.config";
+import { documentPolicy, type SecurityHeaderEnv } from "@/lib/server/http/security-headers";
 import { DEFAULT_DRAIN, handle, type DrainBounds } from "./http/adapter";
 import { ROUTES, type HttpMethod, type RouteEntry } from "./http/route-table";
 import { crossSiteWriteGuard } from "./middleware/cross-site";

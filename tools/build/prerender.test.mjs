@@ -14,11 +14,14 @@ import {
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const FONTS_CSS = path.join(ROOT, "src/client/fonts.css");
 
-/** A Vite manifest naming every font file fonts.css loads, as `vite build` writes it for CSS assets. */
+/**
+ * A Vite manifest naming every font file fonts.css loads, as `vite build` writes it for CSS assets: keyed by the
+ * path under the Vite root (src/client).
+ */
 function manifestForFonts() {
   const manifest = {};
   for (const [, url] of readFileSync(FONTS_CSS, "utf8").matchAll(/url\("([^"]+)"\)/g)) {
-    const key = path.posix.normalize(path.posix.join("src/client", url));
+    const key = path.posix.normalize(url);
     const name = path.posix.basename(url).replace(/(\.[a-z0-9]+)$/, "-HASH$1");
     manifest[key] = { file: `assets/${name}`, src: key };
   }
@@ -79,7 +82,7 @@ describe("page.json", () => {
     expect(versions.ogImage).toBe(
       assetVersion(
         "opengraph-image.png",
-        readFileSync(path.join(ROOT, "src/app/opengraph-image.png")),
+        readFileSync(path.join(ROOT, "src/server/page/assets/opengraph-image.png")),
       ),
     );
     expect(versions.favicon).toMatch(/^favicon\.[0-9a-f]{16}\.ico$/);
@@ -105,9 +108,9 @@ describe("fonts.css", () => {
       "Monocraft",
       "OpenDyslexic",
     ]) {
-      expect(readFileSync(path.join(ROOT, `src/app/fonts/${licence}-LICENSE`), "utf8")).toContain(
-        "SIL OPEN FONT LICENSE Version 1.1",
-      );
+      expect(
+        readFileSync(path.join(ROOT, `src/client/fonts/${licence}-LICENSE`), "utf8"),
+      ).toContain("SIL OPEN FONT LICENSE Version 1.1");
     }
   });
 });

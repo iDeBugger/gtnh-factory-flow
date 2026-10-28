@@ -6,8 +6,8 @@ import { datasetBackendPath } from "./middleware/dataset-backend";
 import { call, listen, type Listening } from "./test-support/serve";
 
 /**
- * The development server's dataset backend: the forwarding decisions of Next's three `beforeFiles` rewrites
- * (next-config.test.ts's accept and refuse cases), and the forwarding itself against a stub backend.
+ * The development server's dataset backend: which paths it forwards and which it refuses, as Next's three
+ * `beforeFiles` rewrites decided, and the forwarding itself against a stub backend.
  */
 
 describe("which paths go to the dataset backend", () => {

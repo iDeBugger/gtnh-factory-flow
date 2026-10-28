@@ -23,7 +23,7 @@ export function readAppVersion(source) {
   return match[1];
 }
 
-/** The build's identity, as next.config.ts and the image labels carry it. */
+/** The build's identity, as the bundles' defines and the image labels carry it. */
 export function buildId(version, sha) {
   if (!/^[0-9a-f]{8,40}$/.test(sha)) {
     throw new Error("Not a commit id.");
