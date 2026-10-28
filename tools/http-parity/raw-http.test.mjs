@@ -182,3 +182,33 @@ describe("rawRequest against a server that stops reading", () => {
     expect(answer.bytesSent).toBeLessThan(body.length);
   });
 });
+
+describe("rawRequest against a server that resets mid-answer", () => {
+  // The head and part of a declared body, then a reset: the answer is cut short.
+  const server = net.createServer((socket) => {
+    socket.once("data", () => {
+      socket.write(
+        "HTTP/1.1 413 Payload Too Large\r\ncontent-type: text/plain\r\ncontent-length: 100\r\n\r\ntoo",
+      );
+      setTimeout(() => socket.resetAndDestroy(), 100);
+    });
+    socket.on("error", () => {});
+  });
+  let base;
+  beforeAll(async () => {
+    base = `http://127.0.0.1:${await listen(server)}`;
+  });
+  afterAll(() => close(server));
+
+  it("fails a strict exchange whose answer was cut short", async () => {
+    await expect(
+      rawRequest({ base, target: "/cut", strict: true, timeoutMs: 5000 }),
+    ).rejects.toThrow(/cut short/);
+  });
+
+  it("keeps the status and what arrived when the exchange is not strict", async () => {
+    const answer = await rawRequest({ base, target: "/cut", timeoutMs: 5000 });
+    expect(answer.status).toBe(413);
+    expect(answer.body.toString("utf8")).toBe("too");
+  });
+});
