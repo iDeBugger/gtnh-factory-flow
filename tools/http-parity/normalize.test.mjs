@@ -38,7 +38,7 @@ describe("normalizeText and normalizeCase", () => {
     const state = createNormalizeState();
     expect(
       normalizeText("2026-10-25T17:33:50.431+00:00 and Tue, 27 Oct 2026 10:00:00 GMT", state),
-    ).toBe("<time> and <time>");
+    ).toBe("<time:iso.f+00:00> and <time:http>");
     expect(normalizeText("gtnh_session=abc.def; Path=/", state)).toBe(
       "gtnh_session=<cookie:1>; Path=/",
     );
@@ -61,6 +61,50 @@ describe("normalizeText and normalizeCase", () => {
       ["retry-after", "<seconds>"],
       ["set-cookie", "gtnh_session=<cookie:2>; Path=/"],
     ]);
+  });
+
+  it("keeps a timestamp's form: milliseconds, no fraction, an offset and no zone are four tokens", () => {
+    const state = createNormalizeState();
+    const forms = [
+      "2026-10-27T10:00:00.000Z",
+      "2026-10-27T10:00:00Z",
+      "2026-10-27T10:00:00+00:00",
+      "2026-10-27T10:00:00",
+    ].map((time) => normalizeText(time, state));
+    expect(forms).toEqual(["<time:iso.fZ>", "<time:isoZ>", "<time:iso+00:00>", "<time:iso>"]);
+    expect(normalizeText("2025-01-02T03:04:05.678Z", state)).toBe(forms[0]);
+    // Postgres drops a fraction's trailing zeros: one column, one form.
+    expect(normalizeText("2025-01-02T03:04:05.43+00:00", state)).toBe(
+      normalizeText("2025-01-02T03:04:05.431+00:00", state),
+    );
+  });
+
+  it("stores a text body's length as sent, asset URLs named, so equal tokens of unequal length differ", () => {
+    const cookieBody = (value) =>
+      normalizeCase(
+        {
+          status: 200,
+          headers: [["content-type", "text/plain"]],
+          body: Buffer.from(`gtnh_session=${value}`),
+        },
+        { name: "t", request: { target: "/api/x" }, state: createNormalizeState() },
+      ).body;
+    expect(cookieBody("abc")).toEqual({ text: "gtnh_session=<cookie:1>", bytes: 16 });
+    expect(cookieBody("abcd").text).toBe(cookieBody("abc").text);
+    expect(cookieBody("abcd").bytes).toBe(17);
+    const prewarm = normalizeCase(json({ durationMs: 1234 }), {
+      name: "p",
+      request: { target: "/api/datasets/v/prewarm" },
+      state: createNormalizeState(),
+    });
+    expect(prewarm.body).toEqual({ text: '{"durationMs":"<ms>"}' });
+    const timed = (time) =>
+      normalizeCase(json({ at: time }), {
+        name: "t",
+        request: { target: "/api/x" },
+        state: createNormalizeState(),
+      }).body;
+    expect(timed("2025-01-02T03:04:05.43+00:00")).toEqual(timed("2025-01-02T03:04:05.431+00:00"));
   });
 
   it("keeps a dataset answer byte for byte", () => {
@@ -94,7 +138,7 @@ describe("normalizeText and normalizeCase", () => {
         { name: "f", request: { target }, state: createNormalizeState() },
       ).headers;
     expect(file("/datasets/gtnh/v/client/catalog.0123456789abcdef0123.json")).toEqual([
-      ["last-modified", "<time>"],
+      ["last-modified", "<time:http>"],
     ]);
     expect(file("/datasets/gtnh/v/recipe-lookup-index.json.gz")).toEqual([
       ["last-modified", "Tue, 27 Oct 2026 18:30:31 GMT"],

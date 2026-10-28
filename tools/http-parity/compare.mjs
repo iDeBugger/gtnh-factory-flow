@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Compares two capture directories case by case: status, body, and every
- * header name and value, duplicates and order within one name included.
+ * header name and value, order within one name included (repeated lines of
+ * one name are joined as RFC 9110 joins them, `set-cookie` excepted).
  *
  *   node tools/http-parity/compare.mjs <dirA> <dirB> [--allow allowed-differences.json]
  *
@@ -61,14 +62,24 @@ function headerMap(headers, bodyless) {
   return map;
 }
 
-function headerValue(values) {
+/**
+ * One header's value: repeated field lines joined with ", ", which RFC 9110 makes the same field as one
+ * comma-joined line, so two `vary` lines and one joined line compare equal. `set-cookie` is the exception the
+ * RFC names: its lines cannot be joined, so they stay one per line.
+ */
+function headerValue(key, values) {
   if (values === undefined) return undefined;
-  return values.length === 1 ? values[0] : values.join("\n");
+  if (values.length === 1) return values[0];
+  return values.join(key === "set-cookie" ? "\n" : ", ");
 }
 
-export function bodyLength(body) {
+/**
+ * A body's length in raw bytes when both sides stored it (a text body normalized to equal text can still have
+ * had different bytes), else the stored form's.
+ */
+export function bodyLength(body, raw = true) {
   if (!body) return 0;
-  if (typeof body.bytes === "number") return body.bytes;
+  if (raw && typeof body.bytes === "number") return body.bytes;
   if (typeof body.text === "string") return Buffer.byteLength(body.text, "utf8");
   return body.length ?? 0;
 }
@@ -175,8 +186,8 @@ export function diffCases(a, b, allow = []) {
     const headersA = headerMap(a.headers, bodyless);
     const headersB = headerMap(b.headers, bodyless);
     for (const key of new Set([...headersA.keys(), ...headersB.keys()])) {
-      const valueA = headerValue(headersA.get(key));
-      const valueB = headerValue(headersB.get(key));
+      const valueA = headerValue(key, headersA.get(key));
+      const valueB = headerValue(key, headersB.get(key));
       if (valueA !== valueB) differences.push({ field: `headers.${key}`, a: valueA, b: valueB });
     }
     const valueA = bodyValue(a.body);
@@ -185,8 +196,9 @@ export function diffCases(a, b, allow = []) {
       differences.push({ field: "body", a: valueA, b: valueB });
     } else {
       // Equal bodies of unequal length: raw bytes the stored form does not show.
-      const lengthA = bodyLength(a.body);
-      const lengthB = bodyLength(b.body);
+      const raw = typeof a.body?.bytes === "number" && typeof b.body?.bytes === "number";
+      const lengthA = bodyLength(a.body, raw);
+      const lengthB = bodyLength(b.body, raw);
       if (lengthA !== lengthB) differences.push({ field: "body.length", a: lengthA, b: lengthB });
     }
   }

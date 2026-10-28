@@ -78,6 +78,9 @@ describe("diffCases", () => {
     expect(diffCases(a, b, [])).toEqual([]);
     const hashed = (length) => stored({ body: { sha256: "ab", length } });
     expect(diffCases(hashed(10), hashed(11), [])).toEqual([{ field: "body.length", a: 10, b: 11 }]);
+    const text = (bytes) => stored({ body: { text: "gtnh_session=<cookie:1>", bytes } });
+    expect(diffCases(text(16), text(17), [])).toEqual([{ field: "body.length", a: 16, b: 17 }]);
+    expect(diffCases(text(16), text(16), [])).toEqual([]);
     expect(diffCases(withHeaders([["connection", "close"]]), withHeaders([]), [])).toEqual([
       { field: "headers.connection", a: "close", b: undefined },
     ]);
@@ -119,6 +122,22 @@ describe("diffCases", () => {
     expect(
       diffCases(stored({ body: { text: "ab" } }), stored({ body: { text: "abc" } }), []),
     ).toEqual([{ field: "body", a: "ab", b: "abc" }]);
+  });
+
+  it("joins repeated field lines with a comma, as one line, and keeps Set-Cookie lines apart", () => {
+    const vary = withHeaders([
+      ["vary", "rsc"],
+      ["vary", "Accept-Encoding"],
+    ]);
+    expect(diffCases(vary, withHeaders([["vary", "rsc, Accept-Encoding"]]), [])).toEqual([]);
+    expect(diffCases(vary, withHeaders([["vary", "Accept-Encoding, rsc"]]), [])).toHaveLength(1);
+    const cookies = withHeaders([
+      ["set-cookie", "a=1"],
+      ["set-cookie", "b=2"],
+    ]);
+    expect(diffCases(cookies, withHeaders([["set-cookie", "a=1, b=2"]]), [])).toEqual([
+      { field: "headers.set-cookie", a: "a=1\nb=2", b: "a=1, b=2" },
+    ]);
   });
 
   describe("the committed allow list", () => {

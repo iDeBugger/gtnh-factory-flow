@@ -7,7 +7,12 @@
  *   first appearance in the run, so the same id in two answers stays the
  *   same token, and two runs that make the same rows in the same order
  *   compare equal;
- * - ISO and HTTP-date timestamps by `<time>`;
+ * - ISO and HTTP-date timestamps by a `<time:...>` token that keeps their form:
+ *   `<time:http>`, or `<time:iso>` with `.f` when it has a fraction and the
+ *   zone as sent (`<time:iso.fZ>`, `<time:iso+00:00>`, `<time:iso>`), so a
+ *   change of form (milliseconds dropped, an offset for a `Z`) still shows.
+ *   The fraction's digit count is not form: Postgres drops a fraction's
+ *   trailing zeros, so `.43` and `.431` come from one column;
  * - a board image's random name by `<image:n>`, and its month by `<month>`;
  * - a `Retry-After` count of seconds by `<seconds>`;
  * - each asset URL (`/_next/static/...`, `/assets/...`) by `<asset:sha256-8>`
@@ -25,7 +30,7 @@ import { PNG } from "pngjs";
 export const TEXT_LIMIT = 256 * 1024;
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
-const ISO_TIME = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/g;
+const ISO_TIME = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?/g;
 const HTTP_DATE =
   /(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4} \d{2}:\d{2}:\d{2} GMT/g;
 const SESSION_COOKIE = /gtnh_session=([^;\s",]+)/g;
@@ -47,6 +52,20 @@ function numbered(map, value, label) {
   return `<${label}:${map.get(value)}>`;
 }
 
+export const HTTP_TIME_TOKEN = "<time:http>";
+
+/** An ISO timestamp's token: its form (fraction digits, zone as sent), never its value. */
+export function isoTimeToken(fraction, zone) {
+  return `<time:iso${fraction ? ".f" : ""}${zone ?? ""}>`;
+}
+
+/** Timestamps by their tokens, and nothing else. */
+function tokenizeTimes(text) {
+  return text
+    .replace(ISO_TIME, (_match, fraction, zone) => isoTimeToken(fraction, zone))
+    .replace(HTTP_DATE, HTTP_TIME_TOKEN);
+}
+
 /** The run-volatile values in a text, replaced by stable tokens. */
 export function normalizeText(text, state) {
   return text
@@ -60,8 +79,8 @@ export function normalizeText(text, state) {
       SESSION_COOKIE,
       (match, value) => `gtnh_session=${numbered(state.cookies, value, "cookie")}`,
     )
-    .replace(ISO_TIME, "<time>")
-    .replace(HTTP_DATE, "<time>");
+    .replace(ISO_TIME, (_match, fraction, zone) => isoTimeToken(fraction, zone))
+    .replace(HTTP_DATE, HTTP_TIME_TOKEN);
 }
 
 /** Every asset URL a text names, once each, in order. */
@@ -134,14 +153,21 @@ export function normalizeCase(
   // Text only when it decodes back to the same bytes: two different invalid sequences would both read as U+FFFD.
   if (decoded !== undefined && Buffer.from(decoded, "utf8").equals(raw.body)) {
     const original = decoded;
-    let text = original;
+    // What is measured: the body with asset URLs named by their bytes (build names, not run values) and
+    // timestamps by their tokens (a fraction's digit count varies from run to run, see `isoTimeToken`).
+    const measured =
+      prewarm || dataset ? original : tokenizeTimes(replaceAssets(original, assetHashes));
+    let text = measured;
     if (prewarm) {
       text = text.replace(/"durationMs":\d+/g, '"durationMs":"<ms>"');
     } else if (!dataset) {
-      text = replaceAssets(normalizeText(text, state), assetHashes);
+      text = normalizeText(measured, state);
     }
     bodyChanged = text !== original;
-    body = { text };
+    // Its length, so two bodies whose run values (ids, cookies, image names) became equal tokens still differ
+    // when those values did not have the same length. The prewarm's stopwatch is the other value whose length
+    // varies from run to run.
+    body = prewarm ? { text } : { text, bytes: Buffer.byteLength(measured, "utf8") };
   } else {
     body = { sha256: sha256(raw.body), length: raw.body.length };
     if (isPng(raw.body)) {
@@ -159,7 +185,7 @@ export function normalizeCase(
     }
     if (lower === "link") return [lower, replaceAssets(value, assetHashes)];
     if (lower === "etag" && bodyChanged && !dataset) return [lower, "<etag>"];
-    if (lower === "last-modified" && CLIENT_FILE_PATH.test(target)) return [lower, "<time>"];
+    if (lower === "last-modified" && CLIENT_FILE_PATH.test(target)) return [lower, HTTP_TIME_TOKEN];
     return [lower, value];
   });
 
