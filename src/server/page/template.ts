@@ -54,17 +54,37 @@ function preloadTag(font: FontPreload): string {
   return `<link rel="preload" href="${escapeAttribute(font.href)}" as="font" type="${escapeAttribute(font.type)}" crossorigin=""/>`;
 }
 
-/** Reads the built page and its page.json once, at start. */
+/** One CSP hash source as the build writes it. */
+const SCRIPT_HASH = /^'sha256-[A-Za-z0-9+/]{43}='$/;
+
+/**
+ * page.json's script hashes, refused when missing, empty or malformed. The page always carries its boot
+ * scripts, so an empty list means the build lost them, and the policy must not lose them with it.
+ */
+function checkedScriptHashes(hashes: unknown): string[] {
+  if (
+    !Array.isArray(hashes) ||
+    hashes.length === 0 ||
+    !hashes.every((hash) => typeof hash === "string" && SCRIPT_HASH.test(hash))
+  ) {
+    throw new Error(
+      "page.json must list the sha256 hash of every inline script the page runs (scriptHashes).",
+    );
+  }
+  return hashes as string[];
+}
+
+/** Reads the built page and its page.json once, at start. A page.json without its script hashes is refused. */
 export function loadPageTemplate(clientDir: string): PageTemplate {
   const html = readFileSync(path.join(clientDir, "index.html"), "utf8");
   const page = JSON.parse(readFileSync(path.join(clientDir, "page.json"), "utf8")) as {
-    scriptHashes: string[];
+    scriptHashes?: unknown;
     fontPreloads: FontPreload[];
     assetVersions?: HeadAssetVersions;
   };
   return {
     html: arrangeHead(html, page.fontPreloads),
-    scriptHashes: page.scriptHashes,
+    scriptHashes: checkedScriptHashes(page.scriptHashes),
     fontPreloads: page.fontPreloads,
     assetVersions: page.assetVersions ?? {},
   };

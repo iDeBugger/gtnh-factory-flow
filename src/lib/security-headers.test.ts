@@ -144,6 +144,21 @@ describe("the script hashes", () => {
     expect(documentPolicy({ production: true, scriptHashes: [] })).toBe(documentPolicy(production));
     expect(documentPolicy({ production: true, scriptHashes: undefined })).toBe(documentPolicy(production));
   });
+
+  it("refuse to fall back to 'unsafe-inline' in production when the page must carry hashes", () => {
+    for (const scriptHashes of [[], undefined]) {
+      expect(() => documentPolicy({ production: true, requireScriptHashes: true, scriptHashes })).toThrow(
+        /script hashes are missing/,
+      );
+    }
+    expect(
+      directive(documentPolicy({ production: true, requireScriptHashes: true, scriptHashes: ["'sha256-abc='"] }), "script-src"),
+    ).toBe("script-src 'self' 'sha256-abc=' 'wasm-unsafe-eval'");
+    // Outside production the dev server's own inline scripts need 'unsafe-inline' whatever the build says.
+    expect(directive(documentPolicy({ production: false, requireScriptHashes: true }), "script-src")).toContain(
+      "'unsafe-inline'",
+    );
+  });
 });
 
 describe("the headers for one path", () => {

@@ -6,7 +6,7 @@
  * its OPTIONS and 405 answers), the page and `/community`, the 404 and the error answer.
  */
 import express, { type Express, type RequestHandler } from "express";
-import type { SecurityHeaderEnv } from "../../security-headers.config";
+import { documentPolicy, type SecurityHeaderEnv } from "../../security-headers.config";
 import { DEFAULT_DRAIN, handle, type DrainBounds } from "./http/adapter";
 import { ROUTES, type HttpMethod, type RouteEntry } from "./http/route-table";
 import { crossSiteWriteGuard } from "./middleware/cross-site";
@@ -124,8 +124,11 @@ function readyGate(ready: Promise<void>): RequestHandler {
 
 export function createApp(options: AppOptions): Express {
   const env: SecurityHeaderEnv = options.template
-    ? { ...options.env, scriptHashes: options.template.scriptHashes }
+    ? { ...options.env, scriptHashes: options.template.scriptHashes, requireScriptHashes: true }
     : options.env;
+  // Built once here, so a policy that cannot be built (a page without its script hashes) stops the start
+  // instead of failing every answer.
+  documentPolicy(env);
   const app = express();
   // Settings before any middleware: Next's router is case-sensitive and strict about a trailing slash (the
   // redirect handles that), sends no X-Powered-By and no ETag on a route answer, and its query is plain.

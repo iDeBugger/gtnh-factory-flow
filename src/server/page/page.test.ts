@@ -230,6 +230,31 @@ describe("the page template", () => {
     writeFileSync(path.join(dir, "index.html"), "<html><head></head><body></body></html>");
     expect(() => loadPageTemplate(dir)).toThrow(/<!--app-head-->/);
   });
+
+  it("refuses a page.json whose script hashes are missing, empty or malformed", () => {
+    const dir = path.join(root, "no-hashes");
+    writeClient(dir);
+    const page = JSON.parse(readFileSync(path.join(dir, "page.json"), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    for (const scriptHashes of [undefined, [], ["sha256-abc"], [HASHES[0], 7]]) {
+      writeFileSync(path.join(dir, "page.json"), JSON.stringify({ ...page, scriptHashes }));
+      expect(() => loadPageTemplate(dir), JSON.stringify(scriptHashes)).toThrow(/scriptHashes/);
+    }
+  });
+
+  it("stops a production app whose page has no script hashes, rather than serve 'unsafe-inline'", () => {
+    const options = {
+      env: { production: true, siteUrl: SITE },
+      publicDir: path.join(root, "public"),
+      datasetsDir: path.join(root, "public", "datasets", "gtnh"),
+    };
+    expect(() => createApp({ ...options, template: { ...template, scriptHashes: [] } })).toThrow(
+      /script hashes are missing/,
+    );
+    expect(() => createApp({ ...options, template })).not.toThrow();
+  });
 });
 
 describe("with the community switch off", () => {

@@ -37,9 +37,16 @@ export interface SecurityHeaderEnv {
   /**
    * The quoted `'sha256-...'` sources of every inline script the page carries. A page whose inline scripts
    * are fixed at build (no streamed payload) lists them, and in production `script-src` then names them
-   * instead of `'unsafe-inline'`. Absent or empty, the policy keeps `'unsafe-inline'`.
+   * instead of `'unsafe-inline'`. Absent or empty, the policy keeps `'unsafe-inline'`, unless
+   * `requireScriptHashes` says the page has them.
    */
   scriptHashes?: string[];
+  /**
+   * The page's inline scripts are hashed at build (the Express server with its prerendered page). In production
+   * an absent or empty `scriptHashes` then throws instead of falling back to `'unsafe-inline'`: a build that lost
+   * its hash list must stop the server, not quietly serve the weaker policy, which no browser check would notice.
+   */
+  requireScriptHashes?: boolean;
 }
 
 /**
@@ -56,6 +63,11 @@ export function documentPolicy(env: SecurityHeaderEnv): string {
   // Outside production the dev server injects inline scripts of its own (React Refresh), which no build-time
   // hash list names, so only production trades 'unsafe-inline' for the hashes.
   const hashes = env.production ? (env.scriptHashes ?? []) : [];
+  if (env.production && env.requireScriptHashes && hashes.length === 0) {
+    throw new Error(
+      "The page's script hashes are missing: the policy would fall back to 'unsafe-inline'.",
+    );
+  }
   const scriptSources =
     hashes.length > 0
       ? ["'self'", ...hashes, "'wasm-unsafe-eval'"]
