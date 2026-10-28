@@ -452,7 +452,7 @@ const syntaxTrees = new Map<string, ts.SourceFile>();
 function syntaxTree(file: SourceFile): ts.SourceFile {
   let tree = syntaxTrees.get(file.path);
   if (!tree || tree.text !== file.text) {
-    const kind = file.path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+    const kind = /\.[jt]sx$/.test(file.path) ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
     tree = ts.createSourceFile(file.path, file.text, ts.ScriptTarget.Latest, true, kind);
     syntaxTrees.set(file.path, tree);
   }
@@ -460,9 +460,43 @@ function syntaxTree(file: SourceFile): ts.SourceFile {
 }
 
 /**
- * The files whose directive prologue holds `"use client"`. Nothing reads that directive since the site left Next,
- * so it would only mislead. Every source file counts here, the exempt ones (tests, the dev pages) and workers too.
+ * The files whose directive prologue holds `"use client"`. No bundler or server of the site reads that directive,
+ * so it would only mislead. Every script file counts here, the exempt ones (tests, the dev pages) and workers too:
+ * `scriptFiles` reads the whole checkout, not only the graph's src/ and tools/.
  */
+/** Every script extension a file of the checkout may be written in, for the directive check. */
+const SCRIPT_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
+
+/**
+ * Every script file of the checkout outside the skipped folders, hidden folders (`.git` and the like) and
+ * `public/` (files the site serves as they are, never source), the root's own files included.
+ */
+function scriptFiles(): Map<string, SourceFile> {
+  const files = new Map<string, SourceFile>();
+  const visit = (directory: string): void => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const full = path.join(directory, entry.name);
+      const relative = path.relative(ROOT, full).split(path.sep).join("/");
+      if (entry.isDirectory()) {
+        if (
+          !SKIPPED_DIRECTORIES.has(entry.name) &&
+          !entry.name.startsWith(".") &&
+          relative !== "public"
+        ) {
+          visit(full);
+        }
+      } else if (
+        SCRIPT_EXTENSIONS.includes(path.extname(entry.name)) &&
+        !/\.d\.[mc]?ts$/.test(entry.name)
+      ) {
+        files.set(relative, toSourceFile(relative, fs.readFileSync(full, "utf8")));
+      }
+    }
+  };
+  visit(ROOT);
+  return files;
+}
+
 function clientDirectiveFiles(graph: Map<string, SourceFile>): string[] {
   return [...graph.values()]
     .filter((file) => file.text.includes("use client"))
@@ -1396,8 +1430,12 @@ describe("the layers", () => {
     expect(sqlOutOfPlace(good)).toEqual([]);
   });
 
-  it("no source file carries a 'use client' directive", () => {
-    expect(clientDirectiveFiles(graph)).toEqual([]);
+  it("no script file of the checkout carries a 'use client' directive", () => {
+    const files = scriptFiles();
+    // The scan reaches what the import graph does not: root files and every script extension.
+    expect(files.has("vite.config.ts")).toBe(true);
+    expect(files.has("eslint.config.mjs")).toBe(true);
+    expect(clientDirectiveFiles(files)).toEqual([]);
   });
 
   it("finds the directive in any file, after other directives, and not past the prologue", () => {
@@ -1408,14 +1446,20 @@ describe("the layers", () => {
       "src/components/Late.tsx": 'import { x } from "./x";\n"use client";',
       "src/components/Comment.tsx": '// "use client";\nexport {};',
       "src/components/Text.tsx": 'export const note = "use client";',
+      "src/components/Plain.jsx": '"use client";\nexport const x = <div />;',
+      "tools/script.cjs": '"use client";\nmodule.exports = {};',
+      "root.config.js": "'use client';\nexport default {};",
     };
     const files = new Map(
       Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
     );
     expect(clientDirectiveFiles(files)).toEqual([
+      "root.config.js",
       "src/client/dev/clean-card/main.tsx",
+      "src/components/Plain.jsx",
       "src/components/Strict.tsx",
       "src/lib/arrange.worker.ts",
+      "tools/script.cjs",
     ]);
   });
 });
