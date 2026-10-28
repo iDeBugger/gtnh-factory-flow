@@ -216,11 +216,21 @@ export function diffCases(a, b, allow = []) {
     if (valueA !== valueB) {
       differences.push({ field: "body", a: valueA, b: valueB });
     } else {
-      // Equal bodies of unequal length: raw bytes the stored form does not show.
-      const raw = typeof a.body?.bytes === "number" && typeof b.body?.bytes === "number";
-      const lengthA = bodyLength(a.body, raw);
-      const lengthB = bodyLength(b.body, raw);
-      if (lengthA !== lengthB) differences.push({ field: "body.length", a: lengthA, b: lengthB });
+      // Equal bodies of unequal length: raw bytes the stored form does not show. A text body measured on one
+      // side only (a capture from before `bytes` was stored) cannot be checked, and says so.
+      const measuredA = typeof a.body?.bytes === "number";
+      const measuredB = typeof b.body?.bytes === "number";
+      if (measuredA !== measuredB) {
+        differences.push({
+          field: "body.length",
+          a: measuredA ? a.body.bytes : "unmeasured",
+          b: measuredB ? b.body.bytes : "unmeasured",
+        });
+      } else {
+        const lengthA = bodyLength(a.body, measuredA);
+        const lengthB = bodyLength(b.body, measuredB);
+        if (lengthA !== lengthB) differences.push({ field: "body.length", a: lengthA, b: lengthB });
+      }
     }
   }
   return differences.filter((difference) => !isAllowed(name, difference, allow, a?.status));

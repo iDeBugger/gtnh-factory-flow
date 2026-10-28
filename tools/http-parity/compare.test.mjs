@@ -81,6 +81,14 @@ describe("diffCases", () => {
     const text = (bytes) => stored({ body: { text: "gtnh_session=<cookie:1>", bytes } });
     expect(diffCases(text(16), text(17), [])).toEqual([{ field: "body.length", a: 16, b: 17 }]);
     expect(diffCases(text(16), text(16), [])).toEqual([]);
+    const unmeasured = stored({ body: { text: "gtnh_session=<cookie:1>" } });
+    expect(diffCases(text(16), unmeasured, [])).toEqual([
+      { field: "body.length", a: 16, b: "unmeasured" },
+    ]);
+    expect(diffCases(unmeasured, text(16), [])).toEqual([
+      { field: "body.length", a: "unmeasured", b: 16 },
+    ]);
+    expect(diffCases(unmeasured, unmeasured, [])).toEqual([]);
     expect(diffCases(withHeaders([["connection", "close"]]), withHeaders([]), [])).toEqual([
       { field: "headers.connection", a: "close", b: undefined },
     ]);
