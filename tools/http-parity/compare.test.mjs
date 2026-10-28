@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { diffCases } from "./compare.mjs";
+
+const ALLOW = JSON.parse(
+  readFileSync(new URL("./allowed-differences.json", import.meta.url), "utf8"),
+);
 
 const stored = (overrides = {}) => ({
   name: "case",
@@ -82,5 +87,106 @@ describe("diffCases", () => {
     expect(diffCases(stored(), undefined, [])).toEqual([
       { field: "case", a: "present", b: undefined },
     ]);
+  });
+
+  it("compares content-length and transfer-encoding as sent on HEAD, 204 and 304", () => {
+    const head = (headers) =>
+      stored({ request: { method: "HEAD", target: "/x" }, headers, body: { text: "" } });
+    expect(
+      diffCases(head([["content-length", "13175276"]]), head([["content-length", "0"]]), ALLOW),
+    ).toEqual([{ field: "headers.content-length", a: "13175276", b: "0" }]);
+    expect(
+      diffCases(head([["content-length", "5"]]), head([["transfer-encoding", "chunked"]]), ALLOW),
+    ).toEqual([
+      { field: "headers.content-length", a: "5", b: undefined },
+      { field: "headers.transfer-encoding", a: undefined, b: "chunked" },
+    ]);
+    const notModified = (headers) => stored({ status: 304, headers, body: { text: "" } });
+    expect(diffCases(notModified([["content-length", "5"]]), notModified([]), ALLOW)).toEqual([
+      { field: "headers.content-length", a: "5", b: undefined },
+    ]);
+  });
+
+  it("never allows a case that failed or was skipped, on either side or both", () => {
+    const failed = stored({ status: -1, headers: [], body: { text: "<failed: timeout>" } });
+    expect(diffCases(failed, failed, [{ case: ".*", field: "*", reason: "x" }])).toEqual([
+      { field: "capture", a: "<failed: timeout>" },
+      { field: "capture", b: "<failed: timeout>" },
+    ]);
+  });
+
+  it("reports the body once when it differs, its length only when the bodies match", () => {
+    expect(
+      diffCases(stored({ body: { text: "ab" } }), stored({ body: { text: "abc" } }), []),
+    ).toEqual([{ field: "body", a: "ab", b: "abc" }]);
+  });
+
+  describe("the committed allow list", () => {
+    const NEXT_CSP =
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:3770 http://127.0.0.1:25640; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'self'";
+    const EXPRESS_CSP = NEXT_CSP.replace(
+      "'unsafe-inline' 'wasm",
+      "'sha256-AAAA' 'sha256-BB/+=' 'wasm",
+    );
+    const csp = (value) =>
+      stored({ name: "page /", headers: [["content-security-policy", value]] });
+
+    it("allows the CSP's script hashes in place of 'unsafe-inline', and nothing else", () => {
+      expect(diffCases(csp(NEXT_CSP), csp(EXPRESS_CSP), ALLOW)).toEqual([]);
+      for (const broken of [
+        EXPRESS_CSP.replace(" 'wasm-unsafe-eval'", ""),
+        EXPRESS_CSP.replace(" http://127.0.0.1:25640", ""),
+        EXPRESS_CSP.replace("; frame-ancestors 'self'", ""),
+        EXPRESS_CSP.replace("style-src 'self' 'unsafe-inline'", "style-src 'self'"),
+        NEXT_CSP.replace("'unsafe-inline' 'wasm", "'wasm"),
+      ]) {
+        expect(diffCases(csp(NEXT_CSP), csp(broken), ALLOW), broken).toHaveLength(1);
+      }
+    });
+
+    it("keeps Accept-Encoding in vary where Next sent it", () => {
+      const vary = (value) => stored({ headers: value === undefined ? [] : [["vary", value]] });
+      const router =
+        "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch";
+      expect(diffCases(vary(`${router}, Accept-Encoding`), vary("Accept-Encoding"), ALLOW)).toEqual(
+        [],
+      );
+      expect(diffCases(vary(router), vary(undefined), ALLOW)).toEqual([]);
+      expect(diffCases(vary(`${router}, Accept-Encoding`), vary(undefined), ALLOW)).toHaveLength(1);
+      expect(diffCases(vary(router), vary("Accept-Encoding"), ALLOW)).toHaveLength(1);
+    });
+
+    it("lets only the default font keep its preload in Link (I27)", () => {
+      const font = (hash) =>
+        `<<asset:${hash}>>; rel=preload; as="font"; crossorigin=""; type="font/woff2"`;
+      const style = '<<asset:5151aaaa>>; rel=preload; as="style"';
+      const link = (...items) => stored({ name: "page /", headers: [["link", items.join(", ")]] });
+      const next = link(font("1e06740a"), font("c9407645"), style, font("50841fc9"));
+      expect(diffCases(next, link(font("c9407645"), style), ALLOW)).toEqual([]);
+      expect(diffCases(next, link(font("c9407645")), ALLOW)).toHaveLength(1);
+      expect(diffCases(next, link(font("1e06740a"), style), ALLOW)).toHaveLength(1);
+      expect(diffCases(next, link(font("c9407645"), font("1e06740a"), style), ALLOW)).toHaveLength(
+        1,
+      );
+    });
+
+    it("allows the 404 page's body under either doctype casing, and the /community 307's body only", () => {
+      const page = (name, status, text, headers = []) =>
+        stored({ name, status, headers, body: { text } });
+      expect(
+        diffCases(
+          page("gate /DATASETS/x", 404, "<!DOCTYPE html><a>"),
+          page("gate /DATASETS/x", 404, "<!doctype html><bb>"),
+          ALLOW,
+        ),
+      ).toEqual([]);
+      const next = page("page /community", 307, "<!DOCTYPE html><x>", [["location", "/"]]);
+      expect(diffCases(next, page("page /community", 307, "", [["location", "/"]]), ALLOW)).toEqual(
+        [],
+      );
+      expect(
+        diffCases(next, page("page /community", 307, "", [["location", "/x"]]), ALLOW),
+      ).toHaveLength(1);
+    });
   });
 });

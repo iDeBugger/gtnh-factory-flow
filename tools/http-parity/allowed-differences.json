@@ -1,30 +1,49 @@
 [
   {
     "case": "page /|page /\\?plan=missing|scenario page /\\?plan=",
-    "field": "body*",
+    "field": "body",
     "reason": "The page HTML outside the metadata tags and the shell markup: framework scripts, preloads, next-size-adjust and the RSC flight. Task 10 compares the metadata tags and the shell separately."
   },
   {
     "case": ".*",
     "status": 404,
-    "field": "body*",
+    "field": "body",
     "a": "<!DOCTYPE html>.*",
-    "b": "<!DOCTYPE html>.*",
+    "b": "<!(DOCTYPE|doctype) html>.*",
     "reason": "The 404 page's HTML outside the metadata tags and the shell markup, wherever a path ends on it (framework markup, as for the page)."
+  },
+  {
+    "case": "page /community(\\?plan=x)?|scenario page /community\\?plan=",
+    "status": 307,
+    "field": "body",
+    "reason": "Next's redirect() from a page sends its error document as the 307 body; a browser follows the location and never renders it. Status, location, cache-control and content-type stay compared."
   },
   {
     "case": ".*",
     "field": "headers.vary",
-    "a": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch(, Accept-Encoding)?",
-    "b": "(Accept-Encoding)?",
-    "reason": "Next's router headers leave vary on HTML and route answers; any other vary must stay."
+    "a": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding",
+    "b": "Accept-Encoding",
+    "reason": "Next's router headers leave vary; Accept-Encoding stays where Next sent it."
+  },
+  {
+    "case": ".*",
+    "field": "headers.vary",
+    "a": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "b": "",
+    "reason": "Next's router headers leave vary on route answers that vary on nothing else."
   },
   {
     "case": ".*",
     "field": "headers.content-security-policy",
-    "a": "(.*; )?script-src 'self' 'unsafe-inline' .*",
-    "b": "(.*; )?script-src 'self' ('sha256-[A-Za-z0-9+/=]+' )+.*",
-    "reason": "script-src names the boot scripts' hashes instead of 'unsafe-inline', and the worker policy moves from /_next/static/* to /assets/*."
+    "transform": "csp-script-hashes",
+    "reason": "script-src names the inline scripts' hashes instead of 'unsafe-inline', and the worker policy moves from /_next/static/* to /assets/*. Every other directive stays byte for byte."
+  },
+  {
+    "case": ".*",
+    "field": "headers.link",
+    "transform": "link-keep-fonts",
+    "keep": ["<asset:c9407645>"],
+    "reason": "I27: only the default face keeps its preload (Inter's latin file, which Next names 83afe278b6a6bb3c-s.p.*.woff2). Every other Link item stays compared."
   },
   {
     "case": ".*",
@@ -44,7 +63,7 @@
     "field": "headers.location",
     "a": "https://0\\.0\\.0\\.0:3770/opengraph-image\\.png",
     "b": "http://127\\.0\\.0\\.1:3770/opengraph-image\\.png",
-    "reason": "The intended change (Needs an owner decision 1): the missing card's redirect names siteUrl(), not Next's listen address."
+    "reason": "The intended change (Needs an owner decision 1, I30): the missing card's redirect names siteUrl(), not Next's listen address."
   },
   {
     "case": "cap board image 6 MiB",

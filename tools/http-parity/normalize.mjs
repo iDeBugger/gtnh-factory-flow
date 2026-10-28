@@ -9,7 +9,7 @@
  *   compare equal;
  * - ISO and HTTP-date timestamps by `<time>`;
  * - a board image's random name by `<image:n>`, and its month by `<month>`;
- * - `Retry-After` by `<seconds>`;
+ * - a `Retry-After` count of seconds by `<seconds>`;
  * - each asset URL (`/_next/static/...`, `/assets/...`) by `<asset:sha256-8>`
  *   of the bytes it serves, so one file under two build names compares equal
  *   and two different files do not;
@@ -32,7 +32,8 @@ const SESSION_COOKIE = /gtnh_session=([^;\s",]+)/g;
 const BOARD_IMAGE = /\/api\/community\/images\/\d{4}-\d{2}\/([0-9a-f]{18})\.(png|jpg|gif|webp)/g;
 /** An asset URL as it appears in HTML, in the RSC flight (JSON-escaped) and in a `Link` header. */
 const ASSET_URL = /\/(?:_next\/static|assets)\/[^"'\s<>\\)`]+/g;
-const DATASET_PATH = /^\/(?:api\/datasets|datasets|dataset-files)\//i;
+// Case-sensitive, as the routes are: `/DATASETS/...` is a 404 page, not a dataset answer.
+const DATASET_PATH = /^\/(?:api\/datasets|datasets|dataset-files)\//;
 const CLIENT_FILE_PATH = /^\/datasets\/gtnh\/[^/]+\/client\//;
 const PREWARM_PATH = /^\/api\/datasets\/[^/]+\/prewarm(?:\?|$)/;
 const TEXT_TYPE = /json|^text\/|xml|javascript|html|manifest|svg/i;
@@ -119,13 +120,20 @@ export function normalizeCase(
   raw,
   { name, request, state, assetHashes, target = request?.target ?? "" },
 ) {
-  const dataset = isDatasetTarget(target);
+  // A dataset answer is never HTML: a page under a dataset path is the 404 page, normalized like any page.
+  const dataset =
+    isDatasetTarget(target) && !/text\/html/i.test(headerValue(raw.headers, "content-type") ?? "");
   const prewarm = PREWARM_PATH.test(target);
   let bodyChanged = false;
 
   let body;
-  if (isText(raw.headers, raw.body) && raw.body.length <= TEXT_LIMIT) {
-    const original = raw.body.toString("utf8");
+  const decoded =
+    isText(raw.headers, raw.body) && raw.body.length <= TEXT_LIMIT
+      ? raw.body.toString("utf8")
+      : undefined;
+  // Text only when it decodes back to the same bytes: two different invalid sequences would both read as U+FFFD.
+  if (decoded !== undefined && Buffer.from(decoded, "utf8").equals(raw.body)) {
+    const original = decoded;
     let text = original;
     if (prewarm) {
       text = text.replace(/"durationMs":\d+/g, '"durationMs":"<ms>"');
@@ -144,7 +152,8 @@ export function normalizeCase(
 
   const headers = raw.headers.map(([key, value]) => {
     const lower = key.toLowerCase();
-    if (lower === "retry-after") return [lower, "<seconds>"];
+    // A count of seconds varies with the clock; any other form (a date, a fraction) is a change of form and stays.
+    if (lower === "retry-after") return [lower, /^\d+$/.test(value) ? "<seconds>" : value];
     if (lower === "location" || lower === "refresh" || lower === "set-cookie") {
       return [lower, normalizeText(value, state)];
     }

@@ -138,4 +138,45 @@ describe("normalizeText and normalizeCase", () => {
     expect(stored.body.length).toBe(bytes.length);
     expect(stored.body.pixels).toMatch(/^[0-9a-f]{64}$/);
   });
+
+  it("replaces a Retry-After count of seconds only, keeping any other form", () => {
+    const retry = (value) =>
+      normalizeCase(
+        { status: 429, headers: [["retry-after", value]], body: Buffer.alloc(0) },
+        { name: "r", request: { target: "/api/x" }, state: createNormalizeState() },
+      ).headers[0][1];
+    expect(retry("37")).toBe("<seconds>");
+    expect(retry("Wed, 21 Oct 2026 07:28:00 GMT")).toBe("Wed, 21 Oct 2026 07:28:00 GMT");
+    expect(retry("1.5")).toBe("1.5");
+  });
+
+  it("stores a body that does not decode back to its bytes by hash, not as text", () => {
+    const latin1 = Buffer.from('{"error":"caf\xe9"}', "latin1");
+    const stored = normalizeCase(
+      { status: 400, headers: [["content-type", "application/json"]], body: latin1 },
+      { name: "l", request: { target: "/api/x" }, state: createNormalizeState() },
+    );
+    expect(stored.body).toEqual({ sha256: sha256(latin1), length: latin1.length });
+  });
+
+  it("normalizes the 404 page under a dataset path like any page, whatever the path's case", () => {
+    const page = {
+      status: 404,
+      headers: [
+        ["content-type", "text/html; charset=utf-8"],
+        ["etag", '"abc"'],
+      ],
+      body: Buffer.from('<!DOCTYPE html><script src="/_next/static/chunks/a.js"></script>'),
+    };
+    for (const target of ["/DATASETS/gtnh/v/recipes.json", "/datasets/gtnh/v/RECIPES.JSON"]) {
+      const stored = normalizeCase(page, {
+        name: "g",
+        request: { target },
+        state: createNormalizeState(),
+        assetHashes: new Map([["/_next/static/chunks/a.js", "f".repeat(64)]]),
+      });
+      expect(stored.body.text).toBe('<!DOCTYPE html><script src="<asset:ffffffff>"></script>');
+      expect(stored.headers).toContainEqual(["etag", "<etag>"]);
+    }
+  });
 });

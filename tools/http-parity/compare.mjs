@@ -6,16 +6,24 @@
  *   node tools/http-parity/compare.mjs <dirA> <dirB> [--allow allowed-differences.json]
  *
  * Only the ignore list escapes: `date`, `keep-alive`, the `x-nextjs-*` cache
- * markers, and `content-length` with `transfer-encoding`, which are one check
- * on the body's decoded length (a length or chunked framing is not a
- * difference, a different length is). `connection` is compared. Every other
- * difference fails unless the allow list names it: an entry
+ * markers, and `content-length` with `transfer-encoding`, which on an answer
+ * with a body are one check on the body itself (a length or chunked framing
+ * is not a difference, a different body is). On a HEAD, a 204 or a 304 there
+ * is no body to check, so both are compared as sent. `connection` is
+ * compared. A case that failed or was skipped on either side is a difference
+ * no entry can allow.
+ *
+ * Every other difference fails unless the allow list names it. An entry
  * `{ case, field, reason }` matches a case name by the regular expression
  * `case` (whole name) and a field by name, where a trailing `*` matches any
- * rest. `a` and `b`, when given, are regular expressions the two values must
- * match (whole value), so an entry can allow one known change and nothing
- * else on that field, and `status`, when given, is the status side A must
- * have answered (the 404 page, wherever a path ends on it). Exits 1 on any difference the list does not name.
+ * rest. It may narrow itself further:
+ * - `status`: the status side A answered (the 404 page, wherever a path ends
+ *   on it);
+ * - `a` and `b`: regular expressions the two values must match (whole value);
+ * - `transform`: a named rewrite of the two values, after which they must be
+ *   equal byte for byte, so one intended change is allowed and nothing else
+ *   on that field (`TRANSFORMS` below).
+ * Exits 1 on any difference the list does not name.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -31,11 +39,22 @@ export const IGNORED_HEADERS = new Set([
   "x-nextjs-stale-time",
 ]);
 
-function headerMap(headers) {
+/** Framing headers that say something on an answer with no body to check. */
+const BODYLESS_FRAMING = new Set(["content-length", "transfer-encoding"]);
+
+function isBodyless(stored) {
+  return (
+    String(stored?.request?.method ?? "").toUpperCase() === "HEAD" ||
+    stored?.status === 204 ||
+    stored?.status === 304
+  );
+}
+
+function headerMap(headers, bodyless) {
   const map = new Map();
   for (const [name, value] of headers ?? []) {
     const key = name.toLowerCase();
-    if (IGNORED_HEADERS.has(key)) continue;
+    if (IGNORED_HEADERS.has(key) && !(bodyless && BODYLESS_FRAMING.has(key))) continue;
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(value);
   }
@@ -49,6 +68,7 @@ function headerValue(values) {
 
 export function bodyLength(body) {
   if (!body) return 0;
+  if (typeof body.bytes === "number") return body.bytes;
   if (typeof body.text === "string") return Buffer.byteLength(body.text, "utf8");
   return body.length ?? 0;
 }
@@ -67,14 +87,68 @@ function whole(pattern) {
   return new RegExp(`^(?:${pattern})$`, "s");
 }
 
+const SCRIPT_HASHES = "<script-hashes>";
+
+/**
+ * Named rewrites for `transform` entries: each returns the two values in a
+ * form that must then be equal, or undefined when the rewrite does not apply
+ * (the entry then allows nothing).
+ */
+export const TRANSFORMS = {
+  /**
+   * The page policy's one intended change: `script-src` names the inline
+   * scripts' hashes instead of `'unsafe-inline'`, and the worker policy's
+   * path moves from `/_next/static/` to `/assets/`. Every other directive and
+   * source stays byte for byte.
+   */
+  "csp-script-hashes": (a, b) => {
+    const unsafe = /script-src 'self' 'unsafe-inline'(?= |;|$)/;
+    const hashes = /script-src 'self'(?: 'sha256-[A-Za-z0-9+/=]+')+(?= |;|$)/;
+    if (!unsafe.test(a) || !hashes.test(b)) return undefined;
+    return [
+      a
+        .replace(unsafe, `script-src 'self' ${SCRIPT_HASHES}`)
+        .replaceAll("/_next/static/", "/assets/"),
+      b.replace(hashes, `script-src 'self' ${SCRIPT_HASHES}`),
+    ];
+  },
+  /**
+   * I27: only the named font files keep their preload. Side A's `Link` items
+   * are filtered to its non-font items and the kept fonts, in order, and must
+   * then equal side B's exactly, so a dropped or added stylesheet preload, or
+   * any other font, still fails.
+   */
+  "link-keep-fonts": (a, b, entry) => {
+    const keep = new Set(entry.keep ?? []);
+    const items = a.split(/,\s*(?=<)/);
+    const kept = items.filter((item) => {
+      if (!/;\s*as="?font"?/.test(item)) return true;
+      const url = /^<(.*?)>\s*;/.exec(item)?.[1];
+      return url !== undefined && keep.has(url);
+    });
+    return [kept.join(", "), b];
+  },
+};
+
+function transformAllows(entry, difference) {
+  if (entry.transform === undefined) return true;
+  const transform = TRANSFORMS[entry.transform];
+  if (!transform || typeof difference.a !== "string" || typeof difference.b !== "string")
+    return false;
+  const pair = transform(difference.a, difference.b, entry);
+  return pair !== undefined && pair[0] === pair[1];
+}
+
 export function isAllowed(caseName, difference, allow, statusA) {
+  if (difference.field === "capture") return false;
   return allow.some(
     (entry) =>
       whole(entry.case).test(caseName) &&
       (entry.status === undefined || entry.status === statusA) &&
       fieldMatches(entry.field, difference.field) &&
       (entry.a === undefined || whole(entry.a).test(String(difference.a ?? ""))) &&
-      (entry.b === undefined || whole(entry.b).test(String(difference.b ?? ""))),
+      (entry.b === undefined || whole(entry.b).test(String(difference.b ?? ""))) &&
+      transformAllows(entry, difference),
   );
 }
 
@@ -85,20 +159,36 @@ export function diffCases(a, b, allow = []) {
   if (!a || !b) {
     differences.push({ field: "case", a: a ? "present" : undefined, b: b ? "present" : undefined });
   } else {
+    for (const [side, stored] of [
+      ["a", a],
+      ["b", b],
+    ]) {
+      if (!(stored.status > 0)) {
+        differences.push({
+          field: "capture",
+          [side]: stored.body?.text ?? `status ${stored.status}`,
+        });
+      }
+    }
     if (a.status !== b.status) differences.push({ field: "status", a: a.status, b: b.status });
-    const headersA = headerMap(a.headers);
-    const headersB = headerMap(b.headers);
+    const bodyless = isBodyless(a) || isBodyless(b);
+    const headersA = headerMap(a.headers, bodyless);
+    const headersB = headerMap(b.headers, bodyless);
     for (const key of new Set([...headersA.keys(), ...headersB.keys()])) {
       const valueA = headerValue(headersA.get(key));
       const valueB = headerValue(headersB.get(key));
       if (valueA !== valueB) differences.push({ field: `headers.${key}`, a: valueA, b: valueB });
     }
-    const lengthA = bodyLength(a.body);
-    const lengthB = bodyLength(b.body);
-    if (lengthA !== lengthB) differences.push({ field: "body.length", a: lengthA, b: lengthB });
     const valueA = bodyValue(a.body);
     const valueB = bodyValue(b.body);
-    if (valueA !== valueB) differences.push({ field: "body", a: valueA, b: valueB });
+    if (valueA !== valueB) {
+      differences.push({ field: "body", a: valueA, b: valueB });
+    } else {
+      // Equal bodies of unequal length: raw bytes the stored form does not show.
+      const lengthA = bodyLength(a.body);
+      const lengthB = bodyLength(b.body);
+      if (lengthA !== lengthB) differences.push({ field: "body.length", a: lengthA, b: lengthB });
+    }
   }
   return differences.filter((difference) => !isAllowed(name, difference, allow, a?.status));
 }
