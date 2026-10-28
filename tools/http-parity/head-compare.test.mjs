@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { compareHeads, metadataTags, pageScripts, shellMarkup } from "./head-compare.mjs";
+import {
+  compareHeads,
+  headLeftover,
+  htmlLang,
+  metadataTags,
+  pageScripts,
+  shellMarkup,
+} from "./head-compare.mjs";
 
 const page = (name, status, text) => [
   name,
@@ -41,6 +48,44 @@ describe("head-compare", () => {
     ]) {
       const { differences } = compareHeads(next, new Map([page("gate /x", 404, broken)]));
       expect(differences.length, broken).toBeGreaterThan(0);
+    }
+  });
+
+  it("compares the document's language and fails any other markup left in the head", () => {
+    const html = (lang, doc) => `<html lang="${lang}" class="h-full">${doc}`;
+    expect(htmlLang(html("en", NEXT_HEAD + NEXT_BODY))).toBe("en");
+    expect(htmlLang('<html id="__next_error__"><head></head>')).toBeUndefined();
+    expect(headLeftover(NEXT_HEAD)).toBe("");
+    const next = new Map([page("gate /x", 404, html("en", NEXT_HEAD + NEXT_BODY))]);
+    expect(
+      compareHeads(next, new Map([page("gate /x", 404, html("en", EXPRESS))])).differences,
+    ).toEqual([]);
+    const other = compareHeads(next, new Map([page("gate /x", 404, html("de", EXPRESS))]));
+    expect(other.differences).toMatchObject([{ field: "lang", a: "en", b: "de" }]);
+    for (const extra of [
+      "<style>p{}</style>",
+      '<base href="/x/">',
+      "<noscript>x</noscript>",
+      "text",
+    ]) {
+      const head = EXPRESS.replace("<title>", `${extra}<title>`);
+      const found = compareHeads(next, new Map([page("gate /x", 404, html("en", head))]));
+      expect(found.differences, extra).toMatchObject([{ field: "head", a: "" }]);
+      // Even the same markup on both sides fails: nothing here reads it.
+      const both = compareHeads(
+        new Map([
+          page(
+            "gate /x",
+            404,
+            html("en", NEXT_HEAD.replace("<title>", `${extra}<title>`) + NEXT_BODY),
+          ),
+        ]),
+        new Map([page("gate /x", 404, html("en", head))]),
+      );
+      expect(
+        both.differences.map((d) => d.field),
+        extra,
+      ).toContain("head");
     }
   });
 

@@ -17,6 +17,9 @@
  *   list, its streaming timer) are left out.
  * - Shell: the `<body>` markup up to the first framework script, without Next's suspense markers, its pending
  *   boundary templates, the metadata it streams into the body, and the `#root` wrapper.
+ * - Language: the `lang` of `<html>`.
+ * - Nothing else in `<head>`: any markup there besides the tags and scripts above (a `<style>`, a `<base>`, a
+ *   `<noscript>`, text) fails, on either side, since no part of this compare reads it.
  */
 import { pathToFileURL } from "node:url";
 import { readCaptureDir } from "./compare.mjs";
@@ -78,6 +81,18 @@ export function pageScripts(html) {
   return (html.match(TAG) ?? []).filter((tag) => tag.startsWith("<script") && !isFrameworkTag(tag));
 }
 
+/** The `lang` of the document's `<html>`, or undefined. */
+export function htmlLang(html) {
+  const start = /<html\b(?:"[^"]*"|[^>"])*>/i.exec(html)?.[0] ?? "";
+  return /\slang="([^"]*)"/i.exec(start)?.[1];
+}
+
+/** What `<head>` holds besides the tags and scripts: markup no other part of the compare reads. */
+export function headLeftover(html) {
+  const head = /<head\b[^>]*>([\s\S]*?)<\/head>/i.exec(html)?.[1] ?? "";
+  return head.replace(TAG, "").replace(/\s+/g, " ").trim();
+}
+
 /** The body markup compared (see the header). */
 export function shellMarkup(html) {
   let body = html.slice(html.indexOf("<body"));
@@ -112,6 +127,12 @@ function isHtml404(stored) {
 /** The differences between two HTML answers of one case: `{ name, field, index?, a, b }`. */
 function diffHtml(name, textA, textB, prefix = "") {
   const differences = [];
+  const langA = htmlLang(textA);
+  const langB = htmlLang(textB);
+  if (langA !== langB) differences.push({ name, field: prefix + "lang", a: langA, b: langB });
+  const leftA = headLeftover(textA);
+  const leftB = headLeftover(textB);
+  if (leftA || leftB) differences.push({ name, field: prefix + "head", a: leftA, b: leftB });
   for (const [field, list] of [
     ["tags", metadataTags],
     ["scripts", pageScripts],
@@ -142,7 +163,7 @@ function diffHtml(name, textA, textB, prefix = "") {
 }
 
 /**
- * Each case's differences: `{ name, field: "tags" | "scripts" | "shell" | "case", index?, a, b }`. A ruled case
+ * Each case's differences: `{ name, field: "lang" | "head" | "tags" | "scripts" | "shell" | "case", index?, a, b }`. A ruled case
  * is also held to the second directory's own plain 404, as fields named `own 404 <field>`.
  */
 export function compareHeads(a, b) {
