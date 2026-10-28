@@ -2,12 +2,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { setDbFaultForTests } from "@/lib/server/db/guard";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 import { oversizeRequest } from "@/test-support/request-bodies";
-import { clearDbFault, useTestDb } from "@/test-support/test-db";
+import { clearDbFault, setupTestDb } from "@/test-support/test-db";
 import { BLUEPRINT_MAX_PER_USER } from "@/lib/blueprints/types";
 import aluminaLine from "@/components/flow/__fixtures__/alumina-line-shared-reactor.json";
 import { json } from "@/lib/server/db";
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 
 /** Every statement the routes send, as compiled, with its parameters. */
 const calls: Array<{ sql: string; parameters: readonly unknown[] }> = [];

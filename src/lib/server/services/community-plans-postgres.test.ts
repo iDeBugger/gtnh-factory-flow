@@ -1,6 +1,6 @@
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { closeDb, resetDbBreaker, useDbForTests, withTransaction } from "../db";
+import { closeDb, resetDbBreaker, setDbForTests, withTransaction } from "../db";
 import { createDbClient, type DirectDbClient } from "../db/client";
 import { applyMigrations, dbDir, sqlRunner } from "../db/migrations";
 import type { SignedIn, Viewer } from "../http/viewer";
@@ -59,11 +59,11 @@ describe.skipIf(!serverUrl)("community posts on Postgres", () => {
     poster = { userId: rows[0]!.id, username: "racer", isAdmin: false, adminToken: false };
     await setup.end();
     client = createDbClient("site", { DATABASE_URL: url.toString(), DATABASE_POOL_MAX: "12" });
-    useDbForTests(client.db);
+    setDbForTests(client.db);
   }, 60_000);
 
   afterAll(async () => {
-    useDbForTests(undefined);
+    setDbForTests(undefined);
     await client?.db.destroy();
     await closeDb();
     resetDbBreaker();

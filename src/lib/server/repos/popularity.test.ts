@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { setDbFaultForTests } from "@/lib/server/db/guard";
-import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
+import { clearDbFault, setupTestDb, withDbFault } from "@/test-support/test-db";
 import { json } from "../db";
 import * as plans from "./plans";
 import { publicPlanPage } from "./popularity";
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 
 const OWNER = "a0000000-0000-4000-8000-0000000000b1";
 

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { useTestDb } from "@/test-support/test-db";
+import { setupTestDb } from "@/test-support/test-db";
 import {
   forgetImageCapWarnings,
   IMAGES_PER_DAY,
@@ -20,7 +20,7 @@ import { GET } from "./[month]/[name]/route";
  * capped for the whole site.
  */
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 let files: string;
 
 const PNG = Buffer.from(

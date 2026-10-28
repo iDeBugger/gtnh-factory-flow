@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { Kysely, PGliteDialect } from "kysely";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { forgetSessionUsers } from "@/lib/server/auth/sessions";
-import { useDbForTests } from "@/lib/server/db";
+import { setDbForTests } from "@/lib/server/db";
 import { GuardedDialect } from "@/lib/server/db/guard";
 import { applyMigrations, dbDir, ensureRoles, sqlRunner } from "@/lib/server/db/migrations";
 import type { Database } from "@/lib/server/db/schema";
@@ -69,7 +69,7 @@ beforeAll(async () => {
     "insert into library_design_members (owner_id, design_id, member_id) values ($1, 'd1', $2)",
     [OWNER, MEMBER],
   );
-  useDbForTests(
+  setDbForTests(
     new Kysely<Database>({ dialect: new GuardedDialect(new PGliteDialect({ pglite })) }),
   );
   await pglite.exec("set role gtnh_live");
@@ -80,7 +80,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  useDbForTests(undefined);
+  setDbForTests(undefined);
   await pglite.close();
 });
 

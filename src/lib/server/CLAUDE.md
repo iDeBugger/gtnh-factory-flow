@@ -575,9 +575,9 @@ Rules:
 ## Local database (`npm run dev:local`, tests)
 
 - Never copy `.env.local` into a worktree: local work needs no database credentials.
-- Tests open an in-memory PGlite per file with `useTestDb()` (`src/test-support/test-db.ts`): the same migrations
+- Tests open an in-memory PGlite per file with `setupTestDb()` (`src/test-support/test-db.ts`): the same migrations
   the deploy applies (`applyMigrations` over `db/`), the same parsers and the breaker (`GuardedDialect`), installed
-  with `useDbForTests`. `withDbFault` fails the queries whose SQL matches. PGlite runs one transaction at a time,
+  with `setDbForTests`. `withDbFault` fails the queries whose SQL matches. PGlite runs one transaction at a time,
   so races need a real Postgres: the `services/*-postgres.test.ts` files run with `GTNH_TEST_POSTGRES_URL` (a
   server they may create a database on; CI's test job has a postgres service with the compose file's image and
   digest, and under `CI` a missing URL fails them, `test-support/real-postgres.ts`), and `db/pg-real.local.test.ts` runs the repository cases against the

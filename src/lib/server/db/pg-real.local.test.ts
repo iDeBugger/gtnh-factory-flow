@@ -19,7 +19,7 @@ import { countPlanView } from "../services/community-plans";
 import { saveDesign } from "../services/library";
 import { castVote } from "../services/votes";
 import { createDbClient, type DirectDbClient } from "./client";
-import { closeDb, resetDbBreaker, useDbForTests, withTransaction } from "./index";
+import { closeDb, resetDbBreaker, setDbForTests, withTransaction } from "./index";
 
 /**
  * The repository cases of the direct swap against a real Postgres reached as
@@ -101,20 +101,20 @@ const fromAddress = (address: string) =>
 describe.skipIf(!siteUrl)("Postgres as the deploy's roles", () => {
   beforeAll(async () => {
     site = createDbClient("site", { DATABASE_URL: siteUrl, DATABASE_POOL_MAX: "12" });
-    useDbForTests(site.db);
+    setDbForTests(site.db);
     owner = await account("o");
     member = await account("m");
   }, 60_000);
 
   afterAll(async () => {
-    useDbForTests(site.db);
+    setDbForTests(site.db);
     // Every row the cases made hangs off these accounts (on delete cascade)
     // but the event log's, which is keyed by its actor.
     if (made.length > 0) {
       await site.pool.query("delete from community_users where id = any($1)", [made]);
     }
     await site.pool.query("delete from community_events where actor_key like $1", [`pg-real-${RUN}%`]);
-    useDbForTests(undefined);
+    setDbForTests(undefined);
     await site.db.destroy();
     await live?.db.destroy();
     await closeDb();
@@ -304,12 +304,12 @@ describe.skipIf(!siteUrl)("Postgres as the deploy's roles", () => {
       expect((await saveDesign(owner, owner.userId, "pg-real-live", upsert("Live", STAMP))).ok).toBe(true);
       await withTransaction((tx) => designMembers.add(owner.userId, "pg-real-live", member.userId, tx));
       live = createDbClient("live", { DATABASE_URL: liveUrl });
-      useDbForTests(live.db);
+      setDbForTests(live.db);
     }, 60_000);
 
     afterAll(() => {
       forgetSessionUsers();
-      useDbForTests(site.db);
+      setDbForTests(site.db);
     });
 
     it("logs in as gtnh_live and reads no password", async () => {
@@ -335,13 +335,13 @@ describe.skipIf(!siteUrl)("Postgres as the deploy's roles", () => {
       expect(await store.flush(owner.userId, "pg-real-live", "tok-a", plan("Stale") as never, 2, until())).toBe("lost");
       await store.release(owner.userId, "pg-real-live", "tok-new");
 
-      useDbForTests(site.db);
+      setDbForTests(site.db);
       expect(await designs.read(owner.userId, "pg-real-live", { withPlan: true })).toMatchObject({
         seq: 1,
         plan: { name: "Flushed" },
         live_lease_until: null,
       });
-      useDbForTests(live!.db);
+      setDbForTests(live!.db);
     });
   });
 });

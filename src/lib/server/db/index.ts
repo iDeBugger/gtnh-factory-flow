@@ -121,9 +121,9 @@ export async function closeDb(): Promise<void> {
 }
 
 /** For tests: answer `getDb()` with this database (undefined: back to `DATABASE_URL`). Installing one is refused in production. */
-export function useDbForTests(db: Kysely<Database> | undefined): void {
+export function setDbForTests(db: Kysely<Database> | undefined): void {
   if (db && process.env.NODE_ENV === "production") {
-    throw new Error("useDbForTests is for tests only.");
+    throw new Error("setDbForTests is for tests only.");
   }
   state().testDb = db;
 }

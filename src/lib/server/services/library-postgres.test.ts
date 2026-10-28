@@ -2,7 +2,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { LIBRARY_MAX_DESIGNS } from "@/lib/library/sync-types";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
-import { closeDb, resetDbBreaker, useDbForTests } from "../db";
+import { closeDb, resetDbBreaker, setDbForTests } from "../db";
 import { createDbClient, type DirectDbClient } from "../db/client";
 import { applyMigrations, dbDir, sqlRunner } from "../db/migrations";
 import type { SignedIn } from "../http/viewer";
@@ -63,11 +63,11 @@ describe.skipIf(!serverUrl)("the library on Postgres", () => {
     viewer = { userId: rows[0]!.id, username: "racer", isAdmin: false, adminToken: false };
     await setup.end();
     client = createDbClient("site", { DATABASE_URL: url.toString(), DATABASE_POOL_MAX: "12" });
-    useDbForTests(client.db);
+    setDbForTests(client.db);
   }, 60_000);
 
   afterAll(async () => {
-    useDbForTests(undefined);
+    setDbForTests(undefined);
     await client?.db.destroy();
     await closeDb();
     resetDbBreaker();

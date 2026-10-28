@@ -1,7 +1,7 @@
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { useTestDb } from "@/test-support/test-db";
+import { setupTestDb } from "@/test-support/test-db";
 import { createDbClient, type DirectDbClient } from "./client";
 import { json } from "./parsers";
 import type { Database } from "./schema";
@@ -12,7 +12,7 @@ import type { Database } from "./schema";
  * PGlite says the same of production.
  */
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 let server: PGLiteSocketServer;
 let wire: DirectDbClient;
 

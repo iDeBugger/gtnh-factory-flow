@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { planWithAdditions } from "@/lib/model/__fixtures__/plan-additions";
 import type { FactoryProject } from "@/lib/model/types";
-import { useTestDb } from "@/test-support/test-db";
+import { setupTestDb } from "@/test-support/test-db";
 import { makeSessionToken } from "@/lib/server/auth/sessions";
 import { oversizeRequest } from "@/test-support/request-bodies";
 import { GET, PUT } from "./route";
@@ -13,7 +13,7 @@ import { GET, PUT } from "./route";
  * jsonb in between).
  */
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 let cookie = "";
 
 beforeAll(async () => {

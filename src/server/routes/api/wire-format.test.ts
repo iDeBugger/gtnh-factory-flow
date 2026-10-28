@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { useTestDb, type TestDb } from "@/test-support/test-db";
+import { setupTestDb, type TestDb } from "@/test-support/test-db";
 import { makeSessionToken } from "@/lib/server/auth/sessions";
 import { saltedKey } from "@/lib/server/auth/keys";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
@@ -47,7 +47,7 @@ const SEED_NAMES: Record<string, string> = {
 
 const TIMESTAMP = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d{1,6})?\+00:00$/;
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 const cookies: Record<string, string> = {};
 
 const project = (name: string) => ({

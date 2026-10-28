@@ -9,7 +9,7 @@ import type { LiveOp, LivePlan } from "@/lib/live/ops";
 import { plansEqual } from "@/lib/live/ops";
 import { docKey, type ServerFrame } from "@/lib/live/protocol";
 import { PROJECT_SCHEMA_VERSION } from "@/lib/model/types";
-import { useTestDb } from "@/test-support/test-db";
+import { setupTestDb } from "@/test-support/test-db";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
 import { json } from "@/lib/server/db";
 import * as designRoute from "@/server/routes/api/library/designs/[designId]/route";
@@ -46,7 +46,7 @@ function countingStore(): { store: PlanStore; calls: Record<string, number> } {
 const ORIGIN = "http://localhost:3000";
 const INTERNAL_TOKEN = "live-test-internal";
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 const users: Record<string, { id: string; cookie: string }> = {};
 const journalDirs: string[] = [];
 const services: LiveService[] = [];

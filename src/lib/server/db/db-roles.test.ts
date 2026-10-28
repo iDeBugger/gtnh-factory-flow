@@ -14,7 +14,7 @@ import * as plans from "../repos/plans";
 import * as popularity from "../repos/popularity";
 import { PLAN_SUMMARY_FIELDS } from "../community-rows";
 import * as votes from "../repos/votes";
-import { useDbForTests, withTransaction } from "./index";
+import { setDbForTests, withTransaction } from "./index";
 import {
   applyMigrations,
   dbDir,
@@ -93,7 +93,7 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  useDbForTests(undefined);
+  setDbForTests(undefined);
   await pglite.close();
 });
 
@@ -214,7 +214,7 @@ describe("the database roles", () => {
 
   it("runs the account and event repositories under the role of each process that calls them", async () => {
     // The repositories' own statements, as Kysely compiles them, on this database.
-    useDbForTests(new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) }));
+    setDbForTests(new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) }));
     try {
       await as("gtnh_site", async () => {
         const made = await accounts.createAccount("repo-made", "hash");
@@ -245,13 +245,13 @@ describe("the database roles", () => {
         );
       });
     } finally {
-      useDbForTests(undefined);
+      setDbForTests(undefined);
     }
   });
 
   it("runs every site-side library repository function as the site role, transactions and row locks included", async () => {
     const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) });
-    useDbForTests(db);
+    setDbForTests(db);
     const stamp = "2026-10-26T10:00:00.000Z";
     try {
       await as("gtnh_site", async () => {
@@ -336,7 +336,7 @@ describe("the database roles", () => {
         ]);
       });
     } finally {
-      useDbForTests(undefined);
+      setDbForTests(undefined);
       await pglite.query("delete from library_designs where id = 'd2'");
       await pglite.query("delete from library_folders where id = 'f1'");
     }
@@ -344,7 +344,7 @@ describe("the database roles", () => {
 
   it("runs every direct community post and comment repository function as the site role", async () => {
     const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) });
-    useDbForTests(db);
+    setDbForTests(db);
     const owner = { userId: OWNER, isAdmin: false, adminToken: false };
     const stats = {
       needs: [],
@@ -423,7 +423,7 @@ describe("the database roles", () => {
         expect(await plans.readAccess(id)).toBeUndefined();
       });
     } finally {
-      useDbForTests(undefined);
+      setDbForTests(undefined);
       if (planId) {
         await pglite.query("delete from community_plans where id = $1", [planId]);
       }
@@ -432,7 +432,7 @@ describe("the database roles", () => {
 
   it("runs every direct vote repository function as the site role, on posts and blueprints, row locks included", async () => {
     const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) });
-    useDbForTests(db);
+    setDbForTests(db);
     const plan = await pglite.query<{ id: string }>(
       `insert into community_plans (user_id, author_name, name, plan, uploader_key)
        values ($1, 'owner', 'Voted', '{"nodes":[]}', 'test') returning id`,
@@ -466,14 +466,14 @@ describe("the database roles", () => {
         }
       });
     } finally {
-      useDbForTests(undefined);
+      setDbForTests(undefined);
       await pglite.query("delete from community_plans where id = $1", [ids.plan]);
     }
   });
 
   it("runs every blueprint repository function as the site role", async () => {
     const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) });
-    useDbForTests(db);
+    setDbForTests(db);
     const stat = { kind: "item" as const, resourceId: "steel", displayName: "Steel", ratePerSecond: 1 };
     let blueprintId: string | undefined;
     try {
@@ -515,7 +515,7 @@ describe("the database roles", () => {
         expect(await blueprints.readOwn(id, OWNER)).toBeUndefined();
       });
     } finally {
-      useDbForTests(undefined);
+      setDbForTests(undefined);
       if (blueprintId) {
         await pglite.query("delete from blueprints where id = $1", [blueprintId]);
       }
@@ -524,7 +524,7 @@ describe("the database roles", () => {
 
   it("runs the by-score read and the popularity sweep's page as the site role", async () => {
     const db = new Kysely<Database>({ dialect: new PGliteDialect({ pglite }) });
-    useDbForTests(db);
+    setDbForTests(db);
     const posted = await pglite.query<{ id: string }>(
       `insert into community_plans (user_id, author_name, name, plan, outputs, uploader_key)
        values ($1, 'owner', 'Ranked', '{"nodes":[]}', '[{"kind":"item","resourceId":"steel"}]', 'test') returning id`,
@@ -542,7 +542,7 @@ describe("the database roles", () => {
         ]);
       });
     } finally {
-      useDbForTests(undefined);
+      setDbForTests(undefined);
       await pglite.query("delete from community_plans where id = $1", [id]);
     }
   });

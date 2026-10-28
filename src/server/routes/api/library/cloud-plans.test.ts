@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
+import { clearDbFault, setupTestDb, withDbFault } from "@/test-support/test-db";
 import { setDbFaultForTests } from "@/lib/server/db/guard";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
 import { resetDbBreaker } from "@/lib/server/db";
@@ -65,7 +65,7 @@ vi.mock("@/lib/server/repos/designs", async (importOriginal) => {
  * notices the live service is sent.
  */
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 let notices: Array<{ path: string; auth: string | undefined; body: unknown }> = [];
 let noticeServer: Server;
 const users: Record<string, { id: string; cookie: string }> = {};

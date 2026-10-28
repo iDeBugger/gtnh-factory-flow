@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { json } from "@/lib/server/db";
 import { setDbFaultForTests } from "@/lib/server/db/guard";
-import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
+import { clearDbFault, setupTestDb, withDbFault } from "@/test-support/test-db";
 import { withModAndCommunityOn, withModAndCommunityUnset } from "@/test-support/mod-and-community";
 
 const row = {
@@ -46,7 +46,7 @@ import { loadPageTemplate } from "./template";
 const SITE = "https://stage.gtnhplanner.idebugger.net";
 const planSearch = new URLSearchParams("plan=plan-1");
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 const PUBLIC_ID = "00000000-0000-4000-8000-0000000000c1";
 const PRIVATE_ID = "00000000-0000-4000-8000-0000000000c2";
 

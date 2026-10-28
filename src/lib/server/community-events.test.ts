@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { useTestDb } from "@/test-support/test-db";
+import { setupTestDb } from "@/test-support/test-db";
 import {
   EVENTS_KEPT_DAYS,
   forgetEventPrune,
@@ -12,7 +12,7 @@ import {
  * what no window reads any more, once an hour.
  */
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 
 async function insertAgedEvent(actorKey: string, daysBack: number): Promise<void> {
   await testDb()

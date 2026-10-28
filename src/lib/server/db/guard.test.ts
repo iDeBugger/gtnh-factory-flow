@@ -10,14 +10,14 @@ import {
   type QueryResult,
 } from "kysely";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useTestDb, withDbFault } from "@/test-support/test-db";
+import { setupTestDb, withDbFault } from "@/test-support/test-db";
 import { dbBreakerOpen, DB_BREAKER_FAILURES, DB_BREAKER_OPEN_MS, resetDbBreaker } from "./breaker";
 import { DatabaseDownError, isDatabaseDown, isRetryableTransactionError } from "./errors";
 import { withTransaction } from "./index";
 import { GuardedDialect, setDbFaultForTests } from "./guard";
 import type { Database } from "./schema";
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 
 const withCode = (code: string) => Object.assign(new Error(`failed ${code}`), { code });
 

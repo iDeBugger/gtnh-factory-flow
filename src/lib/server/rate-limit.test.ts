@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { useTestDb } from "@/test-support/test-db";
+import { setupTestDb } from "@/test-support/test-db";
 import { checkRateLimit, serially } from "./limits/rate-limit";
 
 /**
@@ -7,7 +7,7 @@ import { checkRateLimit, serially } from "./limits/rate-limit";
  * arrive together must take turns or they all read a count under the limit.
  */
 
-useTestDb();
+setupTestDb();
 
 beforeAll(() => {
   vi.stubEnv("COMMUNITY_HASH_SALT", "rate-limit-test-salt");

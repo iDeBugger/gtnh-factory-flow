@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { useTestDb } from "@/test-support/test-db";
+import { setupTestDb } from "@/test-support/test-db";
 import { forgetSessionUsers } from "@/lib/server/auth/sessions";
 import { resetDbBreaker } from "@/lib/server/db";
 import { hashPassword } from "@/lib/server/auth/passwords";
@@ -12,7 +12,7 @@ import { POST } from "./route";
  * minutes, and a burst is counted one by one.
  */
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 
 const LOCKED = { error: "Too many attempts for this account. Try again in 15 minutes." };
 const WRONG = { error: "Wrong username or password." };

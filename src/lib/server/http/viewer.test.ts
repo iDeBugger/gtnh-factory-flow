@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { useTestDb, withDbFault } from "@/test-support/test-db";
+import { setupTestDb, withDbFault } from "@/test-support/test-db";
 import { forgetSessionUsers, makeSessionToken } from "../auth/sessions";
 import { readViewer } from "./viewer";
 
 const ADMIN = "00000000-0000-4000-8000-00000000aa01";
 const PLAYER = "00000000-0000-4000-8000-00000000bb01";
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 
 beforeAll(async () => {
   vi.stubEnv("COMMUNITY_HASH_SALT", "viewer-test-salt");

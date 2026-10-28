@@ -1,6 +1,6 @@
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { closeDb, resetDbBreaker, useDbForTests } from "../db";
+import { closeDb, resetDbBreaker, setDbForTests } from "../db";
 import { createDbClient, type DirectDbClient } from "../db/client";
 import { applyMigrations, dbDir, sqlRunner } from "../db/migrations";
 import type { Viewer } from "../http/viewer";
@@ -77,11 +77,11 @@ describe.skipIf(!serverUrl)("votes on Postgres", () => {
     authorId = rows[0]!.id;
     await setup.end();
     client = createDbClient("site", { DATABASE_URL: url.toString(), DATABASE_POOL_MAX: "12" });
-    useDbForTests(client.db);
+    setDbForTests(client.db);
   }, 60_000);
 
   afterAll(async () => {
-    useDbForTests(undefined);
+    setDbForTests(undefined);
     await client?.db.destroy();
     await closeDb();
     resetDbBreaker();

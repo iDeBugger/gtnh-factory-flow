@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
+import { clearDbFault, setupTestDb, withDbFault } from "@/test-support/test-db";
 import { bumpSessionEpoch, forgetSessionUsers } from "@/lib/server/auth/sessions";
 import {
   checkPassword,
@@ -41,7 +41,7 @@ vi.mock("@/lib/server/repos/accounts", async (importOriginal) => {
   };
 });
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 
 /** A fresh client address per call: the per-address limits never meet across cases. */
 const nextAddress = () => `10.1.${Math.floor(addresses / 250)}.${(addresses++ % 250) + 1}`;

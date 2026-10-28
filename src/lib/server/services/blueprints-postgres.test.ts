@@ -2,7 +2,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BLUEPRINT_MAX_PER_USER } from "@/lib/blueprints/types";
 import aluminaLine from "@/components/flow/__fixtures__/alumina-line-shared-reactor.json";
-import { closeDb, resetDbBreaker, useDbForTests } from "../db";
+import { closeDb, resetDbBreaker, setDbForTests } from "../db";
 import { createDbClient, type DirectDbClient } from "../db/client";
 import { applyMigrations, dbDir, sqlRunner } from "../db/migrations";
 import type { SignedIn } from "../http/viewer";
@@ -36,11 +36,11 @@ describe.skipIf(!serverUrl)("blueprints on Postgres", () => {
     await applyMigrations(sqlRunner(setup), dbDir());
     await setup.end();
     client = createDbClient("site", { DATABASE_URL: url.toString(), DATABASE_POOL_MAX: "12" });
-    useDbForTests(client.db);
+    setDbForTests(client.db);
   }, 60_000);
 
   afterAll(async () => {
-    useDbForTests(undefined);
+    setDbForTests(undefined);
     await client?.db.destroy();
     await closeDb();
     resetDbBreaker();

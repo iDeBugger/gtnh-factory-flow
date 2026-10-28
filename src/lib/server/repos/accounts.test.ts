@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { useTestDb } from "@/test-support/test-db";
+import { setupTestDb } from "@/test-support/test-db";
 import { createAccount, searchByPrefix } from "./accounts";
 
 /**
@@ -10,7 +10,7 @@ import { createAccount, searchByPrefix } from "./accounts";
 
 const ME = "44444444-4444-4444-8444-444444444444";
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 
 let seeded: Promise<void> | undefined;
 function seed(): Promise<void> {

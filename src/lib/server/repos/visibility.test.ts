@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { json } from "@/lib/server/db/parsers";
 import { canSeePlan } from "@/lib/server/services/access";
-import { useTestDb } from "@/test-support/test-db";
+import { setupTestDb } from "@/test-support/test-db";
 import { OWNER, STRANGER, viewers } from "@/test-support/viewers";
 import { sqlRules } from "./visibility";
 
 const MEMBER = "33333333-3333-4333-8333-333333333333";
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 
 /** Seeds the rows once per test file; the database lives for the file. */
 let seeded: Promise<void> | undefined;

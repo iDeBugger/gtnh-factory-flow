@@ -2,7 +2,7 @@ import net from "node:net";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { sql } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { useTestDb } from "@/test-support/test-db";
+import { setupTestDb } from "@/test-support/test-db";
 import { createDbClient, type DirectDbClient } from "./client";
 import { DatabaseDownError } from "./errors";
 
@@ -13,7 +13,7 @@ import { DatabaseDownError } from "./errors";
  * a fresh connection for the next query.
  */
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 let server: PGLiteSocketServer;
 let proxy: net.Server;
 const sockets: net.Socket[] = [];

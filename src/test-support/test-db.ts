@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { Kysely, PGliteDialect } from "kysely";
 import { afterAll, afterEach, beforeAll } from "vitest";
 import { forgetSessionUsers } from "@/lib/server/auth/sessions";
-import { resetDbBreaker, useDbForTests } from "@/lib/server/db";
+import { resetDbBreaker, setDbForTests } from "@/lib/server/db";
 import { GuardedDialect, setDbFaultForTests } from "@/lib/server/db/guard";
 import { applyMigrations, dbDir, sqlRunner } from "@/lib/server/db/migrations";
 import { DB_TYPE_PARSERS } from "@/lib/server/db/parsers";
@@ -38,7 +38,7 @@ export function clearDbFault(): void {
 }
 
 /** Registers the hooks; call at the top of a test file, read the database inside tests. */
-export function useTestDb(): () => TestDb {
+export function setupTestDb(): () => TestDb {
   let testDb: TestDb | undefined;
 
   beforeAll(async () => {
@@ -49,7 +49,7 @@ export function useTestDb(): () => TestDb {
     const db = new Kysely<Database>({
       dialect: new GuardedDialect(new PGliteDialect({ pglite })),
     });
-    useDbForTests(db);
+    setDbForTests(db);
     testDb = { db, pglite };
   }, 60_000);
 
@@ -60,7 +60,7 @@ export function useTestDb(): () => TestDb {
   });
 
   afterAll(async () => {
-    useDbForTests(undefined);
+    setDbForTests(undefined);
     // Closes the PGlite too.
     await testDb?.db.destroy();
   });

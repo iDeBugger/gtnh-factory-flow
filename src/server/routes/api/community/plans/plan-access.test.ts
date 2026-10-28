@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FactoryProject } from "@/lib/model/types";
 import { takeLpCount } from "@/lib/solver/plan/lp";
 import { APP_VERSION } from "@/lib/version";
-import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
+import { clearDbFault, setupTestDb, withDbFault } from "@/test-support/test-db";
 import { setDbFaultForTests } from "@/lib/server/db/guard";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
 import { json, resetDbBreaker } from "@/lib/server/db";
@@ -75,7 +75,7 @@ const PNG = Buffer.from(
  * voting and the board photograph of a post that is not public.
  */
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 let files: string;
 const users: Record<string, { id: string; cookie: string }> = {};
 let addresses = 0;

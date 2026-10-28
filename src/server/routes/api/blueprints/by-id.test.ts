@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { clearDbFault, useTestDb, withDbFault } from "@/test-support/test-db";
+import { clearDbFault, setupTestDb, withDbFault } from "@/test-support/test-db";
 import { forgetSessionUsers, makeSessionToken } from "@/lib/server/auth/sessions";
 import { json, resetDbBreaker } from "@/lib/server/db";
 import * as blueprintsRepo from "@/lib/server/repos/blueprints";
@@ -12,7 +12,7 @@ import * as one from "./[blueprintId]/route";
  * edit and delete, published or not and whatever the community switch says.
  */
 
-const testDb = useTestDb();
+const testDb = setupTestDb();
 const users: Record<string, { id: string; cookie: string }> = {};
 
 async function makeUser(username: string) {
