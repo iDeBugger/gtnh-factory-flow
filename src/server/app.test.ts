@@ -62,6 +62,14 @@ const param: RouteEntry = {
   source: "test",
   module: { GET: async (_request, { params }) => Response.json(await params) },
 };
+const ownHead: RouteEntry = {
+  path: "/api/__own-head",
+  source: "test",
+  module: {
+    GET: () => new Response("get", { headers: { "x-answered-by": "GET" } }),
+    HEAD: () => new Response(null, { headers: { "x-answered-by": "HEAD" } }),
+  },
+};
 const handlerUriError: RouteEntry = {
   path: "/api/handler-uri-error",
   source: "test",
@@ -98,7 +106,7 @@ beforeAll(async () => {
     createApp({
       ...options,
       before: [libraryErrors],
-      extraRoutes: [throwing, param, handlerUriError],
+      extraRoutes: [throwing, param, handlerUriError, ownHead],
       siteFilesDir: path.resolve(import.meta.dirname, "page/assets"),
     }),
   );
@@ -389,6 +397,13 @@ describe("the app's routing rules", () => {
         .map(([name]) => name)
         .filter((name) => !["date", "transfer-encoding", "content-length"].includes(name));
     expect(names(head)).toEqual(names(get));
+  });
+
+  it("answers HEAD with a route's own HEAD export when it has one", async () => {
+    const head = await call(server.port, "HEAD", "/api/__own-head");
+    expect(head.status).toBe(200);
+    expect(header(head, "x-answered-by")).toBe("HEAD");
+    expect(header(await call(server.port, "GET", "/api/__own-head"), "x-answered-by")).toBe("GET");
   });
 
   it("sends no X-Powered-By and no ETag on a route answer", async () => {

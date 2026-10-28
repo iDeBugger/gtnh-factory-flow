@@ -92,8 +92,12 @@ function mountRoute(app: Express, route: RouteEntry, drain: DrainBounds): void {
     );
     return;
   }
-  for (const [method, handler] of Object.entries(route.module)) {
-    if (handler) app[EXPRESS_METHOD[method as HttpMethod]](route.path, handle(handler, { drain }));
+  // HEAD first: Express's GET layer also answers HEAD, so a route's own HEAD export runs only if it comes first.
+  const methods = Object.keys(route.module) as HttpMethod[];
+  methods.sort((a, b) => Number(b === "HEAD") - Number(a === "HEAD"));
+  for (const method of methods) {
+    const handler = route.module[method];
+    if (handler) app[EXPRESS_METHOD[method]](route.path, handle(handler, { drain }));
   }
   app.options(route.path, optionsAnswer(route.module));
   app.all(route.path, methodNotAllowed());
