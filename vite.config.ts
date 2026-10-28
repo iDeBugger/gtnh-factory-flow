@@ -17,13 +17,14 @@ const lightningcss = createRequire(path.join(__dirname, "node_modules/vite/packa
  * `--ssr prerender.tsx`, the build-time render of the page shell
  * (tools/build/prerender.mjs).
  */
-export default defineConfig(({ isSsrBuild }) => ({
+export default defineConfig(({ isSsrBuild, mode }) => ({
   root: path.join(src, "client"),
   // The site's public/ is served by the server, never copied into the bundle.
   publicDir: false,
   resolve: { alias: { "@": src } },
-  // The NEXT_PUBLIC_* build values and NODE_ENV, inlined: the browser has no `process`.
-  define: clientDefines(process.env),
+  // The NEXT_PUBLIC_* build values and NODE_ENV, inlined: the browser has no `process`. NODE_ENV follows Vite's
+  // mode, so the dev server keeps "development" and the dev aids behind it, and `vite build` gives "production".
+  define: clientDefines(process.env, { mode }),
   plugins: [react(), tailwindcss()],
   build: {
     outDir: path.resolve(__dirname, isSsrBuild ? "dist/prerender" : "dist/client"),
