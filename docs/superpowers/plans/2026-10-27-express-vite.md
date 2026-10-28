@@ -256,7 +256,7 @@ from the folders, and nothing is discovered at run time.
   Next's 500 and Next's answer to a malformed escape (`/api/__parity-param/%E0%A4%A`) can be captured. They are never
   committed anywhere.
 - [ ] **Step 4: Build the two Next baselines**, one per value of the community switch:
-  - `NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3760 GTNH_BUILD_ID=baseline-3a41db6d NEXT_PUBLIC_MOD_AND_COMMUNITY= npm run build`;
+  - `NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3770 GTNH_BUILD_ID=baseline-3a41db6d NEXT_PUBLIC_MOD_AND_COMMUNITY= npm run build`;
   - copy `.next/standalone` plus `.next/static` beside it into `scratch/next-off/`;
   - the same with `NEXT_PUBLIC_MOD_AND_COMMUNITY=on` into `scratch/next-on/`.
 
@@ -410,11 +410,17 @@ it("ignores date and keep-alive, and checks the body length across content-lengt
   7. logout.
 - [ ] **Step 5: Implement `capture.mjs`.** It sends each case, stores the raw parts and normalizes while writing. It
   prints the case count and how many failed to connect.
-- [ ] **Step 6: Record the Next baselines.** Every server in this plan runs on **port 3760**, one at a time, so ports
+- [ ] **Step 6: Record the Next baselines.** Every server in this plan runs on **port 3770** (ports 3770-3779 are the
+  executors'; the local database takes 3771 and 3772), one at a time, so ports
   never differ between captures. For each mode, start a fresh PGlite database. Shell 1:
-  `LOCAL_DB_PGLITE=1 LOCAL_DB_DIR=scratch/parity-db-next-<mode> npx tsx tools/local-db/serve.ts`.
-  Shell 2: `PORT=3760 HOSTNAME=127.0.0.1 DATABASE_URL=postgres://postgres@127.0.0.1:54330/postgres COMMUNITY_HASH_SALT=parity-salt-000000000000000000000000 NEXT_PUBLIC_MOD_AND_COMMUNITY=<""|on> GTNH_PREWARM_ON_STARTUP=1 FILE_STORE_DIR=scratch/parity-files-next-<mode> node scratch/next-<mode>/server.js`.
-  Then run `node tools/http-parity/capture.mjs --base http://127.0.0.1:3760 --mode <mode> --out scratch/parity/next-<mode>`.
+  `LOCAL_DB_PORT=3772 LOCAL_DB_PG_PORT=3771 LOCAL_DB_DIR=scratch/parity-db-next-<mode> node --import tsx tools/local-db/serve.ts`.
+  Shell 2: `PORT=3770 HOSTNAME=0.0.0.0 DATABASE_URL=postgres://postgres@127.0.0.1:3771/postgres COMMUNITY_HASH_SALT=parity-salt-000000000000000000000000 NEXT_PUBLIC_MOD_AND_COMMUNITY=<""|on> GTNH_PREWARM_ON_STARTUP=1 FILE_STORE_DIR=scratch/parity-files-next-<mode> GTNH_CLIENT_FILES_DIR=scratch/parity-client-files node scratch/next-<mode>/server.js`,
+  from the express worktree with absolute paths (`scratch/scripts/run-capture.sh` does all of it).
+  - `HOSTNAME=0.0.0.0` is what the image runs. With `127.0.0.1` and `X-Forwarded-Proto: https`, Next sends the dataset
+    gate's rewrite to `https://localhost:3770` as an external proxy, and every gated dataset file answers 500. Do not
+    change it back. Express may listen on 127.0.0.1: none of its answers depend on the listen address.
+  - One `GTNH_CLIENT_FILES_DIR` serves every run, Next and Express.
+  Then run `node tools/http-parity/capture.mjs --base http://127.0.0.1:3770 --mode <mode> --out scratch/parity/next-<mode>`.
   Run each mode twice on fresh databases and compare the runs: `node tools/http-parity/compare.mjs scratch/parity/next-on scratch/parity/next-on-2`.
   Expected: no difference. A difference here is a normalizer gap: fix the normalizer, not the cases.
 - [ ] **Step 7: Write `allowed-differences.json`.** Each entry is `{ case, field, reason }` and names a difference
@@ -427,15 +433,15 @@ it("ignores date and keep-alive, and checks the body length across content-lengt
     moves from `/_next/static/*` to `/assets/*`;
   - `etag` on the 404 page (Next's prerendered page has one);
   - the `/_next/image` case (a plain 404 now);
-  - the card's `location` for a missing plan: `https://127.0.0.1:3760/...` on Next, `http://127.0.0.1:3760/...`
+  - the card's `location` for a missing plan: `https://0.0.0.0:3770/...` on Next (its listen address), `http://127.0.0.1:3770/...`
     (`siteUrl()`) on Express. This is the intended change, "Needs an owner decision" 1;
   - `connection: close` on an answer that left the request body unread (the 6 MiB case): hop by hop, Caddy drops it;
   - every `nextOnly` case.
 
   Nothing else goes on the list without the reviewer's agreement.
-- [ ] **Step 8: Record the board perf baseline** against the `next-off` server on 3760:
-  `node tools/perf/build-plan.mjs --base http://127.0.0.1:3760 --version local-2.9.0-rc-2 --nodes 300 --out scratch/perf/plan.json`,
-  then 3 runs of `node tools/perf/stress.mjs --plan scratch/perf/plan.json --base http://127.0.0.1:3760 --label next --out scratch/perf/next-<n>.json`.
+- [ ] **Step 8: Record the board perf baseline** against the `next-off` server on 3770:
+  `node tools/perf/build-plan.mjs --base http://127.0.0.1:3770 --version local-2.9.0-rc-2 --nodes 300 --out scratch/perf/plan.json`,
+  then 3 runs of `node tools/perf/stress.mjs --plan scratch/perf/plan.json --base http://127.0.0.1:3770 --label next --out scratch/perf/next-<n>.json`.
   Expected: three JSON files. `node tools/perf/ab.mjs scratch/perf/next-*.json` prints the table.
 - [ ] **Step 9: Run the suite and commit.** `npm run typecheck && npm run test`, then
   `git commit -m "I25 An HTTP parity harness captures every route's answer, sent raw, for comparison across servers"`.
@@ -554,7 +560,7 @@ it("sends a missing plan to the site's own generic card, on the site's own origi
 ```ts
 // head.test.ts
 it("renders the site head exactly as Next does, mode off", () => {
-  expect(tagsOneLine(renderHead(siteHead(), "http://127.0.0.1:3760"))).toBe(fixture("next-head-off.html"));
+  expect(tagsOneLine(renderHead(siteHead(), "http://127.0.0.1:3770"))).toBe(fixture("next-head-off.html"));
 });
 it("renders a plan's head exactly as Next does", () => { /* withModAndCommunityOn(); next-head-on-plan.html */ });
 it("escapes player text in every tag that carries it", () => {
@@ -1035,7 +1041,7 @@ it("renders the shell with the boot scripts layout.tsx had", () => { /* bootScri
   then `node scratch/dep-age.mjs` and `npm run audit:gate`.
 - [ ] **Step 4: Implement the files above.** Add `{ type: "module" }` at the four `new Worker(...)` sites.
 - [ ] **Step 5: Build and check the output.**
-  `NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3760 GTNH_BUILD_ID=baseline-3a41db6d npm run build:client`. Expected:
+  `NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3770 GTNH_BUILD_ID=baseline-3a41db6d npm run build:client`. Expected:
   - `dist/client/index.html` holds the shell markup and two boot scripts;
   - `dist/client/page.json` holds 2 hashes and as many font preloads as the baseline `Link` header;
   - `dist/client/assets/` holds four `*.worker-*.js` files;
@@ -1208,7 +1214,7 @@ it("exits 143 on a real SIGTERM", async () => { /* spawn tsx src/server/test-sup
 ```
 
 - [ ] **Step 2: Run, implement, rerun.** Then build and smoke-start:
-  `NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3760 GTNH_BUILD_ID=baseline-3a41db6d npm run build:express && PORT=3760 GTNH_PREWARM_ON_STARTUP=1 npm run start:express`.
+  `NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3770 GTNH_BUILD_ID=baseline-3a41db6d npm run build:express && PORT=3770 GTNH_PREWARM_ON_STARTUP=1 npm run start:express`.
   Expected: `/api/version` answers 200 once the prewarm log line has printed, and its CSP is the production policy.
 - [ ] **Step 3: Check the dev server.** Run `npm run dev:express` and open `http://localhost:3000` headless
   (Playwright, `waitUntil: "load"`). Check that editing a component hot-swaps it and editing a route restarts the
@@ -1222,7 +1228,8 @@ it("exits 143 on a real SIGTERM", async () => { /* spawn tsx src/server/test-sup
 that pins it.
 
 - [ ] **Step 1: Capture Express in both modes.** For each mode, build with the Task 0 build values
-  (`npm run build:express`), start on port 3760 with the same database setup as Task 1 step 6, and run
+  (`npm run build:express`, so `NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3770`), start on port 3770 with the same
+  database setup and `GTNH_CLIENT_FILES_DIR` as Task 1 step 6, and run
   `capture.mjs ... --out scratch/parity/express-<mode>`.
 - [ ] **Step 2: Compare.**
   `node tools/http-parity/compare.mjs scratch/parity/next-<mode> scratch/parity/express-<mode> --allow tools/http-parity/allowed-differences.json`.
@@ -1238,7 +1245,7 @@ that pins it.
   `npx vitest run src/lib/server/dataset-responses.local.test.ts --config vitest.local.config.ts` in the express
   worktree. Expected: every hash matches the Task 0 baseline. This shows that the dataset query layer is untouched.
   The HTTP evidence for dataset bytes is step 2's dataset sweep.
-- [ ] **Step 5: Run the browser check on both servers.** `node tools/http-parity/browser-check.mjs --base http://127.0.0.1:3760`
+- [ ] **Step 5: Run the browser check on both servers.** `node tools/http-parity/browser-check.mjs --base http://127.0.0.1:3770`
   against each in turn. Expected: both pass. A failure on Next is a check bug.
 - [ ] **Step 6: Board perf.** Run 3 `stress.mjs` runs against Express (`--label express`), then
   `node tools/perf/ab.mjs scratch/perf/next-*.json` and `node tools/perf/ab.mjs scratch/perf/express-*.json`.
@@ -1248,7 +1255,7 @@ that pins it.
   report. They are measurements, not gates.
 - [ ] **Step 8: Run the smoke test without Caddy.** Start the live service as `dev-local` does, on :3001
   (`LIVE_PORT=3001 npx tsx src/live/main.ts` with dev-local's env), then
-  `node tools/deploy/smoke.mjs --base http://127.0.0.1:3760 --live http://127.0.0.1:3001 --skip-accounts`.
+  `node tools/deploy/smoke.mjs --base http://127.0.0.1:3770 --live http://127.0.0.1:3001 --skip-accounts`.
   Expected: all ok, except the checks that are Next-only (fixed in Task 11).
 
 ### Task 11: The cut: scripts, image, smoke, deploy docs
