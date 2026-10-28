@@ -40,23 +40,24 @@ export interface CallOptions {
 }
 
 /**
- * One raw exchange: the target goes out byte for byte, never through `fetch`. `Host` names the server unless the
- * call sets its own, and `Connection: keep-alive` is asked for, so a close in the answer is the server's choice.
+ * One raw exchange: the target goes out byte for byte, never through `fetch`. Headers given as pairs go out in
+ * order, a repeated name included. `Host` names the server unless the call sets its own, and `Connection: keep-alive` is asked for, so a close in the answer is the server's choice.
  * Rejects with the socket error when no answer head arrived.
  */
 export function call(
   port: number,
   method: string,
   target: string,
-  headers: Record<string, string> = {},
+  headers: Record<string, string> | [string, string][] = {},
   body?: string | Buffer,
   options: CallOptions = {},
 ): Promise<RawAnswer> {
-  const names = new Set(Object.keys(headers).map((name) => name.toLowerCase()));
+  const own = Array.isArray(headers) ? headers : Object.entries(headers);
+  const names = new Set(own.map(([name]) => name.toLowerCase()));
   const pairs: [string, string][] = [];
   if (!names.has("host")) pairs.push(["host", `127.0.0.1:${port}`]);
   if (!names.has("connection")) pairs.push(["connection", "keep-alive"]);
-  pairs.push(...Object.entries(headers));
+  pairs.push(...own);
   const chunks =
     body !== undefined && options.chunkDelayMs !== undefined
       ? Array.from({ length: Math.ceil(Buffer.byteLength(body) / 65_536) }, (_, index) =>

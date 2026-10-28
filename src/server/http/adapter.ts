@@ -151,13 +151,19 @@ export interface WebRequestOptions {
 
 /**
  * The web Request a handler gets: the canonical URL (after the redirects, `canonicalPath` and any gate rewrite)
- * on the site's own origin, the headers as sent, the body as a capped stream, and a signal that aborts when the
- * client goes away.
+ * on the site's own origin, the headers as Node keeps them, the body as a capped stream, and a signal that aborts
+ * when the client goes away.
+ *
+ * The headers come from Node's `req.headers`, as Next built them: a repeated single-valued header (`Host`,
+ * `Content-Type`, `Authorization` and the rest of Node's list) keeps its first value, cookies are joined with `; `
+ * and any other repeat with `, `.
  */
 export function toWebRequest(req: ExpressRequest, options: WebRequestOptions): Request {
   const headers = new Headers();
-  for (let index = 0; index < req.rawHeaders.length; index += 2) {
-    headers.append(req.rawHeaders[index]!, req.rawHeaders[index + 1]!);
+  for (const [name, value] of Object.entries(req.headers)) {
+    for (const one of Array.isArray(value) ? value : [value]) {
+      if (one !== undefined) headers.append(name, one);
+    }
   }
   const controller = new AbortController();
   req.res?.once("close", () => {

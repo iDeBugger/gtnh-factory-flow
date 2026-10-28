@@ -53,6 +53,11 @@ const routes: RouteEntry[] = [
     },
   },
   {
+    path: "/api/t/headers",
+    source: "test",
+    module: { POST: (request) => Response.json(Object.fromEntries(request.headers)) },
+  },
+  {
     path: "/api/t/redirect",
     source: "test",
     module: { GET: () => Response.redirect(`${SITE}/elsewhere`, 302) },
@@ -211,6 +216,36 @@ describe("the adapter", () => {
     expect(header(answer.headers, "vary")).toEqual(["Origin"]);
     expect(header(answer.headers, "www-authenticate")).toEqual(["Basic"]);
     expect(header(answer.headers, "x-own")).toEqual(["kept"]);
+  });
+
+  it("gives the handler a repeated request header as Node and Next keep it: the first of a single-valued one", async () => {
+    const answer = await call(
+      server.port,
+      "POST",
+      "/api/t/headers",
+      [
+        ["host", "first.example"],
+        ["host", "second.example"],
+        ["content-type", "multipart/form-data; boundary=x"],
+        ["content-type", "text/plain"],
+        ["authorization", "Bearer one"],
+        ["authorization", "Bearer two"],
+        ["x-many", "a"],
+        ["x-many", "b"],
+        ["cookie", "a=1"],
+        ["cookie", "b=2"],
+        ["content-length", "0"],
+      ],
+      "",
+    );
+    expect(answer.status).toBe(200);
+    expect(JSON.parse(answer.body.toString())).toMatchObject({
+      host: "first.example",
+      "content-type": "multipart/form-data; boundary=x",
+      authorization: "Bearer one",
+      "x-many": "a, b",
+      cookie: "a=1; b=2",
+    });
   });
 
   it("copies the headers of a Response whose headers are immutable, without changing them", async () => {
