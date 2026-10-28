@@ -186,4 +186,26 @@ describe("after the stop began", () => {
       await stopped;
     });
   }
+
+  it("reads the rest of a body still arriving under an answer that was open, its head unsent, at the stop", async () => {
+    let letThrough!: () => void;
+    const ready = new Promise<void>((resolve) => (letThrough = resolve));
+    const { port, shutdown } = await start(ready);
+    const client = await connect(port);
+    // A whole head and half the body, held behind the start: open when the stop begins, nothing sent yet.
+    await sendAndRead(
+      client.socket,
+      "POST /no-such-page HTTP/1.1\r\nHost: x\r\nConnection: keep-alive\r\nContent-Length: 10\r\n\r\n12345",
+    );
+    const stopped = shutdown();
+    letThrough();
+    await until(() => /\r\n\r\n/.test(client.received()));
+    expect(client.received()).toMatch(/^HTTP\/1\.1 404 /);
+    expect(client.received()).toMatch(/\r\nConnection: close\r\n/i);
+    await wait(150);
+    expect(client.isClosed()).toBe(false);
+    client.socket.write("67890");
+    await client.closed;
+    await stopped;
+  });
 });
