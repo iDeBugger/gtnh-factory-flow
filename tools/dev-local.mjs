@@ -15,7 +15,9 @@
  *    player clicking around, and dev-local says so;
  * 2. the live service (`src/live/main.ts`) on :3001, journal in
  *    scratch/local-db/live-journal;
- * 3. `next dev` on :3000, uploaded files in scratch/local-db/files.
+ * 3. `next dev` on :3000, uploaded files in scratch/local-db/files. With
+ *    `--express`, the Express dev server (src/server/dev.ts, Vite in
+ *    middleware mode, under `tsx watch`) instead.
  *
  * Next.js and the live service run with that DATABASE_URL and a
  * development-only COMMUNITY_HASH_SALT, so sign-ins made here work only here. Ctrl+C stops
@@ -124,6 +126,9 @@ function startPostgresContainer() {
 const dockerAnswers = () =>
   process.env.LOCAL_DB_PGLITE !== "1" &&
   spawnSync("docker", ["info", "--format", "{{.ServerVersion}}"], { timeout: 10_000 }).status === 0;
+
+/** `--express`: the site runs on the Express dev server instead of `next dev`. */
+const express = process.argv.includes("--express");
 
 const bin = {
   tsx: path.join(root, "node_modules", "tsx", "dist", "cli.mjs"),
@@ -254,8 +259,21 @@ try {
     });
   }
 
-  start("next", [bin.next, "dev", "--port", String(webPort)], {
+  const site = express
+    ? [
+        bin.tsx,
+        "watch",
+        "--clear-screen=false",
+        "--include",
+        "src/server",
+        "--include",
+        "src/lib/server",
+        "src/server/dev.ts",
+      ]
+    : [bin.next, "dev", "--port", String(webPort)];
+  start(express ? "site" : "next", site, {
     ...shared,
+    PORT: String(webPort),
     NEXT_PUBLIC_LIVE_URL: `ws://localhost:${livePort}/live`,
     // Board images and plan previews.
     FILE_STORE_DIR: path.join(root, "scratch", "local-db", "files"),
