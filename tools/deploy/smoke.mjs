@@ -476,13 +476,26 @@ try {
       );
       await page.screenshot({ path: path.join(out, "smoke-new-design.png") });
     }
-    const picker = page.locator('[data-mb="new-plan-version"]');
-    if (VERSIONS.includes("local-2.8.1") && (await picker.count())) {
-      await picker.click();
-      await page
-        .locator('[role="menu"] [role="menuitem"]', { hasText: "GTNH 2.8.1" })
+    // A new plan's version is the Settings choice (Plans > New plans), offered while the site serves both.
+    const plans = page.locator(".ms-section", { hasText: /^Plans$/ });
+    const offered =
+      VERSIONS.includes("local-2.8.1") &&
+      (await page
+        .locator('[aria-label="Settings"]')
         .first()
-        .click();
+        .click()
+        .then(() => plans.waitFor({ timeout: 10_000 }))
+        .then(
+          () => true,
+          () => false,
+        ));
+    if (
+      VERSIONS.includes("local-2.8.1") &&
+      check(offered, "Settings offers New plans: GTNH 2.8.1")
+    ) {
+      await plans.click();
+      await page.locator('[role="radio"]', { hasText: "GTNH 2.8.1" }).first().click();
+      await page.keyboard.press("Escape");
       await page.click(".mt-plus");
       await page
         .locator('[role="menu"] [role="menuitem"]', { hasText: /^New plan$/ })
