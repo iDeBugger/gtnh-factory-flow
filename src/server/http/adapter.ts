@@ -12,6 +12,7 @@ import type {
 } from "express";
 import { PROXY_BODY_MAX_BYTES } from "@/lib/server/http/request-body";
 import { siteUrl } from "@/lib/site-url";
+import { canonicalUrlOf } from "../middleware/normalize-path";
 import type { WebHandler } from "./route-table";
 
 /**
@@ -168,7 +169,7 @@ export function toWebRequest(req: ExpressRequest, options: WebRequestOptions): R
     init.body = bodyStream(req, options.hardCapBytes);
     init.duplex = "half";
   }
-  return new Request(options.origin + req.canonicalUrl, init);
+  return new Request(options.origin + canonicalUrlOf(req), init);
 }
 
 /**

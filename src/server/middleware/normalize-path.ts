@@ -22,8 +22,12 @@ declare global {
     interface Request {
       /** The request target as it arrived. Read only by the two redirects in this file. */
       rawTarget?: string;
-      /** The canonical path plus the raw query: what the handler's `request.url` names. */
-      canonicalUrl: string;
+      /**
+       * The canonical path plus the raw query: what the handler's `request.url` names. Set by `canonicalPath`, so
+       * a middleware mounted before it (the `before` list, the ready gate) sees none; read it with
+       * `canonicalUrlOf`.
+       */
+      canonicalUrl?: string;
     }
   }
 }
@@ -112,4 +116,24 @@ export function canonicalPath(): RequestHandler {
     req.canonicalUrl = canonical;
     next();
   };
+}
+
+/** The request's canonical URL. Only middlewares after `canonicalPath` may ask, so a missing one is a bug. */
+export function canonicalUrlOf(req: { canonicalUrl?: string }): string {
+  if (req.canonicalUrl === undefined) {
+    throw new Error("The canonical URL is read before canonicalPath ran.");
+  }
+  return req.canonicalUrl;
+}
+
+/** The request's canonical path and its raw query (empty or starting with `?`). */
+export function canonicalParts(req: { canonicalUrl?: string }): {
+  pathname: string;
+  search: string;
+} {
+  const canonical = canonicalUrlOf(req);
+  const at = canonical.indexOf("?");
+  return at < 0
+    ? { pathname: canonical, search: "" }
+    : { pathname: canonical.slice(0, at), search: canonical.slice(at) };
 }

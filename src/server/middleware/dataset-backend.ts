@@ -13,6 +13,7 @@ import http from "node:http";
 import https from "node:https";
 import { pipeline } from "node:stream";
 import type { RequestHandler } from "express";
+import { canonicalParts } from "./normalize-path";
 
 /** A published dataset name's characters, never starting with a dot. */
 const PUBLISHED_SEGMENT = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
@@ -82,14 +83,13 @@ function connectionHeaders(headers: http.IncomingHttpHeaders): Set<string> {
 export function datasetBackendProxy(baseUrl: string): RequestHandler {
   const base = baseUrl.replace(/\/+$/, "");
   return (req, res, next) => {
-    const canonical = req.canonicalUrl;
-    const at = canonical.indexOf("?");
-    const backendPath = datasetBackendPath(at < 0 ? canonical : canonical.slice(0, at));
+    const { pathname, search } = canonicalParts(req);
+    const backendPath = datasetBackendPath(pathname);
     if (backendPath === undefined) {
       next();
       return;
     }
-    const target = new URL(base + backendPath + (at < 0 ? "" : canonical.slice(at)));
+    const target = new URL(base + backendPath + search);
     const skip = connectionHeaders(req.headers);
     const headers: http.OutgoingHttpHeaders = {};
     for (const [name, value] of Object.entries(req.headers)) {

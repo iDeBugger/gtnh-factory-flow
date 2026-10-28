@@ -11,6 +11,7 @@ import { stat } from "node:fs/promises";
 import path from "node:path";
 import express, { type Request, type RequestHandler, type Response } from "express";
 import { decideDatasetPath } from "@/lib/server/dataset-path-gate";
+import { canonicalParts } from "./normalize-path";
 import { sendNextFileError, sendNextPlainError } from "./not-found";
 
 /**
@@ -174,13 +175,6 @@ export function publicFiles(publicDir: string): RequestHandler {
   });
 }
 
-/** The request's canonical path, without its query. */
-function canonicalPathname(req: Request): string {
-  const canonical = req.canonicalUrl;
-  const at = canonical.indexOf("?");
-  return at < 0 ? canonical : canonical.slice(0, at);
-}
-
 /**
  * The public dataset tree, served at `/datasets/gtnh`: the files beside the data (the manifest, reports, the
  * textures that are not named by their bytes). It serves a file only when the dataset gate passes the request's
@@ -191,7 +185,7 @@ export function datasetPublicFiles(datasetsDir: string): RequestHandler {
   const mount = guardedMount({
     root: datasetsDir,
     serve: serveStatic(datasetsDir, { dotfiles: "deny" }),
-    allows: (req) => decideDatasetPath(canonicalPathname(req).toLowerCase()).kind === "pass",
+    allows: (req) => decideDatasetPath(canonicalParts(req).pathname.toLowerCase()).kind === "pass",
   });
   const router = express.Router({ caseSensitive: true, strict: true });
   router.use("/datasets/gtnh", mount);

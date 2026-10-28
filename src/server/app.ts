@@ -23,6 +23,7 @@ import {
   notFound,
   optionsAnswer,
   revalidatedMethodNotAllowed,
+  ServerNotReadyError,
 } from "./middleware/not-found";
 import { securityHeaders } from "./middleware/security-headers";
 import { clientAssets, datasetPublicFiles, publicFiles } from "./middleware/static";
@@ -89,9 +90,20 @@ function mountRoute(app: Express, route: RouteEntry, drain: DrainBounds): void {
 /** What Next put on a force-static route's answer that named no Cache-Control: a year in shared caches. */
 const STATIC_CACHE_CONTROL = "s-maxage=31536000";
 
+/**
+ * Holds every request until `ready` settles. A start that failed is logged once, here, and each request then gets
+ * the 500 without its own log line.
+ */
 function readyGate(ready: Promise<void>): RequestHandler {
+  const outcome = ready.then(
+    () => undefined,
+    (error: unknown) => {
+      console.error("The server failed to start.", error);
+      return new ServerNotReadyError(error);
+    },
+  );
   return (_req, _res, next) => {
-    ready.then(() => next(), next);
+    void outcome.then((failed) => (failed ? next(failed) : next()));
   };
 }
 

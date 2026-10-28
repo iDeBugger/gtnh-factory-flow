@@ -1,5 +1,6 @@
 import type { RequestHandler } from "express";
 import { decideDatasetPath } from "@/lib/server/dataset-path-gate";
+import { canonicalParts } from "./normalize-path";
 
 const REFUSED_BODY = JSON.stringify({ error: "Invalid dataset path." });
 
@@ -12,9 +13,7 @@ const REFUSED_BODY = JSON.stringify({ error: "Invalid dataset path." });
  */
 export function datasetGate(): RequestHandler {
   return (req, res, next) => {
-    const canonical = req.canonicalUrl;
-    const at = canonical.indexOf("?");
-    const pathname = at < 0 ? canonical : canonical.slice(0, at);
+    const { pathname, search } = canonicalParts(req);
     const decision = decideDatasetPath(pathname);
     if (decision.kind === "refuse") {
       res.statusCode = 400;
@@ -25,7 +24,7 @@ export function datasetGate(): RequestHandler {
       return;
     }
     if (decision.kind === "rewrite") {
-      const rewritten = decision.pathname + (at < 0 ? "" : canonical.slice(at));
+      const rewritten = decision.pathname + search;
       req.url = rewritten;
       req.canonicalUrl = rewritten;
       res.setHeader("x-middleware-rewrite", decision.pathname);

@@ -9,6 +9,7 @@ import type { RawAnswer } from "../../tools/http-parity/requests.mjs";
 import nextAnswers from "./__fixtures__/next-answers.json";
 import { createApp } from "./app";
 import type { RouteEntry } from "./http/route-table";
+import { canonicalUrlOf } from "./middleware/normalize-path";
 import { call, listen, type Listening } from "./test-support/serve";
 
 /**
@@ -269,6 +270,60 @@ describe("the app's routing rules", () => {
     expect(header(logout, "location")).toBe("/api/community/auth/logout");
     expect((await call(server.port, "GET", "/datasets/gtnh/v/recipes.json/")).status).toBe(308);
     expect((await call(server.port, "GET", "//datasets/gtnh/v/recipes.json")).status).toBe(308);
+    // The gate and the guard are mounted: the same requests without the redirect's spelling are refused, and an
+    // escape the gate refuses still takes the 308 first.
+    const evil = { origin: "https://evil.example" };
+    expect((await call(server.port, "POST", "/api/community/auth/logout", evil)).status).toBe(403);
+    const escaped = await call(server.port, "GET", "/datasets/gtnh/v/recipes%2Ejson/");
+    expect(escaped.status).toBe(308);
+    expect(header(escaped, "location")).toBe("/datasets/gtnh/v/recipes%2Ejson");
+    expect((await call(server.port, "GET", "/datasets/gtnh/v/recipes%2Ejson")).status).toBe(400);
+  });
+
+  it("checks cross-site writes on the canonical path, after the redirects", async () => {
+    const evil = { origin: "https://evil.example" };
+    for (const target of [
+      "/x/../api/community/auth/logout",
+      "/x/%2e%2e/api/community/auth/logout",
+      "/api/./community/auth/logout",
+    ]) {
+      const answer = await call(server.port, "POST", target, evil);
+      expect(answer.status, target).toBe(403);
+      expect(JSON.parse(answer.body.toString()), target).toEqual({
+        error: "Cross-site request refused.",
+      });
+    }
+    const redirected = await call(server.port, "POST", "//x/../api/community/auth/logout", evil);
+    expect(redirected.status).toBe(308);
+    expect(header(redirected, "location")).toBe("/api/community/auth/logout");
+  });
+
+  it("logs a failed start once, however many requests it holds", async () => {
+    const log = vi.mocked(console.error);
+    log.mockClear();
+    const failed = await listen(
+      createApp({
+        env: { production: true, siteUrl: SITE },
+        publicDir: "/nonexistent",
+        datasetsDir: "/nonexistent",
+        ready: Promise.reject(new Error("prewarm failed")),
+      }),
+    );
+    try {
+      for (let index = 0; index < 3; index += 1) {
+        const answer = await call(failed.port, "GET", "/api/version");
+        expect(answer.status).toBe(500);
+        expect(answer.body.length).toBe(0);
+      }
+      expect(log).toHaveBeenCalledTimes(1);
+    } finally {
+      await failed.close();
+    }
+  });
+
+  it("refuses to read the canonical URL before canonicalPath has set it", () => {
+    expect(() => canonicalUrlOf({})).toThrow(/before canonicalPath/);
+    expect(canonicalUrlOf({ canonicalUrl: "/a?b" })).toBe("/a?b");
   });
 
   it("puts the security headers on a route answer, a 404, a 405, an OPTIONS and a 500", async () => {

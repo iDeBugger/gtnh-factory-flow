@@ -7,6 +7,14 @@ import { headersForPath, type SecurityHeaderEnv } from "../../../security-header
 import { RouteHandlerError } from "../http/adapter";
 import { optionsAllow, type RouteModule } from "../http/route-table";
 
+/** A request held for a start that failed. The failure was logged once, where it happened (app.ts). */
+export class ServerNotReadyError extends Error {
+  constructor(cause: unknown) {
+    super("The server did not start.", { cause });
+    this.name = "ServerNotReadyError";
+  }
+}
+
 /** OPTIONS on a route: 204 and the sorted `Allow` Next writes for the route's exports. */
 export function optionsAnswer(module: RouteModule): RequestHandler {
   const allow = optionsAllow(module);
@@ -123,7 +131,9 @@ export function errorHandler(env: SecurityHeaderEnv): ErrorRequestHandler {
       sendNextPlainError(res);
       return;
     }
-    console.error(error instanceof RouteHandlerError ? error.cause : error);
+    if (!(error instanceof ServerNotReadyError)) {
+      console.error(error instanceof RouteHandlerError ? error.cause : error);
+    }
     if (res.headersSent) {
       res.destroy();
       return;
