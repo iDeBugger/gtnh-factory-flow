@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { APP_FONT_STORAGE_KEY, DEFAULT_APP_FONT } from "@/lib/app-font";
 import { uiScaleBootScript } from "@/lib/ui-scale-boot";
 import {
@@ -8,6 +8,7 @@ import {
   PHONE_MAX_WIDTH,
   SNUG_MAX_WIDTH,
 } from "@/lib/viewport-breakpoints";
+import nextAnswers from "../server/__fixtures__/next-answers.json";
 import { renderShell } from "./prerender";
 
 describe("renderShell", () => {
@@ -40,5 +41,23 @@ describe("renderShell", () => {
     const data = JSON.parse(structuredData);
     expect(data["@context"]).toBe("https://schema.org");
     expect(data["@graph"][0]["@type"]).toBe("WebSite");
+  });
+
+  describe("against the page Next served", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("writes the same boot scripts and structured data, byte for byte", () => {
+      // The captured 404 page carries the layout's boot scripts and JSON-LD, made with this site address.
+      vi.stubEnv("NEXT_PUBLIC_SITE_URL", "http://127.0.0.1:3770");
+      const page = (nextAnswers as unknown as { notFound: { body: { text: string } } }).notFound
+        .body.text;
+      const inline = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
+      const jsonLd = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(page)?.[1];
+      const { bootScripts, structuredData } = renderShell();
+      expect(inline.slice(0, 2)).toEqual(bootScripts);
+      expect(jsonLd).toBe(structuredData);
+    });
   });
 });
