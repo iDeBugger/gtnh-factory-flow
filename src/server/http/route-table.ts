@@ -86,11 +86,45 @@ export function optionsAllow(module: RouteModule): string {
   return [...allowed].sort().join(", ");
 }
 
+/** The folder names of a route file's path, one per union member. */
+type Segments<S extends string> = S extends `${infer Head}/${infer Rest}`
+  ? Head | Segments<Rest>
+  : S;
+
+type CatchAllNames<S extends string> =
+  Segments<S> extends infer Segment ? (Segment extends `[...${infer Name}]` ? Name : never) : never;
+
+type ParamNames<S extends string> =
+  Segments<S> extends infer Segment
+    ? Segment extends `[...${string}]`
+      ? never
+      : Segment extends `[${infer Name}]`
+        ? Name
+        : never
+    : never;
+
+/**
+ * The params a route file's folders give its handlers: `[x]` is `x: string`, `[...x]` is `x: string[]`, as the
+ * adapter passes them by folder name.
+ */
+export type ParamsOf<S extends string> = { [K in ParamNames<S>]: string } & {
+  [K in CatchAllNames<S>]: string[];
+};
+
+/**
+ * What a route file may export as handlers, checked against its folders: a handler that names a param its path
+ * does not give (a typo, a renamed folder) is a type error here.
+ */
+type TypedRouteModule<S extends string> = {
+  [M in HttpMethod]?: (
+    request: Request,
+    context: { params: Promise<ParamsOf<S>> },
+  ) => Response | Promise<Response>;
+};
+
 /**
  * The method exports of a route module. Next's segment config (`runtime`,
- * `dynamic`, `revalidate`, `generateStaticParams`) is not a handler. Each
- * handler names its own params; the adapter passes them by folder name, so
- * the cast to the shared context type is sound.
+ * `dynamic`, `revalidate`, `generateStaticParams`) is not a handler.
  */
 function pick(module: Record<string, unknown>): RouteModule {
   const picked: RouteModule = {};
@@ -101,11 +135,18 @@ function pick(module: Record<string, unknown>): RouteModule {
   return picked;
 }
 
-const entry = (source: string, module: Record<string, unknown>): RouteEntry => ({
-  path: routePathForFile(source),
-  source,
-  module: pick(module),
-});
+/**
+ * One table entry. The module's handlers are checked against `ParamsOf<source>` first; the one cast after that
+ * check widens them to the shared context type, which is sound because the adapter passes exactly the params the
+ * folders name. The test holds that `module` is the file `source` names.
+ */
+function entry<S extends string>(source: S, module: TypedRouteModule<S>): RouteEntry {
+  return {
+    path: routePathForFile(source),
+    source,
+    module: pick(module as Record<string, unknown>),
+  };
+}
 
 /**
  * In Next's precedence: within a folder, a static segment comes before a
