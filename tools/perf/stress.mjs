@@ -51,8 +51,9 @@ await page.evaluate(async (plan) => {
   const DB_NAME = "gtnh-factory-flow-designs";
   const open = () =>
     new Promise((resolve, reject) => {
-      // The app's schema version (design-storage.ts DB_VERSION): an older one is refused once the app has opened it.
-      const request = indexedDB.open(DB_NAME, 3);
+      // No version: the app has opened the database by now, so this opens its current schema, whatever
+      // design-storage.ts DB_VERSION has become. A fixed number is refused as soon as the app's is higher.
+      const request = indexedDB.open(DB_NAME);
       request.onupgradeneeded = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains("design-meta")) {
