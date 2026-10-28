@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -72,5 +72,17 @@ describe("buildIdentity", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "build-identity-"));
     made.push(dir);
     expect(buildIdentity({}, dir)).toBe("");
+  });
+});
+
+describe("the module", () => {
+  it("imports Node built-ins only, so the build scripts load it outside a bundle without pulling app code in", () => {
+    const source = readFileSync(new URL("./build-identity.mjs", import.meta.url), "utf8");
+    const imports = [
+      ...source.matchAll(/^\s*(?:import|export)[^;]*?from\s+["']([^"']+)["']/gm),
+    ].map((match) => match[1]);
+    expect(imports.length).toBeGreaterThan(0);
+    expect(imports.filter((name) => !name.startsWith("node:"))).toEqual([]);
+    expect(source).not.toMatch(/\bimport\(|\brequire\(/);
   });
 });

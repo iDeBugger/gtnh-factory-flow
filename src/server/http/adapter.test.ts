@@ -1,8 +1,18 @@
 import http from "node:http";
 import net from "node:net";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { BOARD_IMAGE_MAX_BYTES, UPLOAD_FORM_OVERHEAD_BYTES } from "@/lib/community/types";
-import { BODY_HARD_CAP_BYTES } from "@/lib/server/http/request-body";
+import { BLUEPRINT_BODY_MAX_BYTES } from "@/lib/blueprints/types";
+import {
+  BOARD_IMAGE_MAX_BYTES,
+  COMMUNITY_UPLOAD_BODY_MAX_BYTES,
+  UPLOAD_FORM_OVERHEAD_BYTES,
+} from "@/lib/community/types";
+import { RESOLVE_RECIPES_MAX_BYTES } from "@/lib/datasets/resolve-recipes-limits";
+import {
+  BODY_HARD_CAP_BYTES,
+  COMMENT_BODY_MAX_BYTES,
+  SMALL_JSON_MAX_BYTES,
+} from "@/lib/server/http/request-body";
 import { createApp, type AppOptions } from "../app";
 import { call, listen, type Listening } from "../test-support/serve";
 import { DRAIN_IDLE_MS, DRAIN_MAX_BYTES, DRAIN_TOTAL_MS, type DrainBounds } from "./adapter";
@@ -443,6 +453,29 @@ describe("the adapter", () => {
     } finally {
       log.mockRestore();
     }
+  });
+
+  it("keeps the hard cap above every route's cap, so a body cut at it still answers the route's 413", () => {
+    for (const cap of [
+      COMMUNITY_UPLOAD_BODY_MAX_BYTES,
+      BOARD_IMAGE_MAX_BYTES + UPLOAD_FORM_OVERHEAD_BYTES,
+      BLUEPRINT_BODY_MAX_BYTES,
+      RESOLVE_RECIPES_MAX_BYTES,
+      COMMENT_BODY_MAX_BYTES,
+      SMALL_JSON_MAX_BYTES,
+    ]) {
+      expect(BODY_HARD_CAP_BYTES).toBeGreaterThan(cap);
+    }
+    expect(BODY_HARD_CAP_BYTES).toBeLessThan(10 * MiB);
+  });
+
+  it("keeps Caddy's 8 MB body limit between the hard cap and the drain's byte bound", () => {
+    // `request_body max_size 8MB` (docs/deploy.md), decimal megabytes as Caddy reads them. Above the hard cap, so
+    // every 413 is the app's; below the drain bound, so in production no body ever reaches that bound and every
+    // drained 413 is delivered.
+    const CADDY_BODY_MAX_BYTES = 8 * 1000 * 1000;
+    expect(BODY_HARD_CAP_BYTES).toBeLessThan(CADDY_BODY_MAX_BYTES);
+    expect(CADDY_BODY_MAX_BYTES).toBeLessThan(DRAIN_MAX_BYTES);
   });
 
   it("keeps the drain's default idle and total bounds above Caddy's 30 s body timeout", () => {
