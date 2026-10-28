@@ -85,10 +85,14 @@ function connect(port: number): Promise<{
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function until(check: () => boolean, ms = 10_000): Promise<void> {
+/**
+ * Waits for `check`, then fails naming `what`. The bound stays under vitest's 5 s test timeout, so the failure
+ * says what never happened instead of only that the test timed out.
+ */
+async function until(what: string, check: () => boolean, ms = 3_000): Promise<void> {
   const began = Date.now();
   while (!check()) {
-    if (Date.now() - began > ms) throw new Error("timed out");
+    if (Date.now() - began > ms) throw new Error(`timed out waiting for ${what}`);
     await wait(5);
   }
 }
@@ -102,6 +106,7 @@ async function sendAndRead(socket: net.Socket, text: string): Promise<void> {
   socket.write(text);
   const length = Buffer.byteLength(text);
   await until(
+    `the server to read ${length} bytes`,
     () => serverSockets.reduce((sum, server) => sum + server.bytesRead, 0) >= before + length,
   );
 }
@@ -137,7 +142,7 @@ describe("after the stop began", () => {
       "GET /api/held-throw HTTP/1.1\r\nHost: x\r\nConnection: keep-alive\r\n\r\n",
     );
     entered = false;
-    await until(() => entered);
+    await until("the handler to be entered", () => entered);
     const stopped = shutdown();
     release();
     const received = await client.closed;
@@ -174,7 +179,7 @@ describe("after the stop began", () => {
       client.socket.write(
         "Connection: keep-alive\r\nContent-Type: text/plain\r\nContent-Length: 10\r\n\r\n12345",
       );
-      await until(() => /\r\n\r\n/.test(client.received()));
+      await until("the answer's head", () => /\r\n\r\n/.test(client.received()));
       expect(client.received()).toMatch(new RegExp(`^HTTP/1\\.1 ${status} `));
       expect(client.received()).toMatch(/\r\nConnection: close\r\n/i);
       // The answer is out, but the socket stays open while the body still arrives: a close now would reset the
@@ -199,7 +204,7 @@ describe("after the stop began", () => {
     );
     const stopped = shutdown();
     letThrough();
-    await until(() => /\r\n\r\n/.test(client.received()));
+    await until("the answer's head", () => /\r\n\r\n/.test(client.received()));
     expect(client.received()).toMatch(/^HTTP\/1\.1 404 /);
     expect(client.received()).toMatch(/\r\nConnection: close\r\n/i);
     await wait(150);
