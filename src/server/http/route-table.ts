@@ -67,7 +67,7 @@ const METHODS: readonly HttpMethod[] = ["GET", "HEAD", "POST", "PUT", "PATCH", "
  * literal segments.
  */
 export function routePathForFile(file: string): string {
-  const folders = file.replace(/^src\/app/, "").replace(/\/route\.tsx?$/, "");
+  const folders = file.replace(/^src\/app/, "").replace(/\/route\.[jt]sx?$/, "");
   return folders
     .split("/")
     .map((segment) => segment.replace(/^\[\.\.\.(.+)\]$/, "*$1").replace(/^\[(.+)\]$/, ":$1"))

@@ -6,15 +6,18 @@ import { optionsAllow, routePathForFile, ROUTES, type WebHandler } from "./route
 
 const REPO = path.resolve(__dirname, "../../..");
 
-/** Every route file under a folder, as a repo path; tests and the baseline's parity fixtures are not routes. */
+/**
+ * Every route file under a folder, as a repo path: `route.ts`, `.tsx`, `.js` or `.jsx`, the names Next routes.
+ * Only the baseline's parity fixtures (`__parity-*`) are left out.
+ */
 function globRouteFiles(dir: string): string[] {
   const found: string[] = [];
   const walk = (relative: string): void => {
     for (const entry of readdirSync(path.join(REPO, relative), { withFileTypes: true })) {
       const child = `${relative}/${entry.name}`;
-      if (entry.name.includes("parity-")) continue;
+      if (entry.name.startsWith("__parity-")) continue;
       if (entry.isDirectory()) walk(child);
-      else if (/^route\.tsx?$/.test(entry.name)) found.push(child);
+      else if (/^route\.[jt]sx?$/.test(entry.name)) found.push(child);
     }
   };
   walk(dir);
@@ -23,7 +26,7 @@ function globRouteFiles(dir: string): string[] {
 
 /** The Next path of a route file, brackets kept: the key the parity cases use. */
 const nextPath = (source: string): string =>
-  source.replace(/^src\/app/, "").replace(/\/route\.tsx?$/, "");
+  source.replace(/^src\/app/, "").replace(/\/route\.[jt]sx?$/, "");
 
 /** Whether an Express 5 path from the table matches a concrete path: `:x` takes one segment, `*x` the rest. */
 function matches(pattern: string, concrete: string): boolean {
@@ -54,6 +57,8 @@ describe("the route table", () => {
     );
     expect(routePathForFile("src/app/llms.txt/route.ts")).toBe("/llms.txt");
     expect(routePathForFile("src/app/api/version/route.tsx")).toBe("/api/version");
+    expect(routePathForFile("src/app/api/version/route.js")).toBe("/api/version");
+    expect(routePathForFile("src/app/api/version/route.jsx")).toBe("/api/version");
   });
 
   it("keeps only the method exports of a route module", () => {
