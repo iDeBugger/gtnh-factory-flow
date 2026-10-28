@@ -54,7 +54,7 @@ function numbered(map, value, label) {
 
 export const HTTP_TIME_TOKEN = "<time:http>";
 
-/** An ISO timestamp's token: its form (fraction digits, zone as sent), never its value. */
+/** An ISO timestamp's token: its form (whether it has a fraction, and the zone as sent), never its value. */
 export function isoTimeToken(fraction, zone) {
   return `<time:iso${fraction ? ".f" : ""}${zone ?? ""}>`;
 }
