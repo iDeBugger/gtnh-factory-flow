@@ -102,23 +102,33 @@ function runtimeSpecifiers(source: ts.SourceFile): string[] {
   return out;
 }
 
+/**
+ * Whether `node` is exactly the guard `typeof process !== "undefined"` (or `!=`, either operand order). Anything
+ * else, an inverted test or a `typeof process` buried in another expression, is no guard.
+ */
 function isTypeofProcessGuard(node: ts.Node): boolean {
-  let found = false;
-  const visit = (child: ts.Node) => {
-    if (
-      ts.isTypeOfExpression(child) &&
-      ts.isIdentifier(child.expression) &&
-      child.expression.text === "process"
-    ) {
-      found = true;
-    }
-    if (!found) ts.forEachChild(child, visit);
-  };
-  visit(node);
-  return found;
+  while (ts.isParenthesizedExpression(node)) node = node.expression;
+  if (!ts.isBinaryExpression(node)) return false;
+  const operator = node.operatorToken.kind;
+  if (
+    operator !== ts.SyntaxKind.ExclamationEqualsEqualsToken &&
+    operator !== ts.SyntaxKind.ExclamationEqualsToken
+  ) {
+    return false;
+  }
+  const isTypeofProcess = (side: ts.Expression) =>
+    ts.isTypeOfExpression(side) &&
+    ts.isIdentifier(side.expression) &&
+    side.expression.text === "process";
+  const isUndefinedText = (side: ts.Expression) =>
+    ts.isStringLiteral(side) && side.text === "undefined";
+  return (
+    (isTypeofProcess(node.left) && isUndefinedText(node.right)) ||
+    (isUndefinedText(node.left) && isTypeofProcess(node.right))
+  );
 }
 
-/** Whether `node` sits on the right of an `&&` whose left tests `typeof process`, or in such an `if`. */
+/** Whether `node` sits on the right of an `&&` whose whole left operand is the guard, or in such an `if`. */
 function isBehindTypeofProcess(node: ts.Node): boolean {
   let child: ts.Node = node;
   for (let parent = node.parent; parent; child = parent, parent = parent.parent) {
@@ -254,6 +264,27 @@ describe("process in browser code", () => {
       "src/lib/solver/simplex.ts:SIMPLEX_DEBUG",
       "src/lib/solver/simplex.ts:SIMPLEX_DEBUG",
     ]);
+  });
+
+  it('counts a read as guarded only behind typeof process !== "undefined"', () => {
+    const readsOf = (text: string) =>
+      processReads(
+        path.join(ROOT, "src/guard-probe.ts"),
+        ts.createSourceFile("guard-probe.ts", text, ts.ScriptTarget.Latest, true),
+      );
+    expect(readsOf('if (typeof process !== "undefined" && process.env.X) f();')[0]).toMatchObject({
+      guardedName: "X",
+    });
+    expect(readsOf('if ("undefined" != typeof process && process.env.X) f();')[0]).toMatchObject({
+      guardedName: "X",
+    });
+    for (const inverted of [
+      'if (typeof process === "undefined" && process.env.X) f();',
+      'if ((typeof process !== "undefined" || a) && process.env.X) f();',
+      'if (typeof process === "object" && process.env.X) f();',
+    ]) {
+      expect(readsOf(inverted)[0], inverted).toMatchObject({ envName: "X" });
+    }
   });
 
   it("reads Reflect.get(process.env) only in deployment-features.ts, behind typeof window", () => {
