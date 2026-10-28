@@ -2,7 +2,7 @@
   {
     "case": "page /|page /\\?plan=missing|scenario page /\\?plan=",
     "field": "body",
-    "reason": "The page HTML outside the metadata tags and the shell markup: framework scripts, preloads, next-size-adjust and the RSC flight. Task 10 compares the metadata tags and the shell separately."
+    "reason": "The page HTML around its metadata tags, inline scripts and shell markup: Next's framework scripts, stylesheet and script preloads, next-size-adjust and the RSC flight. head-compare.mjs compares the tags in order, the inline scripts and the shell, and must report no difference."
   },
   {
     "case": ".*",
@@ -10,7 +10,7 @@
     "field": "body",
     "a": "<!DOCTYPE html>.*",
     "b": "<!(DOCTYPE|doctype) html>.*",
-    "reason": "The 404 page's HTML outside the metadata tags and the shell markup, wherever a path ends on it (framework markup, as for the page)."
+    "reason": "The 404 page's HTML around its metadata tags, inline scripts and not-found markup: Next's framework scripts, stylesheet and script preloads, next-size-adjust and the RSC flight. head-compare.mjs compares the tags in order, the inline scripts and the markup of every HTML 404, and must report no difference outside its plain-404 list."
   },
   {
     "case": "page /community(\\?plan=x)?|scenario page /community\\?plan=",
