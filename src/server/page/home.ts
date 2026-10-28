@@ -1,5 +1,6 @@
 import type { RequestHandler } from "express";
-import { headForRequest, renderMetadataTags } from "@/lib/server/site/head";
+import { renderMetadataTags } from "@/lib/server/site/head";
+import { headForRequest } from "@/lib/server/site/plan-head";
 import { siteUrl } from "@/lib/site-url";
 import { canonicalParts } from "../middleware/normalize-path";
 import {

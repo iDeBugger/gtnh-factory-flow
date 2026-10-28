@@ -10,7 +10,8 @@ vi.mock("@/lib/server/services/plan-preview", async (importOriginal) => ({
   getPublicPlanRow: (id: string) => getPublicPlanRow(id),
 }));
 
-import { headForRequest, planHead, renderHead, SITE_IMAGE, siteHead } from "./head";
+import { renderHead, SITE_IMAGE, siteHead } from "./head";
+import { headForRequest, planHead } from "./plan-head";
 
 const ORIGIN = "http://127.0.0.1:3770";
 const PLAN_ID = "00000000-0000-4000-8000-0000000000c1";
@@ -129,6 +130,16 @@ describe("with the community switch on", () => {
   it("links a plan id that needs escaping as Next's URL resolution writes it", () => {
     const html = renderHead(planHead({ ...row, id: `a b&"'` }), ORIGIN);
     expect(html).toContain(`<link rel="canonical" href="${ORIGIN}/?plan=a%20b%26%22%27"/>`);
+  });
+});
+
+describe("the head module", () => {
+  it("loads no database module, so the template and the 404 page load none through it", () => {
+    const source = readFileSync(new URL("./head.ts", import.meta.url), "utf8");
+    const imports = [...source.matchAll(/^import (?!type )[^;]*? from "([^"]+)";/gms)].map(
+      (match) => match[1],
+    );
+    expect(imports).toEqual(["@/lib/deployment-features", "./escape"]);
   });
 });
 

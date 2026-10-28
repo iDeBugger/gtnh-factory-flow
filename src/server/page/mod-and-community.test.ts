@@ -32,7 +32,8 @@ vi.mock("@/lib/server/services/plan-preview", async (importOriginal) => ({
 vi.mock("@/components/FactoryPlannerApp", () => ({ FactoryPlannerApp: () => null }));
 
 import { renderShell } from "@/client/prerender";
-import { headForRequest, siteHead } from "@/lib/server/site/head";
+import { siteHead } from "@/lib/server/site/head";
+import { headForRequest } from "@/lib/server/site/plan-head";
 import { llmsText, robots, sitemapEntries } from "@/lib/server/site/site-files";
 import { createApp } from "../app";
 import { call, listen, type Listening } from "../test-support/serve";
