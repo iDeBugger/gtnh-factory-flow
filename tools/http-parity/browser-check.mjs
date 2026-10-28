@@ -8,11 +8,18 @@
  * document policy (`securitypolicyviolation`), that nothing threw and React reported no hydration error, and that
  * the Welcome tab renders. On `/` it opens a new design and adds a recipe card, which the solver worker solves with
  * highs.wasm. Then it saves a font choice and reloads: the saved font must be on `<html>` before the module entry
- * starts (`window.__gtnhEntryStarted`), so the boot script stamped it, not the app. Prints every finding and exits
- * 1 when there is one.
+ * starts (`window.__gtnhEntryStarted`), so the boot script stamped it, not the app. The policy record of the page
+ * and of each worker is read at each check, before each navigation and before the profile closes, so a
+ * violation after a check is still reported. Prints every finding and exits 1 when there is one.
  */
 import { chromium, firefox } from "playwright-core";
-import { policyListener, policyViolations, watchConsole } from "./page-listeners.mjs";
+import {
+  drainPolicyViolations,
+  drainWorkerPolicy,
+  policyListener,
+  watchConsole,
+  watchWorkerPolicy,
+} from "./page-listeners.mjs";
 
 const APP_FONT_STORAGE_KEY = "gtnh-app-font";
 const SAVED_FONT = "minecraft";
@@ -67,6 +74,25 @@ async function checkEngine(name, engine) {
       const page = await context.newPage();
       page.setDefaultTimeout(60_000);
       const requests = [];
+      const workers = new Set();
+      page.on("worker", (worker) => {
+        workers.add(worker);
+        worker.on("close", () => workers.delete(worker));
+        watchWorkerPolicy(worker).catch(() => {});
+      });
+      /** Reports every violation the page and its workers recorded since the last read. */
+      const readPolicy = async (where) => {
+        for (const violation of await drainPolicyViolations(page).catch(() => [])) {
+          findings.push(label(`${where} policy: ${violation}`));
+        }
+        for (const worker of workers) {
+          for (const violation of await drainWorkerPolicy(worker)) {
+            findings.push(
+              label(`${where} worker ${worker.url().replace(BASE, "")} policy: ${violation}`),
+            );
+          }
+        }
+      };
       page.on("pageerror", (error) => findings.push(label(`page error: ${error.message}`)));
       watchConsole(page, (finding) => findings.push(label(finding)));
       // The context sees the workers' requests too (the solver fetches highs.wasm from its worker).
@@ -74,17 +100,21 @@ async function checkEngine(name, engine) {
         requests.push({ url: response.url().replace(BASE, ""), status: response.status() });
       });
       const visit = async (target) => {
+        await readPolicy(`before ${target}`);
         const response = await page.goto(`${BASE}${target}`, { waitUntil: "load" });
         if (response?.status() !== 200) {
           findings.push(label(`${target} answered ${response?.status()}`));
         }
         await page.waitForTimeout(1500);
-        for (const violation of await policyViolations(page)) {
-          findings.push(label(`${target} policy: ${violation}`));
-        }
+        await readPolicy(target);
         return page.evaluate(() => window.__browserCheck);
       };
-      return { context, page, requests, visit };
+      /** Reads the policy record a last time, then closes the profile. */
+      const close = async () => {
+        await readPolicy("last");
+        await context.close();
+      };
+      return { close, page, readPolicy, requests, visit };
     };
 
     // 1. The plan link, on a profile of its own: it opens the plan as a design where the library is on.
@@ -97,13 +127,11 @@ async function checkEngine(name, engine) {
     notes.push(
       label(`/?plan= title: ${await planVisit.page.title()}; ${planTabs} design tab(s) open`),
     );
-    for (const violation of await policyViolations(planVisit.page)) {
-      findings.push(label(`plan policy: ${violation}`));
-    }
-    await planVisit.context.close();
+    await planVisit.readPolicy("plan");
+    await planVisit.close();
 
     // 2. The home page on a fresh profile.
-    const { context, page, requests, visit } = await open();
+    const { close, page, readPolicy, requests, visit } = await open();
     await visit("/");
     // Where the mod and community switch is on, a first visit opens the mod announcement over Welcome.
     const announcement = page.locator('[aria-labelledby="mod-announcement-title"]');
@@ -151,9 +179,7 @@ async function checkEngine(name, engine) {
         () => document.querySelectorAll(".react-flow__node").length,
       );
       notes.push(label(`${cards} card(s) on the board`));
-      for (const violation of await policyViolations(page)) {
-        findings.push(label(`board policy: ${violation}`));
-      }
+      await readPolicy("board");
     }
 
     // 3. The saved font is stamped by the boot script, before the entry runs.
@@ -175,7 +201,7 @@ async function checkEngine(name, engine) {
     }
     const started = await page.evaluate(() => window.__gtnhEntryStarted === true);
     if (!started) findings.push(label("the module entry never started"));
-    await context.close();
+    await close();
   } catch (error) {
     findings.push(label(`check failed: ${error instanceof Error ? error.message : String(error)}`));
   } finally {

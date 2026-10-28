@@ -45,3 +45,48 @@ export function watchConsole(page, report) {
 export function policyViolations(page) {
   return page.evaluate(() => [...(window.__pagePolicy ?? [])]);
 }
+
+/**
+ * Takes the violations recorded so far on the page out of its record, so a later read reports only newer ones.
+ * Read before every navigation and before the context closes: a navigation drops the record with the document.
+ *
+ * @param {import("playwright-core").Page} page
+ * @returns {Promise<string[]>}
+ */
+export function drainPolicyViolations(page) {
+  return page.evaluate(() => (window.__pagePolicy ?? []).splice(0));
+}
+
+/**
+ * Records a worker's own policy violations, which fire on the worker's global scope, not on the document. Attached
+ * when Playwright reports the worker, so it sees what the worker does from then on (its fetches, the wasm, later
+ * imports); a worker that has closed takes its record with it.
+ *
+ * @param {import("playwright-core").Worker} worker
+ */
+export async function watchWorkerPolicy(worker) {
+  await worker.evaluate(() => {
+    if (self.__workerPolicy) return;
+    const violations = [];
+    Object.defineProperty(self, "__workerPolicy", { value: violations });
+    self.addEventListener("securitypolicyviolation", (event) => {
+      violations.push(
+        `${event.violatedDirective} blocked ${event.blockedURI || "inline"} ${event.sample || ""}`.trim(),
+      );
+    });
+  });
+}
+
+/**
+ * Takes the violations a watched worker recorded so far out of its record. A worker that has closed reads as none.
+ *
+ * @param {import("playwright-core").Worker} worker
+ * @returns {Promise<string[]>}
+ */
+export async function drainWorkerPolicy(worker) {
+  try {
+    return await worker.evaluate(() => (self.__workerPolicy ?? []).splice(0));
+  } catch {
+    return [];
+  }
+}
