@@ -102,6 +102,8 @@ describe("server.mjs", () => {
 });
 
 describe("serverEnv", () => {
+  const UNSET = { siteUrl: null, liveUrl: null, datasetManifestUrl: null };
+
   function clientWith(values) {
     const dir = mkdtempSync(path.join(tmpdir(), "client-build-"));
     dirs.push(dir);
@@ -109,8 +111,14 @@ describe("serverEnv", () => {
     return dir;
   }
 
-  it("takes the community switch and the build id from the client build", () => {
-    const dir = clientWith({ modAndCommunity: "on", buildId: "4.4.1-abcdef12" });
+  it("takes every build value from the client build", () => {
+    const dir = clientWith({
+      modAndCommunity: "on",
+      buildId: "4.4.1-abcdef12",
+      siteUrl: "https://x.test",
+      liveUrl: "/live",
+      datasetManifestUrl: null,
+    });
     const env = serverEnv(dir, {
       NEXT_PUBLIC_MOD_AND_COMMUNITY: "on",
       NEXT_PUBLIC_SITE_URL: "https://x.test",
@@ -119,26 +127,39 @@ describe("serverEnv", () => {
       NEXT_PUBLIC_MOD_AND_COMMUNITY: "on",
       GTNH_BUILD_ID: "4.4.1-abcdef12",
       NEXT_PUBLIC_SITE_URL: "https://x.test",
+      NEXT_PUBLIC_LIVE_URL: "/live",
     });
-    expect(serverDefines(env)).toMatchObject({
+    expect(serverDefines(env)).toEqual({
       "process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY": '"on"',
       "process.env.NEXT_PUBLIC_GTNH_BUILD_ID": '"4.4.1-abcdef12"',
+      "process.env.NEXT_PUBLIC_SITE_URL": '"https://x.test"',
+      "process.env.NEXT_PUBLIC_LIVE_URL": '"/live"',
     });
-    expect(serverEnv(clientWith({ modAndCommunity: "", buildId: "b" }), {})).toMatchObject({
+    expect(serverEnv(clientWith({ modAndCommunity: "", buildId: "b", ...UNSET }), {})).toEqual({
       NEXT_PUBLIC_MOD_AND_COMMUNITY: "",
       GTNH_BUILD_ID: "b",
     });
   });
 
-  it("fails when the server would be built with another switch or build id than the client", () => {
-    const dir = clientWith({ modAndCommunity: "", buildId: "b" });
+  it("fails when the server would be built with another value than the client", () => {
+    const dir = clientWith({ modAndCommunity: "", buildId: "b", ...UNSET });
     expect(() => serverEnv(dir, { NEXT_PUBLIC_MOD_AND_COMMUNITY: "on" })).toThrow(
       /NEXT_PUBLIC_MOD_AND_COMMUNITY is "on" here but "" in the client build/,
     );
-    expect(() => serverEnv(clientWith({ modAndCommunity: "on", buildId: "b" }), {})).toThrow(
-      /is "" here but "on"/,
-    );
+    expect(() =>
+      serverEnv(clientWith({ modAndCommunity: "on", buildId: "b", ...UNSET }), {}),
+    ).toThrow(/is "" here but "on"/);
     expect(() => serverEnv(dir, { GTNH_BUILD_ID: "other" })).toThrow(/GTNH_BUILD_ID is "other"/);
+    expect(() => serverEnv(dir, { NEXT_PUBLIC_SITE_URL: "https://x.test" })).toThrow(
+      /NEXT_PUBLIC_SITE_URL is "https:\/\/x.test" here but unset in the client build/,
+    );
+    const site = clientWith({ modAndCommunity: "", buildId: "b", ...UNSET, liveUrl: "/live" });
+    expect(() => serverEnv(site, { NEXT_PUBLIC_LIVE_URL: "wss://other.test/live" })).toThrow(
+      /NEXT_PUBLIC_LIVE_URL is "wss:\/\/other.test\/live" here but "\/live" in the client build/,
+    );
+    expect(() => serverEnv(clientWith({ modAndCommunity: "", buildId: "b" }), {})).toThrow(
+      /must name modAndCommunity, buildId and siteUrl, liveUrl, datasetManifestUrl/,
+    );
     expect(() => serverEnv(clientWith(undefined), {})).toThrow(
       /run build:client before build:server/,
     );
@@ -166,7 +187,13 @@ describe("the built server", () => {
     );
     writeFileSync(
       path.join(client, "build.json"),
-      JSON.stringify({ modAndCommunity: "", buildId: "t" }),
+      JSON.stringify({
+        modAndCommunity: "",
+        buildId: "t",
+        siteUrl: null,
+        liveUrl: null,
+        datasetManifestUrl: null,
+      }),
     );
     mkdirSync(path.join(cwd, "src", "app"), { recursive: true });
     for (const file of ["favicon.ico", "opengraph-image.png"]) {

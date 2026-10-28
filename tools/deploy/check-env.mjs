@@ -2,12 +2,15 @@
 // The deploy's check of the server's environment, run before anything starts:
 //
 //   node check-env.mjs /opt/gtnh/.env [more env files] --image-label "<org.gtnh.mod-and-community>" [--set NAME=value]
+//     [--build-json <file>]
 //
-// Exits 1 naming every problem. A problem names the variable, never its value:
+// It runs inside the site image, beside the image's own build record (`dist/client/build.json`, read from
+// ../dist/client/build.json unless --build-json names another file), so it compares the env with the values
+// the image was built with. Exits 1 naming every problem. A problem names the variable, never its value:
 // the output lands in a terminal and a deploy log.
 import { readFileSync } from "node:fs";
 import { isIP } from "node:net";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REQUIRED = [
   "POSTGRES_PASSWORD",
@@ -49,6 +52,19 @@ const POSTGREST_PREFIX = "POSTGREST_";
 
 /** The narrowest proxy list a mistake can widen to: every peer inside may name any client address. */
 const WIDEST_PREFIX = { 4: 24, 6: 120 };
+
+/**
+ * The build values the site inlined at build that `.env` may also name: the name and its key in build.json.
+ * The site serves the built value; a different one in `.env` says the stack was configured for another build.
+ */
+const BUILT_URLS = [
+  ["NEXT_PUBLIC_SITE_URL", "siteUrl"],
+  ["NEXT_PUBLIC_LIVE_URL", "liveUrl"],
+  ["NEXT_PUBLIC_GTNH_DATASET_MANIFEST_URL", "datasetManifestUrl"],
+];
+
+/** Where the image keeps its build record, relative to this file in the image (/app/deploy/check-env.mjs). */
+const IMAGE_BUILD_JSON = fileURLToPath(new URL("../dist/client/build.json", import.meta.url));
 
 /** Reads KEY=VALUE lines as compose's --env-file does: comments, blanks and surrounding quotes ignored. */
 export function parseEnvFile(text) {
@@ -116,7 +132,9 @@ function trustedProxyProblems(value) {
  * Everything wrong with a deployed stack's environment. `image.modAndCommunity`
  * is the site image's org.gtnh.mod-and-community label: the value baked in at
  * build, which the run-time value must equal or every mod and community route
- * stays off. `options.rehearsal` accepts http:// origins (a workstation's stack).
+ * stays off. `image.build` is the image's build.json: the switch, the build id
+ * (which GTNH_TAG must name) and the URLs the bundles were built with.
+ * `options.rehearsal` accepts http:// origins (a workstation's stack).
  */
 export function checkDeployEnv(env, image, options = {}) {
   const problems = [];
@@ -150,10 +168,33 @@ export function checkDeployEnv(env, image, options = {}) {
       problems.push(`${name} must not be set on a deployed stack.`);
     }
   }
+  const switchDiffers =
+    "NEXT_PUBLIC_MOD_AND_COMMUNITY differs from the value the site image was built with: every mod and community route would stay off.";
   if (value("NEXT_PUBLIC_MOD_AND_COMMUNITY") !== (image?.modAndCommunity ?? "")) {
-    problems.push(
-      "NEXT_PUBLIC_MOD_AND_COMMUNITY differs from the value the site image was built with: every mod and community route would stay off.",
-    );
+    problems.push(switchDiffers);
+  }
+  const built = image?.build;
+  if (built) {
+    if (built.modAndCommunity !== (image?.modAndCommunity ?? "")) {
+      problems.push(
+        "The site image's build.json and its org.gtnh.mod-and-community label name different switches: rebuild the image.",
+      );
+    }
+    if (value("NEXT_PUBLIC_MOD_AND_COMMUNITY") !== built.modAndCommunity) {
+      problems.push(switchDiffers);
+    }
+    if (value("GTNH_TAG") && value("GTNH_TAG") !== built.buildId) {
+      problems.push(
+        "GTNH_TAG names another build than the site image's build.json: /api/version would never name this release.",
+      );
+    }
+    for (const [name, key] of BUILT_URLS) {
+      if (name in env && value(name) !== (built[key] ?? "")) {
+        problems.push(
+          `${name} differs from the value the site image was built with, which the site serves: remove it or rebuild.`,
+        );
+      }
+    }
   }
   for (const origin of value("LIVE_ALLOWED_ORIGINS")
     .split(",")
@@ -187,6 +228,7 @@ function main(argv) {
   const set = {};
   let label;
   let rehearsal = false;
+  let buildJson = IMAGE_BUILD_JSON;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--image-label") {
@@ -197,6 +239,8 @@ function main(argv) {
       if (eq > 0) {
         set[pair.slice(0, eq)] = pair.slice(eq + 1);
       }
+    } else if (arg === "--build-json") {
+      buildJson = argv[++i] ?? "";
     } else if (arg === "--rehearsal") {
       rehearsal = true;
     } else {
@@ -205,7 +249,7 @@ function main(argv) {
   }
   if (files.length === 0 || label === undefined) {
     console.error(
-      "Usage: check-env.mjs <env file>... --image-label <value> [--set NAME=value] [--rehearsal]",
+      "Usage: check-env.mjs <env file>... --image-label <value> [--set NAME=value] [--build-json <file>] [--rehearsal]",
     );
     return 2;
   }
@@ -218,7 +262,18 @@ function main(argv) {
       return 1;
     }
   }
-  const problems = checkDeployEnv({ ...env, ...set }, { modAndCommunity: label }, { rehearsal });
+  let build;
+  try {
+    build = JSON.parse(readFileSync(buildJson, "utf8"));
+  } catch {
+    console.error(`Cannot read the site image's build record ${buildJson}.`);
+    return 1;
+  }
+  const problems = checkDeployEnv(
+    { ...env, ...set },
+    { modAndCommunity: label, build },
+    { rehearsal },
+  );
   for (const problem of problems) {
     console.error(`env: ${problem}`);
   }

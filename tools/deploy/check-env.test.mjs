@@ -1,3 +1,7 @@
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { checkDeployEnv, parseEnvFile } from "./check-env.mjs";
 
@@ -78,6 +82,105 @@ describe("the deploy's env check", () => {
         { modAndCommunity: "on" },
       ),
     ).toEqual([]);
+  });
+
+  describe("against the image's build record", () => {
+    const build = () => ({
+      modAndCommunity: "",
+      buildId: "4.4.1-5efe0a3c",
+      siteUrl: "https://stage.gtnhplanner.idebugger.net",
+      liveUrl: "/live",
+      datasetManifestUrl: "/datasets/gtnh/datasets.manifest.json",
+    });
+    const image = (overrides = {}) => ({
+      modAndCommunity: "",
+      build: { ...build(), ...overrides },
+    });
+
+    it("accepts an env that names the image's own values or leaves them out", () => {
+      expect(checkDeployEnv(complete(), image())).toEqual([]);
+      const named = {
+        ...complete(),
+        NEXT_PUBLIC_SITE_URL: "https://stage.gtnhplanner.idebugger.net",
+        NEXT_PUBLIC_LIVE_URL: "/live",
+        NEXT_PUBLIC_GTNH_DATASET_MANIFEST_URL: "/datasets/gtnh/datasets.manifest.json",
+      };
+      expect(checkDeployEnv(named, image())).toEqual([]);
+    });
+
+    it("refuses a switch other than the build's, even when the label agrees with the env", () => {
+      const env = { ...complete(), NEXT_PUBLIC_MOD_AND_COMMUNITY: "on" };
+      expect(checkDeployEnv(env, { modAndCommunity: "on", build: build() })).toEqual([
+        "The site image's build.json and its org.gtnh.mod-and-community label name different switches: rebuild the image.",
+        "NEXT_PUBLIC_MOD_AND_COMMUNITY differs from the value the site image was built with: every mod and community route would stay off.",
+      ]);
+      expect(checkDeployEnv(env, image())).toEqual([
+        "NEXT_PUBLIC_MOD_AND_COMMUNITY differs from the value the site image was built with: every mod and community route would stay off.",
+      ]);
+    });
+
+    it("refuses a tag that names another build than the image's", () => {
+      expect(checkDeployEnv(complete(), image({ buildId: "4.4.1-00000000" }))).toEqual([
+        "GTNH_TAG names another build than the site image's build.json: /api/version would never name this release.",
+      ]);
+    });
+
+    it("refuses a site, live or manifest URL other than the one the image was built with, by name", () => {
+      const env = {
+        ...complete(),
+        NEXT_PUBLIC_SITE_URL: "https://s3cr3t.example",
+        NEXT_PUBLIC_LIVE_URL: "wss://s3cr3t.example/live",
+        NEXT_PUBLIC_GTNH_DATASET_MANIFEST_URL: "",
+      };
+      const problems = checkDeployEnv(env, image());
+      expect(problems).toEqual(
+        [
+          "NEXT_PUBLIC_SITE_URL",
+          "NEXT_PUBLIC_LIVE_URL",
+          "NEXT_PUBLIC_GTNH_DATASET_MANIFEST_URL",
+        ].map(
+          (name) =>
+            `${name} differs from the value the site image was built with, which the site serves: remove it or rebuild.`,
+        ),
+      );
+      for (const problem of problems) {
+        expect(problem).not.toMatch(/s3cr3t/);
+      }
+      expect(
+        checkDeployEnv({ ...complete(), NEXT_PUBLIC_LIVE_URL: "/live" }, image({ liveUrl: null })),
+      ).toHaveLength(1);
+    });
+
+    it("reads the record beside it, and refuses to pass without one", () => {
+      const dir = mkdtempSync(path.join(tmpdir(), "check-env-"));
+      try {
+        const envFile = path.join(dir, ".env");
+        writeFileSync(
+          envFile,
+          Object.entries(complete())
+            .map(([name, value]) => `${name}=${value}`)
+            .join("\n"),
+        );
+        const record = path.join(dir, "build.json");
+        const script = path.join(import.meta.dirname, "check-env.mjs");
+        const run = (...extra) =>
+          spawnSync(process.execPath, [script, envFile, "--image-label", "", ...extra], {
+            encoding: "utf8",
+          });
+        writeFileSync(record, JSON.stringify(build()));
+        expect(run("--build-json", record)).toMatchObject({ status: 0, stdout: "env: ok\n" });
+        const other = run("--build-json", record, "--set", "GTNH_TAG=4.4.1-00000000");
+        expect(other.status).toBe(1);
+        expect(other.stderr).toMatch(/^env: GTNH_TAG names another build/m);
+        const missing = run("--build-json", path.join(dir, "absent.json"));
+        expect(missing.status).toBe(1);
+        expect(missing.stderr).toMatch(/Cannot read the site image's build record/);
+        // From a checkout there is no dist/ beside tools/deploy: the default is the image's place.
+        expect(run().status).toBe(1);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 
   it("refuses an origin that is not https, unless rehearsing", () => {

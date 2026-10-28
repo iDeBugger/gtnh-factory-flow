@@ -18,9 +18,10 @@ const lightningcss = createRequire(
  * (tools/build/prerender.mjs).
  */
 /**
- * Writes `build.json` beside the client build: the community switch and the build id the bundle was given.
- * The server build takes both from it (tools/build/build-server.mjs), so a server is never built with other
- * values than the page it serves, whose prerendered shell differs by the switch.
+ * Writes `build.json` beside the client build: the build values the bundle was given, an unset one as null.
+ * The server build takes them from it (tools/build/build-server.mjs), so a server is never built with other
+ * values than the page it serves, whose prerendered shell differs by the switch and whose JSON-LD names the
+ * site. The deploy's env check reads it from the image (tools/deploy/check-env.mjs).
  */
 function buildValues(defines: Record<string, string>): Plugin {
   return {
@@ -28,6 +29,10 @@ function buildValues(defines: Record<string, string>): Plugin {
     apply: "build",
     generateBundle() {
       const value = (name: string) => JSON.parse(defines[`process.env.${name}`]!) as string;
+      const whenSet = (name: string) => {
+        const literal = defines[`process.env.${name}`]!;
+        return literal === "undefined" ? null : (JSON.parse(literal) as string);
+      };
       this.emitFile({
         type: "asset",
         fileName: "build.json",
@@ -35,6 +40,9 @@ function buildValues(defines: Record<string, string>): Plugin {
           {
             modAndCommunity: value("NEXT_PUBLIC_MOD_AND_COMMUNITY"),
             buildId: value("NEXT_PUBLIC_GTNH_BUILD_ID"),
+            siteUrl: whenSet("NEXT_PUBLIC_SITE_URL"),
+            liveUrl: whenSet("NEXT_PUBLIC_LIVE_URL"),
+            datasetManifestUrl: whenSet("NEXT_PUBLIC_GTNH_DATASET_MANIFEST_URL"),
           },
           null,
           2,

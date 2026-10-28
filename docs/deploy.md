@@ -103,6 +103,14 @@ layer, `LOCAL_DB` or `NODE_ENV`, a mod-and-community value
 that differs from the image's label (every mod and community route would stay 404), a non-https live origin, and
 a trusted proxy subnet wider than /24. It names the variable, never the value.
 
+The image also holds its build record, `dist/client/build.json`: the switch, the build id and the site, live and
+manifest URLs the client was built with, an unset one as `null`. The server build takes every one of them from it and
+fails on a different value in its env, so the page and the server are always built alike. The env check, run in the
+image, reads it too and refuses a label that disagrees with it, a `.env` switch other than the built one, a
+`GTNH_TAG` that is not its build id, and a `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_LIVE_URL` or
+`NEXT_PUBLIC_GTNH_DATASET_MANIFEST_URL` in `.env` that differs from the built value (the site serves the built one).
+So a mismatched deploy stops at step 4, before the old container is replaced.
+
 ## Server side (infra repo)
 
 Every server change goes through `iDeBugger/infra`, applied by the owner with `/opt/infra/bin/apply.sh`. No script
