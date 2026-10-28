@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkServerSetup, checkServerSetupOrExit } from "./startup-checks";
+import { checkServerSetup, checkServerSetupOrExit, modAndCommunityMismatch } from "./startup-checks";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -109,5 +109,22 @@ describe("the server's startup checks", () => {
       expect(() => checkServerSetup((message) => lines.push(message))).not.toThrow();
       expect(lines).toEqual([`[db] ${name} is not read: set DATABASE_URL.`]);
     }
+  });
+
+  it("say so as an error when the process's mod and community switch differs from the build's", () => {
+    expect(modAndCommunityMismatch("on", "on")).toBeUndefined();
+    expect(modAndCommunityMismatch(" ON ", "on")).toBeUndefined();
+    expect(modAndCommunityMismatch("", undefined)).toBeUndefined();
+    expect(modAndCommunityMismatch("off", "")).toBeUndefined();
+    expect(modAndCommunityMismatch("on", "")).toMatch(
+      /^\[mod-and-community\] NEXT_PUBLIC_MOD_AND_COMMUNITY is off here but on in the build/,
+    );
+    expect(modAndCommunityMismatch("", "on")).toMatch(/is on here but off in the build/);
+    // Unbundled, both reads are the process's, so the checks never see a mismatch.
+    vi.stubEnv("NEXT_PUBLIC_MOD_AND_COMMUNITY", "on");
+    const errors: string[] = [];
+    quiet();
+    checkServerSetup(() => {}, (message) => errors.push(message));
+    expect(errors).toEqual([]);
   });
 });

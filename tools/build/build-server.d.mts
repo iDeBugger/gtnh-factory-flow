@@ -5,3 +5,7 @@ export declare function buildServer(options?: {
   outDir?: string;
   env?: Record<string, string | undefined>;
 }): Promise<void>;
+export declare function serverEnv(
+  clientDir: string,
+  env: Record<string, string | undefined>,
+): Record<string, string | undefined>;

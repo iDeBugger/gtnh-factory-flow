@@ -21,8 +21,32 @@
  *   does not leave the server without a database while looking configured.
  *   The deployed stack's env check refuses the REST client's variables by
  *   name before anything starts (tools/deploy/check-env.mjs).
+ * - NEXT_PUBLIC_MOD_AND_COMMUNITY in the process says otherwise than the
+ *   build's (modAndCommunityMismatch): it says so as an error line. The
+ *   switch then stays off on the server (deployment-features.ts), while the
+ *   page, built the other way, still shows or hides the mod and the library.
+ *   Not refused, as the deployment's fail-safe is to keep serving the planner.
  */
 export const SHORT_SECRET_LENGTH = 16;
+
+const isOn = (value: string | undefined) => value?.trim().toLowerCase() === "on";
+
+/**
+ * The line to log when the running process's NEXT_PUBLIC_MOD_AND_COMMUNITY
+ * and the build's disagree, read the way deployment-features.ts reads them
+ * (exactly "on", any case, trimmed); undefined when they agree.
+ */
+export function modAndCommunityMismatch(
+  built: string | undefined,
+  running: string | undefined,
+): string | undefined {
+  if (isOn(built) === isOn(running)) return undefined;
+  return (
+    `[mod-and-community] NEXT_PUBLIC_MOD_AND_COMMUNITY is ${isOn(running) ? "on" : "off"} here but ` +
+    `${isOn(built) ? "on" : "off"} in the build: the mod and community routes are off, and the page does not ` +
+    "match this server. Start it with the value it was built with, or rebuild."
+  );
+}
 
 /**
  * The checks as the server runs them: a failure ends the process. A throw left
@@ -47,7 +71,10 @@ const UNREAD_DB_VARIABLES = [
   "LOCAL_DB",
 ] as const;
 
-export function checkServerSetup(warn: (message: string) => void = console.warn): void {
+export function checkServerSetup(
+  warn: (message: string) => void = console.warn,
+  error: (message: string) => void = console.error,
+): void {
   const salt = process.env.COMMUNITY_HASH_SALT;
   if (salt === undefined || salt.trim() === "") {
     warn(
@@ -70,5 +97,13 @@ export function checkServerSetup(warn: (message: string) => void = console.warn)
     if (process.env[name]) {
       warn(`[db] ${name} is not read: set DATABASE_URL.`);
     }
+  }
+  // The literal read is the build's value, inlined by the server build; the Reflect.get read is never inlined.
+  const mismatch = modAndCommunityMismatch(
+    process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY,
+    Reflect.get(process.env, "NEXT_PUBLIC_MOD_AND_COMMUNITY") as string | undefined,
+  );
+  if (mismatch) {
+    error(mismatch);
   }
 }

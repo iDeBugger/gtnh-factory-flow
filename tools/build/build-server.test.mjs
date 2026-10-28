@@ -4,7 +4,8 @@ import http from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { writeEntry } from "./build-server.mjs";
+import { serverEnv, writeEntry } from "./build-server.mjs";
+import { serverDefines } from "./define.mjs";
 
 const dirs = [];
 
@@ -88,5 +89,49 @@ describe("server.mjs", () => {
     const { code } = await exited;
     expect(await answered).toBe("up");
     expect(code).toBe(143);
+  });
+});
+
+describe("serverEnv", () => {
+  function clientWith(values) {
+    const dir = mkdtempSync(path.join(tmpdir(), "client-build-"));
+    dirs.push(dir);
+    if (values) writeFileSync(path.join(dir, "build.json"), JSON.stringify(values));
+    return dir;
+  }
+
+  it("takes the community switch and the build id from the client build", () => {
+    const dir = clientWith({ modAndCommunity: "on", buildId: "4.4.1-abcdef12" });
+    const env = serverEnv(dir, {
+      NEXT_PUBLIC_MOD_AND_COMMUNITY: "on",
+      NEXT_PUBLIC_SITE_URL: "https://x.test",
+    });
+    expect(env).toMatchObject({
+      NEXT_PUBLIC_MOD_AND_COMMUNITY: "on",
+      GTNH_BUILD_ID: "4.4.1-abcdef12",
+      NEXT_PUBLIC_SITE_URL: "https://x.test",
+    });
+    expect(serverDefines(env)).toMatchObject({
+      "process.env.NEXT_PUBLIC_MOD_AND_COMMUNITY": '"on"',
+      "process.env.NEXT_PUBLIC_GTNH_BUILD_ID": '"4.4.1-abcdef12"',
+    });
+    expect(serverEnv(clientWith({ modAndCommunity: "", buildId: "b" }), {})).toMatchObject({
+      NEXT_PUBLIC_MOD_AND_COMMUNITY: "",
+      GTNH_BUILD_ID: "b",
+    });
+  });
+
+  it("fails when the server would be built with another switch or build id than the client", () => {
+    const dir = clientWith({ modAndCommunity: "", buildId: "b" });
+    expect(() => serverEnv(dir, { NEXT_PUBLIC_MOD_AND_COMMUNITY: "on" })).toThrow(
+      /NEXT_PUBLIC_MOD_AND_COMMUNITY is "on" here but "" in the client build/,
+    );
+    expect(() => serverEnv(clientWith({ modAndCommunity: "on", buildId: "b" }), {})).toThrow(
+      /is "" here but "on"/,
+    );
+    expect(() => serverEnv(dir, { GTNH_BUILD_ID: "other" })).toThrow(/GTNH_BUILD_ID is "other"/);
+    expect(() => serverEnv(clientWith(undefined), {})).toThrow(
+      /run build:client before build:server/,
+    );
   });
 });
