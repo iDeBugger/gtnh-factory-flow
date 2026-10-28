@@ -28,7 +28,7 @@ import { describe, expect, it } from "vitest";
 const MAX_ALLOWED: Record<string, number> = {
   "1": 11,
   "2": 1,
-  "4": 1,
+  "4": 0,
   "5": 0,
   "6": 1,
   "7": 3,

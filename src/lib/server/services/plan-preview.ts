@@ -16,22 +16,16 @@ import { getFileStore, isFileStoreConfigured, type FileBucket } from "../file-st
 /**
  * Where the share flow puts each post's board photograph (a file store
  * bucket), one object per plan named `<planId>.png`. Deliberately not a table column: the object
- * name is derived from the id the card route already holds, so an old row
- * simply has no object and the card falls back to its icon face.
+ * name is derived from the plan id, so an old row simply has no object.
  */
 export const PLAN_PREVIEW_BUCKET: FileBucket = "plan-previews";
 
 /**
  * The largest side a stored preview may claim. The client captures at most
- * 1600 by 1000, so the bound costs nothing legitimate, and it keeps the one
- * decode the card pays (resvg, from the IHDR's own numbers) at most 64 MiB
- * with the 8-bit bound below.
+ * 1600 by 1000, so the bound costs nothing legitimate, and it keeps a decode
+ * of a stored picture at most 64 MiB with the 8-bit bound below.
  */
 export const PLAN_PREVIEW_MAX_SIDE = 4096;
-
-/** The card's hero area the photograph is contain-fit into, assuming a two-line title. */
-export const PREVIEW_BOX_WIDTH = 1084;
-export const PREVIEW_BOX_HEIGHT = 330;
 
 /**
  * The width and height a PNG's IHDR declares, or undefined when the bytes
@@ -61,28 +55,6 @@ export function readPngHeader(bytes: Uint8Array): { width: number; height: numbe
     return undefined;
   }
   return { width, height };
-}
-
-/**
- * The stored photograph contain-fit into the card's hero area by hand
- * (satori cannot infer an image's intrinsic size), from the IHDR alone so no
- * pixel decode is paid per unfurl. Undefined for a header the bound above
- * refuses, so an object stored before the check falls back to the icon face
- * rather than a decode.
- */
-export function sizePlanPreview(
-  png: Buffer,
-): { dataUri: string; width: number; height: number } | undefined {
-  const header = readPngHeader(png);
-  if (!header) {
-    return undefined;
-  }
-  const scale = Math.min(PREVIEW_BOX_WIDTH / header.width, PREVIEW_BOX_HEIGHT / header.height);
-  return {
-    dataUri: `data:image/png;base64,${png.toString("base64")}`,
-    width: Math.max(1, Math.round(header.width * scale)),
-    height: Math.max(1, Math.round(header.height * scale)),
-  };
 }
 
 /** The plan's stored board photograph, or undefined when none was uploaded. */

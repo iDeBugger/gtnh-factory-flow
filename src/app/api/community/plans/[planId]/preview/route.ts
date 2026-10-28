@@ -18,16 +18,15 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * The board photograph a shared link unfurls into. Stored in the file
+ * The post's board photograph, shown on its library page. Stored in the file
  * store's PRIVATE `plan-previews` bucket AT the plan's id (no schema column,
- * no URL to validate: the card route derives the object name from the id it
- * already has, and re-sharing overwrites in place) and served only through the
- * GET below, which checks the post: no other route serves that bucket.
+ * no URL to validate: the object name comes from the id, and re-sharing
+ * overwrites in place) and served only through the GET below, which checks
+ * the post: no other route serves that bucket.
  *
- * Owner-only, unlike board-image uploads: this picture becomes the plan's
- * public face in every chat the link is pasted into, so only the person who
- * owns the post gets to stamp it. The card trusts the PNG's header for its
- * size, so the header is checked here: a real IHDR with both sides within
+ * Owner-only, unlike board-image uploads: this picture is the post's public
+ * face, so only the person who owns the post gets to stamp it. The header is
+ * checked so the bucket holds only real PNGs: an IHDR with both sides within
  * `PLAN_PREVIEW_MAX_SIDE`. A re-share overwrites one object, so the cost of
  * a flood is storage churn; an account gets a few dozen an hour, counted
  * after the checks so junk spends no share.
@@ -82,7 +81,7 @@ export async function POST(
 
 /**
  * The photograph itself, for the library's preview page. A public post's is
- * the same picture every chat unfurl shows, so anyone may look; an
+ * public, so anyone may look; an
  * unpublished post's is its owner's (and the admin's) alone, and the answer
  * for one reads the same as for a post with no picture, so a stranger learns
  * nothing the detail route would not tell them.

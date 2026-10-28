@@ -98,8 +98,6 @@
   `api/datasets/[versionId]/client-files/route.test.ts`, `browser-loader.test.ts`.
 - Every server cache is bounded or index-sized (the Node heap is capped at 3 GB). A slow
   site: check the heap first.
-- The OG card route reads fonts through `process.cwd()`: the site image copies `src/app/fonts` beside the standalone
-  `server.js` (`Dockerfile`).
 - The image optimizer is off (`images.unoptimized` in next.config.ts): nothing uses next/image, and
   `/_next/image` would hand any same-origin PNG (uploads, dataset textures) to sharp. Pictures are served
   by the app's own routes or plain `<img>`; keep it that way.
@@ -481,10 +479,8 @@ Rules:
   `plan-previews` bucket is private and its pictures are served only by `GET .../preview`, which answers an
   unpublished post's picture to its owner and the admin alone (`Cache-Control: private, no-store`) and 404 `No preview.`
   to everyone else.
-  The share card sizes the picture from its IHDR without a decode, so the preview POST stores only a PNG whose
-  first chunk is an IHDR with both sides in 1..`PLAN_PREVIEW_MAX_SIDE` (4096; `readPngHeader` in `plan-preview.ts`,
-  else 415), `sizePlanPreview` answers nothing for an object that breaks the rule (the card falls back to the icon
-  face), and an account uploads at most 30 previews an hour (`PREVIEWS_PER_HOUR`, counted after the checks).
+  The preview POST stores only a PNG whose first chunk is an IHDR with both sides in 1..`PLAN_PREVIEW_MAX_SIDE`
+  (4096; `readPngHeader` in `plan-preview.ts`, else 415), and an account uploads at most 30 previews an hour (`PREVIEWS_PER_HOUR`, counted after the checks).
   No GET writes: a view is `POST .../view` (60 a minute per address), which the library's grid sends once when a player
   opens a post's page (`countPlanView` in `src/lib/community/client.ts`, from the tile's open gesture); the drawer, the
   bookmarks shelf and a copy being made are lookups (`getCommunityPlan`) and count nothing.

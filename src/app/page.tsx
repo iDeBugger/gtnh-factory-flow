@@ -7,11 +7,10 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 /**
- * A shared link unfurls as the plan it carries: its name, the author's words
- * (or the plan's numbers), and a card drawn from its inputs and outputs -
- * instead of the site's one generic face. Any other visit, and any plan a
- * crawler may not see, falls through to the layout's metadata untouched, as
- * does every visit while the community library is switched off.
+ * A shared link unfurls as the plan it carries: its name and the author's
+ * words (or the plan's numbers), over the site's own image. Any other visit,
+ * and any plan a crawler may not see, falls through to the layout's metadata
+ * untouched, as does every visit while the community library is switched off.
  */
 export async function generateMetadata({
   searchParams,
@@ -30,13 +29,6 @@ export async function generateMetadata({
 
   const description = describePlanRow(row);
   const planUrl = `/?plan=${encodeURIComponent(row.id)}`;
-  const image = {
-    url: `/api/community/plans/${encodeURIComponent(row.id)}/card`,
-    width: 1200,
-    height: 630,
-    alt: `${row.name} on GTNH Planner`,
-  };
-
   return {
     title: `${row.name} | GTNH Planner`,
     description,
@@ -47,13 +39,11 @@ export async function generateMetadata({
       siteName: "GTNH Planner",
       type: "website",
       url: planUrl,
-      images: [image],
     },
     twitter: {
       card: "summary_large_image",
       title: row.name,
       description,
-      images: [image.url],
     },
   };
 }

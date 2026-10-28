@@ -12,10 +12,10 @@ export function siteUrl(): string {
 }
 
 /**
- * The site's own host as images print it (the share card, the exported plan's
- * footer), from the same `NEXT_PUBLIC_SITE_URL`. Unset, blank or not a URL it
- * is undefined and the image prints no address: never the development server's
- * and never another site's.
+ * The site's own host as images print it (the exported plan's footer), from
+ * the same `NEXT_PUBLIC_SITE_URL`. Unset, blank or not a URL it is undefined
+ * and the image prints no address: never the development server's and never
+ * another site's.
  */
 export function siteHost(): string | undefined {
   const value = (process.env.NEXT_PUBLIC_SITE_URL ?? "").trim();

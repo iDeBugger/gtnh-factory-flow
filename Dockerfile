@@ -53,7 +53,7 @@ RUN --mount=type=cache,id=gtnh-next-cache,target=/app/.next/cache,sharing=locked
     NEXT_TELEMETRY_DISABLED=1 \
     npm run build \
  && npm run build:live -- --metafile=dist-live/meta.json \
- && chmod -R a+rX,go-w public src/app/fonts tools/deploy
+ && chmod -R a+rX,go-w public tools/deploy
 
 # The live service's run-time packages: the ones its bundle leaves external
 # (esbuild --packages=external; the build's metafile names them) and their
@@ -73,12 +73,10 @@ RUN mkdir -p /app/public/datasets/gtnh /app/.next/cache /data/files /data/client
 # Next's standalone output (next.config.ts): server.js with the traced server
 # files and the packages they load, the config serialized inside. Next leaves
 # the client files and public/ to be copied beside it. Public files carry no
-# datasets: they are a volume. The card route reads its fonts through
-# process.cwd(). Unchanging parts first: a deploy whose packages, public
-# files and fonts are the same reuses those layers.
+# datasets: they are a volume. Unchanging parts first: a deploy whose
+# packages and public files are the same reuses those layers.
 COPY --from=build /app/.next/standalone/node_modules ./node_modules
 COPY --from=build /app/public ./public
-COPY --from=build /app/src/app/fonts ./src/app/fonts
 # The deploy runs the env check in this image, against the server's .env.
 COPY --from=build /app/tools/deploy/check-env.mjs ./deploy/
 COPY --from=build /app/.next/static ./.next/static

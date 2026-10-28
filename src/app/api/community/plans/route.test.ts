@@ -5,7 +5,6 @@ import * as plan from "./[planId]/route";
 import * as vote from "./[planId]/vote/route";
 import * as comments from "./[planId]/comments/route";
 import * as comment from "./[planId]/comments/[commentId]/route";
-import * as card from "./[planId]/card/route";
 import * as download from "./[planId]/download/route";
 import * as preview from "./[planId]/preview/route";
 import * as view from "./[planId]/view/route";
@@ -25,7 +24,6 @@ const handlers: Array<[string, Handler]> = [
   ["GET /plans/[id]/comments", comments.GET as unknown as Handler],
   ["POST /plans/[id]/comments", comments.POST as unknown as Handler],
   ["DELETE /plans/[id]/comments/[id]", comment.DELETE as unknown as Handler],
-  ["GET /plans/[id]/card", card.GET as unknown as Handler],
   ["POST /plans/[id]/download", download.POST as unknown as Handler],
   ["POST /plans/[id]/preview", preview.POST as unknown as Handler],
   ["GET /plans/[id]/preview", preview.GET as unknown as Handler],
@@ -55,11 +53,9 @@ describe("the community plan routes with the setting on", () => {
   withModAndCommunityOn();
 
   // This test server has no community database, so each route answers as it
-  // always has without one: the hub's 503, the card's redirect to the site
-  // image, and no stored preview.
+  // always has without one: the hub's 503, and no stored preview.
   const unconfigured = { error: "Community hub is not configured." };
   const expected: Record<string, [number, unknown]> = {
-    "GET /plans/[id]/card": [302, undefined],
     "GET /plans/[id]/preview": [404, { error: "No preview." }],
   };
   it.each(handlers)("%s answers as before", async (...entry) => {

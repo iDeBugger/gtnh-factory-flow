@@ -576,7 +576,7 @@ const NO_PREVIEW = "No preview.";
 
 /**
  * Whether the viewer may look at a post's board photograph: a public post's
- * is the picture every chat unfurl shows; an unpublished post's is for
+ * is public; an unpublished post's is for
  * whoever `canSeePlan` admits, and refused as a post with no picture.
  */
 export async function previewAccess(

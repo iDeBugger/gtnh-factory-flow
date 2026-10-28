@@ -186,8 +186,8 @@ The Dockerfile is laid out so a deploy rebuilds and rewrites only what its commi
   (`gtnh-next-cache`), so it compiles only what changed.
 - The site image is Next's standalone output (`output: "standalone"` in `next.config.ts`): `server.js`, the traced
   server files and only the packages they load (about 60 MB, against the 470 MB the whole run-time install was),
-  then `.next/static`, `public/` and the card route's fonts. The config is serialized into `server.js` at build;
-  nothing reads `next.config.ts` at run time. The layers that rarely change (packages, public files, fonts) come
+  then `.next/static` and `public/`. The config is serialized into `server.js` at build;
+  nothing reads `next.config.ts` at run time. The layers that rarely change (packages, public files) come
   first, so a deploy that leaves them alone reuses them.
 - The live image holds `dist-live/` and only the packages it can load: the ones its bundle leaves external
   (esbuild's metafile names them) and their whole run-time closure from `package-lock.json`, dependencies, optional

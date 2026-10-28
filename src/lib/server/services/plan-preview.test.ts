@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { pngHeader } from "@/test-support/png";
-import { quietMarkdown, readPngHeader, sizePlanPreview } from "./plan-preview";
+import { quietMarkdown, readPngHeader } from "./plan-preview";
 
 describe("the stored board photograph's header", () => {
   it("reads the size of a PNG whose first chunk is an IHDR within the bound", () => {
@@ -23,14 +23,6 @@ describe("the stored board photograph's header", () => {
     const notPng = pngHeader(100, 100);
     notPng[0] = 0x00;
     expect(readPngHeader(notPng)).toBeUndefined();
-  });
-
-  it("contain-fits a 1600 by 1000 picture into the card's box, and sizes nothing it refuses", () => {
-    const sized = sizePlanPreview(pngHeader(1600, 1000));
-    expect(sized).toMatchObject({ width: 528, height: 330 });
-    expect(sized!.dataUri.startsWith("data:image/png;base64,iVBORw0KGgo")).toBe(true);
-    expect(sizePlanPreview(pngHeader(100, 100, "IDAT"))).toBeUndefined();
-    expect(sizePlanPreview(pngHeader(5000, 10))).toBeUndefined();
   });
 });
 

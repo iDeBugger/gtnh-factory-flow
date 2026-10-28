@@ -127,8 +127,8 @@ export function SharePlanDialog({
     setUploading(true);
     setError(undefined);
     try {
-      // Photograph the board while the plan uploads: the picture is what the
-      // share link unfurls into in a chat. Best-effort — a failed photo must
+      // Photograph the board while the plan uploads: the picture is the post's
+      // face on its library page. Best-effort — a failed photo must
       // never fail the post.
       const previewPromise = capturePlanPreviewPng();
       // Whatever is still sitting in the tag input counts as one last tag.

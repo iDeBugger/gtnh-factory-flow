@@ -59,13 +59,6 @@
     "reason": "The image optimizer is off in Next and the path is gone with it: a plain 404 now."
   },
   {
-    "case": "scenario community card missing|route (GET|HEAD) /api/community/plans/\\[planId\\]/card.*",
-    "field": "headers.location",
-    "a": "https://0\\.0\\.0\\.0:3770/opengraph-image\\.png",
-    "b": "http://127\\.0\\.0\\.1:3770/opengraph-image\\.png",
-    "reason": "The intended change (Needs an owner decision 1, I30): the missing card's redirect names siteUrl(), not Next's listen address."
-  },
-  {
     "case": "cap board image 6 MiB",
     "field": "headers.connection",
     "a": "keep-alive",

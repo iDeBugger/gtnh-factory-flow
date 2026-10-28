@@ -269,6 +269,8 @@ from the folders, and nothing is discovered at run time.
 
 ### Task 1: The wire-format parity harness
 
+> **Removed by I31:** the share card route is gone. Its cases (the scenario's card steps and the card route cases) answer 404 on Express, and the card's allow entry is dropped.
+
 **Files:**
 - Create: `tools/http-parity/requests.mjs`, `tools/http-parity/requests.d.mts`, `tools/http-parity/raw-http.mjs`,
   `tools/http-parity/capture.mjs`, `tools/http-parity/normalize.mjs`, `tools/http-parity/compare.mjs`,
@@ -643,6 +645,8 @@ it("has a parity case for every route and every method", () => {
 - [ ] **Step 4: Run the suite and commit.** `git commit -m "I25 One route table names every handler and the path its folders give it"`
 
 ### Task 5: Express app core: adapter, path normalization, headers, 404/405/500 (from 2026-10-29 13:22 UTC)
+
+> **Removed by I31:** no handler writes `request.url`'s origin any more: the card route that did is gone.
 
 **Files:**
 - Create: `src/server/http/adapter.ts`, `src/server/app.ts`, `src/server/middleware/normalize-path.ts`,
@@ -1115,6 +1119,8 @@ it("sends the Link preload header Next sent, by asset bytes", async () => { /* p
 
 ### Task 9: Server entries: production main, dev server, build, SIGTERM, timeouts
 
+> **Removed by I31:** the server bundle carries no `@vercel/og`: no `require`/`__dirname` banner for it and no `hb.wasm`, `resvg.wasm` or font files beside the bundle.
+
 **Files:**
 - Create: `src/server/main.ts`, `src/server/dev.ts`, `src/server/shutdown.ts`, `src/server/main.test.ts`,
   `src/server/test-support/start.ts`, `src/lib/server/lifecycle.ts`, `tools/build/build-server.mjs`,
@@ -1223,6 +1229,8 @@ it("exits 143 on a real SIGTERM", async () => { /* spawn tsx src/server/test-sup
   `git commit -m "I25 Express has a production entry that prewarms and drains on SIGTERM, a Vite dev server and a build"`
 
 ### Task 10: Parity run, perf and memory (fix commits only)
+
+> **Removed by I31:** the card pixel compare is dropped, and `/?plan=<id>` has no image tag of its own: the site's `opengraph-image.png` stands.
 
 **Files:** none planned. Each fix found here is its own commit, in the module that owns the behaviour, with a test
 that pins it.

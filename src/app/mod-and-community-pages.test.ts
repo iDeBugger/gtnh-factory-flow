@@ -119,7 +119,7 @@ describe("with the setting unset", () => {
     expect(text).toContain("balance machine ratios, and compute EU/t power draw and throughput. No account");
   });
 
-  it("robots.txt allows no community card", () => {
+  it("robots.txt allows the site and keeps the API out", () => {
     expect(robots().rules).toMatchObject([{ allow: ["/"] }]);
   });
 
@@ -147,7 +147,7 @@ describe("with the setting unset", () => {
 describe("with the setting on", () => {
   withModAndCommunityOn();
 
-  it("the sitemap and llms.txt list community plans, and robots allows their card", async () => {
+  it("the sitemap and llms.txt list community plans", async () => {
     const entries = await sitemap();
     expect(entries.map((entry) => entry.url)).toContain(`https://stage.gtnhplanner.idebugger.net/?plan=${PUBLIC_ID}`);
     expect(entries.map((entry) => entry.url)).not.toContain(`https://stage.gtnhplanner.idebugger.net/?plan=${PRIVATE_ID}`);
@@ -156,7 +156,7 @@ describe("with the setting on", () => {
     expect(text).toContain(`- [Steel line](https://stage.gtnhplanner.idebugger.net/?plan=${PUBLIC_ID}): Makes steel`);
     expect(text).not.toContain(PRIVATE_ID);
     expect(text).toContain("share plans with the community");
-    expect(robots().rules).toMatchObject([{ allow: ["/", "/api/community/plans/*/card"] }]);
+    expect(robots().rules).toMatchObject([{ allow: ["/"] }]);
   });
 
   it("the sitemap and llms.txt answer without community plans when the database fails", async () => {
@@ -186,7 +186,11 @@ describe("with the setting on", () => {
   });
 
   it("a ?plan= link unfurls as its plan, and /community redirects to it", async () => {
-    expect(await generateMetadata(planSearch)).toMatchObject({ title: "Steel line | GTNH Planner" });
+    const meta = await generateMetadata(planSearch);
+    expect(meta).toMatchObject({ title: "Steel line | GTNH Planner" });
+    // No image of its own: the site's opengraph-image.png stands, as on every other page.
+    expect(meta.openGraph).not.toHaveProperty("images");
+    expect(meta.twitter).not.toHaveProperty("images");
     await expect(CommunityRedirect(planSearch)).rejects.toMatchObject({
       digest: expect.stringContaining("NEXT_REDIRECT"),
     });

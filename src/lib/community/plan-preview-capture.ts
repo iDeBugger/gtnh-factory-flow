@@ -11,7 +11,7 @@ import { BOARD_IMAGE_MAX_BYTES } from "@/lib/community/types";
 import { randomUUID } from "@/lib/random-id";
 
 /**
- * The photograph a shared link unfurls into: the live board, taken with the
+ * The post's board photograph, shown on its library page: the live board, taken with the
  * export dialog's defaults (detailed cards, ordinary board colours, no
  * margin notes, the author's own paper). Captured at the moment of sharing —
  * the same moment the plan JSON goes out — so the picture and the post can

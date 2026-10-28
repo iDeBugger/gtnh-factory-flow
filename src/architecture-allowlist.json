@@ -61,11 +61,6 @@
       "rule": "2"
     },
     {
-      "from": "src/app/api/community/plans/[planId]/card/route.tsx",
-      "to": "src/components/flow/tier-colors.ts",
-      "rule": "4"
-    },
-    {
       "from": "src/lib/search/resource-search-engine.ts",
       "to": "src/lib/server/bounded-lru.ts",
       "rule": "6"
