@@ -51,12 +51,23 @@ export type WebHandler = (request: Request, context: RouteContext) => Response |
 
 export type RouteModule = Partial<Record<HttpMethod, WebHandler>>;
 
+/**
+ * How Next served a route its segment config made static, which shows on the wire. Named in the table by hand;
+ * the test holds it to each file's segment config.
+ * - `"static"` (`dynamic = "force-static"`): every method gets the GET answer, and an answer with no
+ *   Cache-Control of its own gets `s-maxage=31536000`;
+ * - `"revalidate"` (`revalidate` above 0): GET and HEAD only; any other method, OPTIONS included, answers 405
+ *   with `Allow: GET` and `Allow: HEAD` as two lines and the body `Method Not Allowed`.
+ */
+export type NextServing = "static" | "revalidate";
+
 export interface RouteEntry {
   /** The Express 5 path: `:name` for `[name]`, `*name` for `[...name]`. */
   path: string;
   /** The route file's repo path. */
   source: string;
   module: RouteModule;
+  serving?: NextServing;
 }
 
 const METHODS: readonly HttpMethod[] = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
@@ -140,11 +151,16 @@ function pick(module: Record<string, unknown>): RouteModule {
  * check widens them to the shared context type, which is sound because the adapter passes exactly the params the
  * folders name. The test holds that `module` is the file `source` names.
  */
-function entry<S extends string>(source: S, module: TypedRouteModule<S>): RouteEntry {
+function entry<S extends string>(
+  source: S,
+  module: TypedRouteModule<S>,
+  serving?: NextServing,
+): RouteEntry {
   return {
     path: routePathForFile(source),
     source,
     module: pick(module as Record<string, unknown>),
+    ...(serving ? { serving } : {}),
   };
 }
 
@@ -190,7 +206,7 @@ export const ROUTES: readonly RouteEntry[] = [
     apiDatasetsVersionIdResolveRecipes,
   ),
   entry("src/app/api/datasets/[versionId]/resources/route.ts", apiDatasetsVersionIdResources),
-  entry("src/app/api/highs/[file]/route.ts", apiHighsFile),
+  entry("src/app/api/highs/[file]/route.ts", apiHighsFile, "static"),
   entry("src/app/api/library/route.ts", apiLibrary),
   entry("src/app/api/library/designs/[designId]/route.ts", apiLibraryDesignsDesignId),
   entry(
@@ -212,5 +228,5 @@ export const ROUTES: readonly RouteEntry[] = [
     "src/app/datasets/gtnh/[versionId]/textures/[...assetPath]/route.ts",
     datasetsGtnhVersionIdTexturesAssetPath,
   ),
-  entry("src/app/llms.txt/route.ts", llmsTxt),
+  entry("src/app/llms.txt/route.ts", llmsTxt, "revalidate"),
 ];

@@ -110,6 +110,24 @@ describe("the route table", () => {
     }
   });
 
+  it("marks the routes Next served from its prerender cache as their segment config says, and only those", async () => {
+    // force-static is "static"; a revalidate above 0 is "revalidate"; anything else Next ran per request.
+    const servingOf = (config: Record<string, unknown>) =>
+      config.dynamic === "force-static"
+        ? "static"
+        : typeof config.revalidate === "number" && config.revalidate > 0
+          ? "revalidate"
+          : undefined;
+    for (const route of ROUTES) {
+      const config = (await import(path.join(REPO, route.source))) as Record<string, unknown>;
+      expect(route.serving, route.source).toBe(servingOf(config));
+    }
+    expect(ROUTES.filter((route) => route.serving).map((route) => route.source)).toEqual([
+      "src/app/api/highs/[file]/route.ts",
+      "src/app/llms.txt/route.ts",
+    ]);
+  });
+
   it("lists OPTIONS' Allow sorted, as Next does", () => {
     expect(optionsAllow({ POST: h, GET: h })).toBe("GET, HEAD, OPTIONS, POST");
     expect(optionsAllow({ POST: h })).toBe("OPTIONS, POST");
