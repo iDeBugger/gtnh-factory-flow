@@ -228,9 +228,20 @@ function clientWentAway(res: ExpressResponse): boolean {
 }
 
 /**
- * Writes a handler's Response: its status, its headers (each Set-Cookie on its own line), and its body piped with
- * backpressure, none on HEAD. The handler's Response is only read, never changed: some carry immutable headers
- * (`Response.redirect`).
+ * The headers a route's answer adds to what is already on the answer. Any other header the answer already carries
+ * (the security headers) wins over the route's own of the same name, as in Next's `sendResponse`.
+ */
+const REPEATABLE_HEADERS = new Set([
+  "set-cookie",
+  "www-authenticate",
+  "proxy-authenticate",
+  "vary",
+]);
+
+/**
+ * Writes a handler's Response: its status, its headers (each Set-Cookie on its own line; see
+ * `REPEATABLE_HEADERS` for a name already set), and its body piped with backpressure, none on HEAD. The
+ * handler's Response is only read, never changed: some carry immutable headers (`Response.redirect`).
  */
 export async function sendWebResponse(
   req: ExpressRequest,
@@ -244,7 +255,9 @@ export async function sendWebResponse(
     res.setHeader("cache-control", defaultCacheControl);
   }
   for (const [name, value] of response.headers) {
-    if (name !== "set-cookie") res.setHeader(name, value);
+    if (name === "set-cookie") continue;
+    if (REPEATABLE_HEADERS.has(name)) res.appendHeader(name, value);
+    else if (res.getHeader(name) === undefined) res.setHeader(name, value);
   }
   const cookies = response.headers.getSetCookie();
   if (cookies.length > 0) res.setHeader("set-cookie", cookies);

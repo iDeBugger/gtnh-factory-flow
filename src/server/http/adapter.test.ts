@@ -37,6 +37,22 @@ const routes: RouteEntry[] = [
     },
   },
   {
+    path: "/api/t/own-headers",
+    source: "test",
+    module: {
+      GET: () => {
+        const headers = new Headers({
+          "content-security-policy": "default-src 'none'",
+          "x-frame-options": "DENY",
+          vary: "Origin",
+          "www-authenticate": "Basic",
+          "x-own": "kept",
+        });
+        return new Response("ok", { headers });
+      },
+    },
+  },
+  {
     path: "/api/t/redirect",
     source: "test",
     module: { GET: () => Response.redirect(`${SITE}/elsewhere`, 302) },
@@ -182,6 +198,19 @@ describe("the adapter", () => {
   it("passes several Set-Cookie headers through one by one", async () => {
     const answer = await call(server.port, "GET", "/api/t/cookies");
     expect(header(answer.headers, "set-cookie")).toEqual(["a=1; Path=/", "b=2; Path=/; HttpOnly"]);
+  });
+
+  it("keeps the security headers over a route's own of the same name, and adds Vary and the rest, as Next did", async () => {
+    const site = await call(server.port, "GET", "/api/t/url");
+    const answer = await call(server.port, "GET", "/api/t/own-headers");
+    expect(header(answer.headers, "content-security-policy")).toEqual(
+      header(site.headers, "content-security-policy"),
+    );
+    expect(header(answer.headers, "content-security-policy")[0]).not.toBe("default-src 'none'");
+    expect(header(answer.headers, "x-frame-options")).toEqual(["SAMEORIGIN"]);
+    expect(header(answer.headers, "vary")).toEqual(["Origin"]);
+    expect(header(answer.headers, "www-authenticate")).toEqual(["Basic"]);
+    expect(header(answer.headers, "x-own")).toEqual(["kept"]);
   });
 
   it("copies the headers of a Response whose headers are immutable, without changing them", async () => {
