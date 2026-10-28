@@ -7,8 +7,12 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { REQUEST_TOO_BIG_MESSAGE } from "@/lib/server/http/request-body";
+import { checkServerSetupOrExit } from "@/lib/server/startup-checks";
 import { startServer, type StartedServer, type StartOptions } from "./main";
 import { call } from "./test-support/serve";
+
+// The real check exits on a missing setting; a test that passes no setupCheck sees this one.
+vi.mock("@/lib/server/startup-checks", () => ({ checkServerSetupOrExit: vi.fn() }));
 
 const REPO = path.resolve(import.meta.dirname, "../..");
 const HASH = `'sha256-${"A".repeat(43)}='`;
@@ -138,6 +142,20 @@ describe("startServer", () => {
     expect(console.info).toHaveBeenCalledWith(
       "GTNH default dataset prewarmed; other versions load in the background.",
     );
+  });
+
+  it("runs the server's own setup check once, before the prewarm, when given none", async () => {
+    const calls: string[] = [];
+    vi.mocked(checkServerSetupOrExit).mockImplementation(() => calls.push("check"));
+    const { ready } = await start({
+      setupCheck: undefined,
+      prewarm: async () => {
+        calls.push("prewarm");
+      },
+    });
+    await ready;
+    expect(checkServerSetupOrExit).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(["check", "prewarm"]);
   });
 
   it("prewarms nothing unless GTNH_PREWARM_ON_STARTUP is 1", async () => {
