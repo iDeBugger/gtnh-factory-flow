@@ -2,7 +2,7 @@
  * Express on one side, a route handler's web `Request` and `Response` on the other. The handlers keep the
  * signature they have under Next; this file is the only place that knows both worlds.
  */
-import type { IncomingMessage } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type {
@@ -186,8 +186,9 @@ export function toWebRequest(req: ExpressRequest, options: WebRequestOptions): R
 
 /**
  * Reads and discards the rest of a request body nobody read, within `bounds`, then closes the connection: after
- * a handler's answer, and after the error answer of a handler that failed mid-body (not-found.ts). The answer
- * says `Connection: close`. Once begun, the drain owns the body: the handler's stream errors.
+ * a handler's answer, after the error answer of a handler that failed mid-body (not-found.ts), and under any
+ * answer sent after the stop began (shutdown.ts). The answer says `Connection: close`. Once begun, the drain owns
+ * the body: the handler's stream errors.
  *
  * Node closes a `Connection: close` socket as soon as the answer is flushed (`destroySoon`), which with request
  * bytes still arriving is the reset described at `DRAIN_MAX_BYTES`. Until the drain ends, that close is held back
@@ -207,7 +208,7 @@ export function hasUnreadBody(req: IncomingMessage): boolean {
 
 export function drainUnreadBody(
   req: IncomingMessage,
-  res: ExpressResponse,
+  res: ServerResponse,
   bounds: DrainBounds,
 ): void {
   const state = bodyState(req);

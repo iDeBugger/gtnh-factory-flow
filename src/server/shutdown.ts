@@ -1,4 +1,5 @@
 import type http from "node:http";
+import { DEFAULT_DRAIN, drainUnreadBody, hasUnreadBody, type DrainBounds } from "./http/adapter";
 
 export interface ShutdownOptions {
   /** How long open requests may take to finish before every connection is closed. */
@@ -6,6 +7,8 @@ export interface ShutdownOptions {
   exit: (code: number) => void;
   /** Releases what the server holds (closeServerResources), after the last request. */
   close: () => Promise<void>;
+  /** The bounds of the drain that reads a body still arriving under a closing answer. */
+  drain?: DrainBounds;
 }
 
 /** The longest the release may take, so a hung pool never outlives the stop (grace + this stays under 20 s). */
@@ -25,13 +28,27 @@ export function installShutdown(
   options: ShutdownOptions,
 ): (signal?: "SIGTERM" | "SIGINT") => Promise<void> {
   let stopping: Promise<void> | undefined;
-  // Answers whose head has not gone out yet. Once the stop begins each says `Connection: close`, so the proxy
-  // in front never reuses a socket this server is about to close.
-  const open = new Set<http.ServerResponse>();
+  const drain = options.drain ?? DEFAULT_DRAIN;
+  /*
+   * Once the stop begins, each answer whose head has not gone out closes its connection and says
+   * `Connection: close`, so the proxy in front never reuses a socket this server is about to close. The close
+   * is held on `shouldKeepAlive`, which an answer that resets its headers (the error handler) cannot undo. An
+   * answer sent while the request's body still arrives drains that body within the bounds before the socket
+   * closes: a close under unread bytes resets the connection and can lose the answer.
+   */
+  const closing = (req: http.IncomingMessage, res: http.ServerResponse): void => {
+    res.shouldKeepAlive = false;
+    res.setHeader("connection", "close");
+    res.once("prefinish", () => {
+      if (hasUnreadBody(req)) drainUnreadBody(req, res, drain);
+    });
+  };
+  // Answers whose head has not gone out yet.
+  const open = new Map<http.ServerResponse, http.IncomingMessage>();
   // Ahead of the app's own listener, which may answer at once.
-  server.prependListener("request", (_req, res) => {
-    if (stopping) res.setHeader("connection", "close");
-    else open.add(res);
+  server.prependListener("request", (req, res) => {
+    if (stopping) closing(req, res);
+    else open.set(res, req);
     // A connection that was busy when the stop began closes as soon as its answer has gone out.
     res.on("finish", () => {
       open.delete(res);
@@ -45,8 +62,8 @@ export function installShutdown(
       options.exit(code);
       return stopping;
     }
-    for (const res of open) {
-      if (!res.headersSent) res.setHeader("connection", "close");
+    for (const [res, req] of open) {
+      if (!res.headersSent) closing(req, res);
     }
     open.clear();
     stopping = new Promise<void>((resolve) => {

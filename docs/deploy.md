@@ -53,8 +53,10 @@ infra commit first.
   nothing in its image: the sitemap and llms.txt are held in memory for an hour, and the `.next/cache` tmpfs
   compose still mounts is left empty. Site and live run as uid 1000 over root-owned files.
 - On SIGTERM the site stops taking connections, closes its idle keep-alive connections, lets open requests finish
-  (each of those answers says `Connection: close`, so Caddy never reuses a socket about to close), releases the
-  database pool (at most 2 s) and exits 143. After 15 s it closes every connection still open. A SIGTERM during the
+  and releases the database pool (at most 2 s), then exits 143. Every answer whose head goes out after the stop
+  began closes its connection and says `Connection: close`, so Caddy never reuses a socket about to close; when
+  the request's body is still arriving, the site reads the rest within its drain bounds before it closes, so
+  the answer is not lost to a reset. After 15 s it closes every connection still open. A SIGTERM during the
   prewarm waits for the prewarm's current step first: the worst stop measured was 19.3 s. Live stops within
   30 s, storing every open plan and releasing its leases.
 - The images run `npm ci` with their own npm (11.19), which needs lockfile entries an older npm leaves out (the

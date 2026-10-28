@@ -115,6 +115,14 @@ export function sendNextFileError(res: Response): void {
 }
 
 /**
+ * Clears what earlier middleware put on an answer, except `Connection`: a close the stop asked for stays said
+ * (shutdown.ts).
+ */
+function clearHeaders(res: Response): void {
+  for (const name of res.getHeaderNames()) if (name !== "connection") res.removeHeader(name);
+}
+
+/**
  * Last in the chain. A param decode error answers as Next did; every other error answers Next's own 500: the
  * security headers and an empty body, never a stack. The client keeps its own fallback sentence for a 500. The
  * headers are written here again, so an error raised before the security-header middleware ran still carries
@@ -132,7 +140,7 @@ export function errorHandler(
         res.destroy();
         return;
       }
-      for (const name of res.getHeaderNames()) res.removeHeader(name);
+      clearHeaders(res);
       if (hasUnreadBody(req)) drainUnreadBody(req, res, drain);
       sendNextPlainError(res);
       return;
@@ -144,7 +152,7 @@ export function errorHandler(
       res.destroy();
       return;
     }
-    for (const name of res.getHeaderNames()) res.removeHeader(name);
+    clearHeaders(res);
     for (const [name, value] of headersForPath(req.path, env)) res.setHeader(name, value);
     // A handler that failed with the body half read left it paused: drain the rest, then close.
     if (hasUnreadBody(req)) drainUnreadBody(req, res, drain);
