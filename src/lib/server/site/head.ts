@@ -88,8 +88,11 @@ export const SITE_IMAGE: OgImage = {
   alt: "The GTNH Planner board: a Benzene setup drawn as a flowchart, with the item list on the left and the plan totals on the right\n",
 };
 
-/** `src/server/page/assets/favicon.ico`, linked before the other icons. */
-const FAVICON = { url: "/favicon.ico", sizes: "48x48", type: "image/x-icon" };
+/**
+ * `src/server/page/assets/favicon.ico`, linked before the other icons. Its size is the file's largest image, as
+ * Next's metadata wrote it (head.test.ts holds both to the file).
+ */
+export const FAVICON = { url: "/favicon.ico", sizes: "48x48", type: "image/x-icon" };
 
 /**
  * The site's own head, built at each call so the community setting is read

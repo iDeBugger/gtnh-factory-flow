@@ -10,7 +10,7 @@ vi.mock("@/lib/server/services/plan-preview", async (importOriginal) => ({
   getPublicPlanRow: (id: string) => getPublicPlanRow(id),
 }));
 
-import { renderHead, SITE_IMAGE, siteHead } from "./head";
+import { FAVICON, renderHead, SITE_IMAGE, siteHead } from "./head";
 import { headForRequest, planHead } from "./plan-head";
 
 const ORIGIN = "http://127.0.0.1:3770";
@@ -180,6 +180,21 @@ describe("the site image", () => {
       new URL("../../../server/page/assets/opengraph-image.png", import.meta.url),
     );
     expect(readPngHeader(png)).toEqual({ width: SITE_IMAGE.width, height: SITE_IMAGE.height });
+  });
+
+  it("links the favicon with the type and the largest size the file holds", () => {
+    const ico = readFileSync(new URL("../../../server/page/assets/favicon.ico", import.meta.url));
+    // ICONDIR: reserved 0, type 1 (an icon), then one 16-byte entry per image (a 0 side means 256).
+    expect([ico.readUInt16LE(0), ico.readUInt16LE(2)]).toEqual([0, 1]);
+    const sides = Array.from({ length: ico.readUInt16LE(4) }, (_, index) => {
+      const at = 6 + 16 * index;
+      return [ico[at] || 256, ico[at + 1] || 256] as const;
+    });
+    const largest = sides.reduce((best, side) =>
+      side[0] * side[1] > best[0] * best[1] ? side : best,
+    );
+    expect(FAVICON.sizes).toBe(`${largest[0]}x${largest[1]}`);
+    expect(FAVICON.type).toBe("image/x-icon");
   });
 
   it("carries no query when the build gives no version", () => {
