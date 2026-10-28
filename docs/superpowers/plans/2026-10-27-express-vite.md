@@ -714,9 +714,12 @@ it("has a parity case for every route and every method", () => {
     security headers. The destination is Next's: the WHATWG pathname without its trailing slash, then the query
     **re-serialized** the way Next's `stringifyQuery` does: `?a` becomes `?a=`, and `+` in a value becomes `%20`.
     Implement it as `querystring.stringify` of the parsed query, the module Next uses, and pin it against the
-    baseline (`/api/version/?a&b=x+y`). The path half is also Next's: each segment of the path is decoded, then
-    encoded again the way Next compiles `/:path+` (`encodeURIComponent` per segment, read from
-    `load-custom-routes.js` and the baseline). It is pinned by `/api/%76ersion/`, `/a%20b/` and `/a%2Fb/`.
+    baseline (`/api/version/?a&b=x+y`). The path half is also Next's, read from the baseline: the WHATWG pathname
+    without its last `/`. Escapes are kept as sent and nothing is decoded: `/api/%76ersion/` goes to
+    `/api/%76ersion`, `/a%2Fb/` to `/a%2Fb`, and `:`, `@` and `(` stay as they are; only the characters WHATWG
+    escapes are escaped (`/a"b/` goes to `/a%22b`). It is pinned by `/api/%76ersion/`, `/a%20b/`, `/a%2Fb/` and
+    the probed locations of the fixture. A path with a repeated slash takes the first redirect: `/a//b/` goes to
+    `/a/b/`, so its trailing slash survives one hop.
   - `canonicalPath()`: after the redirects, `req.url` becomes the WHATWG pathname of the raw target plus the raw
     search. `.` and `..` segments, and `%2e`/`%2E` dot segments, resolve the way Next's router and proxy saw them.
     Every later middleware sees this path: security headers, the gate, the cross-site check, the static mounts and
@@ -768,7 +771,7 @@ it("resolves dot segments as Next does, in the 308 Location and before routing",
   expect((await call(port, "GET", "/api/%2e/version")).status).toBe(200);
   expect((await call(port, "GET", "/api/x/../version")).status).toBe(200);
 });
-it("re-encodes the path of a trailing-slash 308 as Next does", async () => {
+it("keeps the path of a trailing-slash 308 as sent, escapes and all, as Next does", async () => {
   for (const t of ["/api/%76ersion/", "/a%20b/", "/a%2Fb/"])
     expect((await call(port, "GET", t)).headers).toContainEqual(["location", nextFixture.slashLocationFor(t)]);
 });
