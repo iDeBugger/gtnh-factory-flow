@@ -345,6 +345,27 @@ const RULES: Record<string, (edge: Edge) => boolean> = {
   "13": ({ from, to }) => from.startsWith("src/") && to.startsWith("tools/"),
 };
 
+/**
+ * Files that import `next` or `next/*`, type-only imports included: every
+ * route handler, and every file outside src/app (Next's pages, layouts and
+ * metadata files under src/app are its own until the cut). The handlers
+ * must answer the same outside Next.
+ */
+function nextImporters(graph: Map<string, SourceFile>): string[] {
+  return [...graph.values()]
+    .filter((file) => !isExempt(file.path))
+    .filter((file) => isRouteHandler(file.path) || !file.path.startsWith("src/app/"))
+    .filter((file) => file.edges.some((edge) => /^pkg:next(\/|$)/.test(edge.to)))
+    .map((file) => file.path)
+    .sort();
+}
+
+/** Today's next imports outside the pages, each until the task that removes it. The list only shrinks. */
+const NEXT_IMPORT_EXCEPTIONS = new Map<string, string>([
+  ["src/app/sitemap.ts", "MetadataRoute's type, until Task 12 moves the sitemap off Next"],
+  ["src/proxy.ts", "Next's middleware, until Task 12 removes it"],
+]);
+
 /** Services return results, never HTTP responses; no allowlist entry excuses one. */
 const importsNext = ({ from, to }: Edge): boolean =>
   from.startsWith("src/lib/server/services/") && /^pkg:next(\/|$)/.test(to);
@@ -905,13 +926,14 @@ describe("the layers", () => {
     expect(next.map((edge) => `${edge.from} -> ${edge.to}`)).toEqual([]);
   });
 
-  it("no route handler or server module imports next/server or next/og", () => {
-    const offenders = [...graph.values()]
-      .filter((f) => !isExempt(f.path) && (isRouteHandler(f.path) || isServer(f.path)))
-      .flatMap((f) =>
-        f.edges.filter((e) => /^pkg:next\/(server|og)$/.test(e.to)).map((e) => `${f.path} -> ${e.to}`),
-      );
+  it("only the pages and Next's own files import next, so the handlers and the rest run without it", () => {
+    const offenders = nextImporters(graph).filter((file) => !NEXT_IMPORT_EXCEPTIONS.has(file));
     expect(offenders).toEqual([]);
+  });
+
+  it("every next import exception still imports next", () => {
+    const importers = new Set(nextImporters(graph));
+    expect([...NEXT_IMPORT_EXCEPTIONS.keys()].filter((file) => !importers.has(file))).toEqual([]);
   });
 
   it("only the data layer sends a query", () => {
