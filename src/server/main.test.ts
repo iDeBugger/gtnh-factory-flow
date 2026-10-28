@@ -120,6 +120,8 @@ afterAll(() => {
 });
 
 beforeEach(() => {
+  // A mock a test gave an implementation or calls keeps neither into the next test.
+  vi.mocked(checkServerSetupOrExit).mockReset();
   vi.stubEnv("GTNH_PREWARM_ON_STARTUP", "1");
   vi.stubEnv("NEXT_PUBLIC_SITE_URL", "http://127.0.0.1:3770");
   vi.spyOn(console, "info").mockImplementation(() => {});
