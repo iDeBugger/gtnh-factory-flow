@@ -399,3 +399,47 @@ describe("the app's routing rules", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("a development server's own middlewares", () => {
+  /** Stands in for Vite's middlewares: it answers every request that reaches it. */
+  const dev: RequestHandler = (_req, res) => {
+    res.statusCode = 200;
+    res.setHeader("content-type", "text/plain");
+    res.end("dev");
+  };
+  let devServer: Listening;
+  const EVIL = { host: "parity.example", origin: "https://evil.example" };
+
+  beforeAll(async () => {
+    devServer = await listen(
+      createApp({
+        env: { production: false, siteUrl: SITE },
+        publicDir: "/nonexistent",
+        datasetsDir: "/nonexistent",
+        devMiddlewares: [dev],
+      }),
+    );
+  });
+  afterAll(() => devServer.close());
+
+  it("run after the redirects, the security headers, the dataset gate and the cross-site check", async () => {
+    const slashes = await call(devServer.port, "GET", "//main.tsx");
+    expect(slashes.status).toBe(308);
+    expect(header(slashes, "location")).toBe("/main.tsx");
+    const trailing = await call(devServer.port, "GET", "/main.tsx/");
+    expect(trailing.status).toBe(308);
+    expect(header(trailing, "location")).toBe("/main.tsx");
+
+    const served = await call(devServer.port, "GET", "/main.tsx");
+    expect(served.body.toString()).toBe("dev");
+    for (const name of SECURITY_HEADERS) expect(header(served, name), name).toBeDefined();
+    expect(header(served, "content-security-policy")).toContain("'unsafe-eval'");
+
+    const gated = await call(devServer.port, "GET", "/%64atasets/gtnh/v/recipes.json");
+    expect(gated.status).toBe(400);
+    expect(JSON.parse(gated.body.toString())).toEqual({ error: "Invalid dataset path." });
+
+    const crossSite = await call(devServer.port, "POST", "/api/community/auth/logout", EVIL, "{}");
+    expect(crossSite.status).toBe(403);
+  });
+});

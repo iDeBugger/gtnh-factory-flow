@@ -2,7 +2,7 @@
  * The site as an Express 5 app. Its first middlewares do, in Next's order, what Next did without being asked:
  * the 308s for repeated slashes, backslashes and a trailing slash, then the canonical path, then the security
  * headers, then what Next's proxy did (the dataset path gate and the cross-site write check), then the dataset
- * backend of a development server, then the static files. Then the site files, the route table (each route with
+ * backend and the own middlewares (Vite's) of a development server, then the static files. Then the site files, the route table (each route with
  * its OPTIONS and 405 answers), the page and `/community`, the 404 and the error answer.
  */
 import express, { type Express, type RequestHandler } from "express";
@@ -53,6 +53,12 @@ export interface AppOptions {
   datasetBackendUrl?: string;
   /** Mounted first, before the ready gate. */
   before?: RequestHandler[];
+  /**
+   * A development server's own middlewares (Vite's). Mounted after the redirects, the canonical path, the
+   * security headers, the dataset gate and the cross-site check, so dev answers through the same gate and
+   * redirects as production, and ahead of the static files and the routes.
+   */
+  devMiddlewares?: RequestHandler[];
   /** For tests only: routes mounted ahead of the table. Production passes none. */
   extraRoutes?: RouteEntry[];
   /** For tests only: the drain's bounds instead of the defaults in adapter.ts. */
@@ -138,6 +144,7 @@ export function createApp(options: AppOptions): Express {
   app.use(datasetGate());
   app.use(crossSiteWriteGuard());
   if (options.datasetBackendUrl) app.use(datasetBackendProxy(options.datasetBackendUrl));
+  for (const middleware of options.devMiddlewares ?? []) app.use(middleware);
   if (options.clientDir) app.use(clientAssets(options.clientDir));
   app.use(publicFiles(options.publicDir));
   app.use(datasetPublicFiles(options.datasetsDir));
