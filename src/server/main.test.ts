@@ -195,6 +195,26 @@ describe("startServer", () => {
     await closed;
   });
 
+  it("exits 143 within the release bound when closing the database never finishes", async () => {
+    for (const graceMs of [60_000, 100]) {
+      const exit = vi.fn();
+      // graceMs 60 s: the server closes on its own (no request is open); 100 ms: a held request runs the grace out.
+      const server = await start({
+        exit,
+        graceMs,
+        close: () => new Promise(() => {}),
+        prewarm: graceMs === 100 ? () => new Promise(() => {}) : async () => {},
+      });
+      if (graceMs !== 100) await server.ready;
+      if (graceMs === 100) void call(server.port, "GET", "/api/version").catch(() => {});
+      await tick();
+      const began = Date.now();
+      await server.shutdown();
+      expect(exit, `grace ${graceMs}`).toHaveBeenCalledWith(143);
+      expect(Date.now() - began, `grace ${graceMs}`).toBeLessThan(3_000);
+    }
+  }, 15_000);
+
   it("exits 143 on shutdown while the prewarm is still running", async () => {
     const exit = vi.fn();
     const server = await start({ exit, graceMs: 200, prewarm: () => new Promise(() => {}) });
