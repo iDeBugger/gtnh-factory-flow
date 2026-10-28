@@ -464,6 +464,51 @@ function syntaxTree(file: SourceFile): ts.SourceFile {
  * so it would only mislead. Every script file counts here, the exempt ones (tests, the dev pages) and workers too:
  * `scriptFiles` reads the whole checkout, not only the graph's src/ and tools/.
  */
+/** A spawn site: `new Worker(new URL("<file>", import.meta.url)`, or a SharedWorker's. */
+const SPAWN =
+  /new\s+(?:Shared)?Worker\(\s*new\s+URL\(\s*["'`]([^"'`]+)["'`]\s*,\s*import\.meta\.url/g;
+
+/**
+ * A worker never imports the module that spawns it, at any depth (src/components/flow/CLAUDE.md): Vite builds that
+ * without a warning, the worker bundle then carries its spawner, and the spawner's `new Worker(...)` becomes
+ * `new Worker(self.location.href)`, a worker that can start a copy of itself. Reported as `worker -> spawner`;
+ * type-only imports are erased and do not count.
+ */
+function workerSpawnerImports(graph: Map<string, SourceFile>): string[] {
+  // A fixture's files are not on disk, so an edge to one reads as unresolved; it is looked up in the graph.
+  const inGraph = (to: string): string | undefined => {
+    if (graph.has(to)) return to;
+    if (!to.startsWith("unresolved:")) return undefined;
+    const base = to.slice("unresolved:".length);
+    return [base, ...SOURCE_EXTENSIONS.map((extension) => base + extension)].find((file) =>
+      graph.has(file),
+    );
+  };
+  const found: string[] = [];
+  for (const spawner of graph.values()) {
+    if (!spawner.path.startsWith("src/") || isExempt(spawner.path)) continue;
+    for (const [, specifier] of spawner.text.matchAll(SPAWN)) {
+      const worker = inGraph(resolveSpecifier(path.join(ROOT, spawner.path), specifier!));
+      if (!worker) {
+        found.push(`${spawner.path} spawns ${specifier}, which is not a source file`);
+        continue;
+      }
+      const reached = new Set([worker]);
+      const queue = [worker];
+      while (queue.length > 0) {
+        for (const edge of graph.get(queue.shift()!)?.edges ?? []) {
+          const to = edge.typeOnly ? undefined : inGraph(edge.to);
+          if (!to || reached.has(to)) continue;
+          reached.add(to);
+          queue.push(to);
+        }
+      }
+      if (reached.has(spawner.path)) found.push(`${worker} -> ${spawner.path}`);
+    }
+  }
+  return found.sort();
+}
+
 /** Every script extension a file of the checkout may be written in, for the directive check. */
 const SCRIPT_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
 
@@ -1428,6 +1473,32 @@ describe("the layers", () => {
     expect(serviceDbNames(good)).toEqual([]);
     expect(handleReexports(good)).toEqual([]);
     expect(sqlOutOfPlace(good)).toEqual([]);
+  });
+
+  it("no worker imports the module that spawns it", () => {
+    // The four workers are found, so the check reads the real spawn sites.
+    const spawned = [...graph.values()].flatMap((file) =>
+      file.path.startsWith("src/") && !isExempt(file.path) ? [...file.text.matchAll(SPAWN)] : [],
+    );
+    expect(spawned).toHaveLength(4);
+    expect(workerSpawnerImports(graph)).toEqual([]);
+  });
+
+  it("finds a worker that reaches its spawner at any depth, and not through a type import", () => {
+    const fixtures: Record<string, string> = {
+      "src/lib/spawner.ts":
+        'import "./other";\nexport const start = () => new Worker(new URL("./job.worker.ts", import.meta.url), { type: "module" });',
+      "src/lib/job.worker.ts": 'import { help } from "./helper";\nhelp();',
+      "src/lib/helper.ts": 'import { start } from "./spawner";\nexport const help = () => start;',
+      "src/lib/typed.ts":
+        'export const run = () => new Worker(new URL("./typed.worker.ts", import.meta.url));',
+      "src/lib/typed.worker.ts": 'import type { run } from "./typed";\nexport type R = typeof run;',
+      "src/lib/other.ts": "export {};",
+    };
+    const files = new Map(
+      Object.entries(fixtures).map(([file, text]) => [file, toSourceFile(file, text)]),
+    );
+    expect(workerSpawnerImports(files)).toEqual(["src/lib/job.worker.ts -> src/lib/spawner.ts"]);
   });
 
   it("no script file of the checkout carries a 'use client' directive", () => {
