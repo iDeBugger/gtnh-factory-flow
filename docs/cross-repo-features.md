@@ -2,7 +2,7 @@
 
 Written 2026-10-14 by adding buffer drawers (`buffer-drawers.md`) to both the mod and the website, start to finish. The
 mod is GTNH Planner (Java 25 downgraded to 8, Minecraft 1.7.10, this repo). The website is Factory Flow's one-mode board
-(Next.js and TypeScript, `C:\Users\jack\gtnh-ff-backport`, branch `mod-backport`). A copy of this file lives in the
+(TypeScript and React, served by Express with a Vite build, `C:\Users\jack\gtnh-ff-backport`, branch `mod-backport`). A copy of this file lives in the
 website at `docs/cross-repo-features.md`; change both together.
 
 ## How the two relate
@@ -55,7 +55,7 @@ website at `docs/cross-repo-features.md`; change both together.
 | Solver tests | `src/test/java/.../solver/` (`SolverGoldenTest`, `SolverPathTest`, `SolverIslandTest`), `SolverCorpus` digest by reflection | `lib/solver/plan/__fixtures__/` (`golden.test.ts`, `harness.test.ts`, `digest.ts` by hand), `solve-core.test.ts` |
 | Corpus input dump | `dev/SolveInputJson` (`call 'solvedump?dir=...'` in game, or a test that writes it) | `__fixtures__/load.ts` (`parseSolveInput`) |
 | Parity of the adapter | (none) | `adapter/parity.test.ts` (website plans against the mod's dumps of the same plans) |
-| Running it | `tools/dev/mc.sh` (`start`, `call`, `shot`; gate on `idle`) | `next dev -p <port>`, `/dev/clean-card` (`window.__ccStore`), Playwright |
+| Running it | `tools/dev/mc.sh` (`start`, `call`, `shot`; gate on `idle`) | `PORT=<port> npm run dev`, `/dev/clean-card` (`window.__ccStore`), Playwright |
 | Player notes | `.changelogs/unreleased.md` | `src/lib/changelog.ts` (at deploy) |
 
 ## The order to do it in

@@ -2,7 +2,7 @@
 // (see K below), and
 // write mod | web montages, a red/cyan anaglyph and an index page under tools/parity/out/.
 //   node tools/parity/run.mjs [filter-regex] [--headed]
-// Server: GTNH_DATASET_BACKEND_URL=https://gtnhplanner.com node node_modules/next/dist/bin/next dev -p 3120
+// Server: GTNH_DATASET_BACKEND_URL=https://gtnhplanner.com PORT=3120 npm run dev
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

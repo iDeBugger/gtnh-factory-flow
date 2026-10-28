@@ -207,7 +207,7 @@ The Dockerfile is laid out so a deploy rebuilds and rewrites only what its commi
   the prebuild step, `tools/build/`, the env check, `live-deps.mjs` and `tools/db/migrate.ts`), the Dockerfile and
   the bake file out of the context: they are neither sent nor hashed. The site build runs on every deploy, as the
   build id is baked into the bundles. Tailwind scans the same files in a checkout (`@source` in
-  `src/app/globals.css`), so a checkout's build and the image's have the same CSS.
+  `src/client/globals.css`), so a checkout's build and the image's have the same CSS.
 - `npm ci` depends on `package.json` and `package-lock.json` alone, with npm's download cache in a BuildKit cache
   mount (`gtnh-npm`): a deploy with the same lockfile reuses the install.
 - `npm run build` builds the client with Vite, prerenders the page and bundles the server with esbuild, in one `RUN`
@@ -215,7 +215,7 @@ The Dockerfile is laid out so a deploy rebuilds and rewrites only what its commi
   `dist/client/build.json` and fails on a different one (Environment, above).
 - The site image is the server bundle and what it reads from its working folder `/app`: `dist/server/server.mjs`
   and `app.mjs`, `dist/client` (the page template, `page.json` with the script hashes, `build.json` and
-  `/assets`), `public/`, the two site files `src/app/favicon.ico` and `src/app/opengraph-image.png`, the env check
+  `/assets`), `public/`, the two site files `src/server/page/assets/favicon.ico` and `opengraph-image.png`, the env check
   in `deploy/`, and in `node_modules` only the packages the bundle leaves external (express, pg, kysely, zod,
   highs) with their whole run-time closure, collected the way the live image's are (`live-deps.mjs` over
   `dist/server/meta.json`, the `site-deps` stage). The highs route and the solver read

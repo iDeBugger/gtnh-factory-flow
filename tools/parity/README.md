@@ -6,8 +6,8 @@ repo worktree), captures it at the mod's scale, and compares.
 ## Run
 
 ```bash
-# 1. dev server (a junctioned node_modules needs the local next.config.ts tweak, skip-worktree'd; see master plan)
-GTNH_DATASET_BACKEND_URL=https://gtnhplanner.com node node_modules/next/dist/bin/next dev -p 3120
+# 1. dev server (Express with Vite)
+GTNH_DATASET_BACKEND_URL=https://gtnhplanner.com PORT=3120 npm run dev
 
 # 2. captures: tools/parity/out/<state>.side.png (mod left, web right), .ana.png (mod red, web cyan), index.html
 node tools/parity/run.mjs                 # every state in states.mjs (about 8 min); or a regex: run.mjs 'drawer|rail'

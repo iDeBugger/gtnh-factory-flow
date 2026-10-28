@@ -6,7 +6,7 @@ others built, vote, and open any shared plan directly in the editor.
 ## Architecture
 
 - **Frontend**: `/community` (browser) and the Share button in the editor.
-- **API**: Next.js routes under `src/app/api/community/**`. All validation,
+- **API**: the site's routes under `src/server/routes/api/community/**`. All validation,
   stat derivation, vote deduplication, and rate limiting happen here.
 - **Storage**: Postgres, reached only by the site's server code
   (`src/lib/server/repos/`) and the live service, each logged in as its own
