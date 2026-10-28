@@ -68,7 +68,9 @@
     "vitest": "^4.1.6"
   },
   "overrides": {
-    "fflate": "0.7.5"
+    "satori": {
+      "fflate": "0.7.5"
+    }
   },
   "volta": {
     "node": "24.21.0"
