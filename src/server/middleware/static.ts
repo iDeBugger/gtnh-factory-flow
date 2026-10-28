@@ -19,20 +19,29 @@ import { canonicalParts } from "./normalize-path";
 import { sendNextFileError, sendNextPlainError } from "./not-found";
 
 /**
- * The content types Next's file handler sent, where they differ from serve-static's: Next typed files with the
- * `mime` 1 table and its charset rule (`UTF-8`, upper case, on text, JavaScript and JSON only).
+ * The file types of the `mime` 1 table where it differs from serve-static's (mime-db), or where the site's files
+ * pin it: the parity fixtures hold these. Any other extension takes serve-static's type.
  */
-const NEXT_CONTENT_TYPES: Record<string, string> = {
-  ".js": "application/javascript; charset=UTF-8",
-  ".mjs": "application/javascript; charset=UTF-8",
-  ".json": "application/json; charset=UTF-8",
-  ".map": "application/json; charset=UTF-8",
-  ".css": "text/css; charset=UTF-8",
-  ".html": "text/html; charset=UTF-8",
-  ".txt": "text/plain; charset=UTF-8",
+const MIME1_TYPES: Record<string, string> = {
+  ".js": "application/javascript",
+  ".mjs": "application/javascript",
+  ".json": "application/json",
+  ".map": "application/json",
+  ".css": "text/css",
+  ".html": "text/html",
+  ".txt": "text/plain",
   ".webmanifest": "application/manifest+json",
   ".ico": "image/x-icon",
 };
+
+/**
+ * A file answer's `Content-Type`, by `mime` 1's charset rule: `charset=UTF-8` (upper case) on a type that starts
+ * with `text/`, `application/javascript` or `application/json`, and no charset on any other.
+ */
+export function fileContentType(type: string): string {
+  const base = type.split(";", 1)[0]!.trim();
+  return /^text\/|^application\/(javascript|json)/.test(base) ? `${base}; charset=UTF-8` : base;
+}
 
 /**
  * The types Next's compression counted as compressible, among those the site serves. Next put `Vary:
@@ -199,8 +208,14 @@ function serveStatic(root: string, options: { immutable?: boolean; dotfiles: "ig
     fallthrough: true,
     ...(options.immutable ? { immutable: true, maxAge: "1y" } : {}),
     setHeaders(res, file) {
-      const type = NEXT_CONTENT_TYPES[path.extname(file).toLowerCase()];
-      if (type) res.setHeader("content-type", type);
+      const extension = path.extname(file).toLowerCase();
+      let type = MIME1_TYPES[extension];
+      if (!type) {
+        // serve-static's own type for the extension, from Express's table, before the charset rule.
+        (res as unknown as Response).type(extension || "bin");
+        type = String(res.getHeader("content-type"));
+      }
+      res.setHeader("content-type", fileContentType(type));
     },
   });
 }

@@ -8,7 +8,7 @@ import { diffCases, type AllowEntry, type StoredCase } from "../../tools/http-pa
 import type { RawAnswer } from "../../tools/http-parity/requests.mjs";
 import gateAnswers from "./__fixtures__/next-gate-answers.json";
 import { createApp } from "./app";
-import { resolveLikeSend } from "./middleware/static";
+import { fileContentType, resolveLikeSend } from "./middleware/static";
 import { call, listen, type Listening } from "./test-support/serve";
 
 /**
@@ -50,6 +50,10 @@ beforeAll(async () => {
   put("public/highs.js", "var Module;");
   put("public/highs.wasm", "wasm bytes");
   put("public/site.webmanifest", "{}");
+  put("public/notes.md", "# notes");
+  put("public/table.csv", "a,b");
+  put("public/logo.svg", "<svg/>");
+  put("public/LICENSE", "text");
   put("public/.hidden", "dot file");
   put("public/datasets/gtnh/v/recipes.json", "raw");
   put("public/datasets/gtnh/datasets.manifest.json", '{"schemaVersion":1}');
@@ -137,6 +141,11 @@ describe("the static mounts", () => {
       ["/datasets/gtnh/v/textures/atlas/atlas-0000.png", "image/png", undefined],
       ["/assets/index-abc123.js", "application/javascript; charset=UTF-8", "Accept-Encoding"],
       ["/assets/index-abc123.css", "text/css; charset=UTF-8", "Accept-Encoding"],
+      // Beyond the listed types, the charset rule: text gets UTF-8 in upper case, anything else no charset.
+      ["/notes.md", "text/markdown; charset=UTF-8", "Accept-Encoding"],
+      ["/table.csv", "text/csv; charset=UTF-8", "Accept-Encoding"],
+      ["/logo.svg", "image/svg+xml", "Accept-Encoding"],
+      ["/LICENSE", "application/octet-stream", undefined],
     ];
     for (const [target, type, vary] of expected) {
       for (const method of ["GET", "HEAD"]) {
@@ -146,6 +155,14 @@ describe("the static mounts", () => {
         expect(headers(answer, "vary"), `${method} ${target}`).toEqual(vary ? [vary] : []);
       }
     }
+  });
+
+  it("puts mime 1's charset on text, JavaScript and JSON types only", () => {
+    expect(fileContentType("text/markdown; charset=utf-8")).toBe("text/markdown; charset=UTF-8");
+    expect(fileContentType("application/json")).toBe("application/json; charset=UTF-8");
+    expect(fileContentType("application/javascript")).toBe("application/javascript; charset=UTF-8");
+    expect(fileContentType("application/manifest+json")).toBe("application/manifest+json");
+    expect(fileContentType("image/png")).toBe("image/png");
   });
 
   it("answers 304 to If-None-Match on a public file, with no type and no Vary", async () => {
