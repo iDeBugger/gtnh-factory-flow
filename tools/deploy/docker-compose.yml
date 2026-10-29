@@ -110,7 +110,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-      - /app/.next/cache:uid=1000,gid=1000
     # Heap 3 GB (the image's NODE_OPTIONS) with both dataset versions loaded.
     mem_limit: 4g
     stop_grace_period: 30s

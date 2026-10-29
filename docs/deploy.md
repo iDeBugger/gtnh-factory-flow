@@ -50,8 +50,8 @@ infra commit first.
   live; the site image also sets `TINI_KILL_PROCESS_GROUP=1`), `no-new-privileges`, no capabilities
   (`cap_drop: ALL`), `restart: unless-stopped`, json-file logs of 3 x 10 MB. Every container's root filesystem is
   read-only: site and live with tmpfs `/tmp`, postgres with tmpfs `/tmp` and its socket directory. The site writes
-  nothing in its image: the sitemap and llms.txt are held in memory for an hour, and the `.next/cache` tmpfs
-  compose still mounts is left empty. Site and live run as uid 1000 over root-owned files.
+  nothing in its image: the sitemap and llms.txt are held in memory for an hour. Site and live run as uid 1000
+  over root-owned files.
 - On SIGTERM the site stops taking connections, closes its idle keep-alive connections, lets open requests finish
   and releases the database pool (at most 2 s), then exits 143. Every answer whose head goes out after the stop
   began closes its connection and says `Connection: close`, so Caddy never reuses a socket about to close; when

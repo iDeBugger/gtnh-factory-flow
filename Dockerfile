@@ -9,8 +9,7 @@
 # Both run as the image's `node` user (uid 1000) with root-owned, read-only
 # application files. Datasets, uploaded files, client files and the live
 # journal are mounted volumes; nothing in the image is written at run time
-# but /tmp. The site keeps an empty /app/.next/cache, which compose still
-# mounts a tmpfs over.
+# but /tmp.
 #
 # Layers are ordered so a deploy rewrites only what changed: the package
 # installs depend on package.json and package-lock.json alone, npm's download
@@ -79,10 +78,8 @@ FROM ${NODE_IMAGE} AS site
 # The app root: the server reads dist/client, public/, the site files in
 # src/server/page/assets and node_modules/highs/build from its working folder.
 WORKDIR /app
-# .next/cache stays only because compose still mounts a tmpfs there; nothing
-# writes it.
-RUN mkdir -p /app/public/datasets/gtnh /app/.next/cache /data/files /data/client-files \
- && chown node:node /app/.next/cache /data/files /data/client-files
+RUN mkdir -p /app/public/datasets/gtnh /data/files /data/client-files \
+ && chown node:node /data/files /data/client-files
 # The server bundle (dist/server: server.mjs, which sets NODE_ENV and loads
 # app.mjs), the built client (dist/client: the page template, page.json with
 # the script hashes, build.json and /assets), public/, the two site files the
