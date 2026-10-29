@@ -30,8 +30,8 @@
  *
  * The no-flash boot script in src/client/boot.ts stamps the same variables before
  * first paint from the same storage key (`uiScaleBootScript` in
- * ui-scale-boot.ts, which has no hook import so the server layout may use
- * it), and `UiScaleRestore` re-stamps them once the app runs and after a
+ * ui-scale-boot.ts, which has no hook import so boot.ts may load it
+ * without React), and `UiScaleRestore` re-stamps them once the app runs and after a
  * back-forward-cache restore.
  */
 

@@ -22,7 +22,7 @@
  * failed with "unnamed prepared statement does not exist", and another
  * client's rollback took autocommitted inserts with it (29 rows kept of 75).
  * With `maxConnections: 1` a second client is refused outright (ECONNRESET),
- * so Next and the live service could not both hold a connection. Neither is
+ * so the site and the live service could not both hold a connection. Neither is
  * a database two processes can share, so:
  * - with LOCAL_DB_POSTGRES_URL set (dev-local sets it when Docker answers and
  *   it has started the compose file's pinned `postgres` image on 54330), both

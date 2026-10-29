@@ -1,6 +1,6 @@
 /**
- * Express on one side, a route handler's web `Request` and `Response` on the other. The handlers keep the
- * signature they have under Next; this file is the only place that knows both worlds.
+ * Express on one side, a route handler's web `Request` and `Response` on the other. The handlers take a web
+ * `Request` and return a web `Response`; this file is the only place that knows both worlds.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";

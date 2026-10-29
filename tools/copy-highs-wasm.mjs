@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
 import path from "node:path";
 
 // The solve worker loads HiGHS at runtime and fetches its wasm from
-// /highs.wasm; this puts the binary where Next serves it. Runs as predev and
+// /highs.wasm; this puts the binary in public/, which the site serves. Runs as predev and
 // prebuild so neither a dev checkout nor a deploy clone can forget it, and
 // the file itself stays out of git.
 mkdirSync("public", { recursive: true });

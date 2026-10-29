@@ -1,8 +1,8 @@
 /**
  * The interface size's constants and no-flash boot script. Split from
- * ui-scale.ts, which imports a React hook: Next refuses a hook-importing
- * module in the server layout, and the layout is where the boot script is
- * inlined. See ui-scale.ts for the model.
+ * ui-scale.ts, which imports a React hook: src/client/boot.ts inlines the
+ * boot script into the page, and the dev server loads boot.ts without React.
+ * See ui-scale.ts for the model.
  */
 
 import { PHONE_MAX_HEIGHT, PHONE_MAX_WIDTH } from "@/lib/viewport-breakpoints";

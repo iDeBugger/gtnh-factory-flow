@@ -3,7 +3,7 @@ import type { PoolConfig } from "pg";
 /** The variables the pool reads: `process.env`, or a test's own. */
 export type DbEnv = Readonly<Record<string, string | undefined>>;
 
-/** Which process opens the pool: the site (Next) or the live service. */
+/** Which process opens the pool: the site or the live service. */
 export type DbService = "site" | "live";
 
 /**
