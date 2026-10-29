@@ -149,36 +149,53 @@ async function checkEngine(name, engine) {
       const field = page.locator('input[aria-label="Search items and fluids"]').first();
       await field.waitFor();
       await field.fill("Iron Ingot");
-      const slot = page.locator('[aria-label="Resource results"] .nei-slot').first();
-      await slot.waitFor();
-      await slot.click();
-      const add = page.locator('[aria-label="Add recipe node"]').first();
-      await add.waitFor();
-      await add.click();
-      await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length > 0);
-      await page.keyboard.press("Escape");
-      const deadline = Date.now() + 60_000;
-      while (
-        Date.now() < deadline &&
-        !requests.some((request) => /highs\.wasm/.test(request.url))
-      ) {
-        await page.waitForTimeout(250);
-      }
-      await page.waitForTimeout(2000);
-      const wasm = requests.find((request) => /highs\.wasm/.test(request.url));
-      if (!wasm)
-        findings.push(
-          label(
-            `solve: the worker never fetched highs.wasm (highs requests: ${JSON.stringify(requests.filter((r) => /highs/.test(r.url)))})`,
-          ),
-        );
-      else if (wasm.status !== 200)
-        findings.push(label(`solve: highs.wasm answered ${wasm.status}`));
-      else notes.push(label(`solver fetched ${wasm.url}`));
-      const cards = await page.evaluate(
-        () => document.querySelectorAll(".react-flow__node").length,
+      // The slot named Iron Ingot, never merely the first: the results can open with another resource, such as
+      // a Thaumcraft aspect. The name is the slot's accessible name, or its tooltip title once the page moved it.
+      const results = page.locator('[aria-label="Resource results"] .nei-slot');
+      const slot = results
+        .and(page.locator('[aria-label="Iron Ingot"], [data-tip-title="Iron Ingot"]'))
+        .first();
+      const found = await slot.waitFor({ timeout: 60_000 }).then(
+        () => true,
+        () => false,
       );
-      notes.push(label(`${cards} card(s) on the board`));
+      if (!found) {
+        const shown = await results.evaluateAll((slots) =>
+          slots
+            .slice(0, 8)
+            .map((s) => s.getAttribute("aria-label") ?? s.getAttribute("data-tip-title")),
+        );
+        findings.push(label(`search: no Iron Ingot slot (saw: ${shown.join(", ") || "no slot"})`));
+      } else {
+        await slot.click();
+        const add = page.locator('[aria-label="Add recipe node"]').first();
+        await add.waitFor();
+        await add.click();
+        await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length > 0);
+        await page.keyboard.press("Escape");
+        const deadline = Date.now() + 60_000;
+        while (
+          Date.now() < deadline &&
+          !requests.some((request) => /highs\.wasm/.test(request.url))
+        ) {
+          await page.waitForTimeout(250);
+        }
+        await page.waitForTimeout(2000);
+        const wasm = requests.find((request) => /highs\.wasm/.test(request.url));
+        if (!wasm)
+          findings.push(
+            label(
+              `solve: the worker never fetched highs.wasm (highs requests: ${JSON.stringify(requests.filter((r) => /highs/.test(r.url)))})`,
+            ),
+          );
+        else if (wasm.status !== 200)
+          findings.push(label(`solve: highs.wasm answered ${wasm.status}`));
+        else notes.push(label(`solver fetched ${wasm.url}`));
+        const cards = await page.evaluate(
+          () => document.querySelectorAll(".react-flow__node").length,
+        );
+        notes.push(label(`${cards} card(s) on the board`));
+      }
       await readPolicy("board");
     }
 
