@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
@@ -92,6 +92,19 @@ describe("the dev server's environment and exposure", () => {
       ".env.local",
     ])("denies %s by name, even with the whole checkout allowed", (file) => {
       expect(isFileLoadingAllowed(wholeCheckout(), path.join(ROOT, file))).toBe(false);
+    });
+
+    it("finds no symbolic link in src/", async () => {
+      // /@fs/ serves src/ whole, and Vite follows a link there to its target while the deny list matches the
+      // link's own path: a link in src/ would serve whatever it points at.
+      const entries = await readdir(path.join(ROOT, "src"), {
+        recursive: true,
+        withFileTypes: true,
+      });
+      const links = entries
+        .filter((entry) => entry.isSymbolicLink())
+        .map((entry) => path.relative(ROOT, path.join(entry.parentPath, entry.name)));
+      expect(links).toEqual([]);
     });
 
     it("leaves src/ and node_modules/ outside the deny list", () => {
