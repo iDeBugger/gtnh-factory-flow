@@ -42,7 +42,41 @@ export const UNPARSED_TARGET = "/__unparsed-target";
 
 /** The legacy parser behind `url.parse`, which `parseurl` runs on every target that does not start with `/`. */
 type LegacyUrl = { parse(target: string): unknown };
-const { Url: LegacyUrlParser } = nodeUrl as unknown as { Url: new () => LegacyUrl };
+type LegacyUrlParser = new () => LegacyUrl;
+
+/**
+ * `node:url`'s `Url`, checked once when the module loads. Node exports it without documenting it, and
+ * `routableTarget` reads any throw as an unparsable target: without this check a Node that dropped or changed it
+ * would answer every target that does not start with `/` with the 404, silently. A missing `Url`, one that cannot
+ * be constructed, or one that no longer accepts `*` and refuses `http://[/x` stops the server at start instead.
+ */
+export function legacyUrlParser(module: unknown): LegacyUrlParser {
+  const Url = (module as { Url?: unknown } | undefined)?.Url;
+  const fail = (why: string): never => {
+    throw new Error(`node:url's legacy Url parser ${why}: the unparsed-target check cannot run.`);
+  };
+  if (typeof Url !== "function") return fail("is missing");
+  const Parser = Url as LegacyUrlParser;
+  const parse = (target: string): boolean => {
+    let parser: LegacyUrl;
+    try {
+      parser = new Parser();
+    } catch {
+      return fail("cannot be constructed");
+    }
+    if (typeof parser.parse !== "function") return fail("has no parse method");
+    try {
+      parser.parse(target);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (!parse("*") || parse("http://[/x")) return fail("no longer parses as parseurl does");
+  return Parser;
+}
+
+const LegacyUrlParser = legacyUrlParser(nodeUrl);
 
 /**
  * The target the router is given: the one sent, or `UNPARSED_TARGET` when the router could not parse it. A target

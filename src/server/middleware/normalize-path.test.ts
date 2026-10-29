@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import nodeUrl, { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { describe, expect, it } from "vitest";
-import { UNPARSED_TARGET, routableTarget } from "./normalize-path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { UNPARSED_TARGET, legacyUrlParser, routableTarget } from "./normalize-path";
 
 const REPO = path.resolve(__dirname, "../../..");
 
@@ -48,5 +48,55 @@ describe("routableTarget", () => {
       answers: ["*", "http://host/x", UNPARSED_TARGET],
       warnings: ["control DEP0169"],
     });
+  });
+});
+
+describe("legacyUrlParser", () => {
+  afterEach(() => {
+    vi.doUnmock("node:url");
+    vi.resetModules();
+  });
+
+  it("takes node:url's own Url", () => {
+    expect(legacyUrlParser(nodeUrl)).toBe((nodeUrl as unknown as { Url: unknown }).Url);
+  });
+
+  it("refuses a Url that is missing, cannot be constructed, has no parse or parses otherwise", () => {
+    class Throws {
+      constructor() {
+        throw new Error("no");
+      }
+    }
+    class NoParse {}
+    class AcceptsAll {
+      parse(): void {}
+    }
+    class RefusesAll {
+      parse(): void {
+        throw new TypeError("refused");
+      }
+    }
+    for (const [module, why] of [
+      [{}, "is missing"],
+      [undefined, "is missing"],
+      [{ Url: "Url" }, "is missing"],
+      [{ Url: () => ({}) }, "cannot be constructed"],
+      [{ Url: Throws }, "cannot be constructed"],
+      [{ Url: NoParse }, "has no parse method"],
+      [{ Url: AcceptsAll }, "no longer parses as parseurl does"],
+      [{ Url: RefusesAll }, "no longer parses as parseurl does"],
+    ] as const) {
+      expect(() => legacyUrlParser(module), why).toThrow(why);
+    }
+  });
+
+  it("stops the module from loading when node:url has no Url, so the server does not start", async () => {
+    vi.resetModules();
+    vi.doMock("node:url", async (importOriginal) => {
+      const rest = { ...(await importOriginal<Record<string, unknown>>()) };
+      delete rest.Url;
+      return { ...rest, default: { ...rest } };
+    });
+    await expect(import("./normalize-path")).rejects.toThrow(/legacy Url parser is missing/);
   });
 });
