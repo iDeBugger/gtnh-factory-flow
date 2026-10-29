@@ -1,8 +1,11 @@
 /**
- * The interface size's constants and no-flash boot script. Split from
- * ui-scale.ts, which imports a React hook: src/client/boot.ts inlines the
- * boot script into the page, and the dev server loads boot.ts without React.
- * See ui-scale.ts for the model.
+ * The interface size's constants and no-flash boot script, kept free of React
+ * (ui-scale.ts, which imports a React hook, holds the rest; see it for the
+ * model). Two reasons. The boot script is written into the page as text by
+ * src/client/boot.ts and runs before the app's bundle, so it can lean on
+ * nothing the bundle loads. And the dev server imports boot.ts, and with it
+ * this file, into its own Node process to write that text, a process that
+ * loads no React or UI code.
  */
 
 import { PHONE_MAX_HEIGHT, PHONE_MAX_WIDTH } from "@/lib/viewport-breakpoints";
