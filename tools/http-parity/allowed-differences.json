@@ -95,6 +95,14 @@
     "reason": "Ruled as intended: Next's 307 from /community listed its error document's stylesheet preloads; a browser following the redirect never uses them, and Express sends none. Only the default face keeps its font preload, as on the page."
   },
   {
+    "case": "gate [^ ]+ /datasets/gtnh/[^/ ]+/recipes\\.json/",
+    "status": 308,
+    "field": "headers.content-type",
+    "a": "",
+    "b": "text/plain; charset=utf-8",
+    "reason": "Behind Caddy only: the gate's 308 for a trailing slash carries Content-Length and no type, and Caddy's Go server then sniffs text/plain from the redirect's short text body. Next sent the same answer chunked, which Caddy never sniffs. A browser follows the location and never reads the body."
+  },
+  {
     "case": "nextOnly .*",
     "field": "*",
     "reason": "The throw and escape fixtures exist only in the Next baseline build (Task 0 step 3)."

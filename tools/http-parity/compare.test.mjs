@@ -258,6 +258,34 @@ describe("diffCases", () => {
       ).toHaveLength(1);
     });
 
+    it("allows Caddy's sniffed type only on the trailing-slash 308 of a recipes file", () => {
+      const redirect = (name, status, type) =>
+        stored({ name, status, headers: type === undefined ? [] : [["content-type", type]] });
+      const SNIFFED = "text/plain; charset=utf-8";
+      for (const name of [
+        "gate local-2.8.1 /datasets/gtnh/local-2.8.1/recipes.json/",
+        "gate local-2.9.0-rc-2 /datasets/gtnh/local-2.9.0-rc-2/recipes.json/",
+      ]) {
+        expect(diffCases(redirect(name, 308), redirect(name, 308, SNIFFED), ALLOW), name).toEqual(
+          [],
+        );
+        expect(
+          diffCases(redirect(name, 200), redirect(name, 200, SNIFFED), ALLOW),
+          name,
+        ).toHaveLength(1);
+        expect(
+          diffCases(redirect(name, 308), redirect(name, 308, "text/html; charset=utf-8"), ALLOW),
+          name,
+        ).toHaveLength(1);
+        expect(
+          diffCases(redirect(name, 308, "application/json"), redirect(name, 308, SNIFFED), ALLOW),
+          name,
+        ).toHaveLength(1);
+      }
+      const other = "gate local-2.8.1 /datasets/gtnh/local-2.8.1/recipes.json";
+      expect(diffCases(redirect(other, 308), redirect(other, 308, SNIFFED), ALLOW)).toHaveLength(1);
+    });
+
     it("allows Connection: close only on the two over-cap uploads' 413", () => {
       const connection = (name, value, status = 413) =>
         stored({ name, status, headers: [["connection", value]] });
