@@ -459,11 +459,6 @@ function syntaxTree(file: SourceFile): ts.SourceFile {
   return tree;
 }
 
-/**
- * The files whose directive prologue holds `"use client"`. No bundler or server of the site reads that directive,
- * so it would only mislead. Every script file counts here, the exempt ones (tests, the dev pages) and workers too:
- * `scriptFiles` reads the whole checkout, not only the graph's src/ and tools/.
- */
 /** A spawn site: `new Worker(new URL("<file>", import.meta.url)`, or a SharedWorker's. */
 const SPAWN =
   /new\s+(?:Shared)?Worker\(\s*new\s+URL\(\s*["'`]([^"'`]+)["'`]\s*,\s*import\.meta\.url/g;
@@ -542,6 +537,11 @@ function scriptFiles(): Map<string, SourceFile> {
   return files;
 }
 
+/**
+ * The files whose directive prologue holds `"use client"`. No bundler or server of the site reads that directive,
+ * so it would only mislead. Every script file counts here, the exempt ones (tests, the dev pages) and workers too:
+ * `scriptFiles` reads the whole checkout, not only the graph's src/ and tools/.
+ */
 function clientDirectiveFiles(graph: Map<string, SourceFile>): string[] {
   return [...graph.values()]
     .filter((file) => file.text.includes("use client"))
