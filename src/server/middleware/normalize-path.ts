@@ -13,7 +13,7 @@
  * target there) is read nowhere, so no check can be passed by spelling a path differently.
  */
 import querystring from "node:querystring";
-import { parse as legacyParse } from "node:url";
+import nodeUrl from "node:url";
 import type { RequestHandler, Response } from "express";
 
 declare global {
@@ -40,15 +40,20 @@ declare global {
  */
 export const UNPARSED_TARGET = "/__unparsed-target";
 
+/** The legacy parser behind `url.parse`, which `parseurl` runs on every target that does not start with `/`. */
+type LegacyUrl = { parse(target: string): unknown };
+const { Url: LegacyUrlParser } = nodeUrl as unknown as { Url: new () => LegacyUrl };
+
 /**
  * The target the router is given: the one sent, or `UNPARSED_TARGET` when the router could not parse it. A target
- * that starts with `/` always parses (`parseurl`'s fast path); any other goes through the legacy `url.parse`, as
- * `parseurl` sends it.
+ * that starts with `/` always parses (`parseurl`'s fast path); any other goes through the legacy parser, as
+ * `parseurl` sends it. The parser is called on its own `Url` object rather than through `url.parse`: only whether
+ * it throws is read, and `url.parse` prints a DEP0169 deprecation warning for a caller outside `node_modules`.
  */
 export function routableTarget(target: string): string {
   if (target.startsWith("/")) return target;
   try {
-    legacyParse(target);
+    new LegacyUrlParser().parse(target);
     return target;
   } catch {
     return UNPARSED_TARGET;
